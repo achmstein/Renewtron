@@ -150,6 +150,7 @@
                                                inputmode="numeric"
                                                maxlength="19"
                                                @bind="cardNumber"
+                                               @oninput="FormatCardNumber"
                                                required
                                                placeholder="xxxx xxxx xxxx xxxx"
                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
@@ -162,6 +163,7 @@
                                                type="text"
                                                maxlength="5"
                                                @bind="expiryDate"
+                                               @oninput="FormatExpiryDate"
                                                required
                                                placeholder="MM/YY"
                                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
@@ -380,6 +382,23 @@
             errorMessage = $"An error occurred: {ex.Message}";
             isProcessing = false;
         }
+    }
+
+    private void FormatCardNumber(ChangeEventArgs e)
+    {
+        var digits = new string(e.Value?.ToString()?.Where(char.IsDigit).ToArray() ?? Array.Empty<char>());
+        cardNumber = string.Join(" ", Enumerable.Range(0, (digits.Length + 3) / 4)
+                                                .Select(i => new string(digits.Skip(i * 4).Take(4).ToArray())))
+                            .Trim();
+    }
+
+    private void FormatExpiryDate(ChangeEventArgs e)
+    {
+        var input = new string(e.Value?.ToString()?.Where(char.IsDigit).ToArray() ?? Array.Empty<char>());
+        if (input.Length >= 3)
+            expiryDate = input[..2] + "/" + input[2..Math.Min(4, input.Length)];
+        else
+            expiryDate = input;
     }
 
     private string GetStatusClass(string? status)
