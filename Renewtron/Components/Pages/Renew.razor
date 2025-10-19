@@ -1,0 +1,396 @@
+﻿@page "/renew/{id:guid}"
+
+@using Asic.Client.Models
+@using Renewtron.Data
+@using Renewtron.Services
+@using Microsoft.EntityFrameworkCore
+@using Soenneker.Blazor.CreditCards
+@using Asic.Client.Abstractions
+
+@inject ApplicationDbContext DbContext
+@inject IEncryptionService EncryptionService
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IAsicRenewalClient RenewalClient
+
+<PageTitle>Renew Business Name</PageTitle>
+
+<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-3xl">
+        @if (isLoading)
+        {
+            <div class="text-center">
+                <svg class="mx-auto h-12 w-12 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-4 text-sm text-gray-600">Loading...</p>
+            </div>
+        }
+        else if (searchResult == null)
+        {
+            <div class="text-center">
+                <h3 class="text-lg font-semibold text-gray-900">Business not found</h3>
+                <p class="mt-2 text-sm text-gray-600">The business you're trying to renew doesn't exist.</p>
+                <a href="/" class="mt-4 inline-block text-indigo-600 hover:text-indigo-500">Back to Home</a>
+            </div>
+        }
+        else if (isProcessing)
+        {
+            <div class="rounded-lg bg-white p-8 shadow text-center">
+                <svg class="mx-auto h-16 w-16 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <h3 class="mt-4 text-lg font-semibold text-gray-900">Processing Renewal</h3>
+                <p class="mt-2 text-sm text-gray-600">Please wait while we process your payment...</p>
+                <p class="mt-1 text-xs text-gray-500">This may take up to 2 minutes</p>
+            </div>
+        }
+        else
+        {
+            <!-- Business Info Card -->
+            <div class="mb-8 overflow-hidden rounded-lg bg-white shadow">
+                <div class="bg-indigo-600 px-6 py-4">
+                    <h2 class="text-xl font-semibold text-white">Renew Business Name</h2>
+                </div>
+                <div class="px-6 py-4">
+                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Business Name</dt>
+                            <dd class="mt-1 text-sm font-semibold text-gray-900">@searchResult.BusinessName</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Status</dt>
+                            <dd class="mt-1">
+                                <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset @GetStatusClass(searchResult.Status)">
+                                    @searchResult.Status
+                                </span>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">Current Renewal Date</dt>
+                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RenewalDate</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-gray-500">ABN</dt>
+                            <dd class="mt-1 text-sm text-gray-900">@searchResult.SearchLog?.Abn</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Renewal Form -->
+            <div class="overflow-hidden rounded-lg bg-white shadow">
+                <div class="px-6 py-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-6">Renewal Details</h3>
+
+                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
+                        <!-- Renewal Period -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Renewal Period</label>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="relative flex items-start">
+                                    <div class="flex h-6 items-center">
+                                        <input id="1year" name="renewalYears" type="radio" value="1" @onchange="@(() => renewalYears = 1)" checked="@(renewalYears == 1)"
+                                               class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600">
+                                    </div>
+                                    <div class="ml-3">
+                                        <label for="1year" class="text-sm font-medium text-gray-900">1 Year</label>
+                                        <p class="text-sm text-gray-500">$54</p>
+                                    </div>
+                                </div>
+                                <div class="relative flex items-start">
+                                    <div class="flex h-6 items-center">
+                                        <input id="3years" name="renewalYears" type="radio" value="3" @onchange="@(() => renewalYears = 3)" checked="@(renewalYears == 3)"
+                                               class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600">
+                                    </div>
+                                    <div class="ml-3">
+                                        <label for="3years" class="text-sm font-medium text-gray-900">3 Years</label>
+                                        <p class="text-sm text-gray-500">$162</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="mb-6">
+                            <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                            <input type="email" id="email" @bind="email" required
+                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300">
+                            <p class="mt-1 text-xs text-gray-500">Receipt and confirmation will be sent to this email</p>
+                        </div>
+
+                        <!-- Credit Card Component -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Payment Information</label>
+                            <CreditCard @ref="creditCardComponent"
+                                        CardNumber="@cardNumber"
+                                        CardholderName="@cardHolder"
+                                        ExpiryDate="@expiryDate"
+                                        Cvc="@cvv" />
+
+                                         <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <!-- Cardholder Name -->
+                                    <div>
+                                        <label for="cardHolder" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
+                                        <input id="cardHolder"
+                                               type="text"
+                                               @bind="cardHolder"
+                                               required
+                                               placeholder="Name on card"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+
+                                    <!-- Card Number -->
+                                    <div>
+                                        <label for="cardNumber" class="block text-sm font-medium text-gray-700">Card Number</label>
+                                        <input id="cardNumber"
+                                               type="text"
+                                               inputmode="numeric"
+                                               maxlength="19"
+                                               @bind="cardNumber"
+                                               required
+                                               placeholder="xxxx xxxx xxxx xxxx"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+
+                                    <!-- Expiry Date -->
+                                    <div>
+                                        <label for="expiryDate" class="block text-sm font-medium text-gray-700">Expiry (MM/YY)</label>
+                                        <input id="expiryDate"
+                                               type="text"
+                                               maxlength="5"
+                                               @bind="expiryDate"
+                                               required
+                                               placeholder="MM/YY"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+
+                                    <!-- CVC -->
+                                    <div>
+                                        <label for="cvv" class="block text-sm font-medium text-gray-700">CVC</label>
+                                        <input id="cvv"
+                                               type="password"
+                                               maxlength="4"
+                                               @bind="cvv"
+                                               required
+                                               placeholder="•••"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+                                </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="mb-4 rounded-md bg-red-50 p-4">
+                                <div class="flex">
+                                    <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                    </svg>
+                                    <div class="ml-3">
+                                        <p class="text-sm text-red-800">@errorMessage</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Submit Button -->
+                        <div class="flex items-center justify-between">
+                            <a href="/results/@searchResult.SearchLogId" class="text-sm text-gray-600 hover:text-gray-900">
+                                ← Back to results
+                            </a>
+                            <button type="submit"
+                                    disabled="@(!IsFormValid())"
+                                    class="inline-flex items-center rounded-md bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Process Renewal - $@(renewalYears == 1 ? "54" : "162")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Security Notice -->
+            <div class="mt-6 rounded-lg bg-blue-50 p-4">
+                <div class="flex">
+                    <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-800">
+                            <strong>Secure Payment:</strong> Your credit card information is encrypted and securely stored for future renewals.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private SearchResult? searchResult;
+    private string errorMessage = "";
+
+    // Form fields
+    private int renewalYears = 1;
+    private string email = "";
+
+    // Credit card fields
+    private CreditCard? creditCardComponent;
+    private string cardNumber = "";
+    private string cardHolder = "";
+    private string expiryDate = "";
+    private string cvv = "";
+    private string cardBrand = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBusinessDetails();
+    }
+
+    private async Task LoadBusinessDetails()
+    {
+        isLoading = true;
+
+        searchResult = await DbContext.SearchResults
+            .Include(r => r.SearchLog)
+            .Include(r => r.Holders)
+            .FirstOrDefaultAsync(r => r.Id == Id);
+
+        isLoading = false;
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(email) &&
+               !string.IsNullOrWhiteSpace(cardNumber) &&
+               !string.IsNullOrWhiteSpace(cardHolder) &&
+               !string.IsNullOrWhiteSpace(expiryDate) &&
+               !string.IsNullOrWhiteSpace(cvv) &&
+               cardNumber.Length >= 15;
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = "";
+        isProcessing = true;
+
+        try
+        {
+            // Get user info
+            var httpContext = HttpContextAccessor.HttpContext;
+            var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
+            var sessionId = httpContext?.Session?.Id;
+
+            // Parse expiry date (format: MM/YY)
+            var expiryParts = expiryDate.Split('/');
+            var expiryMonth = expiryParts[0];
+            var expiryYear = "20" + expiryParts[1];
+
+            // Save encrypted credit card
+            var savedCard = new SavedCreditCard
+            {
+                Id = Guid.NewGuid(),
+                CardholderName = cardHolder,
+                CardNumberLast4 = cardNumber.Substring(cardNumber.Length - 4),
+                CardBrand = cardBrand,
+                ExpiryMonth = expiryMonth,
+                ExpiryYear = expiryYear,
+                EncryptedCardNumber = EncryptionService.Encrypt(cardNumber),
+                EncryptedCvc = EncryptionService.Encrypt(cvv),
+                CreatedAt = DateTime.UtcNow,
+                IpAddress = ipAddress,
+                SessionId = sessionId
+            };
+
+            DbContext.SavedCreditCards.Add(savedCard);
+            await DbContext.SaveChangesAsync();
+
+            // Create renewal request
+            var renewalRequest = new RenewalRequest
+            {
+                Id = Guid.NewGuid(),
+                SearchResultId = searchResult!.Id,
+                SavedCreditCardId = savedCard.Id,
+                InitiatedAt = DateTime.UtcNow,
+                IpAddress = ipAddress,
+                SessionId = sessionId,
+                RenewalYears = renewalYears,
+                Email = email,
+                Completed = false
+            };
+
+            DbContext.RenewalRequests.Add(renewalRequest);
+            await DbContext.SaveChangesAsync();
+
+            // Process renewal through ASIC
+            var cardDetails = new CreditCardDetails
+            {
+                CardNumber = cardNumber,
+                CardholderName = cardHolder,
+                ExpiryMonth = expiryMonth,
+                ExpiryYear = expiryYear,
+                Cvc = cvv
+            };
+
+            // var result = await RenewalClient.RenewBusinessNameAsync(
+            //     searchResult.SearchLog!.Abn,
+            //     searchResult.BusinessName,
+            //     renewalYears,
+            //     email,
+            //     cardDetails
+            // );
+
+            await Task.Delay(4000);
+
+            var result = new RenewalResult
+            {
+                IsSuccess = true,
+                HostedTokenizationId = "X123",
+                TransactionReference = "ABC998"
+            };
+
+            // Update renewal request
+            renewalRequest.Completed = result.IsSuccess;
+            renewalRequest.CompletedAt = DateTime.UtcNow;
+            renewalRequest.TransactionReference = result.TransactionReference;
+            renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
+            renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
+
+            await DbContext.SaveChangesAsync();
+
+            if (result.IsSuccess)
+            {
+                // Redirect to success page
+                Navigation.NavigateTo($"/renewal-success/{renewalRequest.Id}");
+            }
+            else
+            {
+                errorMessage = result.Message;
+                isProcessing = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+            isProcessing = false;
+        }
+    }
+
+    private string GetStatusClass(string? status)
+    {
+        return status?.ToLower() switch
+        {
+            "registered" => "bg-green-50 text-green-700 ring-green-600/20",
+            "active" => "bg-green-50 text-green-700 ring-green-600/20",
+            "cancelled" => "bg-red-50 text-red-700 ring-red-600/20",
+            "expired" => "bg-yellow-50 text-yellow-800 ring-yellow-600/20",
+            _ => "bg-gray-50 text-gray-600 ring-gray-500/10"
+        };
+    }
+}

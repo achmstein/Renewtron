@@ -13,9 +13,8 @@ public static class ServiceCollectionExtensions
             .BindConfiguration("TwoCaptcha")
             .ValidateDataAnnotations();
 
-        services.AddScoped<ICaptchaSolver, TwoCaptchaSolver>();
-
-        services.AddScoped<IAsicRegistrySearchClient, AsicRegistrySearchClient>();   
+        services.AddSingleton<ICaptchaSolver, TwoCaptchaSolver>();
+        services.AddSingleton<IAsicRegistrySearchClient, AsicRegistrySearchClient>();   
         services.AddScoped<IAsicRenewalClient, AsicRenewalClient>();
         services.AddScoped<IAsicPaymentClient, AsicPaymentClient>();
 
