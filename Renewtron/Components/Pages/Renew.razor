@@ -8,6 +8,7 @@
 @using Asic.Client.Abstractions
 @using Microsoft.Extensions.Options
 @using Renewtron.Settings
+@using Soenneker.Blazor.CreditCards
 
 @inject ApplicationDbContext DbContext
 @inject IEncryptionService EncryptionService
@@ -130,7 +131,12 @@
                         <!-- Credit Card Fields -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 mb-3">Payment Information</label>
-                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                              <CreditCard @ref="creditCardComponent"
+                                        CardNumber="@cardNumber"
+                                        CardholderName="@cardHolder"
+                                        ExpiryDate="@expiryDate"
+                                        Cvc="@cvv" />
+                            <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
                                     <label for="cardHolder" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
                                     <input id="cardHolder" type="text" @bind="cardHolder" required placeholder="Name on card"
@@ -217,6 +223,8 @@
     // Form fields
     private int renewalYears = 1;
     private string email = "";
+
+    private CreditCard? creditCardComponent;
     private string cardNumber = "";
     private string cardHolder = "";
     private string expiryDate = "";
