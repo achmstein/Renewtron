@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Renewtron.Abstractions;
 using Renewtron.Components;
 using Renewtron.Components.Account;
 using Renewtron.Data;
 using Renewtron.Services;
+using Renewtron.Settings;
 using Soenneker.Blazor.CreditCards.Registrars;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,14 +32,27 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
+builder.Services.AddIdentityCore<AppUser>(options => options.SignIn.RequireConfirmedAccount = true)
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddSingleton<IEmailSender<AppUser>, IdentityNoOpEmailSender>();
 
+builder.Services.AddScoped<ApplicationDbContextInitialiser>();
+
+// Encryption service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
+
+// Configure settings
+builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
+builder.Services.Configure<SendGridSettings>(builder.Configuration.GetSection("SendGrid"));
+builder.Services.Configure<AsicCreditCardSettings>(builder.Configuration.GetSection("AsicCreditCard"));
+builder.Services.Configure<PricingSettings>(builder.Configuration.GetSection("Pricing"));
+
+// Payment and Email services
+builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
@@ -84,5 +99,13 @@ app.MapRazorComponents<App>()
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+using var scope = app.Services.CreateScope();
+
+var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextInitialiser>();
+
+await initialiser.InitialiseAsync();
+await initialiser.SeedAsync();
+
 
 app.Run();

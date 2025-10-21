@@ -66,6 +66,14 @@
                             <dd class="mt-1 text-sm font-mono text-gray-900">@renewalRequest.TransactionReference</dd>
                         </div>
 
+                        @if (!string.IsNullOrEmpty(renewalRequest.StripePaymentIntentId))
+                        {
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500">Payment Reference</dt>
+                                <dd class="mt-1 text-sm font-mono text-gray-500">@renewalRequest.StripePaymentIntentId</dd>
+                            </div>
+                        }
+
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Date & Time</dt>
                             <dd class="mt-1 text-sm text-gray-900">@renewalRequest.CompletedAt?.ToLocalTime().ToString("MMMM dd, yyyy 'at' hh:mm tt")</dd>
@@ -79,13 +87,13 @@
                         <div>
                             <dt class="text-sm font-medium text-gray-500">Payment Method</dt>
                             <dd class="mt-1 text-sm text-gray-900">
-                                @renewalRequest.SavedCreditCard?.CardBrand ending in @renewalRequest.SavedCreditCard?.CardNumberLast4
+                                @renewalRequest.CustomerCreditCard?.CardBrand ending in @renewalRequest.CustomerCreditCard?.CardNumberLast4
                             </dd>
                         </div>
 
                         <div class="border-t border-gray-200 pt-4">
                             <dt class="text-sm font-medium text-gray-500">Amount Paid</dt>
-                            <dd class="mt-1 text-2xl font-bold text-gray-900">$@(renewalRequest.RenewalYears == 1 ? "54.00" : "162.00")</dd>
+                            <dd class="mt-1 text-2xl font-bold text-gray-900">$@renewalRequest.CustomerAmount.ToString("F2")</dd>
                         </div>
                     </dl>
                 </div>
@@ -132,7 +140,7 @@
                         <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span class="ml-2">Your credit card has been securely saved for future renewals</span>
+                        <span class="ml-2">Your payment of <strong>${renewalRequest.CustomerAmount:F2}</strong> has been processed successfully</span>
                     </li>
                 </ul>
             </div>
@@ -159,7 +167,7 @@
         renewalRequest = await DbContext.RenewalRequests
             .Include(r => r.SearchResult)
                 .ThenInclude(sr => sr!.SearchLog)
-            .Include(r => r.SavedCreditCard)
+            .Include(r => r.CustomerCreditCard)
             .FirstOrDefaultAsync(r => r.Id == Id);
 
         isLoading = false;
@@ -167,7 +175,6 @@
 
     private void PrintReceipt()
     {
-        // Trigger browser print dialog
         Navigation.NavigateTo($"javascript:window.print()", forceLoad: false);
     }
 }

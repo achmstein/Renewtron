@@ -1,17 +1,23 @@
 ﻿@page "/renew/{id:guid}"
 
 @using Asic.Client.Models
+@using Renewtron.Abstractions
 @using Renewtron.Data
 @using Renewtron.Services
 @using Microsoft.EntityFrameworkCore
-@using Soenneker.Blazor.CreditCards
 @using Asic.Client.Abstractions
+@using Microsoft.Extensions.Options
+@using Renewtron.Settings
 
 @inject ApplicationDbContext DbContext
 @inject IEncryptionService EncryptionService
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IAsicRenewalClient RenewalClient
+@inject IStripePaymentService StripePaymentService
+@inject IEmailService EmailService
+@inject IOptions<AsicCreditCardSettings> AsicCardSettings
+@inject IOptions<PricingSettings> PricingSettings
 
 <PageTitle>Renew Business Name</PageTitle>
 
@@ -42,8 +48,8 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <h3 class="mt-4 text-lg font-semibold text-gray-900">Processing Renewal</h3>
-                <p class="mt-2 text-sm text-gray-600">Please wait while we process your payment...</p>
+                <h3 class="mt-4 text-lg font-semibold text-gray-900">@processingStatus</h3>
+                <p class="mt-2 text-sm text-gray-600">Please wait while we process your request...</p>
                 <p class="mt-1 text-xs text-gray-500">This may take up to 2 minutes</p>
             </div>
         }
@@ -97,7 +103,7 @@
                                     </div>
                                     <div class="ml-3">
                                         <label for="1year" class="text-sm font-medium text-gray-900">1 Year</label>
-                                        <p class="text-sm text-gray-500">$54</p>
+                                        <p class="text-sm text-gray-500">$@pricing.GetCustomerPrice(1).ToString("F2")</p>
                                     </div>
                                 </div>
                                 <div class="relative flex items-start">
@@ -107,7 +113,7 @@
                                     </div>
                                     <div class="ml-3">
                                         <label for="3years" class="text-sm font-medium text-gray-900">3 Years</label>
-                                        <p class="text-sm text-gray-500">$162</p>
+                                        <p class="text-sm text-gray-500">$@pricing.GetCustomerPrice(3).ToString("F2")</p>
                                     </div>
                                 </div>
                             </div>
@@ -121,66 +127,34 @@
                             <p class="mt-1 text-xs text-gray-500">Receipt and confirmation will be sent to this email</p>
                         </div>
 
-                        <!-- Credit Card Component -->
+                        <!-- Credit Card Fields -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 mb-3">Payment Information</label>
-                            <CreditCard @ref="creditCardComponent"
-                                        CardNumber="@cardNumber"
-                                        CardholderName="@cardHolder"
-                                        ExpiryDate="@expiryDate"
-                                        Cvc="@cvv" />
-
-                                         <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    <!-- Cardholder Name -->
-                                    <div>
-                                        <label for="cardHolder" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
-                                        <input id="cardHolder"
-                                               type="text"
-                                               @bind="cardHolder"
-                                               required
-                                               placeholder="Name on card"
-                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                    </div>
-
-                                    <!-- Card Number -->
-                                    <div>
-                                        <label for="cardNumber" class="block text-sm font-medium text-gray-700">Card Number</label>
-                                        <input id="cardNumber"
-                                               type="text"
-                                               inputmode="numeric"
-                                               maxlength="19"
-                                               @bind="cardNumber"
-                                               @oninput="FormatCardNumber"
-                                               required
-                                               placeholder="xxxx xxxx xxxx xxxx"
-                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                    </div>
-
-                                    <!-- Expiry Date -->
-                                    <div>
-                                        <label for="expiryDate" class="block text-sm font-medium text-gray-700">Expiry (MM/YY)</label>
-                                        <input id="expiryDate"
-                                               type="text"
-                                               maxlength="5"
-                                               @bind="expiryDate"
-                                               @oninput="FormatExpiryDate"
-                                               required
-                                               placeholder="MM/YY"
-                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                    </div>
-
-                                    <!-- CVC -->
-                                    <div>
-                                        <label for="cvv" class="block text-sm font-medium text-gray-700">CVC</label>
-                                        <input id="cvv"
-                                               type="password"
-                                               maxlength="4"
-                                               @bind="cvv"
-                                               required
-                                               placeholder="•••"
-                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                    </div>
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label for="cardHolder" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
+                                    <input id="cardHolder" type="text" @bind="cardHolder" required placeholder="Name on card"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
                                 </div>
+
+                                <div>
+                                    <label for="cardNumber" class="block text-sm font-medium text-gray-700">Card Number</label>
+                                    <input id="cardNumber" type="text" inputmode="numeric" maxlength="19" @bind="cardNumber" @oninput="FormatCardNumber" required placeholder="xxxx xxxx xxxx xxxx"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                </div>
+
+                                <div>
+                                    <label for="expiryDate" class="block text-sm font-medium text-gray-700">Expiry (MM/YY)</label>
+                                    <input id="expiryDate" type="text" maxlength="5" @bind="expiryDate" @oninput="FormatExpiryDate" required placeholder="MM/YY"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                </div>
+
+                                <div>
+                                    <label for="cvv" class="block text-sm font-medium text-gray-700">CVC</label>
+                                    <input id="cvv" type="password" maxlength="4" @bind="cvv" required placeholder="•••"
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                </div>
+                            </div>
                         </div>
 
                         @if (!string.IsNullOrEmpty(errorMessage))
@@ -202,10 +176,9 @@
                             <a href="/results/@searchResult.SearchLogId" class="text-sm text-gray-600 hover:text-gray-900">
                                 ← Back to results
                             </a>
-                            <button type="submit"
-                                    disabled="@(!IsFormValid())"
+                            <button type="submit" disabled="@(!IsFormValid())"
                                     class="inline-flex items-center rounded-md bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Process Renewal - $@(renewalYears == 1 ? "54" : "162")
+                                Process Renewal - $@pricing.GetCustomerPrice(renewalYears).ToString("F2")
                             </button>
                         </div>
                     </form>
@@ -220,7 +193,8 @@
                     </svg>
                     <div class="ml-3">
                         <p class="text-sm text-blue-800">
-                            <strong>Secure Payment:</strong> Your credit card information is encrypted and securely stored for future renewals.
+                            <strong>Secure Payment:</strong> Your payment is processed securely via Stripe. 
+                            We'll handle the ASIC renewal on your behalf.
                         </p>
                     </div>
                 </div>
@@ -235,35 +209,32 @@
 
     private bool isLoading = true;
     private bool isProcessing = false;
+    private string processingStatus = "Processing payment...";
     private SearchResult? searchResult;
     private string errorMessage = "";
+    private PricingSettings pricing;
 
     // Form fields
     private int renewalYears = 1;
     private string email = "";
-
-    // Credit card fields
-    private CreditCard? creditCardComponent;
     private string cardNumber = "";
     private string cardHolder = "";
     private string expiryDate = "";
     private string cvv = "";
-    private string cardBrand = "";
 
     protected override async Task OnInitializedAsync()
     {
+        pricing = PricingSettings.Value;
         await LoadBusinessDetails();
     }
 
     private async Task LoadBusinessDetails()
     {
         isLoading = true;
-
         searchResult = await DbContext.SearchResults
             .Include(r => r.SearchLog)
             .Include(r => r.Holders)
             .FirstOrDefaultAsync(r => r.Id == Id);
-
         isLoading = false;
     }
 
@@ -274,90 +245,123 @@
                !string.IsNullOrWhiteSpace(cardHolder) &&
                !string.IsNullOrWhiteSpace(expiryDate) &&
                !string.IsNullOrWhiteSpace(cvv) &&
-               cardNumber.Length >= 15;
+               cardNumber.Replace(" ", "").Length >= 15;
     }
 
     private async Task HandleSubmit()
     {
         errorMessage = "";
         isProcessing = true;
+        processingStatus = "Processing payment...";
 
         try
         {
-            // Get user info
             var httpContext = HttpContextAccessor.HttpContext;
             var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
             var sessionId = httpContext?.Session?.Id;
 
-            // Parse expiry date (format: MM/YY)
+            // Parse expiry date
             var expiryParts = expiryDate.Split('/');
             var expiryMonth = expiryParts[0];
             var expiryYear = "20" + expiryParts[1];
 
-            // Save encrypted credit card
-            var savedCard = new SavedCreditCard
+            var customerAmount = pricing.GetCustomerPrice(renewalYears);
+            var asicAmount = pricing.GetAsicFee(renewalYears);
+
+            // Step 1: Save customer's card (for display only)
+            var customerCard = new SavedCreditCard
             {
                 Id = Guid.NewGuid(),
                 CardholderName = cardHolder,
-                CardNumberLast4 = cardNumber.Substring(cardNumber.Length - 4),
-                CardBrand = cardBrand,
+                CardNumberLast4 = cardNumber.Replace(" ", "").Substring(cardNumber.Replace(" ", "").Length - 4),
+                CardBrand = "Visa", // You can detect this
                 ExpiryMonth = expiryMonth,
                 ExpiryYear = expiryYear,
-                EncryptedCardNumber = EncryptionService.Encrypt(cardNumber),
+                EncryptedCardNumber = EncryptionService.Encrypt(cardNumber.Replace(" ", "")),
                 EncryptedCvc = EncryptionService.Encrypt(cvv),
                 CreatedAt = DateTime.UtcNow,
                 IpAddress = ipAddress,
                 SessionId = sessionId
             };
 
-            DbContext.SavedCreditCards.Add(savedCard);
+            DbContext.SavedCreditCards.Add(customerCard);
             await DbContext.SaveChangesAsync();
 
-            // Create renewal request
+            // Step 2: Create renewal request
             var renewalRequest = new RenewalRequest
             {
                 Id = Guid.NewGuid(),
                 SearchResultId = searchResult!.Id,
-                SavedCreditCardId = savedCard.Id,
+                CustomerCreditCardId = customerCard.Id,
                 InitiatedAt = DateTime.UtcNow,
                 IpAddress = ipAddress,
                 SessionId = sessionId,
                 RenewalYears = renewalYears,
                 Email = email,
+                CustomerAmount = customerAmount,
+                AsicAmount = asicAmount,
                 Completed = false
             };
 
             DbContext.RenewalRequests.Add(renewalRequest);
             await DbContext.SaveChangesAsync();
 
-            // Process renewal through ASIC
-            var cardDetails = new CreditCardDetails
+            // Step 3: Process Stripe payment
+            processingStatus = "Processing your payment...";
+            StateHasChanged();
+
+            var metadata = new Dictionary<string, string>
             {
-                CardNumber = cardNumber,
-                CardholderName = cardHolder,
-                ExpiryMonth = expiryMonth,
-                ExpiryYear = expiryYear,
-                Cvc = cvv
+                { "renewal_request_id", renewalRequest.Id.ToString() },
+                { "business_name", searchResult.BusinessName },
+                { "abn", searchResult.SearchLog.Abn },
+                { "renewal_years", renewalYears.ToString() }
             };
 
-            // var result = await RenewalClient.RenewBusinessNameAsync(
-            //     searchResult.SearchLog!.Abn,
-            //     searchResult.BusinessName,
-            //     renewalYears,
-            //     email,
-            //     cardDetails
-            // );
+            var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.CreatePaymentIntentAsync(
+                customerAmount,
+                email,
+                $"Business Name Renewal - {searchResult.BusinessName}",
+                metadata);
 
-            await Task.Delay(4000);
-
-            var result = new RenewalResult
+            if (!paymentSuccess)
             {
-                IsSuccess = true,
-                HostedTokenizationId = "X123",
-                TransactionReference = "ABC998"
+                renewalRequest.ErrorMessage = $"Stripe payment failed: {paymentError}";
+                await DbContext.SaveChangesAsync();
+                errorMessage = $"Payment failed: {paymentError}";
+                isProcessing = false;
+                return;
+            }
+
+            // Update renewal request with Stripe info
+            renewalRequest.StripePaymentIntentId = paymentIntentId;
+            renewalRequest.StripePaymentStatus = "succeeded";
+            renewalRequest.StripePaidAt = DateTime.UtcNow;
+            await DbContext.SaveChangesAsync();
+
+            // Step 4: Process ASIC renewal using our credit card
+            processingStatus = "Processing ASIC renewal...";
+            StateHasChanged();
+
+            var asicCard = AsicCardSettings.Value;
+            var asicCardDetails = new CreditCardDetails
+            {
+                CardNumber = asicCard.CardNumber,
+                CardholderName = asicCard.CardholderName,
+                ExpiryMonth = asicCard.ExpiryMonth,
+                ExpiryYear = asicCard.ExpiryYear,
+                Cvc = asicCard.Cvc
             };
 
-            // Update renewal request
+            var result = await RenewalClient.RenewBusinessNameAsync(
+                searchResult.SearchLog!.Abn,
+                searchResult.BusinessName,
+                renewalYears,
+                email,
+                asicCardDetails
+            );
+
+            // Step 5: Update renewal request with ASIC result
             renewalRequest.Completed = result.IsSuccess;
             renewalRequest.CompletedAt = DateTime.UtcNow;
             renewalRequest.TransactionReference = result.TransactionReference;
@@ -368,12 +372,36 @@
 
             if (result.IsSuccess)
             {
-                // Redirect to success page
+                // Step 6: Send confirmation email
+                processingStatus = "Sending confirmation email...";
+                StateHasChanged();
+
+                try
+                {
+                    await EmailService.SendRenewalConfirmationAsync(
+                        email,
+                        searchResult.BusinessName,
+                        searchResult.SearchLog.Abn,
+                        renewalYears,
+                        customerAmount,
+                        result.TransactionReference
+                    );
+                }
+                catch (Exception emailEx)
+                {
+                    // Log email error but don't fail the transaction
+                    Console.WriteLine($"Email send failed: {emailEx.Message}");
+                }
+
+                // Step 7: Redirect to success page
                 Navigation.NavigateTo($"/renewal-success/{renewalRequest.Id}");
             }
             else
             {
-                errorMessage = result.Message;
+                // ASIC renewal failed, but customer was already charged
+                // You should handle refunds here
+                errorMessage = $"Payment successful but ASIC renewal failed: {result.Message}. " +
+                             $"Please contact support with reference: {renewalRequest.Id}";
                 isProcessing = false;
             }
         }

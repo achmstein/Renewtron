@@ -4,7 +4,7 @@ public class RenewalRequest
 {
     public Guid Id { get; set; }
     public Guid SearchResultId { get; set; }
-    public Guid? SavedCreditCardId { get; set; }
+    public Guid? CustomerCreditCardId { get; set; } // Customer's card (for display only)
     public DateTime InitiatedAt { get; set; }
     public string? IpAddress { get; set; }
     public string? SessionId { get; set; }
@@ -12,6 +12,15 @@ public class RenewalRequest
     // Renewal details
     public int RenewalYears { get; set; }
     public string? Email { get; set; }
+
+    // Pricing
+    public decimal CustomerAmount { get; set; } // Amount charged to customer (ASIC + markup)
+    public decimal AsicAmount { get; set; } // Amount paid to ASIC
+
+    // Stripe Payment Info
+    public string? StripePaymentIntentId { get; set; }
+    public string? StripePaymentStatus { get; set; }
+    public DateTime? StripePaidAt { get; set; }
 
     // Status tracking
     public bool Completed { get; set; }
@@ -22,5 +31,5 @@ public class RenewalRequest
 
     // Navigation properties
     public SearchResult SearchResult { get; set; }
-    public SavedCreditCard? SavedCreditCard { get; set; }
+    public SavedCreditCard? CustomerCreditCard { get; set; }
 }

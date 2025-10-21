@@ -1,4 +1,4 @@
-﻿namespace Renewtron.Services;
+﻿namespace Renewtron.Abstractions;
 
 public interface IEncryptionService
 {

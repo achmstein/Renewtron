@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Renewtron.Data;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<AppUser>(options)
 {
     public DbSet<SearchLog> SearchLogs { get; set; }
     public DbSet<SearchResult> SearchResults { get; set; }
@@ -17,7 +17,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<ApplicationUser>().ToTable("Users");
+        modelBuilder.Entity<AppUser>().ToTable("Users");
         modelBuilder.Entity<IdentityRole>().ToTable("Roles");
         modelBuilder.Entity<IdentityUserRole<string>>().ToTable("UserRoles");
         modelBuilder.Entity<IdentityUserClaim<string>>().ToTable("UserClaims");
@@ -67,16 +67,16 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.SearchResultId);
             entity.HasIndex(e => e.InitiatedAt);
-            entity.HasIndex(e => e.SavedCreditCardId);
+            entity.HasIndex(e => e.CustomerCreditCardId);
 
             entity.HasOne(e => e.SearchResult)
                 .WithMany()
                 .HasForeignKey(e => e.SearchResultId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.SavedCreditCard)
+            entity.HasOne(e => e.CustomerCreditCard)
                 .WithMany()
-                .HasForeignKey(e => e.SavedCreditCardId)
+                .HasForeignKey(e => e.CustomerCreditCardId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
