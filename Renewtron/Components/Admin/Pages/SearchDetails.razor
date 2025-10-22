@@ -118,6 +118,18 @@
                                             <h3 class="text-base font-semibold text-gray-900">@result.BusinessName</h3>
                                             <dl class="mt-4 grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
                                                 <div>
+                                                    <dt class="text-xs font-medium text-gray-500">Result ID</dt>
+                                                    <dd class="mt-1 text-sm text-gray-900">@result.Id</dd>
+                                                </div>
+                                                <div>
+                                                    <dt class="text-xs font-medium text-gray-500">Registration Date</dt>
+                                                    <dd class="mt-1 text-sm text-gray-900">@(result.RegistrationDate ?? "N/A")</dd>
+                                                </div>
+                                                <div>
+                                                    <dt class="text-xs font-medium text-gray-500">Renewal Date</dt>
+                                                    <dd class="mt-1 text-sm text-gray-900">@(result.RenewalDate ?? "N/A")</dd>
+                                                </div>
+                                                <div>
                                                     <dt class="text-xs font-medium text-gray-500">Status</dt>
                                                     <dd class="mt-1">
                                                         @if (!string.IsNullOrEmpty(result.Status))
@@ -131,14 +143,6 @@
                                                             <span class="text-xs text-gray-400">N/A</span>
                                                         }
                                                     </dd>
-                                                </div>
-                                                <div>
-                                                    <dt class="text-xs font-medium text-gray-500">Registration Date</dt>
-                                                    <dd class="mt-1 text-sm text-gray-900">@(result.RegistrationDate ?? "N/A")</dd>
-                                                </div>
-                                                <div>
-                                                    <dt class="text-xs font-medium text-gray-500">Renewal Date</dt>
-                                                    <dd class="mt-1 text-sm text-gray-900">@(result.RenewalDate ?? "N/A")</dd>
                                                 </div>
                                                 @if (!string.IsNullOrEmpty(result.CancelledDate))
                                                 {
