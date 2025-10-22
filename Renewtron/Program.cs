@@ -1,3 +1,4 @@
+using Asic.Client.Captcha;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +33,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentityCore<AppUser>(options => options.SignIn.RequireConfirmedAccount = true)
+builder.Services.AddIdentityCore<AppUser>(options => options.SignIn.RequireConfirmedAccount = false)
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
@@ -45,14 +46,35 @@ builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
 // Configure settings
-builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
-builder.Services.Configure<SendGridSettings>(builder.Configuration.GetSection("SendGrid"));
-builder.Services.Configure<AsicCreditCardSettings>(builder.Configuration.GetSection("AsicCreditCard"));
-builder.Services.Configure<PricingSettings>(builder.Configuration.GetSection("Pricing"));
+builder.Services.AddOptions<TwoCaptchaSettings>()
+    .BindConfiguration("TwoCaptcha")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<StripeSettings>()
+    .BindConfiguration("Stripe")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<SendGridSettings>()
+    .BindConfiguration("SendGrid")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<AsicCreditCardSettings>()
+    .BindConfiguration("AsicCreditCard")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<PricingSettings>()
+    .BindConfiguration("Pricing")
+    .ValidateDataAnnotations();
 
 // Payment and Email services
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+// Settings management service
+builder.Services.AddScoped<ISettingsService, SettingsService>();
+
+// Renewal retry service
+builder.Services.AddScoped<IRenewalRetryService, RenewalRetryService>();
 
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
@@ -106,6 +128,5 @@ var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextI
 
 await initialiser.InitialiseAsync();
 await initialiser.SeedAsync();
-
 
 app.Run();

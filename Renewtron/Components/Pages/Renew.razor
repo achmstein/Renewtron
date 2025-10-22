@@ -17,8 +17,8 @@
 @inject IAsicRenewalClient RenewalClient
 @inject IStripePaymentService StripePaymentService
 @inject IEmailService EmailService
-@inject IOptions<AsicCreditCardSettings> AsicCardSettings
-@inject IOptions<PricingSettings> PricingSettings
+@inject IOptionsSnapshot<AsicCreditCardSettings> AsicCardSettings
+@inject IOptionsSnapshot<PricingSettings> PricingSettings
 
 <PageTitle>Renew Business Name</PageTitle>
 
@@ -375,6 +375,7 @@
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
+            renewalRequest.FailedAtStep = result.IsSuccess ? null : result.FailedAtStep;
 
             await DbContext.SaveChangesAsync();
 

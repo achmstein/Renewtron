@@ -35,28 +35,28 @@ public class AsicRenewalClient : IAsicRenewalClient
             var (sessionId, adfWindowId, viewState) = await InitializeRenewalSessionAsync();
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
             {
-                return RenewalResult.Failed("Failed to initialize renewal session");
+                return RenewalResult.Failed("Failed to initialize renewal session", "Initialize Session");
             }
 
             // Step 2: Submit ABN to get business name list
             var businessListResult = await SubmitAbnForRenewalAsync(abn, adfWindowId, viewState);
             if (!businessListResult.Success)
             {
-                return RenewalResult.Failed("Failed to submit ABN");
+                return RenewalResult.Failed("Failed to submit ABN", "Submit ABN");
             }
 
             // Step 3: Select specific business name from the list
             var selectionResult = await SelectBusinessNameAsync(businessName, adfWindowId, viewState);
             if (!selectionResult.Success)
             {
-                return RenewalResult.Failed("Failed to select business name");
+                return RenewalResult.Failed("Failed to select business name", "Select Business Name");
             }
 
             // Step 4: Click next to proceed to renewal period selection
             var periodPageResult = await ProceedToRenewalPeriodAsync(adfWindowId, viewState);
             if (!periodPageResult.Success)
             {
-                return RenewalResult.Failed("Failed to proceed to renewal period");
+                return RenewalResult.Failed("Failed to proceed to renewal period", "Proceed to Renewal Period");
             }
 
             var transactionReference = periodPageResult.TransactionReference;
@@ -65,49 +65,49 @@ public class AsicRenewalClient : IAsicRenewalClient
             var periodResult = await SelectRenewalPeriodAsync(renewalYears, adfWindowId, viewState);
             if (!periodResult.Success)
             {
-                return RenewalResult.Failed("Failed to select renewal period");
+                return RenewalResult.Failed("Failed to select renewal period", "Select Renewal Period");
             }
 
             // Step 6: Click next to proceed to review page
             var reviewPageResult = await ProceedToReviewAsync(adfWindowId, viewState);
             if (!reviewPageResult.Success)
             {
-                return RenewalResult.Failed("Failed to proceed to review");
+                return RenewalResult.Failed("Failed to proceed to review", "Proceed to Review");
             }
 
             // Step 7: Select authority declaration (Representative declaration)
             var authorityResult = await SelectAuthorityDeclarationAsync(adfWindowId, viewState);
             if (!authorityResult.Success)
             {
-                return RenewalResult.Failed("Failed to select authority declaration");
+                return RenewalResult.Failed("Failed to select authority declaration", "Select Authority Declaration");
             }
 
             // Step 8: Click next to proceed to payment page
             var paymentPageResult = await ProceedToPaymentAsync(adfWindowId, viewState);
             if (!paymentPageResult.Success)
             {
-                return RenewalResult.Failed("Failed to proceed to payment");
+                return RenewalResult.Failed("Failed to proceed to payment", "Proceed to Payment");
             }
 
             // Step 9: Enter email and confirm email
             var emailResult = await SubmitEmailAsync(email, adfWindowId, viewState);
             if (!emailResult.Success)
             {
-                return RenewalResult.Failed("Failed to submit email");
+                return RenewalResult.Failed("Failed to submit email", "Submit Email");
             }
 
             // Step 10: Select payment method (Pay now by credit card)
             var paymentMethodResult = await SelectPaymentMethodAsync(adfWindowId, viewState);
             if (!paymentMethodResult.Success)
             {
-                return RenewalResult.Failed("Failed to select payment method");
+                return RenewalResult.Failed("Failed to select payment method", "Select Payment Method");
             }
 
             // Step 11: Click Pay Now to open payment gateway
             var paymentGatewayResult = await OpenPaymentGatewayAsync(adfWindowId, viewState);
             if (!paymentGatewayResult.Success)
             {
-                return RenewalResult.Failed("Failed to open payment gateway");
+                return RenewalResult.Failed("Failed to open payment gateway", "Open Payment Gateway");
             }
 
             // Step 12: Process payment through payment gateway
@@ -119,7 +119,8 @@ public class AsicRenewalClient : IAsicRenewalClient
             {
                 return RenewalResult.Failed(
                     $"Renewal initiated but payment failed: {paymentResult.Message}. " +
-                    $"Transaction reference: {transactionReference}");
+                    $"Transaction reference: {transactionReference}",
+                    "Process Payment");
             }
 
             return RenewalResult.Success(
@@ -128,7 +129,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
         catch (Exception ex)
         {
-            return RenewalResult.Failed($"Renewal failed: {ex.Message}");
+            return RenewalResult.Failed($"Renewal failed: {ex.Message}", "Exception");
         }
     }
 

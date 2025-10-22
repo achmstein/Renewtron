@@ -11,7 +11,7 @@ public class EmailService : IEmailService
     private readonly SendGridClient _client;
     private readonly SendGridSettings _settings;
 
-    public EmailService(IOptions<SendGridSettings> settings)
+    public EmailService(IOptionsSnapshot<SendGridSettings> settings)
     {
         _settings = settings.Value;
         _client = new SendGridClient(_settings.ApiKey);

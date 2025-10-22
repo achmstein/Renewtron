@@ -47,7 +47,7 @@ public class ApplicationDbContextInitialiser
     public async Task TrySeedAsync()
     {
         // Default users
-        var administrator = new AppUser { UserName = "test@coinpay.com.au" };
+        var administrator = new AppUser { UserName = "admin@renewtron.com.au" };
 
         if (_userManager.Users.All(u => u.UserName != administrator.UserName))
         {

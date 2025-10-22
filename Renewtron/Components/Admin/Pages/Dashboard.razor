@@ -1,0 +1,271 @@
+@page "/admin"
+
+@using Renewtron.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="min-h-full">
+    <AdminNavMenu />
+
+    <header class="relative bg-white shadow-sm">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <h1 class="text-lg/6 font-semibold text-gray-900">Dashboard</h1>
+        </div>
+    </header>
+
+    <main>
+        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <a href="/admin/searches" class="overflow-hidden rounded-lg bg-white shadow hover:shadow-lg transition-shadow cursor-pointer">
+                    <div class="px-4 py-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4 w-0 flex-1">
+                                <dt class="truncate text-sm font-medium text-gray-500">Total Searches</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">@stats.TotalSearches</dd>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-2">
+                        <div class="text-sm">
+                            <span class="font-medium text-indigo-600 hover:text-indigo-500">View all searches →</span>
+                        </div>
+                    </div>
+                </a>
+
+                <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="px-4 py-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4 w-0 flex-1">
+                                <dt class="truncate text-sm font-medium text-gray-500">Successful Searches</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">@stats.SuccessfulSearches</dd>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-2">
+                        <div class="text-sm text-gray-600">
+                            Success Rate: @(stats.TotalSearches > 0 ? ((stats.SuccessfulSearches * 100.0) / stats.TotalSearches).ToString("F1") : "0")%
+                        </div>
+                    </div>
+                </div>
+
+                <a href="/admin/renewals" class="overflow-hidden rounded-lg bg-white shadow hover:shadow-lg transition-shadow cursor-pointer">
+                    <div class="px-4 py-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                            </div>
+                            <div class="ml-4 w-0 flex-1">
+                                <dt class="truncate text-sm font-medium text-gray-500">Renewals Initiated</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">@stats.RenewalsInitiated</dd>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-2">
+                        <div class="text-sm">
+                            <span class="font-medium text-yellow-600 hover:text-yellow-500">View all renewals →</span>
+                        </div>
+                    </div>
+                </a>
+
+                <a href="/admin/renewals" class="overflow-hidden rounded-lg bg-white shadow hover:shadow-lg transition-shadow cursor-pointer">
+                    <div class="px-4 py-5">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <svg class="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                                </svg>
+                            </div>
+                            <div class="ml-4 w-0 flex-1">
+                                <dt class="truncate text-sm font-medium text-gray-500">Renewals Completed</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">@stats.RenewalsCompleted</dd>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-2">
+                        <div class="text-sm text-gray-600">
+                            Completion Rate: @(stats.RenewalsInitiated > 0 ? ((stats.RenewalsCompleted * 100.0) / stats.RenewalsInitiated).ToString("F1") : "0")%
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="mt-8">
+                <h2 class="text-base font-semibold leading-6 text-gray-900">Quick Actions</h2>
+                <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <a href="/admin/searches" class="relative flex items-center space-x-3 rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <span class="absolute inset-0" aria-hidden="true"></span>
+                            <p class="text-sm font-medium text-gray-900">View Search Logs</p>
+                            <p class="truncate text-sm text-gray-500">Monitor ABN searches</p>
+                        </div>
+                    </a>
+
+                    <a href="/admin/renewals" class="relative flex items-center space-x-3 rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <span class="absolute inset-0" aria-hidden="true"></span>
+                            <p class="text-sm font-medium text-gray-900">Manage Renewals</p>
+                            <p class="truncate text-sm text-gray-500">Retry failed renewals</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="mt-8">
+                <h2 class="text-base font-semibold leading-6 text-gray-900 mb-4">Recent Activity</h2>
+                <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+                    <!-- Recent Searches -->
+                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-medium text-gray-900">Recent Searches</h3>
+                                <a href="/admin/searches" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">View all →</a>
+                            </div>
+                            <div class="space-y-3">
+                                @foreach (var search in recentSearches.Take(5))
+                                {
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium text-gray-900">ABN: @search.Abn</p>
+                                            <p class="text-xs text-gray-500">@search.SearchedAt.ToLocalTime().ToString("MMM dd, HH:mm") - @search.ResultsCount results</p>
+                                        </div>
+                                        <div class="ml-4 flex-shrink-0">
+                                            @if (search.Success)
+                                            {
+                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
+                                                        <circle cx="4" cy="4" r="3" />
+                                                    </svg>
+                                                    Success
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
+                                                        <circle cx="4" cy="4" r="3" />
+                                                    </svg>
+                                                    Failed
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Renewals -->
+                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-medium text-gray-900">Recent Renewals</h3>
+                                <a href="/admin/renewals" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">View all →</a>
+                            </div>
+                            <div class="space-y-3">
+                                @foreach (var renewal in recentRenewals.Take(5))
+                                {
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium text-gray-900 truncate">@renewal.SearchResult?.BusinessName</p>
+                                            <p class="text-xs text-gray-500">@renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, HH:mm")</p>
+                                        </div>
+                                        <div class="ml-4 flex-shrink-0">
+                                            @if (renewal.Completed)
+                                            {
+                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
+                                                        <circle cx="4" cy="4" r="3" />
+                                                    </svg>
+                                                    Completed
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
+                                                        <circle cx="4" cy="4" r="3" />
+                                                    </svg>
+                                                    Failed
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+@code {
+    private List<SearchLog> recentSearches = new();
+    private List<RenewalRequest> recentRenewals = new();
+    private DashboardStats stats = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        // Load stats
+        stats.TotalSearches = await DbContext.SearchLogs.CountAsync();
+        stats.SuccessfulSearches = await DbContext.SearchLogs.CountAsync(s => s.Success);
+        stats.RenewalsInitiated = await DbContext.RenewalRequests.CountAsync();
+        stats.RenewalsCompleted = await DbContext.RenewalRequests.CountAsync(r => r.Completed);
+
+        // Load recent searches
+        recentSearches = await DbContext.SearchLogs
+            .OrderByDescending(s => s.SearchedAt)
+            .Take(10)
+            .ToListAsync();
+
+        // Load recent renewals
+        recentRenewals = await DbContext.RenewalRequests
+            .Include(r => r.SearchResult)
+            .OrderByDescending(r => r.InitiatedAt)
+            .Take(10)
+            .ToListAsync();
+    }
+
+    private class DashboardStats
+    {
+        public int TotalSearches { get; set; }
+        public int SuccessfulSearches { get; set; }
+        public int RenewalsInitiated { get; set; }
+        public int RenewalsCompleted { get; set; }
+    }
+}

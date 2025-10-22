@@ -12,7 +12,7 @@ using Renewtron.Data;
 namespace Renewtron.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251019210110_InitialCreate")]
+    [Migration("20251022084323_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -158,7 +158,7 @@ namespace Renewtron.Data.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Renewtron.Data.ApplicationUser", b =>
+            modelBuilder.Entity("Renewtron.Data.AppUser", b =>
                 {
                     b.Property<string>("Id")
                         .HasColumnType("nvarchar(450)");
@@ -258,16 +258,28 @@ namespace Renewtron.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<decimal>("AsicAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<bool>("Completed")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("CustomerAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("CustomerCreditCardId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FailedAtStep")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HostedTokenizationId")
@@ -282,13 +294,19 @@ namespace Renewtron.Data.Migrations
                     b.Property<int>("RenewalYears")
                         .HasColumnType("int");
 
-                    b.Property<Guid?>("SavedCreditCardId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid>("SearchResultId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("SessionId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("StripePaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StripePaymentIntentId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StripePaymentStatus")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TransactionReference")
@@ -296,9 +314,9 @@ namespace Renewtron.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("InitiatedAt");
+                    b.HasIndex("CustomerCreditCardId");
 
-                    b.HasIndex("SavedCreditCardId");
+                    b.HasIndex("InitiatedAt");
 
                     b.HasIndex("SearchResultId");
 
@@ -456,7 +474,7 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
                 {
-                    b.HasOne("Renewtron.Data.ApplicationUser", null)
+                    b.HasOne("Renewtron.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -465,7 +483,7 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<string>", b =>
                 {
-                    b.HasOne("Renewtron.Data.ApplicationUser", null)
+                    b.HasOne("Renewtron.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -480,7 +498,7 @@ namespace Renewtron.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Renewtron.Data.ApplicationUser", null)
+                    b.HasOne("Renewtron.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -489,7 +507,7 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
                 {
-                    b.HasOne("Renewtron.Data.ApplicationUser", null)
+                    b.HasOne("Renewtron.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -509,18 +527,18 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
-                    b.HasOne("Renewtron.Data.SavedCreditCard", "SavedCreditCard")
+                    b.HasOne("Renewtron.Data.SavedCreditCard", "CustomerCreditCard")
                         .WithMany()
-                        .HasForeignKey("SavedCreditCardId")
+                        .HasForeignKey("CustomerCreditCardId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Renewtron.Data.SearchResult", "SearchResult")
-                        .WithMany()
+                        .WithMany("RenewalRequests")
                         .HasForeignKey("SearchResultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("SavedCreditCard");
+                    b.Navigation("CustomerCreditCard");
 
                     b.Navigation("SearchResult");
                 });
@@ -544,6 +562,8 @@ namespace Renewtron.Data.Migrations
             modelBuilder.Entity("Renewtron.Data.SearchResult", b =>
                 {
                     b.Navigation("Holders");
+
+                    b.Navigation("RenewalRequests");
                 });
 #pragma warning restore 612, 618
         }

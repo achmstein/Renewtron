@@ -28,6 +28,7 @@ public class RenewalRequest
     public string? TransactionReference { get; set; }
     public string? HostedTokenizationId { get; set; }
     public string? ErrorMessage { get; set; }
+    public string? FailedAtStep { get; set; }
 
     // Navigation properties
     public SearchResult SearchResult { get; set; }
