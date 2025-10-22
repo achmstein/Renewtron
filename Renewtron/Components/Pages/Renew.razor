@@ -31,7 +31,7 @@
         </div>
     </div>
 
-    <div class="py-12 px-4 sm:px-6 lg:px-8">
+    <div class="py-8 px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-3xl">
         @if (isLoading)
         {
@@ -125,13 +125,6 @@
                                     </div>
                                 </div>
                                 <p class="mt-4">We'll send you an email confirmation at <strong>@existingRenewalRequest.Email</strong> once your renewal is completed.</p>
-                                @if (!string.IsNullOrEmpty(existingRenewalRequest.ErrorMessage))
-                                {
-                                    <div class="mt-4 text-xs text-gray-500">
-                                        <p class="font-medium">Technical details (for support reference):</p>
-                                        <p class="mt-1">@existingRenewalRequest.ErrorMessage</p>
-                                    </div>
-                                }
                             </div>
                         </div>
                     </div>
