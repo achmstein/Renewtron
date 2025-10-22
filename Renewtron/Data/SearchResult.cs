@@ -18,5 +18,5 @@ public class SearchResult
     // Navigation properties
     public SearchLog SearchLog { get; set; }
     public List<Holder> Holders { get; set; } = [];
-    public List<RenewalRequest> RenewalRequests { get; set; } = [];
+    public RenewalRequest? RenewalRequest { get; set; }
 }
