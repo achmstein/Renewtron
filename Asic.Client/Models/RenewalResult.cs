@@ -1,4 +1,4 @@
-﻿namespace Asic.Client.Models;
+namespace Asic.Client.Models;
 
 public class RenewalResult
 {
@@ -6,6 +6,7 @@ public class RenewalResult
     public string Message { get; set; }
     public string TransactionReference { get; set; }
     public string HostedTokenizationId { get; set; }
+    public string? FailedAtStep { get; set; }
 
     public static RenewalResult Success(string transactionReference, string hostedTokenizationId)
     {
@@ -18,12 +19,13 @@ public class RenewalResult
         };
     }
 
-    public static RenewalResult Failed(string message)
+    public static RenewalResult Failed(string message, string? failedAtStep = null)
     {
         return new RenewalResult
         {
             IsSuccess = false,
-            Message = message
+            Message = message,
+            FailedAtStep = failedAtStep
         };
     }
 }

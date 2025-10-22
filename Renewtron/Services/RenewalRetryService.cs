@@ -79,6 +79,7 @@ public class RenewalRetryService : IRenewalRetryService
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
+            renewalRequest.FailedAtStep = result.IsSuccess ? null : result.FailedAtStep;
 
             await _dbContext.SaveChangesAsync();
 
