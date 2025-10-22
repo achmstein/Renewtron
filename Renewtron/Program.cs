@@ -49,10 +49,14 @@ builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Str
 builder.Services.Configure<SendGridSettings>(builder.Configuration.GetSection("SendGrid"));
 builder.Services.Configure<AsicCreditCardSettings>(builder.Configuration.GetSection("AsicCreditCard"));
 builder.Services.Configure<PricingSettings>(builder.Configuration.GetSection("Pricing"));
+builder.Services.Configure<TwoCaptchaSettings>(builder.Configuration.GetSection("TwoCaptcha"));
 
 // Payment and Email services
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+
+// Settings management service
+builder.Services.AddScoped<ISettingsService, SettingsService>();
 
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
