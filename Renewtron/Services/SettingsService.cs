@@ -93,21 +93,26 @@ public class SettingsService : ISettingsService
 
         if (jsonNode is JsonObject root)
         {
-            // Serialize the settings object to JSON
-            var settingsJson = JsonSerializer.Serialize(settings);
+            // Serialize the settings object to JSON with proper options
+            var serializerOptions = new JsonSerializerOptions
+            {
+                WriteIndented = false // We'll handle indentation at the root level
+            };
+
+            var settingsJson = JsonSerializer.Serialize(settings, serializerOptions);
 
             // Parse the settings JSON and add to root
             var settingsNode = JsonNode.Parse(settingsJson);
             root[sectionName] = settingsNode;
 
-            // Write back with proper formatting
-            var options = new JsonSerializerOptions
+            // Write back with proper formatting using JsonSerializer
+            var writeOptions = new JsonSerializerOptions
             {
                 WriteIndented = true,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
-            var updatedJson = root.ToJsonString(options);
+            var updatedJson = JsonSerializer.Serialize(root, writeOptions);
             await File.WriteAllTextAsync(appSettingsPath, updatedJson);
         }
     }
