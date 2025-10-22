@@ -154,46 +154,6 @@
             <div class="mt-8">
                 <h2 class="text-base font-semibold leading-6 text-gray-900 mb-4">Recent Activity</h2>
                 <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    <!-- Recent Renewals -->
-                    <div class="overflow-hidden rounded-lg bg-white shadow">
-                        <div class="p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-sm font-medium text-gray-900">Recent Renewals</h3>
-                                <a href="/admin/renewals" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">View all →</a>
-                            </div>
-                            <div class="space-y-3">
-                                @foreach (var renewal in recentRenewals.Take(5))
-                                {
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex-1 min-w-0">
-                                            <p class="text-sm font-medium text-gray-900 truncate">@renewal.SearchResult?.BusinessName</p>
-                                            <p class="text-xs text-gray-500">@renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, HH:mm")</p>
-                                        </div>
-                                        <div class="ml-4 flex-shrink-0">
-                                            @if (renewal.Completed)
-                                            {
-                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
-                                                        <circle cx="4" cy="4" r="3" />
-                                                    </svg>
-                                                    Completed
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
-                                                        <circle cx="4" cy="4" r="3" />
-                                                    </svg>
-                                                    Failed
-                                                </span>
-                                            }
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Recent Searches -->
                     <div class="overflow-hidden rounded-lg bg-white shadow">
@@ -218,6 +178,47 @@
                                                         <circle cx="4" cy="4" r="3" />
                                                     </svg>
                                                     Success
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
+                                                        <circle cx="4" cy="4" r="3" />
+                                                    </svg>
+                                                    Failed
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Renewals -->
+                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-sm font-medium text-gray-900">Recent Renewals</h3>
+                                <a href="/admin/renewals" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">View all →</a>
+                            </div>
+                            <div class="space-y-3">
+                                @foreach (var renewal in recentRenewals.Take(5))
+                                {
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-medium text-gray-900 truncate">@renewal.SearchResult?.BusinessName</p>
+                                            <p class="text-xs text-gray-500">@renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, HH:mm")</p>
+                                        </div>
+                                        <div class="ml-4 flex-shrink-0">
+                                            @if (renewal.Completed)
+                                            {
+                                                <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                                                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 8 8">
+                                                        <circle cx="4" cy="4" r="3" />
+                                                    </svg>
+                                                    Completed
                                                 </span>
                                             }
                                             else

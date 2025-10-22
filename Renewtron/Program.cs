@@ -114,5 +114,4 @@ var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextI
 await initialiser.InitialiseAsync();
 await initialiser.SeedAsync();
 
-
 app.Run();
