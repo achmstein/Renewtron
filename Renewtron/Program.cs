@@ -58,6 +58,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 // Settings management service
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 
+// Renewal retry service
+builder.Services.AddScoped<IRenewalRetryService, RenewalRetryService>();
+
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
