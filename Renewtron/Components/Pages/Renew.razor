@@ -329,12 +329,11 @@
             .FirstOrDefaultAsync(r => r.Id == Id);
 
         // Check if there's an existing renewal request for this search result
+        // (1-to-1 relationship: each SearchResult has only one RenewalRequest)
         if (searchResult != null)
         {
             existingRenewalRequest = await DbContext.RenewalRequests
-                .Where(r => r.SearchResultId == searchResult.Id)
-                .OrderByDescending(r => r.InitiatedAt)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(r => r.SearchResultId == searchResult.Id);
 
             // Show support message if payment succeeded but ASIC renewal failed
             if (existingRenewalRequest != null &&
@@ -397,23 +396,51 @@
             DbContext.SavedCreditCards.Add(customerCard);
             await DbContext.SaveChangesAsync();
 
-            // Step 2: Create renewal request
-            var renewalRequest = new RenewalRequest
-            {
-                Id = Guid.NewGuid(),
-                SearchResultId = searchResult!.Id,
-                CustomerCreditCardId = customerCard.Id,
-                InitiatedAt = DateTime.UtcNow,
-                IpAddress = ipAddress,
-                SessionId = sessionId,
-                RenewalYears = renewalYears,
-                Email = email,
-                CustomerAmount = customerAmount,
-                AsicAmount = asicAmount,
-                Completed = false
-            };
+            // Step 2: Update existing renewal request or create new one
+            var renewalRequest = await DbContext.RenewalRequests
+                .FirstOrDefaultAsync(r => r.SearchResultId == searchResult!.Id);
 
-            DbContext.RenewalRequests.Add(renewalRequest);
+            if (renewalRequest != null)
+            {
+                // Update existing renewal request (payment retry scenario)
+                renewalRequest.CustomerCreditCardId = customerCard.Id;
+                renewalRequest.RenewalYears = renewalYears;
+                renewalRequest.Email = email;
+                renewalRequest.CustomerAmount = customerAmount;
+                renewalRequest.AsicAmount = asicAmount;
+                renewalRequest.IpAddress = ipAddress;
+                renewalRequest.SessionId = sessionId;
+                // Clear previous error states
+                renewalRequest.ErrorMessage = null;
+                renewalRequest.FailedAtStep = null;
+                renewalRequest.StripePaymentStatus = null;
+                renewalRequest.StripePaymentIntentId = null;
+                renewalRequest.StripePaidAt = null;
+                renewalRequest.Completed = false;
+                renewalRequest.CompletedAt = null;
+                renewalRequest.TransactionReference = null;
+                renewalRequest.HostedTokenizationId = null;
+            }
+            else
+            {
+                // Create new renewal request (first attempt)
+                renewalRequest = new RenewalRequest
+                {
+                    Id = Guid.NewGuid(),
+                    SearchResultId = searchResult!.Id,
+                    CustomerCreditCardId = customerCard.Id,
+                    InitiatedAt = DateTime.UtcNow,
+                    IpAddress = ipAddress,
+                    SessionId = sessionId,
+                    RenewalYears = renewalYears,
+                    Email = email,
+                    CustomerAmount = customerAmount,
+                    AsicAmount = asicAmount,
+                    Completed = false
+                };
+                DbContext.RenewalRequests.Add(renewalRequest);
+            }
+
             await DbContext.SaveChangesAsync();
 
             // Step 3: Process Stripe payment
