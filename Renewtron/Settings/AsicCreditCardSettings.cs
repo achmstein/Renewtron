@@ -7,5 +7,4 @@ public class AsicCreditCardSettings
     public string ExpiryMonth { get; set; }
     public string ExpiryYear { get; set; }
     public string Cvc { get; set; }
-    public string CardBrand { get; set; }
 }

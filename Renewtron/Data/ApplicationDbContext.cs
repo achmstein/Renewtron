@@ -70,7 +70,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.CustomerCreditCardId);
 
             entity.HasOne(e => e.SearchResult)
-                .WithMany()
+                .WithMany(s => s.RenewalRequests)
                 .HasForeignKey(e => e.SearchResultId)
                 .OnDelete(DeleteBehavior.Restrict);
 

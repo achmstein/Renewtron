@@ -276,6 +276,9 @@ namespace Renewtron.Data.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("FailedAtStep")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("HostedTokenizationId")
                         .HasColumnType("nvarchar(max)");
 
@@ -527,7 +530,7 @@ namespace Renewtron.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Renewtron.Data.SearchResult", "SearchResult")
-                        .WithMany()
+                        .WithMany("RenewalRequests")
                         .HasForeignKey("SearchResultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -556,6 +559,8 @@ namespace Renewtron.Data.Migrations
             modelBuilder.Entity("Renewtron.Data.SearchResult", b =>
                 {
                     b.Navigation("Holders");
+
+                    b.Navigation("RenewalRequests");
                 });
 #pragma warning restore 612, 618
         }

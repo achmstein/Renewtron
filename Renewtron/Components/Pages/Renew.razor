@@ -17,8 +17,8 @@
 @inject IAsicRenewalClient RenewalClient
 @inject IStripePaymentService StripePaymentService
 @inject IEmailService EmailService
-@inject IOptions<AsicCreditCardSettings> AsicCardSettings
-@inject IOptions<PricingSettings> PricingSettings
+@inject IOptionsSnapshot<AsicCreditCardSettings> AsicCardSettings
+@inject IOptionsSnapshot<PricingSettings> PricingSettings
 
 <PageTitle>Renew Business Name</PageTitle>
 

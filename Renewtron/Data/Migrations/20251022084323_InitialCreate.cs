@@ -249,24 +249,30 @@ namespace Renewtron.Data.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SearchResultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    SavedCreditCardId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CustomerCreditCardId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     InitiatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IpAddress = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     SessionId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     RenewalYears = table.Column<int>(type: "int", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CustomerAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    AsicAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    StripePaymentIntentId = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    StripePaymentStatus = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    StripePaidAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Completed = table.Column<bool>(type: "bit", nullable: false),
                     CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     TransactionReference = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     HostedTokenizationId = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    FailedAtStep = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_RenewalRequests", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_RenewalRequests_SavedCreditCards_SavedCreditCardId",
-                        column: x => x.SavedCreditCardId,
+                        name: "FK_RenewalRequests_SavedCreditCards_CustomerCreditCardId",
+                        column: x => x.CustomerCreditCardId,
                         principalTable: "SavedCreditCards",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
@@ -284,14 +290,14 @@ namespace Renewtron.Data.Migrations
                 column: "SearchResultId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_RenewalRequests_CustomerCreditCardId",
+                table: "RenewalRequests",
+                column: "CustomerCreditCardId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_InitiatedAt",
                 table: "RenewalRequests",
                 column: "InitiatedAt");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RenewalRequests_SavedCreditCardId",
-                table: "RenewalRequests",
-                column: "SavedCreditCardId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_SearchResultId",
