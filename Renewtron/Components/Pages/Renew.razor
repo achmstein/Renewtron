@@ -486,8 +486,8 @@
             BackgroundJobClient.Enqueue<IRenewalProcessingService>(service =>
                 service.ProcessRenewalAsync(renewalRequest.Id));
 
-            // Step 5: Redirect to success page immediately
-            Navigation.NavigateTo($"/renewal-success/{renewalRequest.Id}");
+            // Step 5: Redirect to confirmation page immediately
+            Navigation.NavigateTo($"/renewal-confirmation/{renewalRequest.Id}");
         }
         catch (Exception ex)
         {
