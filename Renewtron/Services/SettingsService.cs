@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Renewtron.Services;
 
@@ -84,22 +85,29 @@ public class SettingsService : ISettingsService
     {
         var appSettingsPath = Path.Combine(_environment.ContentRootPath, "appsettings.json");
 
+        // Read the existing JSON
         var json = await File.ReadAllTextAsync(appSettingsPath);
-        var jsonDocument = JsonDocument.Parse(json);
 
-        var root = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+        // Parse as JsonNode for manipulation
+        var jsonNode = JsonNode.Parse(json);
 
-        if (root != null)
+        if (jsonNode is JsonObject root)
         {
-            root[sectionName] = JsonSerializer.Deserialize<Dictionary<string, object>>(
-                JsonSerializer.Serialize(settings));
+            // Serialize the settings object to JSON
+            var settingsJson = JsonSerializer.Serialize(settings);
 
+            // Parse the settings JSON and add to root
+            var settingsNode = JsonNode.Parse(settingsJson);
+            root[sectionName] = settingsNode;
+
+            // Write back with proper formatting
             var options = new JsonSerializerOptions
             {
-                WriteIndented = true
+                WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             };
 
-            var updatedJson = JsonSerializer.Serialize(root, options);
+            var updatedJson = root.ToJsonString(options);
             await File.WriteAllTextAsync(appSettingsPath, updatedJson);
         }
     }
