@@ -1,3 +1,4 @@
+using Asic.Client.Captcha;
 using Renewtron.Settings;
 
 namespace Renewtron.Abstractions;

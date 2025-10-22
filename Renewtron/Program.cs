@@ -1,3 +1,4 @@
+using Asic.Client.Captcha;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -45,11 +46,25 @@ builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
 // Configure settings
-builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
-builder.Services.Configure<SendGridSettings>(builder.Configuration.GetSection("SendGrid"));
-builder.Services.Configure<AsicCreditCardSettings>(builder.Configuration.GetSection("AsicCreditCard"));
-builder.Services.Configure<PricingSettings>(builder.Configuration.GetSection("Pricing"));
-builder.Services.Configure<TwoCaptchaSettings>(builder.Configuration.GetSection("TwoCaptcha"));
+builder.Services.AddOptions<TwoCaptchaSettings>()
+    .BindConfiguration("TwoCaptcha")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<StripeSettings>()
+    .BindConfiguration("Stripe")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<SendGridSettings>()
+    .BindConfiguration("SendGrid")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<AsicCreditCardSettings>()
+    .BindConfiguration("AsicCreditCard")
+    .ValidateDataAnnotations();
+
+builder.Services.AddOptions<PricingSettings>()
+    .BindConfiguration("Pricing")
+    .ValidateDataAnnotations();
 
 // Payment and Email services
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();

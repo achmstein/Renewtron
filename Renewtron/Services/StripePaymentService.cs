@@ -9,7 +9,7 @@ public class StripePaymentService : IStripePaymentService
 {
     private readonly StripeSettings _settings;
 
-    public StripePaymentService(IOptions<StripeSettings> settings)
+    public StripePaymentService(IOptionsSnapshot<StripeSettings> settings)
     {
         _settings = settings.Value;
         StripeConfiguration.ApiKey = _settings.SecretKey;
