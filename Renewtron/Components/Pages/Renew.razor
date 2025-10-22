@@ -9,16 +9,15 @@
 @using Microsoft.Extensions.Options
 @using Renewtron.Settings
 @using Soenneker.Blazor.CreditCards
+@using Hangfire
 
 @inject ApplicationDbContext DbContext
 @inject IEncryptionService EncryptionService
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
-@inject IAsicRenewalClient RenewalClient
 @inject IStripePaymentService StripePaymentService
-@inject IEmailService EmailService
-@inject IOptionsSnapshot<AsicCreditCardSettings> AsicCardSettings
 @inject IOptionsSnapshot<PricingSettings> PricingSettings
+@inject IBackgroundJobClient BackgroundJobClient
 
 <PageTitle>Renew Business Name</PageTitle>
 
@@ -479,72 +478,16 @@
             renewalRequest.StripePaidAt = DateTime.UtcNow;
             await DbContext.SaveChangesAsync();
 
-            // Step 4: Process ASIC renewal using our credit card
-            processingStatus = "Processing ASIC renewal...";
+            // Step 4: Queue background job to process ASIC renewal
+            processingStatus = "Confirming your request...";
             StateHasChanged();
 
-            var asicCard = AsicCardSettings.Value;
-            var asicCardDetails = new CreditCardDetails
-            {
-                CardNumber = asicCard.CardNumber,
-                CardholderName = asicCard.CardholderName,
-                ExpiryMonth = asicCard.ExpiryMonth,
-                ExpiryYear = asicCard.ExpiryYear,
-                Cvc = asicCard.Cvc
-            };
+            // Queue the renewal processing job to run in the background
+            BackgroundJobClient.Enqueue<IRenewalProcessingService>(service =>
+                service.ProcessRenewalAsync(renewalRequest.Id));
 
-            var result = await RenewalClient.RenewBusinessNameAsync(
-                searchResult.SearchLog!.Abn,
-                searchResult.BusinessName,
-                renewalYears,
-                email,
-                asicCardDetails
-            );
-
-            // Step 5: Update renewal request with ASIC result
-            renewalRequest.Completed = result.IsSuccess;
-            renewalRequest.CompletedAt = DateTime.UtcNow;
-            renewalRequest.TransactionReference = result.TransactionReference;
-            renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
-            renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
-            renewalRequest.FailedAtStep = result.IsSuccess ? null : result.FailedAtStep;
-
-            await DbContext.SaveChangesAsync();
-
-            if (result.IsSuccess)
-            {
-                // Step 6: Send confirmation email
-                processingStatus = "Sending confirmation email...";
-                StateHasChanged();
-
-                try
-                {
-                    await EmailService.SendRenewalConfirmationAsync(
-                        email,
-                        searchResult.BusinessName,
-                        searchResult.SearchLog.Abn,
-                        renewalYears,
-                        customerAmount,
-                        result.TransactionReference
-                    );
-                }
-                catch (Exception emailEx)
-                {
-                    // Log email error but don't fail the transaction
-                    Console.WriteLine($"Email send failed: {emailEx.Message}");
-                }
-
-                // Step 7: Redirect to success page
-                Navigation.NavigateTo($"/renewal-success/{renewalRequest.Id}");
-            }
-            else
-            {
-                // ASIC renewal failed, but customer was already charged
-                // You should handle refunds here
-                errorMessage = $"Payment successful but ASIC renewal failed: {result.Message}. " +
-                             $"Please contact support with reference: {renewalRequest.Id}";
-                isProcessing = false;
-            }
+            // Step 5: Redirect to success page immediately
+            Navigation.NavigateTo($"/renewal-success/{renewalRequest.Id}");
         }
         catch (Exception ex)
         {

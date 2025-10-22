@@ -1,4 +1,6 @@
 using Asic.Client.Captcha;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -76,6 +78,26 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 // Renewal retry service
 builder.Services.AddScoped<IRenewalRetryService, RenewalRetryService>();
 
+// Background job processing service
+builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
+
+// Add Hangfire services for background job processing
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+    {
+        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+        QueuePollInterval = TimeSpan.Zero,
+        UseRecommendedIsolationLevel = true,
+        DisableGlobalLocks = true
+    }));
+
+// Add the processing server as IHostedService
+builder.Services.AddHangfireServer();
+
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -115,6 +137,12 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 
 app.UseSession();
+
+// Add Hangfire Dashboard (only accessible to authenticated admin users)
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new HangfireAuthorizationFilter() }
+});
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
