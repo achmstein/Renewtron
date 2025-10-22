@@ -65,13 +65,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<RenewalRequest>(entity =>
         {
             entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.SearchResultId);
+            entity.HasIndex(e => e.SearchResultId).IsUnique();
             entity.HasIndex(e => e.InitiatedAt);
             entity.HasIndex(e => e.CustomerCreditCardId);
 
             entity.HasOne(e => e.SearchResult)
-                .WithMany(s => s.RenewalRequests)
-                .HasForeignKey(e => e.SearchResultId)
+                .WithOne(s => s.RenewalRequest)
+                .HasForeignKey<RenewalRequest>(e => e.SearchResultId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.CustomerCreditCard)

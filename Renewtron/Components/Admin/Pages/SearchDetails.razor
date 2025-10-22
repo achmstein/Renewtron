@@ -15,11 +15,8 @@
         <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between">
                 <h1 class="text-lg/6 font-semibold text-gray-900">Search Details</h1>
-                <a href="/admin/searches" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                    <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-                    </svg>
-                    Back to Searches
+                <a href="/admin/renewals" class="text-sm text-gray-600 hover:text-gray-900">
+                    ← Back to Searches
                 </a>
             </div>
         </div>
@@ -184,38 +181,35 @@
                                                 </div>
                                             }
 
-                                            @if (result.RenewalRequests.Any())
+                                            @if (result.RenewalRequest != null)
                                             {
                                                 <div class="mt-4">
-                                                    <h4 class="text-sm font-medium text-gray-900 mb-2">Renewal Requests (@result.RenewalRequests.Count)</h4>
+                                                    <h4 class="text-sm font-medium text-gray-900 mb-2">Renewal Request</h4>
                                                     <div class="space-y-2">
-                                                        @foreach (var renewal in result.RenewalRequests.OrderByDescending(r => r.InitiatedAt))
-                                                        {
-                                                            <div class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
-                                                                <div class="flex items-center gap-3">
-                                                                    <div>
-                                                                        @if (renewal.Completed)
-                                                                        {
-                                                                            <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Completed</span>
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            <span class="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
-                                                                        }
-                                                                    </div>
-                                                                    <div class="text-xs text-gray-600">
-                                                                        <span>@renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</span>
-                                                                        <span class="mx-1">•</span>
-                                                                        <span>@renewal.RenewalYears year@(renewal.RenewalYears > 1 ? "s" : "")</span>
-                                                                        <span class="mx-1">•</span>
-                                                                        <span>$@renewal.CustomerAmount.ToString("F2")</span>
-                                                                    </div>
+                                                        <div class="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2">
+                                                            <div class="flex items-center gap-3">
+                                                                <div>
+                                                                    @if (result.RenewalRequest.Completed)
+                                                                    {
+                                                                        <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Completed</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <span class="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
+                                                                    }
                                                                 </div>
-                                                                <a href="/admin/renewals/@renewal.Id" class="text-indigo-600 hover:text-indigo-900 text-xs font-medium">
-                                                                    View Details →
-                                                                </a>
+                                                                <div class="text-xs text-gray-600">
+                                                                    <span>@result.RenewalRequest.InitiatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</span>
+                                                                    <span class="mx-1">•</span>
+                                                                    <span>@result.RenewalRequest.RenewalYears year@(result.RenewalRequest.RenewalYears > 1 ? "s" : "")</span>
+                                                                    <span class="mx-1">•</span>
+                                                                    <span>$@result.RenewalRequest.CustomerAmount.ToString("F2")</span>
+                                                                </div>
                                                             </div>
-                                                        }
+                                                            <a href="/admin/renewals/@result.RenewalRequest.Id" class="text-indigo-600 hover:text-indigo-900 text-xs font-medium">
+                                                                View Details →
+                                                            </a>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             }
@@ -260,7 +254,7 @@
             .Include(s => s.Results)
                 .ThenInclude(r => r.Holders)
             .Include(s => s.Results)
-                .ThenInclude(r => r.RenewalRequests)
+                .ThenInclude(r => r.RenewalRequest)
             .FirstOrDefaultAsync(s => s.Id == Id);
 
         isLoading = false;
