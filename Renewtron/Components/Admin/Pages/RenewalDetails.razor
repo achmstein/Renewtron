@@ -231,7 +231,7 @@
                     </div>
 
                     <!-- Customer Credit Card -->
-                    @if (renewal.CustomerCreditCard != null)
+                    @if (renewal.StripePayment?.CustomerCreditCard != null)
                     {
                         <div class="overflow-hidden rounded-lg bg-white shadow">
                             <div class="border-b border-gray-200 bg-gray-50 px-6 py-3">
@@ -241,19 +241,19 @@
                                 <dl class="space-y-4">
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Cardholder Name</dt>
-                                        <dd class="mt-1 text-sm text-gray-900">@renewal.CustomerCreditCard.CardholderName</dd>
+                                        <dd class="mt-1 text-sm text-gray-900">@renewal.StripePayment.CustomerCreditCard.CardholderName</dd>
                                     </div>
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Card Number</dt>
-                                        <dd class="mt-1 text-sm text-gray-900 font-mono">**** **** **** @renewal.CustomerCreditCard.CardNumberLast4</dd>
+                                        <dd class="mt-1 text-sm text-gray-900 font-mono">**** **** **** @renewal.StripePayment.CustomerCreditCard.CardNumberLast4</dd>
                                     </div>
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Card Brand</dt>
-                                        <dd class="mt-1 text-sm text-gray-900">@renewal.CustomerCreditCard.CardBrand</dd>
+                                        <dd class="mt-1 text-sm text-gray-900">@renewal.StripePayment.CustomerCreditCard.CardBrand</dd>
                                     </div>
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Expiry</dt>
-                                        <dd class="mt-1 text-sm text-gray-900">@renewal.CustomerCreditCard.ExpiryMonth/@renewal.CustomerCreditCard.ExpiryYear</dd>
+                                        <dd class="mt-1 text-sm text-gray-900">@renewal.StripePayment.CustomerCreditCard.ExpiryMonth/@renewal.StripePayment.CustomerCreditCard.ExpiryYear</dd>
                                     </div>
                                 </dl>
                             </div>
@@ -312,8 +312,8 @@
         renewal = await DbContext.RenewalRequests
             .Include(r => r.SearchResult)
                 .ThenInclude(sr => sr.SearchLog)
-            .Include(r => r.CustomerCreditCard)
             .Include(r => r.StripePayment)
+                .ThenInclude(sp => sp.CustomerCreditCard)
             .FirstOrDefaultAsync(r => r.Id == Id);
         isLoading = false;
     }

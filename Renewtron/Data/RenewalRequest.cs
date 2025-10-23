@@ -4,7 +4,6 @@ public class RenewalRequest
 {
     public Guid Id { get; set; }
     public Guid SearchResultId { get; set; }
-    public Guid? CustomerCreditCardId { get; set; } // Customer's card (for display only - Stripe payments)
     public DateTime InitiatedAt { get; set; }
     public string? IpAddress { get; set; }
     public string? SessionId { get; set; }
@@ -27,6 +26,5 @@ public class RenewalRequest
 
     // Navigation properties
     public SearchResult SearchResult { get; set; }
-    public SavedCreditCard? CustomerCreditCard { get; set; }
     public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments
 }

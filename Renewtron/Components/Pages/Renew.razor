@@ -405,7 +405,6 @@
             if (renewalRequest != null)
             {
                 // Update existing renewal request (payment retry scenario)
-                renewalRequest.CustomerCreditCardId = customerCard.Id;
                 renewalRequest.RenewalYears = renewalYears;
                 renewalRequest.Email = email;
                 renewalRequest.PaymentType = PaymentType.Stripe;
@@ -433,7 +432,6 @@
                 {
                     Id = Guid.NewGuid(),
                     SearchResultId = searchResult!.Id,
-                    CustomerCreditCardId = customerCard.Id,
                     InitiatedAt = DateTime.UtcNow,
                     IpAddress = ipAddress,
                     SessionId = sessionId,
@@ -480,6 +478,7 @@
             {
                 Id = Guid.NewGuid(),
                 RenewalRequestId = renewalRequest.Id,
+                CustomerCreditCardId = customerCard.Id,
                 PaymentIntentId = paymentIntentId!,
                 PaymentStatus = "succeeded",
                 PaidAt = DateTime.UtcNow

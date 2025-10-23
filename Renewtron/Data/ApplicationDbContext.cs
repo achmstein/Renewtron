@@ -68,16 +68,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.SearchResultId).IsUnique();
             entity.HasIndex(e => e.InitiatedAt);
-            entity.HasIndex(e => e.CustomerCreditCardId);
 
             entity.HasOne(e => e.SearchResult)
                 .WithOne(s => s.RenewalRequest)
                 .HasForeignKey<RenewalRequest>(e => e.SearchResultId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(e => e.CustomerCreditCard)
-                .WithMany()
-                .HasForeignKey(e => e.CustomerCreditCardId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.StripePayment)
@@ -93,6 +87,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.PaymentStatus).IsRequired();
             entity.HasIndex(e => e.RenewalRequestId).IsUnique();
             entity.HasIndex(e => e.PaymentIntentId);
+            entity.HasIndex(e => e.CustomerCreditCardId);
+
+            entity.HasOne(e => e.CustomerCreditCard)
+                .WithMany()
+                .HasForeignKey(e => e.CustomerCreditCardId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SavedCreditCard>(entity =>

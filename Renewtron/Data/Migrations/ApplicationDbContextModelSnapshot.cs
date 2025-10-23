@@ -264,9 +264,6 @@ namespace Renewtron.Data.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("CustomerCreditCardId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
@@ -301,8 +298,6 @@ namespace Renewtron.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CustomerCreditCardId");
 
                     b.HasIndex("InitiatedAt");
 
@@ -372,6 +367,9 @@ namespace Renewtron.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("CustomerCreditCardId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("PaymentIntentId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
@@ -387,6 +385,8 @@ namespace Renewtron.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditCardId");
 
                     b.HasIndex("PaymentIntentId");
 
@@ -546,18 +546,11 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
-                    b.HasOne("Renewtron.Data.SavedCreditCard", "CustomerCreditCard")
-                        .WithMany()
-                        .HasForeignKey("CustomerCreditCardId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("Renewtron.Data.SearchResult", "SearchResult")
                         .WithOne("RenewalRequest")
                         .HasForeignKey("Renewtron.Data.RenewalRequest", "SearchResultId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("CustomerCreditCard");
 
                     b.Navigation("SearchResult");
 
@@ -566,11 +559,19 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
                 {
+                    b.HasOne("Renewtron.Data.SavedCreditCard", "CustomerCreditCard")
+                        .WithMany()
+                        .HasForeignKey("CustomerCreditCardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Renewtron.Data.RenewalRequest", "RenewalRequest")
                         .WithOne("StripePayment")
                         .HasForeignKey("Renewtron.Data.StripePayment", "RenewalRequestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("CustomerCreditCard");
 
                     b.Navigation("RenewalRequest");
                 });
