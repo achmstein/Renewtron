@@ -1,0 +1,340 @@
+@page "/admin/manual-renewal"
+
+@using Renewtron.Data
+@using Renewtron.Abstractions
+@using Asic.Client.Abstractions
+@using Microsoft.EntityFrameworkCore
+@using Hangfire
+
+@inject ApplicationDbContext DbContext
+@inject IAsicRegistrySearchClient SearchClient
+@inject NavigationManager Navigation
+@inject IBackgroundJobClient BackgroundJobClient
+
+<PageTitle>Manual Renewal - Admin</PageTitle>
+
+<div class="min-h-full">
+    <AdminNavMenu />
+
+    <header class="relative bg-white shadow-sm">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <h1 class="text-lg/6 font-semibold text-gray-900">Manual Renewal</h1>
+            <p class="mt-1 text-sm text-gray-500">Process renewal for a client who paid externally</p>
+        </div>
+    </header>
+
+    <main>
+        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+            @if (!string.IsNullOrEmpty(successMessage))
+            {
+                <div class="mb-4 rounded-md bg-green-50 p-4">
+                    <div class="flex">
+                        <div class="shrink-0">
+                            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-green-800">@successMessage</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="mb-4 rounded-md bg-red-50 p-4">
+                    <div class="flex">
+                        <div class="shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-red-800">@errorMessage</p>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Step 1: Search for Business -->
+            <div class="mb-6 overflow-hidden rounded-lg bg-white shadow">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-base font-semibold leading-6 text-gray-900">Step 1: Search Business</h3>
+                    <div class="mt-4">
+                        <label for="abn" class="block text-sm font-medium text-gray-700">ABN</label>
+                        <div class="mt-1 flex rounded-md shadow-sm">
+                            <input type="text" @bind="searchAbn" @bind:event="oninput" id="abn"
+                                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
+                                   placeholder="Enter 11-digit ABN" maxlength="11" />
+                            <button @onclick="SearchBusiness" disabled="@isSearching"
+                                    class="ml-3 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                @if (isSearching)
+                                {
+                                    <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Searching...</span>
+                                }
+                                else
+                                {
+                                    <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                    </svg>
+                                    <span>Search</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (searchResults.Any())
+                    {
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-700">Select Business</label>
+                            <div class="mt-2 space-y-2">
+                                @foreach (var result in searchResults)
+                                {
+                                    <div class="flex items-start">
+                                        <div class="flex h-6 items-center">
+                                            <input type="radio" name="business" value="@result.Id"
+                                                   @onchange="() => SelectBusiness(result)"
+                                                   checked="@(selectedResult?.Id == result.Id)"
+                                                   class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600" />
+                                        </div>
+                                        <div class="ml-3 text-sm leading-6">
+                                            <label class="font-medium text-gray-900">@result.BusinessName</label>
+                                            <p class="text-gray-500">Status: @result.Status | Renewal Date: @result.RenewalDate</p>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Step 2: Enter Renewal Details -->
+            @if (selectedResult != null)
+            {
+                <div class="mb-6 overflow-hidden rounded-lg bg-white shadow">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-base font-semibold leading-6 text-gray-900">Step 2: Renewal Details</h3>
+                        <p class="mt-1 text-sm text-gray-500">The ASIC credit card from settings will be used to process this renewal</p>
+
+                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="renewalYears" class="block text-sm font-medium text-gray-700">Renewal Years</label>
+                                <select @bind="renewalYears" id="renewalYears"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2">
+                                    <option value="1">1 Year</option>
+                                    <option value="3">3 Years</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-700">Customer Email</label>
+                                <input type="email" @bind="customerEmail" id="email"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
+                                       placeholder="customer@example.com" />
+                            </div>
+
+                            <div>
+                                <label for="amount" class="block text-sm font-medium text-gray-700">Amount Paid by Customer</label>
+                                <div class="relative mt-1 rounded-md shadow-sm">
+                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                        <span class="text-gray-500 sm:text-sm">$</span>
+                                    </div>
+                                    <input type="number" @bind="amount" id="amount" step="0.01" min="0"
+                                           class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
+                                           placeholder="0.00" />
+                                </div>
+                                <p class="mt-1 text-xs text-gray-500">Amount received from customer via external payment method</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6">
+                            <button @onclick="ProcessManualRenewal" disabled="@isProcessing"
+                                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                @if (isProcessing)
+                                {
+                                    <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span>Process Manual Renewal</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </main>
+</div>
+
+@code {
+    // Search
+    private string searchAbn = "";
+    private bool isSearching = false;
+    private List<SearchResult> searchResults = new();
+    private SearchResult? selectedResult = null;
+
+    // Renewal details
+    private int renewalYears = 1;
+    private string customerEmail = "";
+    private decimal amount = 0;
+
+    // Processing
+    private bool isProcessing = false;
+    private string successMessage = "";
+    private string errorMessage = "";
+
+    private async Task SearchBusiness()
+    {
+        errorMessage = "";
+        successMessage = "";
+        searchResults.Clear();
+        selectedResult = null;
+
+        if (string.IsNullOrWhiteSpace(searchAbn) || searchAbn.Length != 11)
+        {
+            errorMessage = "Please enter a valid 11-digit ABN";
+            return;
+        }
+
+        isSearching = true;
+
+        try
+        {
+            var result = await SearchClient.SearchAsync(searchAbn);
+
+            if (!result.Success)
+            {
+                errorMessage = "Failed to search ASIC registry";
+                return;
+            }
+
+            if (result.Data?.BusinessNames == null || !result.Data.BusinessNames.Any())
+            {
+                errorMessage = "No business names found for this ABN";
+                return;
+            }
+
+            // Check if we already have these results in the database
+            var existingSearchLog = await DbContext.SearchLogs
+                .Include(sl => sl.Results)
+                    .ThenInclude(sr => sr.RenewalRequest)
+                .Where(sl => sl.Abn == searchAbn)
+                .OrderByDescending(sl => sl.SearchedAt)
+                .FirstOrDefaultAsync();
+
+            if (existingSearchLog != null && existingSearchLog.Results.Any())
+            {
+                searchResults = existingSearchLog.Results;
+                successMessage = $"Found {searchResults.Count} business name(s) for ABN {searchAbn}";
+            }
+            else
+            {
+                errorMessage = "Business not found in database. Please have the customer search for their business first via the public interface.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error searching: {ex.Message}";
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private void SelectBusiness(SearchResult result)
+    {
+        selectedResult = result;
+        errorMessage = "";
+    }
+
+    private async Task ProcessManualRenewal()
+    {
+        errorMessage = "";
+        successMessage = "";
+
+        // Validate inputs
+        if (selectedResult == null)
+        {
+            errorMessage = "Please select a business";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(customerEmail))
+        {
+            errorMessage = "Please enter customer email";
+            return;
+        }
+
+        if (amount <= 0)
+        {
+            errorMessage = "Please enter amount paid by customer";
+            return;
+        }
+
+        // Check if renewal already exists
+        var existingRenewal = await DbContext.RenewalRequests
+            .FirstOrDefaultAsync(r => r.SearchResultId == selectedResult.Id);
+
+        if (existingRenewal != null)
+        {
+            errorMessage = "A renewal request already exists for this business. Please check the renewals list.";
+            return;
+        }
+
+        isProcessing = true;
+
+        try
+        {
+            // Create renewal request (no customer credit card needed - will use ASIC card from settings)
+            var renewalRequest = new RenewalRequest
+            {
+                Id = Guid.NewGuid(),
+                SearchResultId = selectedResult.Id,
+                InitiatedAt = DateTime.UtcNow,
+                IpAddress = "Admin",
+                SessionId = "Manual",
+                RenewalYears = renewalYears,
+                Email = customerEmail,
+                PaymentType = PaymentType.External,
+                Amount = amount,
+                Completed = false
+            };
+
+            DbContext.RenewalRequests.Add(renewalRequest);
+            await DbContext.SaveChangesAsync();
+
+            // Queue background job to process renewal
+            BackgroundJobClient.Enqueue<IRenewalProcessingService>(service =>
+                service.ProcessRenewalAsync(renewalRequest.Id));
+
+            successMessage = $"Manual renewal queued successfully for {selectedResult.BusinessName}. The renewal will be processed shortly.";
+
+            // Reset form
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/admin/renewals");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error processing renewal: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

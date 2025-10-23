@@ -87,7 +87,15 @@
                                             @renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
                                         </td>
                                         <td class="px-6 py-4 text-sm font-medium text-gray-900">
-                                            @renewal.SearchResult?.BusinessName
+                                            <div class="flex items-center gap-2">
+                                                <span>@renewal.SearchResult?.BusinessName</span>
+                                                @if (renewal.PaymentType == PaymentType.External)
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800" title="Manual Payment (External)">
+                                                        Manual
+                                                    </span>
+                                                }
+                                            </div>
                                         </td>
                                         <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                             @renewal.SearchResult?.SearchLog?.Abn
@@ -95,7 +103,7 @@
                                         <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">@renewal.RenewalYears</td>
                                         <td class="px-6 py-4 text-sm text-gray-500">@renewal.Email</td>
                                         <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                            $@renewal.CustomerAmount.ToString("F2")
+                                            $@renewal.Amount.ToString("F2")
                                         </td>
                                         <td class="whitespace-nowrap px-6 py-4">
                                             @if (renewal.Completed)
@@ -126,7 +134,7 @@
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     </svg>
                                                 </a>
-                                                @if (!renewal.Completed && renewal.StripePaymentStatus == "succeeded")
+                                                @if (!renewal.Completed && renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded")
                                                 {
                                                     <button @onclick="() => RetryRenewal(renewal.Id)"
                                                             disabled="@isRetrying"
@@ -232,6 +240,7 @@
         renewals = await DbContext.RenewalRequests
             .Include(r => r.SearchResult)
                 .ThenInclude(sr => sr.SearchLog)
+            .Include(r => r.StripePayment)
             .OrderByDescending(r => r.InitiatedAt)
             .Skip((currentPage - 1) * pageSize)
             .Take(pageSize)

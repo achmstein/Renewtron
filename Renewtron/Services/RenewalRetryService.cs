@@ -35,6 +35,7 @@ public class RenewalRetryService : IRenewalRetryService
             var renewalRequest = await _dbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr.SearchLog)
+                .Include(r => r.StripePayment)
                 .FirstOrDefaultAsync(r => r.Id == renewalRequestId);
 
             if (renewalRequest == null)
@@ -47,8 +48,9 @@ public class RenewalRetryService : IRenewalRetryService
                 return (false, "This renewal has already been completed successfully");
             }
 
-            // Check if payment was successful
-            if (renewalRequest.StripePaymentStatus != "succeeded")
+            // Check if payment was successful (only for Stripe payments)
+            if (renewalRequest.PaymentType == PaymentType.Stripe &&
+                (renewalRequest.StripePayment == null || renewalRequest.StripePayment.PaymentStatus != "succeeded"))
             {
                 return (false, "Cannot retry: Payment was not successful. Customer needs to retry payment.");
             }
@@ -93,7 +95,7 @@ public class RenewalRetryService : IRenewalRetryService
                         renewalRequest.SearchResult.BusinessName,
                         renewalRequest.SearchResult.SearchLog.Abn,
                         renewalRequest.RenewalYears,
-                        renewalRequest.CustomerAmount,
+                        renewalRequest.Amount,
                         result.TransactionReference ?? "N/A"
                     );
                 }

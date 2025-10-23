@@ -11,6 +11,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Holder> Holders { get; set; }
     public DbSet<RenewalRequest> RenewalRequests { get; set; }
     public DbSet<SavedCreditCard> SavedCreditCards { get; set; }
+    public DbSet<StripePayment> StripePayments { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -67,12 +68,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.SearchResultId).IsUnique();
             entity.HasIndex(e => e.InitiatedAt);
-            entity.HasIndex(e => e.CustomerCreditCardId);
 
             entity.HasOne(e => e.SearchResult)
                 .WithOne(s => s.RenewalRequest)
                 .HasForeignKey<RenewalRequest>(e => e.SearchResultId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.StripePayment)
+                .WithOne(sp => sp.RenewalRequest)
+                .HasForeignKey<StripePayment>(sp => sp.RenewalRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StripePayment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.PaymentIntentId).IsRequired();
+            entity.Property(e => e.PaymentStatus).IsRequired();
+            entity.HasIndex(e => e.RenewalRequestId).IsUnique();
+            entity.HasIndex(e => e.PaymentIntentId);
+            entity.HasIndex(e => e.CustomerCreditCardId);
 
             entity.HasOne(e => e.CustomerCreditCard)
                 .WithMany()

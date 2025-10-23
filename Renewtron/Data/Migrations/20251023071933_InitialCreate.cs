@@ -249,17 +249,13 @@ namespace Renewtron.Data.Migrations
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SearchResultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    CustomerCreditCardId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     InitiatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IpAddress = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     SessionId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     RenewalYears = table.Column<int>(type: "int", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CustomerAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    AsicAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    StripePaymentIntentId = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    StripePaymentStatus = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    StripePaidAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PaymentType = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Completed = table.Column<bool>(type: "bit", nullable: false),
                     CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     TransactionReference = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -271,15 +267,37 @@ namespace Renewtron.Data.Migrations
                 {
                     table.PrimaryKey("PK_RenewalRequests", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_RenewalRequests_SavedCreditCards_CustomerCreditCardId",
-                        column: x => x.CustomerCreditCardId,
-                        principalTable: "SavedCreditCards",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
                         name: "FK_RenewalRequests_SearchResults_SearchResultId",
                         column: x => x.SearchResultId,
                         principalTable: "SearchResults",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StripePayments",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RenewalRequestId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CustomerCreditCardId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    PaymentIntentId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    PaymentStatus = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PaidAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StripePayments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_StripePayments_RenewalRequests_RenewalRequestId",
+                        column: x => x.RenewalRequestId,
+                        principalTable: "RenewalRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_StripePayments_SavedCreditCards_CustomerCreditCardId",
+                        column: x => x.CustomerCreditCardId,
+                        principalTable: "SavedCreditCards",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -290,11 +308,6 @@ namespace Renewtron.Data.Migrations
                 column: "SearchResultId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_RenewalRequests_CustomerCreditCardId",
-                table: "RenewalRequests",
-                column: "CustomerCreditCardId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_InitiatedAt",
                 table: "RenewalRequests",
                 column: "InitiatedAt");
@@ -302,7 +315,8 @@ namespace Renewtron.Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_SearchResultId",
                 table: "RenewalRequests",
-                column: "SearchResultId");
+                column: "SearchResultId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_RoleClaims_RoleId",
@@ -342,6 +356,22 @@ namespace Renewtron.Data.Migrations
                 column: "SearchLogId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_StripePayments_CustomerCreditCardId",
+                table: "StripePayments",
+                column: "CustomerCreditCardId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StripePayments_PaymentIntentId",
+                table: "StripePayments",
+                column: "PaymentIntentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_StripePayments_RenewalRequestId",
+                table: "StripePayments",
+                column: "RenewalRequestId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UserClaims_UserId",
                 table: "UserClaims",
                 column: "UserId");
@@ -376,10 +406,10 @@ namespace Renewtron.Data.Migrations
                 name: "Holders");
 
             migrationBuilder.DropTable(
-                name: "RenewalRequests");
+                name: "RoleClaims");
 
             migrationBuilder.DropTable(
-                name: "RoleClaims");
+                name: "StripePayments");
 
             migrationBuilder.DropTable(
                 name: "UserClaims");
@@ -394,16 +424,19 @@ namespace Renewtron.Data.Migrations
                 name: "UserTokens");
 
             migrationBuilder.DropTable(
-                name: "SavedCreditCards");
+                name: "RenewalRequests");
 
             migrationBuilder.DropTable(
-                name: "SearchResults");
+                name: "SavedCreditCards");
 
             migrationBuilder.DropTable(
                 name: "Roles");
 
             migrationBuilder.DropTable(
                 name: "Users");
+
+            migrationBuilder.DropTable(
+                name: "SearchResults");
 
             migrationBuilder.DropTable(
                 name: "SearchLogs");
