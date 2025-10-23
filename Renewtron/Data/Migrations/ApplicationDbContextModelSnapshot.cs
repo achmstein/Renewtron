@@ -361,41 +361,6 @@ namespace Renewtron.Data.Migrations
                     b.ToTable("SavedCreditCards");
                 });
 
-            modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("CustomerCreditCardId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("PaymentIntentId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("PaymentStatus")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("RenewalRequestId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerCreditCardId");
-
-                    b.HasIndex("PaymentIntentId");
-
-                    b.HasIndex("RenewalRequestId")
-                        .IsUnique();
-
-                    b.ToTable("StripePayments");
-                });
-
             modelBuilder.Entity("Renewtron.Data.SearchLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -482,6 +447,41 @@ namespace Renewtron.Data.Migrations
                     b.ToTable("SearchResults");
                 });
 
+            modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CustomerCreditCardId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaymentIntentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("RenewalRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerCreditCardId");
+
+                    b.HasIndex("PaymentIntentId");
+
+                    b.HasIndex("RenewalRequestId")
+                        .IsUnique();
+
+                    b.ToTable("StripePayments");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -553,8 +553,17 @@ namespace Renewtron.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("SearchResult");
+                });
 
-                    b.Navigation("StripePayment");
+            modelBuilder.Entity("Renewtron.Data.SearchResult", b =>
+                {
+                    b.HasOne("Renewtron.Data.SearchLog", "SearchLog")
+                        .WithMany("Results")
+                        .HasForeignKey("SearchLogId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SearchLog");
                 });
 
             modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
@@ -576,15 +585,9 @@ namespace Renewtron.Data.Migrations
                     b.Navigation("RenewalRequest");
                 });
 
-            modelBuilder.Entity("Renewtron.Data.SearchResult", b =>
+            modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
-                    b.HasOne("Renewtron.Data.SearchLog", "SearchLog")
-                        .WithMany("Results")
-                        .HasForeignKey("SearchLogId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SearchLog");
+                    b.Navigation("StripePayment");
                 });
 
             modelBuilder.Entity("Renewtron.Data.SearchLog", b =>
