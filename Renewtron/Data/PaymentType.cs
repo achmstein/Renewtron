@@ -11,7 +11,7 @@ public enum PaymentType
     Stripe = 0,
 
     /// <summary>
-    /// Manual/external payment (cash, check, wire transfer, etc.)
+    /// External payment (cash, check, wire transfer, etc.)
     /// </summary>
-    Manual = 1
+    External = 1
 }
