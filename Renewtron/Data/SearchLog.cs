@@ -13,6 +13,7 @@ public class SearchLog
     public bool Success { get; set; }
     public string? ErrorMessage { get; set; }
     public int ResultsCount { get; set; }
+    public SearchInitiator InitiatedBy { get; set; }
 
     public List<SearchResult> Results { get; set; } = [];
 }

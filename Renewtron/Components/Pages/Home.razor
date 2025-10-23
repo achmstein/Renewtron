@@ -243,6 +243,7 @@
                 UserAgent = userAgent,
                 SessionId = sessionId,
                 Success = searchResult.Success,
+                InitiatedBy = SearchInitiator.Customer,
                 ErrorMessage = searchResult.Success ? null : "Search failed",
                 ResultsCount = searchResult.Data?.BusinessNames?.Count ?? 0
             };

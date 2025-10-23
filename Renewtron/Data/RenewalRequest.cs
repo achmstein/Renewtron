@@ -5,8 +5,6 @@ public class RenewalRequest
     public Guid Id { get; set; }
     public Guid SearchResultId { get; set; }
     public DateTime InitiatedAt { get; set; }
-    public string? IpAddress { get; set; }
-    public string? SessionId { get; set; }
 
     // Renewal details
     public int RenewalYears { get; set; }

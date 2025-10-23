@@ -58,7 +58,8 @@ namespace Renewtron.Data.Migrations
                     SessionId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Success = table.Column<bool>(type: "bit", nullable: false),
                     ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ResultsCount = table.Column<int>(type: "int", nullable: false)
+                    ResultsCount = table.Column<int>(type: "int", nullable: false),
+                    InitiatedBy = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -250,8 +251,6 @@ namespace Renewtron.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SearchResultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     InitiatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    IpAddress = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    SessionId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     RenewalYears = table.Column<int>(type: "int", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     PaymentType = table.Column<int>(type: "int", nullable: false),

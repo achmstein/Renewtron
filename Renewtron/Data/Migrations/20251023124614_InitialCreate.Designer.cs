@@ -12,7 +12,7 @@ using Renewtron.Data;
 namespace Renewtron.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251023113242_InitialCreate")]
+    [Migration("20251023124614_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -279,9 +279,6 @@ namespace Renewtron.Data.Migrations
                     b.Property<DateTime>("InitiatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("IpAddress")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<int>("PaymentType")
                         .HasColumnType("int");
 
@@ -290,9 +287,6 @@ namespace Renewtron.Data.Migrations
 
                     b.Property<Guid>("SearchResultId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("SessionId")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -377,6 +371,9 @@ namespace Renewtron.Data.Migrations
 
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("InitiatedBy")
+                        .HasColumnType("int");
 
                     b.Property<string>("IpAddress")
                         .HasMaxLength(50)

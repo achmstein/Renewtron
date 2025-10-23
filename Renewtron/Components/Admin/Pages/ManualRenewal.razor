@@ -9,6 +9,7 @@
 @inject ApplicationDbContext DbContext
 @inject IAsicRegistrySearchClient SearchClient
 @inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
 @inject IBackgroundJobClient BackgroundJobClient
 
 <PageTitle>Manual Renewal - Renewtron</PageTitle>
@@ -229,16 +230,22 @@
             }
 
             // Always create new search log for manual renewal
+            var httpContext = HttpContextAccessor.HttpContext;
+            var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
+            var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
+            var sessionId = httpContext?.Session?.Id;
+
             var searchLog = new SearchLog
             {
                 Id = Guid.NewGuid(),
                 Abn = searchAbn,
                 SearchedAt = DateTime.UtcNow,
-                IpAddress = "Admin",
-                UserAgent = "Manual Renewal",
-                SessionId = "Admin",
+                IpAddress = ipAddress,
+                UserAgent = userAgent,
+                SessionId = sessionId,
                 Success = true,
                 ErrorMessage = null,
+                InitiatedBy = SearchInitiator.Admin,
                 ResultsCount = result.Data.BusinessNames.Count
             };
 
@@ -337,8 +344,6 @@
                 Id = Guid.NewGuid(),
                 SearchResultId = selectedResult.Id,
                 InitiatedAt = DateTime.UtcNow,
-                IpAddress = "Admin",
-                SessionId = "Manual",
                 RenewalYears = renewalYears,
                 Email = customerEmail,
                 PaymentType = PaymentType.External,

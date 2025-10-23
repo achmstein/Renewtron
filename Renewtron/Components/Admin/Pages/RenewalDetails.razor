@@ -139,7 +139,15 @@
                                 </div>
                                 <div>
                                     <dt class="text-sm font-medium text-gray-500">IP Address</dt>
-                                    <dd class="mt-1 text-sm text-gray-900 font-mono">@(renewal.IpAddress ?? "N/A")</dd>
+                                    <dd class="mt-1 text-sm text-gray-900 font-mono">
+                                        <div class="flex items-center gap-2">
+                                            <span>@renewal.SearchResult.SearchLog.IpAddress</span>
+                                            @if (renewal.SearchResult.SearchLog.InitiatedBy == SearchInitiator.Admin)
+                                            {
+                                                <span class="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">Admin</span>
+                                            }
+                                        </div>
+                                    </dd>
                                 </div>
                             </dl>
                         </div>
@@ -270,7 +278,7 @@
 
                 <!-- Action Buttons -->
                 @if (renewal.Status == RenewalStatus.Failed && ((renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded")
-                    || renewal.PaymentType == PaymentType.External))
+                            || renewal.PaymentType == PaymentType.External))
                 {
                     <div class="mt-6 flex justify-end">
                         <button @onclick="RetryRenewal"

@@ -51,7 +51,17 @@
                                             @search.SearchedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
                                         </td>
                                         <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">@search.Abn</td>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">@search.IpAddress</td>
+                                        <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
+                                            <div class="flex items-center gap-2">
+                                                <span>@search.IpAddress</span>
+                                                @if (search.InitiatedBy == SearchInitiator.Admin)
+                                                {
+                                                    <svg class="size-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" title="admin-initiated">
+                                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                                                    </svg>
+                                                }
+                                            </div>
+                                        </td>
                                         <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
                                             <span class="font-mono text-xs">@search.SessionId</span>
                                         </td>
@@ -88,7 +98,7 @@
                                 <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="relative inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                                     Previous
                                 </button>
-                                <button @onclick="NextPage" disabled="@(currentPage * pageSize >= totalCount)" class="relative ml-3 inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                <button @onclick="NextPage" disabled="@(currentPage* pageSize >= totalCount)" class="relative ml-3 inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                                     Next
                                 </button>
                             </div>
@@ -115,7 +125,7 @@
                                         <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300">
                                             Page @currentPage of @((int)Math.Ceiling(totalCount / (double)pageSize))
                                         </span>
-                                        <button @onclick="NextPage" disabled="@(currentPage * pageSize >= totalCount)" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                                        <button @onclick="NextPage" disabled="@(currentPage* pageSize >= totalCount)" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
                                             <span class="sr-only">Next</span>
                                             <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />

@@ -59,7 +59,6 @@
                 </svg>
                 <h3 class="mt-4 text-lg font-semibold text-gray-900">@processingStatus</h3>
                 <p class="mt-2 text-sm text-gray-600">Please wait while we process your request...</p>
-                <p class="mt-1 text-xs text-gray-500">This may take up to 2 minutes</p>
             </div>
         }
         else if (showSupportMessage)
@@ -385,7 +384,7 @@
                 Id = Guid.NewGuid(),
                 CardholderName = cardHolder,
                 CardNumberLast4 = cardNumber.Replace(" ", "").Substring(cardNumber.Replace(" ", "").Length - 4),
-                CardBrand = "Visa", // You can detect this
+                CardBrand = creditCardComponent?.Type, 
                 ExpiryMonth = expiryMonth,
                 ExpiryYear = expiryYear,
                 EncryptedCardNumber = EncryptionService.Encrypt(cardNumber.Replace(" ", "")),
@@ -409,8 +408,6 @@
                 renewalRequest.Email = email;
                 renewalRequest.PaymentType = PaymentType.Stripe;
                 renewalRequest.Amount = amount;
-                renewalRequest.IpAddress = ipAddress;
-                renewalRequest.SessionId = sessionId;
                 // Clear previous error states
                 renewalRequest.ErrorMessage = null;
                 renewalRequest.FailedAtStep = null;
@@ -433,8 +430,6 @@
                     Id = Guid.NewGuid(),
                     SearchResultId = searchResult!.Id,
                     InitiatedAt = DateTime.UtcNow,
-                    IpAddress = ipAddress,
-                    SessionId = sessionId,
                     RenewalYears = renewalYears,
                     Email = email,
                     PaymentType = PaymentType.Stripe,
