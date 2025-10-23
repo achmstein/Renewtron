@@ -82,7 +82,7 @@
                             <tbody class="divide-y divide-gray-200 bg-white">
                                 @foreach (var renewal in renewals)
                                 {
-                                    <tr class="@(renewal.Completed ? "" : "bg-yellow-50")">
+                                    <tr class="@(renewal.Status == RenewalStatus.Completed ? "" : "bg-yellow-50")">
                                         <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                                             @renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
                                         </td>
