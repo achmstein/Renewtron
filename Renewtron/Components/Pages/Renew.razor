@@ -341,7 +341,7 @@
             // Show support message if payment succeeded but ASIC renewal failed
             if (existingRenewalRequest != null &&
                 existingRenewalRequest.StripePayment?.PaymentStatus == "succeeded" &&
-                !existingRenewalRequest.Completed)
+                existingRenewalRequest.Status == RenewalStatus.Failed)
             {
                 showSupportMessage = true;
             }
@@ -415,7 +415,6 @@
                 renewalRequest.ErrorMessage = null;
                 renewalRequest.FailedAtStep = null;
                 renewalRequest.Status = RenewalStatus.Pending;
-                renewalRequest.Completed = false;
                 renewalRequest.CompletedAt = null;
                 renewalRequest.TransactionReference = null;
                 renewalRequest.HostedTokenizationId = null;
@@ -440,8 +439,7 @@
                     Email = email,
                     PaymentType = PaymentType.Stripe,
                     Amount = amount,
-                    Status = RenewalStatus.Pending,
-                    Completed = false
+                    Status = RenewalStatus.Pending
                 };
                 DbContext.RenewalRequests.Add(renewalRequest);
             }

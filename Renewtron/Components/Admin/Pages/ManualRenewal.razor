@@ -369,8 +369,7 @@
                 Email = customerEmail,
                 PaymentType = PaymentType.External,
                 Amount = amount,
-                Status = RenewalStatus.Pending,
-                Completed = false
+                Status = RenewalStatus.Pending
             };
 
             DbContext.RenewalRequests.Add(renewalRequest);

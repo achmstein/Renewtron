@@ -43,7 +43,7 @@ public class RenewalRetryService : IRenewalRetryService
                 return (false, "Renewal request not found");
             }
 
-            if (renewalRequest.Completed || renewalRequest.Status == RenewalStatus.Completed)
+            if (renewalRequest.Status == RenewalStatus.Completed)
             {
                 return (false, "This renewal has already been completed successfully");
             }
@@ -81,8 +81,7 @@ public class RenewalRetryService : IRenewalRetryService
 
             // Update renewal request with result
             renewalRequest.Status = result.IsSuccess ? RenewalStatus.Completed : RenewalStatus.Failed;
-            renewalRequest.Completed = result.IsSuccess;
-            renewalRequest.CompletedAt = DateTime.UtcNow;
+            renewalRequest.CompletedAt = result.IsSuccess ? DateTime.UtcNow : null;
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;

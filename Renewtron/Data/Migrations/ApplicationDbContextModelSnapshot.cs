@@ -258,9 +258,6 @@ namespace Renewtron.Data.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<bool>("Completed")
-                        .HasColumnType("bit");
-
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 

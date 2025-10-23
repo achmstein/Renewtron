@@ -50,7 +50,7 @@ public class RenewalProcessingService : IRenewalProcessingService
             }
 
             // Skip if already completed
-            if (renewalRequest.Completed || renewalRequest.Status == RenewalStatus.Completed)
+            if (renewalRequest.Status == RenewalStatus.Completed)
             {
                 _logger.LogWarning("Renewal request {RenewalRequestId} already completed", renewalRequestId);
                 return;
@@ -94,8 +94,7 @@ public class RenewalProcessingService : IRenewalProcessingService
 
             // Update renewal request with result
             renewalRequest.Status = result.IsSuccess ? RenewalStatus.Completed : RenewalStatus.Failed;
-            renewalRequest.Completed = result.IsSuccess;
-            renewalRequest.CompletedAt = DateTime.UtcNow;
+            renewalRequest.CompletedAt = result.IsSuccess ? DateTime.UtcNow : null;
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
