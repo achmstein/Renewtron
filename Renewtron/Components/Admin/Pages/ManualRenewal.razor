@@ -228,80 +228,64 @@
                 return;
             }
 
-            // Check if we already have these results in the database
-            var existingSearchLog = await DbContext.SearchLogs
-                .Include(sl => sl.Results)
-                    .ThenInclude(sr => sr.RenewalRequest)
-                .Where(sl => sl.Abn == searchAbn)
-                .OrderByDescending(sl => sl.SearchedAt)
-                .FirstOrDefaultAsync();
+            // Always create new search log for manual renewal
+            var searchLog = new SearchLog
+            {
+                Id = Guid.NewGuid(),
+                Abn = searchAbn,
+                SearchedAt = DateTime.UtcNow,
+                IpAddress = "Admin",
+                UserAgent = "Manual Renewal",
+                SessionId = "Admin",
+                Success = true,
+                ErrorMessage = null,
+                ResultsCount = result.Data.BusinessNames.Count
+            };
 
-            if (existingSearchLog != null && existingSearchLog.Results.Any())
+            DbContext.SearchLogs.Add(searchLog);
+            await DbContext.SaveChangesAsync();
+
+            // Save each business result with holders
+            foreach (var business in result.Data.BusinessNames)
             {
-                searchResults = existingSearchLog.Results;
-                successMessage = $"Found {searchResults.Count} business name(s) for ABN {searchAbn}";
-            }
-            else
-            {
-                // Create new search log and results since they don't exist
-                var searchLog = new SearchLog
+                var searchResultEntity = new SearchResult
                 {
                     Id = Guid.NewGuid(),
-                    Abn = searchAbn,
-                    SearchedAt = DateTime.UtcNow,
-                    IpAddress = "Admin",
-                    UserAgent = "Manual Renewal",
-                    SessionId = "Admin",
-                    Success = true,
-                    ErrorMessage = null,
-                    ResultsCount = result.Data.BusinessNames.Count
+                    SearchLogId = searchLog.Id,
+                    BusinessName = business.Name,
+                    Status = business.Status,
+                    RegistrationDate = business.RegistrationDate,
+                    RenewalDate = business.RenewalDate,
+                    CancelledDate = business.CancelledDate,
+                    CancellationUnderReview = business.CancellationUnderReview,
+                    AddressForServiceDocuments = business.AddressForServiceDocuments,
+                    PrincipalPlaceOfBusiness = business.PrincipalPlaceOfBusiness
                 };
 
-                DbContext.SearchLogs.Add(searchLog);
+                DbContext.SearchResults.Add(searchResultEntity);
                 await DbContext.SaveChangesAsync();
 
-                // Save each business result with holders
-                foreach (var business in result.Data.BusinessNames)
+                // Add holders
+                if (business.Holders != null)
                 {
-                    var searchResultEntity = new SearchResult
+                    foreach (var holder in business.Holders)
                     {
-                        Id = Guid.NewGuid(),
-                        SearchLogId = searchLog.Id,
-                        BusinessName = business.Name,
-                        Status = business.Status,
-                        RegistrationDate = business.RegistrationDate,
-                        RenewalDate = business.RenewalDate,
-                        CancelledDate = business.CancelledDate,
-                        CancellationUnderReview = business.CancellationUnderReview,
-                        AddressForServiceDocuments = business.AddressForServiceDocuments,
-                        PrincipalPlaceOfBusiness = business.PrincipalPlaceOfBusiness
-                    };
-
-                    DbContext.SearchResults.Add(searchResultEntity);
-                    await DbContext.SaveChangesAsync();
-
-                    // Add holders
-                    if (business.Holders != null)
-                    {
-                        foreach (var holder in business.Holders)
+                        DbContext.Holders.Add(new Holder
                         {
-                            DbContext.Holders.Add(new Holder
-                            {
-                                Id = Guid.NewGuid(),
-                                SearchResultId = searchResultEntity.Id,
-                                Name = holder.Name,
-                                Type = holder.Type,
-                                Abn = holder.Abn
-                            });
-                        }
-                        await DbContext.SaveChangesAsync();
+                            Id = Guid.NewGuid(),
+                            SearchResultId = searchResultEntity.Id,
+                            Name = holder.Name,
+                            Type = holder.Type,
+                            Abn = holder.Abn
+                        });
                     }
-
-                    searchResults.Add(searchResultEntity);
+                    await DbContext.SaveChangesAsync();
                 }
 
-                successMessage = $"Found and saved {searchResults.Count} business name(s) for ABN {searchAbn}";
+                searchResults.Add(searchResultEntity);
             }
+
+            successMessage = $"Found and saved {searchResults.Count} business name(s) for ABN {searchAbn}";
         }
         catch (Exception ex)
         {
@@ -340,16 +324,6 @@
         if (amount <= 0)
         {
             errorMessage = "Please enter amount paid by customer";
-            return;
-        }
-
-        // Check if renewal already exists
-        var existingRenewal = await DbContext.RenewalRequests
-            .FirstOrDefaultAsync(r => r.SearchResultId == selectedResult.Id);
-
-        if (existingRenewal != null)
-        {
-            errorMessage = "A renewal request already exists for this business. Please check the renewals list.";
             return;
         }
 
