@@ -304,8 +304,6 @@ namespace Renewtron.Data.Migrations
                     b.HasIndex("SearchResultId")
                         .IsUnique();
 
-                    b.HasIndex("Status");
-
                     b.ToTable("RenewalRequests");
                 });
 

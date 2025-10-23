@@ -12,7 +12,7 @@ using Renewtron.Data;
 namespace Renewtron.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251023071933_InitialCreate")]
+    [Migration("20251023113242_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -261,9 +261,6 @@ namespace Renewtron.Data.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<bool>("Completed")
-                        .HasColumnType("bit");
-
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
@@ -296,6 +293,9 @@ namespace Renewtron.Data.Migrations
 
                     b.Property<string>("SessionId")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
 
                     b.Property<string>("TransactionReference")
                         .HasColumnType("nvarchar(max)");

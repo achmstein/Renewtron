@@ -256,7 +256,7 @@ namespace Renewtron.Data.Migrations
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     PaymentType = table.Column<int>(type: "int", nullable: false),
                     Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Completed = table.Column<bool>(type: "bit", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     TransactionReference = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     HostedTokenizationId = table.Column<string>(type: "nvarchar(max)", nullable: true),
