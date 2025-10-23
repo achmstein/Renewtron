@@ -55,8 +55,8 @@ public class RenewalProcessingService : IRenewalProcessingService
                 return;
             }
 
-            // Verify payment was successful
-            if (renewalRequest.StripePaymentStatus != "succeeded")
+            // Verify payment was successful (either Stripe or manual payment)
+            if (!renewalRequest.IsManualPayment && renewalRequest.StripePaymentStatus != "succeeded")
             {
                 _logger.LogError("Renewal request {RenewalRequestId} does not have successful payment", renewalRequestId);
                 return;

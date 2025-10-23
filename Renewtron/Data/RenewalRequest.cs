@@ -22,6 +22,9 @@ public class RenewalRequest
     public string? StripePaymentStatus { get; set; }
     public DateTime? StripePaidAt { get; set; }
 
+    // Manual Payment Info (for external payments processed by admin)
+    public bool IsManualPayment { get; set; }
+
     // Status tracking
     public bool Completed { get; set; }
     public DateTime? CompletedAt { get; set; }

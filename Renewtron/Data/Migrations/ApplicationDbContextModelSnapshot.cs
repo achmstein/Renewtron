@@ -288,6 +288,9 @@ namespace Renewtron.Data.Migrations
                     b.Property<string>("IpAddress")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<bool>("IsManualPayment")
+                        .HasColumnType("bit");
+
                     b.Property<int>("RenewalYears")
                         .HasColumnType("int");
 
