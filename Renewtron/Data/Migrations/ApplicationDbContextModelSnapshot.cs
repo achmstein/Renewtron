@@ -273,9 +273,6 @@ namespace Renewtron.Data.Migrations
                     b.Property<string>("ErrorMessage")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ExternalPaymentReference")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("FailedAtStep")
                         .HasColumnType("nvarchar(max)");
 
@@ -298,15 +295,6 @@ namespace Renewtron.Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("SessionId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("StripePaidAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("StripePaymentIntentId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("StripePaymentStatus")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TransactionReference")
@@ -376,6 +364,36 @@ namespace Renewtron.Data.Migrations
                     b.HasIndex("IpAddress");
 
                     b.ToTable("SavedCreditCards");
+                });
+
+            modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PaymentIntentId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("RenewalRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentIntentId");
+
+                    b.HasIndex("RenewalRequestId")
+                        .IsUnique();
+
+                    b.ToTable("StripePayments");
                 });
 
             modelBuilder.Entity("Renewtron.Data.SearchLog", b =>
@@ -542,6 +560,19 @@ namespace Renewtron.Data.Migrations
                     b.Navigation("CustomerCreditCard");
 
                     b.Navigation("SearchResult");
+
+                    b.Navigation("StripePayment");
+                });
+
+            modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
+                {
+                    b.HasOne("Renewtron.Data.RenewalRequest", "RenewalRequest")
+                        .WithOne("StripePayment")
+                        .HasForeignKey("Renewtron.Data.StripePayment", "RenewalRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RenewalRequest");
                 });
 
             modelBuilder.Entity("Renewtron.Data.SearchResult", b =>

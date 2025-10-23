@@ -40,6 +40,7 @@ public class RenewalProcessingService : IRenewalProcessingService
             var renewalRequest = await _dbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr.SearchLog)
+                .Include(r => r.StripePayment)
                 .FirstOrDefaultAsync(r => r.Id == renewalRequestId);
 
             if (renewalRequest == null)
@@ -55,8 +56,9 @@ public class RenewalProcessingService : IRenewalProcessingService
                 return;
             }
 
-            // Verify payment was successful (either Stripe or manual payment)
-            if (renewalRequest.PaymentType == PaymentType.Stripe && renewalRequest.StripePaymentStatus != "succeeded")
+            // Verify payment was successful (either Stripe or external payment)
+            if (renewalRequest.PaymentType == PaymentType.Stripe &&
+                (renewalRequest.StripePayment == null || renewalRequest.StripePayment.PaymentStatus != "succeeded"))
             {
                 _logger.LogError("Renewal request {RenewalRequestId} does not have successful payment", renewalRequestId);
                 return;

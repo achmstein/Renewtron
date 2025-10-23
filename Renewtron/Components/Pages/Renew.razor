@@ -335,11 +335,12 @@
         if (searchResult != null)
         {
             existingRenewalRequest = await DbContext.RenewalRequests
+                .Include(r => r.StripePayment)
                 .FirstOrDefaultAsync(r => r.SearchResultId == searchResult.Id);
 
             // Show support message if payment succeeded but ASIC renewal failed
             if (existingRenewalRequest != null &&
-                existingRenewalRequest.StripePaymentStatus == "succeeded" &&
+                existingRenewalRequest.StripePayment?.PaymentStatus == "succeeded" &&
                 !existingRenewalRequest.Completed)
             {
                 showSupportMessage = true;
@@ -414,13 +415,16 @@
                 // Clear previous error states
                 renewalRequest.ErrorMessage = null;
                 renewalRequest.FailedAtStep = null;
-                renewalRequest.StripePaymentStatus = null;
-                renewalRequest.StripePaymentIntentId = null;
-                renewalRequest.StripePaidAt = null;
                 renewalRequest.Completed = false;
                 renewalRequest.CompletedAt = null;
                 renewalRequest.TransactionReference = null;
                 renewalRequest.HostedTokenizationId = null;
+
+                // Remove old Stripe payment if exists
+                if (renewalRequest.StripePayment != null)
+                {
+                    DbContext.StripePayments.Remove(renewalRequest.StripePayment);
+                }
             }
             else
             {
@@ -471,10 +475,17 @@
                 return;
             }
 
-            // Update renewal request with Stripe info
-            renewalRequest.StripePaymentIntentId = paymentIntentId;
-            renewalRequest.StripePaymentStatus = "succeeded";
-            renewalRequest.StripePaidAt = DateTime.UtcNow;
+            // Create Stripe payment record
+            var stripePayment = new StripePayment
+            {
+                Id = Guid.NewGuid(),
+                RenewalRequestId = renewalRequest.Id,
+                PaymentIntentId = paymentIntentId!,
+                PaymentStatus = "succeeded",
+                PaidAt = DateTime.UtcNow
+            };
+
+            DbContext.StripePayments.Add(stripePayment);
             await DbContext.SaveChangesAsync();
 
             // Step 4: Queue background job to process ASIC renewal

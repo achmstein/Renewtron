@@ -16,12 +16,6 @@ public class RenewalRequest
     // Payment
     public PaymentType PaymentType { get; set; }
     public decimal Amount { get; set; } // Amount paid by customer
-    public string? ExternalPaymentReference { get; set; } // Reference for manual payments (e.g., check number, wire confirmation)
-
-    // Stripe Payment Info (only for Stripe payments)
-    public string? StripePaymentIntentId { get; set; }
-    public string? StripePaymentStatus { get; set; }
-    public DateTime? StripePaidAt { get; set; }
 
     // Status tracking
     public bool Completed { get; set; }
@@ -34,4 +28,5 @@ public class RenewalRequest
     // Navigation properties
     public SearchResult SearchResult { get; set; }
     public SavedCreditCard? CustomerCreditCard { get; set; }
+    public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments
 }
