@@ -17,7 +17,7 @@ public class RenewalRequest
     public decimal Amount { get; set; } // Amount paid by customer
 
     // Status tracking
-    public bool Completed { get; set; }
+    public RenewalStatus Status { get; set; } = RenewalStatus.Pending;
     public DateTime? CompletedAt { get; set; }
     public string? TransactionReference { get; set; } // ASIC transaction reference
     public string? HostedTokenizationId { get; set; }

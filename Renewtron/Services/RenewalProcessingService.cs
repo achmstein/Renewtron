@@ -50,11 +50,15 @@ public class RenewalProcessingService : IRenewalProcessingService
             }
 
             // Skip if already completed
-            if (renewalRequest.Completed)
+            if (renewalRequest.Status == RenewalStatus.Completed)
             {
                 _logger.LogWarning("Renewal request {RenewalRequestId} already completed", renewalRequestId);
                 return;
             }
+
+            // Mark as processing
+            renewalRequest.Status = RenewalStatus.Processing;
+            await _dbContext.SaveChangesAsync();
 
             // Verify payment was successful (either Stripe or external payment)
             if (renewalRequest.PaymentType == PaymentType.Stripe &&
@@ -89,8 +93,8 @@ public class RenewalProcessingService : IRenewalProcessingService
             );
 
             // Update renewal request with result
-            renewalRequest.Completed = result.IsSuccess;
-            renewalRequest.CompletedAt = DateTime.UtcNow;
+            renewalRequest.Status = result.IsSuccess ? RenewalStatus.Completed : RenewalStatus.Failed;
+            renewalRequest.CompletedAt = result.IsSuccess ? DateTime.UtcNow : null;
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
@@ -143,6 +147,7 @@ public class RenewalProcessingService : IRenewalProcessingService
                 var renewalRequest = await _dbContext.RenewalRequests.FindAsync(renewalRequestId);
                 if (renewalRequest != null)
                 {
+                    renewalRequest.Status = RenewalStatus.Failed;
                     renewalRequest.ErrorMessage = $"Background processing error: {ex.Message}";
                     renewalRequest.FailedAtStep = "BackgroundProcessing";
                     await _dbContext.SaveChangesAsync();

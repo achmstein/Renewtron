@@ -43,10 +43,14 @@ public class RenewalRetryService : IRenewalRetryService
                 return (false, "Renewal request not found");
             }
 
-            if (renewalRequest.Completed)
+            if (renewalRequest.Status == RenewalStatus.Completed)
             {
                 return (false, "This renewal has already been completed successfully");
             }
+
+            // Mark as processing
+            renewalRequest.Status = RenewalStatus.Processing;
+            await _dbContext.SaveChangesAsync();
 
             // Check if payment was successful (only for Stripe payments)
             if (renewalRequest.PaymentType == PaymentType.Stripe &&
@@ -76,8 +80,8 @@ public class RenewalRetryService : IRenewalRetryService
             );
 
             // Update renewal request with result
-            renewalRequest.Completed = result.IsSuccess;
-            renewalRequest.CompletedAt = DateTime.UtcNow;
+            renewalRequest.Status = result.IsSuccess ? RenewalStatus.Completed : RenewalStatus.Failed;
+            renewalRequest.CompletedAt = result.IsSuccess ? DateTime.UtcNow : null;
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;

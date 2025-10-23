@@ -243,7 +243,64 @@
             }
             else
             {
-                errorMessage = "Business not found in database. Please have the customer search for their business first via the public interface.";
+                // Create new search log and results since they don't exist
+                var searchLog = new SearchLog
+                {
+                    Id = Guid.NewGuid(),
+                    Abn = searchAbn,
+                    SearchedAt = DateTime.UtcNow,
+                    IpAddress = "Admin",
+                    UserAgent = "Manual Renewal",
+                    SessionId = "Admin",
+                    Success = true,
+                    ErrorMessage = null,
+                    ResultsCount = result.Data.BusinessNames.Count
+                };
+
+                DbContext.SearchLogs.Add(searchLog);
+                await DbContext.SaveChangesAsync();
+
+                // Save each business result with holders
+                foreach (var business in result.Data.BusinessNames)
+                {
+                    var searchResultEntity = new SearchResult
+                    {
+                        Id = Guid.NewGuid(),
+                        SearchLogId = searchLog.Id,
+                        BusinessName = business.Name,
+                        Status = business.Status,
+                        RegistrationDate = business.RegistrationDate,
+                        RenewalDate = business.RenewalDate,
+                        CancelledDate = business.CancelledDate,
+                        CancellationUnderReview = business.CancellationUnderReview,
+                        AddressForServiceDocuments = business.AddressForServiceDocuments,
+                        PrincipalPlaceOfBusiness = business.PrincipalPlaceOfBusiness
+                    };
+
+                    DbContext.SearchResults.Add(searchResultEntity);
+                    await DbContext.SaveChangesAsync();
+
+                    // Add holders
+                    if (business.Holders != null)
+                    {
+                        foreach (var holder in business.Holders)
+                        {
+                            DbContext.Holders.Add(new Holder
+                            {
+                                Id = Guid.NewGuid(),
+                                SearchResultId = searchResultEntity.Id,
+                                Name = holder.Name,
+                                Type = holder.Type,
+                                Abn = holder.Abn
+                            });
+                        }
+                        await DbContext.SaveChangesAsync();
+                    }
+
+                    searchResults.Add(searchResultEntity);
+                }
+
+                successMessage = $"Found and saved {searchResults.Count} business name(s) for ABN {searchAbn}";
             }
         }
         catch (Exception ex)
@@ -312,7 +369,7 @@
                 Email = customerEmail,
                 PaymentType = PaymentType.External,
                 Amount = amount,
-                Completed = false
+                Status = RenewalStatus.Pending
             };
 
             DbContext.RenewalRequests.Add(renewalRequest);
