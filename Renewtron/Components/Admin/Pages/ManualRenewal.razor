@@ -8,7 +8,6 @@
 
 @inject ApplicationDbContext DbContext
 @inject IAsicRegistrySearchClient SearchClient
-@inject IEncryptionService EncryptionService
 @inject NavigationManager Navigation
 @inject IBackgroundJobClient BackgroundJobClient
 
@@ -121,6 +120,7 @@
                 <div class="mb-6 overflow-hidden rounded-lg bg-white shadow">
                     <div class="px-4 py-5 sm:p-6">
                         <h3 class="text-base font-semibold leading-6 text-gray-900">Step 2: Renewal Details</h3>
+                        <p class="mt-1 text-sm text-gray-500">The ASIC credit card from settings will be used to process this renewal</p>
 
                         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
@@ -140,7 +140,7 @@
                             </div>
 
                             <div>
-                                <label for="customerAmount" class="block text-sm font-medium text-gray-700">Amount Paid (AUD)</label>
+                                <label for="customerAmount" class="block text-sm font-medium text-gray-700">Amount Paid by Customer (AUD)</label>
                                 <div class="relative mt-1 rounded-md shadow-sm">
                                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                         <span class="text-gray-500 sm:text-sm">$</span>
@@ -149,6 +149,7 @@
                                            class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
                                            placeholder="0.00" />
                                 </div>
+                                <p class="mt-1 text-xs text-gray-500">Amount received externally from the customer</p>
                             </div>
 
                             <div>
@@ -161,61 +162,7 @@
                                            class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
                                            placeholder="0.00" />
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 3: Credit Card Details -->
-                <div class="mb-6 overflow-hidden rounded-lg bg-white shadow">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-base font-semibold leading-6 text-gray-900">Step 3: Credit Card Details</h3>
-                        <p class="mt-1 text-sm text-gray-500">Required by ASIC to process the renewal</p>
-
-                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div class="sm:col-span-2">
-                                <label for="cardholderName" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
-                                <input type="text" @bind="cardholderName" id="cardholderName"
-                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
-                                       placeholder="John Doe" />
-                            </div>
-
-                            <div class="sm:col-span-2">
-                                <label for="cardNumber" class="block text-sm font-medium text-gray-700">Card Number</label>
-                                <input type="text" @bind="cardNumber" id="cardNumber" maxlength="19"
-                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
-                                       placeholder="1234 5678 9012 3456" />
-                            </div>
-
-                            <div>
-                                <label for="expiryMonth" class="block text-sm font-medium text-gray-700">Expiry Month</label>
-                                <select @bind="expiryMonth" id="expiryMonth"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2">
-                                    <option value="">Select Month</option>
-                                    @for (int i = 1; i <= 12; i++)
-                                    {
-                                        <option value="@i.ToString("D2")">@i.ToString("D2")</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label for="expiryYear" class="block text-sm font-medium text-gray-700">Expiry Year</label>
-                                <select @bind="expiryYear" id="expiryYear"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2">
-                                    <option value="">Select Year</option>
-                                    @for (int i = DateTime.Now.Year; i <= DateTime.Now.Year + 10; i++)
-                                    {
-                                        <option value="@i">@i</option>
-                                    }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label for="cvc" class="block text-sm font-medium text-gray-700">CVC</label>
-                                <input type="text" @bind="cvc" id="cvc" maxlength="4"
-                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
-                                       placeholder="123" />
+                                <p class="mt-1 text-xs text-gray-500">Amount to be charged to ASIC card</p>
                             </div>
                         </div>
 
@@ -258,13 +205,6 @@
     private string customerEmail = "";
     private decimal customerAmount = 0;
     private decimal asicAmount = 0;
-
-    // Card details
-    private string cardholderName = "";
-    private string cardNumber = "";
-    private string expiryMonth = "";
-    private string expiryYear = "";
-    private string cvc = "";
 
     // Processing
     private bool isProcessing = false;
@@ -366,30 +306,6 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(cardholderName))
-        {
-            errorMessage = "Please enter cardholder name";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(cardNumber) || cardNumber.Replace(" ", "").Length < 13)
-        {
-            errorMessage = "Please enter a valid card number";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(expiryMonth) || string.IsNullOrWhiteSpace(expiryYear))
-        {
-            errorMessage = "Please select card expiry date";
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(cvc) || cvc.Length < 3)
-        {
-            errorMessage = "Please enter a valid CVC";
-            return;
-        }
-
         // Check if renewal already exists
         var existingRenewal = await DbContext.RenewalRequests
             .FirstOrDefaultAsync(r => r.SearchResultId == selectedResult.Id);
@@ -404,32 +320,12 @@
 
         try
         {
-            // Save credit card info (encrypted)
-            var cleanCardNumber = cardNumber.Replace(" ", "");
-            var savedCard = new SavedCreditCard
-            {
-                Id = Guid.NewGuid(),
-                CardholderName = cardholderName,
-                CardNumberLast4 = cleanCardNumber.Substring(cleanCardNumber.Length - 4),
-                CardBrand = "Unknown", // Could detect brand from card number
-                ExpiryMonth = expiryMonth,
-                ExpiryYear = expiryYear,
-                EncryptedCardNumber = EncryptionService.Encrypt(cleanCardNumber),
-                EncryptedCvc = EncryptionService.Encrypt(cvc),
-                CreatedAt = DateTime.UtcNow,
-                IpAddress = "Admin",
-                SessionId = "Manual"
-            };
-
-            DbContext.SavedCreditCards.Add(savedCard);
-            await DbContext.SaveChangesAsync();
-
-            // Create renewal request
+            // Create renewal request (no customer credit card needed - will use ASIC card from settings)
             var renewalRequest = new RenewalRequest
             {
                 Id = Guid.NewGuid(),
                 SearchResultId = selectedResult.Id,
-                CustomerCreditCardId = savedCard.Id,
+                CustomerCreditCardId = null,
                 InitiatedAt = DateTime.UtcNow,
                 IpAddress = "Admin",
                 SessionId = "Manual",
