@@ -93,7 +93,7 @@ public class RenewalRetryService : IRenewalRetryService
                         renewalRequest.SearchResult.BusinessName,
                         renewalRequest.SearchResult.SearchLog.Abn,
                         renewalRequest.RenewalYears,
-                        renewalRequest.CustomerAmount,
+                        renewalRequest.Amount,
                         result.TransactionReference ?? "N/A"
                     );
                 }
