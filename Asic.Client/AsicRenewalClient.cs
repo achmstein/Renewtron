@@ -16,7 +16,8 @@ public class AsicRenewalClient : IAsicRenewalClient
     {
         _http = new HttpClient()
         {
-            BaseAddress = new Uri("https://asicconnect.asic.gov.au/")
+            BaseAddress = new Uri("https://asicconnect.asic.gov.au/"),
+            Timeout = TimeSpan.FromSeconds(300),
         };
 
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
@@ -26,12 +27,12 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
-    // Business name renewal - Complete flow
+    // Business name renewal - Complete flow with error handling
     public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string businessName, int renewalYears, string email, CreditCardDetails cardDetails)
     {
         try
         {
-            // Step 1: Initialize renewal session
+            // Step 1: Initialize renewal session (always starts fresh)
             var (sessionId, adfWindowId, viewState) = await InitializeRenewalSessionAsync();
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
             {
@@ -40,10 +41,79 @@ public class AsicRenewalClient : IAsicRenewalClient
 
             // Step 2: Submit ABN to get business name list
             var businessListResult = await SubmitAbnForRenewalAsync(abn, adfWindowId, viewState);
+
+            // Check for "already processing" error
             if (!businessListResult.Success)
             {
-                return RenewalResult.Failed("Failed to submit ABN", "Submit ABN");
+                if (businessListResult.Message.Contains("We are processing your renewal application"))
+                {
+                    return RenewalResult.Failed(
+                        "A renewal for this ABN is already in progress. " +
+                        "Please complete or cancel the existing renewal before starting a new one. " +
+                        "Check your email for the invoice or wait 48 hours for processing to complete.",
+                        "Already Processing");
+                }
+
+                if (businessListResult.Message.Contains("This business name registration is not due for renewal"))
+                {
+                    return RenewalResult.Failed(
+                        "This business name is not due for renewal yet. " +
+                        "ASIC will send a renewal notice when it becomes due. " +
+                        "Check the business name register to see the next renewal date.",
+                        "Not Due For Renewal");
+                }
+
+                return RenewalResult.Failed($"Failed to submit ABN: {businessListResult.Message}", "Submit ABN");
             }
+
+            // Detect if we've jumped to a later step (ASIC session state)
+            var currentStep = DetectCurrentStep(businessListResult.Content);
+            string transactionReference = null;
+
+            if (currentStep == "Email")
+            {
+                // ASIC jumped directly to email/payment step
+                // Extract transaction reference if available
+                transactionReference = ExtractTransactionReference(businessListResult.Content);
+
+                // Skip to email submission
+                var emailResult = await SubmitEmailAsync(email, adfWindowId, viewState);
+                if (!emailResult.Success)
+                {
+                    return RenewalResult.Failed("Failed to submit email (resumed session)", "Submit Email");
+                }
+
+                // Continue with payment
+                var paymentMethodResult = await SelectPaymentMethodAsync(adfWindowId, viewState);
+                if (!paymentMethodResult.Success)
+                {
+                    return RenewalResult.Failed("Failed to select payment method (resumed session)", "Select Payment Method");
+                }
+
+                var paymentGatewayResult = await OpenPaymentGatewayAsync(adfWindowId, viewState);
+                if (!paymentGatewayResult.Success)
+                {
+                    return RenewalResult.Failed("Failed to open payment gateway (resumed session)", "Open Payment Gateway");
+                }
+
+                var paymentResult = await _paymentClient.ProcessPaymentAsync(
+                    paymentGatewayResult.PaymentUrl,
+                    cardDetails);
+
+                if (!paymentResult.Success)
+                {
+                    return RenewalResult.Failed(
+                        $"Renewal initiated but payment failed: {paymentResult.Message}. " +
+                        $"Transaction reference: {transactionReference ?? "Unknown"}",
+                        "Process Payment");
+                }
+
+                return RenewalResult.Success(
+                    transactionReference ?? "RESUMED",
+                    paymentResult.HostedTokenizationId);
+            }
+
+            // Normal flow continues...
 
             // Step 3: Select specific business name from the list
             var selectionResult = await SelectBusinessNameAsync(businessName, adfWindowId, viewState);
@@ -59,7 +129,7 @@ public class AsicRenewalClient : IAsicRenewalClient
                 return RenewalResult.Failed("Failed to proceed to renewal period", "Proceed to Renewal Period");
             }
 
-            var transactionReference = periodPageResult.TransactionReference;
+            transactionReference = periodPageResult.TransactionReference;
 
             // Step 5: Select renewal period (1 or 3 years)
             var periodResult = await SelectRenewalPeriodAsync(renewalYears, adfWindowId, viewState);
@@ -90,47 +160,77 @@ public class AsicRenewalClient : IAsicRenewalClient
             }
 
             // Step 9: Enter email and confirm email
-            var emailResult = await SubmitEmailAsync(email, adfWindowId, viewState);
-            if (!emailResult.Success)
+            var emailResult2 = await SubmitEmailAsync(email, adfWindowId, viewState);
+            if (!emailResult2.Success)
             {
                 return RenewalResult.Failed("Failed to submit email", "Submit Email");
             }
 
             // Step 10: Select payment method (Pay now by credit card)
-            var paymentMethodResult = await SelectPaymentMethodAsync(adfWindowId, viewState);
-            if (!paymentMethodResult.Success)
+            var paymentMethodResult2 = await SelectPaymentMethodAsync(adfWindowId, viewState);
+            if (!paymentMethodResult2.Success)
             {
                 return RenewalResult.Failed("Failed to select payment method", "Select Payment Method");
             }
 
             // Step 11: Click Pay Now to open payment gateway
-            var paymentGatewayResult = await OpenPaymentGatewayAsync(adfWindowId, viewState);
-            if (!paymentGatewayResult.Success)
+            var paymentGatewayResult2 = await OpenPaymentGatewayAsync(adfWindowId, viewState);
+            if (!paymentGatewayResult2.Success)
             {
                 return RenewalResult.Failed("Failed to open payment gateway", "Open Payment Gateway");
             }
 
             // Step 12: Process payment through payment gateway
-            var paymentResult = await _paymentClient.ProcessPaymentAsync(
-                paymentGatewayResult.PaymentUrl,
+            var paymentResult2 = await _paymentClient.ProcessPaymentAsync(
+                paymentGatewayResult2.PaymentUrl,
                 cardDetails);
 
-            if (!paymentResult.Success)
+            if (!paymentResult2.Success)
             {
                 return RenewalResult.Failed(
-                    $"Renewal initiated but payment failed: {paymentResult.Message}. " +
+                    $"Renewal initiated but payment failed: {paymentResult2.Message}. " +
                     $"Transaction reference: {transactionReference}",
                     "Process Payment");
             }
 
             return RenewalResult.Success(
               transactionReference,
-              paymentResult.HostedTokenizationId);
+              paymentResult2.HostedTokenizationId);
         }
         catch (Exception ex)
         {
             return RenewalResult.Failed($"Renewal failed: {ex.Message}", "Exception");
         }
+    }
+
+    // Detect which step ASIC is currently on based on response content
+    private string DetectCurrentStep(string content)
+    {
+        if (content.Contains("Email required for online payment") ||
+            content.Contains("Select Payment Preference"))
+        {
+            return "Email";
+        }
+        if (content.Contains("Renewal period"))
+        {
+            return "RenewalPeriod";
+        }
+        if (content.Contains("Review"))
+        {
+            return "Review";
+        }
+        if (content.Contains("Business name to be renewed"))
+        {
+            return "SelectBusinessName";
+        }
+        return "Normal";
+    }
+
+    // Extract transaction reference from any response
+    private string ExtractTransactionReference(string content)
+    {
+        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
+        return match.Success ? match.Groups[1].Value : null;
     }
 
     async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeRenewalSessionAsync()
@@ -162,7 +262,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (sessionId, adfWindowId, viewState);
     }
 
-    async Task<(bool Success, string Message)> SubmitAbnForRenewalAsync(string abn, string adfWindowId, string viewState)
+    async Task<(bool Success, string Message, string Content)> SubmitAbnForRenewalAsync(string abn, string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -187,8 +287,18 @@ public class AsicRenewalClient : IAsicRenewalClient
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
 
-        return (response.IsSuccessStatusCode && content.Contains("Business name to be renewed"),
-                response.IsSuccessStatusCode ? "Success" : "Failed");
+        // Check for "already processing" error
+        if (content.Contains("We are processing your renewal application"))
+        {
+            return (false, "We are processing your renewal application", content);
+        }
+
+        var success = response.IsSuccessStatusCode &&
+                     (content.Contains("Business name to be renewed") ||
+                      content.Contains("Email required for online payment") ||
+                      content.Contains("Select Payment Preference"));
+
+        return (success, success ? "Success" : "Failed", content);
     }
 
     async Task<(bool Success, string Message)> SelectBusinessNameAsync(string businessName, string adfWindowId, string viewState)
