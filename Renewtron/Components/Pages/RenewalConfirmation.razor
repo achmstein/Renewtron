@@ -118,11 +118,11 @@
                             </div>
                         }
 
-                        @if (!string.IsNullOrEmpty(renewalRequest.StripePaymentIntentId))
+                        @if (renewalRequest.PaymentType == PaymentType.Stripe && !string.IsNullOrEmpty(renewalRequest.StripePayment?.PaymentIntentId))
                         {
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">Payment Reference</dt>
-                                <dd class="mt-1 text-sm font-mono text-gray-500">@renewalRequest.StripePaymentIntentId</dd>
+                                <dd class="mt-1 text-sm font-mono text-gray-500">@renewalRequest.StripePayment.PaymentIntentId</dd>
                             </div>
                         }
 
@@ -131,12 +131,22 @@
                             <dd class="mt-1 text-sm text-gray-900">@renewalRequest.Email</dd>
                         </div>
 
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Payment Method</dt>
-                            <dd class="mt-1 text-sm text-gray-900">
-                                @renewalRequest.CustomerCreditCard?.CardBrand ending in @renewalRequest.CustomerCreditCard?.CardNumberLast4
-                            </dd>
-                        </div>
+                        @if (renewalRequest.PaymentType == PaymentType.Stripe && renewalRequest.StripePayment?.CustomerCreditCard != null)
+                        {
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500">Payment Method</dt>
+                                <dd class="mt-1 text-sm text-gray-900">
+                                    @renewalRequest.StripePayment.CustomerCreditCard.CardBrand ending in @renewalRequest.StripePayment.CustomerCreditCard.CardNumberLast4
+                                </dd>
+                            </div>
+                        }
+                        else if (renewalRequest.PaymentType == PaymentType.External)
+                        {
+                            <div>
+                                <dt class="text-sm font-medium text-gray-500">Payment Method</dt>
+                                <dd class="mt-1 text-sm text-gray-900">External Payment (Manual)</dd>
+                            </div>
+                        }
 
                         <div class="border-t border-gray-200 pt-4">
                             <dt class="text-sm font-medium text-gray-500">Amount Paid</dt>
@@ -251,7 +261,8 @@
         renewalRequest = await DbContext.RenewalRequests
             .Include(r => r.SearchResult)
                 .ThenInclude(sr => sr!.SearchLog)
-            .Include(r => r.CustomerCreditCard)
+            .Include(r => r.StripePayment)
+                .ThenInclude(sp => sp.CustomerCreditCard)
             .FirstOrDefaultAsync(r => r.Id == Id);
 
         isLoading = false;

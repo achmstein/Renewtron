@@ -134,7 +134,7 @@
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     </svg>
                                                 </a>
-                                                @if (!renewal.Completed && renewal.StripePaymentStatus == "succeeded")
+                                                @if (!renewal.Completed && renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded")
                                                 {
                                                     <button @onclick="() => RetryRenewal(renewal.Id)"
                                                             disabled="@isRetrying"
@@ -240,6 +240,7 @@
         renewals = await DbContext.RenewalRequests
             .Include(r => r.SearchResult)
                 .ThenInclude(sr => sr.SearchLog)
+            .Include(r => r.StripePayment)
             .OrderByDescending(r => r.InitiatedAt)
             .Skip((currentPage - 1) * pageSize)
             .Take(pageSize)
