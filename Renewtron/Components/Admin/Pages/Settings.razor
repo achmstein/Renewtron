@@ -171,20 +171,29 @@
             {
                 <div class="overflow-hidden rounded-lg bg-white shadow">
                     <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Pricing Settings</h3>
+                        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Renewal Pricing</h3>
+                        <p class="text-sm text-gray-500 mb-4">Set the prices customers will pay for business name renewals</p>
                         <EditForm Model="@pricingSettings" OnValidSubmit="SavePricingSettings">
                             <div class="space-y-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">One Year Fee (AUD)</label>
-                                    <InputNumber @bind-Value="pricingSettings.OneYearFee" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                                    <label class="block text-sm font-medium text-gray-700">1 Year Renewal Price</label>
+                                    <div class="relative mt-1 rounded-md shadow-sm">
+                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                            <span class="text-gray-500 sm:text-sm">$</span>
+                                        </div>
+                                        <InputNumber @bind-Value="pricingSettings.OneYearFee" class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <p class="mt-1 text-xs text-gray-500">Total price charged to customer for 1 year renewal</p>
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Three Year Fee (AUD)</label>
-                                    <InputNumber @bind-Value="pricingSettings.ThreeYearFee" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Markup Percentage</label>
-                                    <InputNumber @bind-Value="pricingSettings.MarkupPercentage" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                                    <label class="block text-sm font-medium text-gray-700">3 Year Renewal Price</label>
+                                    <div class="relative mt-1 rounded-md shadow-sm">
+                                        <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                            <span class="text-gray-500 sm:text-sm">$</span>
+                                        </div>
+                                        <InputNumber @bind-Value="pricingSettings.ThreeYearFee" class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                                    </div>
+                                    <p class="mt-1 text-xs text-gray-500">Total price charged to customer for 3 year renewal</p>
                                 </div>
                                 <div>
                                     <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
