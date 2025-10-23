@@ -414,6 +414,7 @@
                 // Clear previous error states
                 renewalRequest.ErrorMessage = null;
                 renewalRequest.FailedAtStep = null;
+                renewalRequest.Status = RenewalStatus.Pending;
                 renewalRequest.Completed = false;
                 renewalRequest.CompletedAt = null;
                 renewalRequest.TransactionReference = null;
@@ -439,6 +440,7 @@
                     Email = email,
                     PaymentType = PaymentType.Stripe,
                     Amount = amount,
+                    Status = RenewalStatus.Pending,
                     Completed = false
                 };
                 DbContext.RenewalRequests.Add(renewalRequest);

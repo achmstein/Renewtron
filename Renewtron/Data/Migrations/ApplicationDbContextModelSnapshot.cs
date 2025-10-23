@@ -294,6 +294,9 @@ namespace Renewtron.Data.Migrations
                     b.Property<string>("SessionId")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
                     b.Property<string>("TransactionReference")
                         .HasColumnType("nvarchar(max)");
 
@@ -303,6 +306,8 @@ namespace Renewtron.Data.Migrations
 
                     b.HasIndex("SearchResultId")
                         .IsUnique();
+
+                    b.HasIndex("Status");
 
                     b.ToTable("RenewalRequests");
                 });

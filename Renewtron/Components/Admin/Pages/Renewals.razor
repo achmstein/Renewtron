@@ -106,21 +106,28 @@
                                             $@renewal.Amount.ToString("F2")
                                         </td>
                                         <td class="whitespace-nowrap px-6 py-4">
-                                            @if (renewal.Completed)
+                                            @switch (renewal.Status)
                                             {
-                                                <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Completed</span>
-                                            }
-                                            else
-                                            {
-                                                <div class="flex flex-col gap-1">
-                                                    <span class="self-start inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
-                                                    @if (!string.IsNullOrEmpty(renewal.ErrorMessage))
-                                                    {
-                                                        <span class="text-xs text-gray-600" title="@renewal.ErrorMessage">
-                                                            @(renewal.ErrorMessage.Length > 30 ? renewal.ErrorMessage.Substring(0, 30) + "..." : renewal.ErrorMessage)
-                                                        </span>
-                                                    }
-                                                </div>
+                                                case RenewalStatus.Completed:
+                                                    <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Completed</span>
+                                                    break;
+                                                case RenewalStatus.Processing:
+                                                    <span class="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">Processing</span>
+                                                    break;
+                                                case RenewalStatus.Pending:
+                                                    <span class="inline-flex rounded-full bg-yellow-100 px-2 text-xs font-semibold leading-5 text-yellow-800">Pending</span>
+                                                    break;
+                                                case RenewalStatus.Failed:
+                                                    <div class="flex flex-col gap-1">
+                                                        <span class="self-start inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
+                                                        @if (!string.IsNullOrEmpty(renewal.ErrorMessage))
+                                                        {
+                                                            <span class="text-xs text-gray-600" title="@renewal.ErrorMessage">
+                                                                @(renewal.ErrorMessage.Length > 30 ? renewal.ErrorMessage.Substring(0, 30) + "..." : renewal.ErrorMessage)
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                    break;
                                             }
                                         </td>
                                         <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
@@ -134,7 +141,7 @@
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     </svg>
                                                 </a>
-                                                @if (!renewal.Completed && ((renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded") 
+                                                @if (renewal.Status == RenewalStatus.Failed && ((renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded")
                                                     || renewal.PaymentType == PaymentType.External))
                                                 {
                                                     <button @onclick="() => RetryRenewal(renewal.Id)"
