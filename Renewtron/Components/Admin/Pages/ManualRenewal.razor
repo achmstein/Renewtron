@@ -140,29 +140,24 @@
                             </div>
 
                             <div>
-                                <label for="customerAmount" class="block text-sm font-medium text-gray-700">Amount Paid by Customer (AUD)</label>
+                                <label for="amount" class="block text-sm font-medium text-gray-700">Amount Paid by Customer</label>
                                 <div class="relative mt-1 rounded-md shadow-sm">
                                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                         <span class="text-gray-500 sm:text-sm">$</span>
                                     </div>
-                                    <input type="number" @bind="customerAmount" id="customerAmount" step="0.01" min="0"
+                                    <input type="number" @bind="amount" id="amount" step="0.01" min="0"
                                            class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
                                            placeholder="0.00" />
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500">Amount received externally from the customer</p>
+                                <p class="mt-1 text-xs text-gray-500">Amount received from customer via external payment method</p>
                             </div>
 
                             <div>
-                                <label for="asicAmount" class="block text-sm font-medium text-gray-700">ASIC Fee (AUD)</label>
-                                <div class="relative mt-1 rounded-md shadow-sm">
-                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                        <span class="text-gray-500 sm:text-sm">$</span>
-                                    </div>
-                                    <input type="number" @bind="asicAmount" id="asicAmount" step="0.01" min="0"
-                                           class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
-                                           placeholder="0.00" />
-                                </div>
-                                <p class="mt-1 text-xs text-gray-500">Amount to be charged to ASIC card</p>
+                                <label for="paymentReference" class="block text-sm font-medium text-gray-700">Payment Reference (Optional)</label>
+                                <input type="text" @bind="paymentReference" id="paymentReference"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
+                                       placeholder="Check #, wire confirmation, etc." />
+                                <p class="mt-1 text-xs text-gray-500">Reference for tracking the external payment</p>
                             </div>
                         </div>
 
@@ -203,8 +198,8 @@
     // Renewal details
     private int renewalYears = 1;
     private string customerEmail = "";
-    private decimal customerAmount = 0;
-    private decimal asicAmount = 0;
+    private decimal amount = 0;
+    private string paymentReference = "";
 
     // Processing
     private bool isProcessing = false;
@@ -230,9 +225,9 @@
         {
             var result = await SearchClient.SearchAsync(searchAbn);
 
-            if (!result.IsSuccess)
+            if (!result.Success)
             {
-                errorMessage = result.Message ?? "Failed to search ASIC registry";
+                errorMessage = "Failed to search ASIC registry";
                 return;
             }
 
@@ -294,15 +289,9 @@
             return;
         }
 
-        if (customerAmount <= 0)
+        if (amount <= 0)
         {
             errorMessage = "Please enter amount paid by customer";
-            return;
-        }
-
-        if (asicAmount <= 0)
-        {
-            errorMessage = "Please enter ASIC fee amount";
             return;
         }
 
@@ -331,9 +320,9 @@
                 SessionId = "Manual",
                 RenewalYears = renewalYears,
                 Email = customerEmail,
-                CustomerAmount = customerAmount,
-                AsicAmount = asicAmount,
-                IsManualPayment = true,
+                PaymentType = PaymentType.Manual,
+                Amount = amount,
+                ExternalPaymentReference = paymentReference,
                 StripePaymentStatus = null,
                 StripePaidAt = DateTime.UtcNow,
                 Completed = false

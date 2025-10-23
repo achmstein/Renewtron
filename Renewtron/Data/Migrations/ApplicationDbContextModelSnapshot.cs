@@ -255,7 +255,7 @@ namespace Renewtron.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("AsicAmount")
+                    b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("Completed")
@@ -264,9 +264,6 @@ namespace Renewtron.Data.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal>("CustomerAmount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<Guid?>("CustomerCreditCardId")
                         .HasColumnType("uniqueidentifier");
 
@@ -274,6 +271,9 @@ namespace Renewtron.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ExternalPaymentReference")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FailedAtStep")
@@ -288,8 +288,8 @@ namespace Renewtron.Data.Migrations
                     b.Property<string>("IpAddress")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsManualPayment")
-                        .HasColumnType("bit");
+                    b.Property<int>("PaymentType")
+                        .HasColumnType("int");
 
                     b.Property<int>("RenewalYears")
                         .HasColumnType("int");

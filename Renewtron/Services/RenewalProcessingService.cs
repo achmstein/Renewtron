@@ -56,7 +56,7 @@ public class RenewalProcessingService : IRenewalProcessingService
             }
 
             // Verify payment was successful (either Stripe or manual payment)
-            if (!renewalRequest.IsManualPayment && renewalRequest.StripePaymentStatus != "succeeded")
+            if (renewalRequest.PaymentType == PaymentType.Stripe && renewalRequest.StripePaymentStatus != "succeeded")
             {
                 _logger.LogError("Renewal request {RenewalRequestId} does not have successful payment", renewalRequestId);
                 return;
@@ -111,7 +111,7 @@ public class RenewalProcessingService : IRenewalProcessingService
                             renewalRequest.SearchResult.BusinessName,
                             renewalRequest.SearchResult.SearchLog.Abn,
                             renewalRequest.RenewalYears,
-                            renewalRequest.CustomerAmount,
+                            renewalRequest.Amount,
                             result.TransactionReference ?? "N/A"
                         );
 

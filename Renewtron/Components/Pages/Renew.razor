@@ -376,8 +376,7 @@
             var expiryMonth = expiryParts[0];
             var expiryYear = "20" + expiryParts[1];
 
-            var customerAmount = pricing.GetCustomerPrice(renewalYears);
-            var asicAmount = pricing.GetAsicFee(renewalYears);
+            var amount = pricing.GetCustomerPrice(renewalYears);
 
             // Step 1: Save customer's card (for display only)
             var customerCard = new SavedCreditCard
@@ -408,8 +407,8 @@
                 renewalRequest.CustomerCreditCardId = customerCard.Id;
                 renewalRequest.RenewalYears = renewalYears;
                 renewalRequest.Email = email;
-                renewalRequest.CustomerAmount = customerAmount;
-                renewalRequest.AsicAmount = asicAmount;
+                renewalRequest.PaymentType = PaymentType.Stripe;
+                renewalRequest.Amount = amount;
                 renewalRequest.IpAddress = ipAddress;
                 renewalRequest.SessionId = sessionId;
                 // Clear previous error states
@@ -436,8 +435,8 @@
                     SessionId = sessionId,
                     RenewalYears = renewalYears,
                     Email = email,
-                    CustomerAmount = customerAmount,
-                    AsicAmount = asicAmount,
+                    PaymentType = PaymentType.Stripe,
+                    Amount = amount,
                     Completed = false
                 };
                 DbContext.RenewalRequests.Add(renewalRequest);
@@ -458,7 +457,7 @@
             };
 
             var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.CreatePaymentIntentAsync(
-                customerAmount,
+                amount,
                 email,
                 $"Business Name Renewal - {searchResult.BusinessName}",
                 metadata);

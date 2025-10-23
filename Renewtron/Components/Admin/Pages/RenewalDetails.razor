@@ -148,7 +148,7 @@
                                 <div>
                                     <dt class="text-sm font-medium text-gray-500">Payment Type</dt>
                                     <dd class="mt-1">
-                                        @if (renewal.IsManualPayment)
+                                        @if (renewal.PaymentType == PaymentType.Manual)
                                         {
                                             <span class="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">Manual / External Payment</span>
                                         }
@@ -159,14 +159,17 @@
                                     </dd>
                                 </div>
                                 <div>
-                                    <dt class="text-sm font-medium text-gray-500">Customer Amount</dt>
-                                    <dd class="mt-1 text-lg font-semibold text-gray-900">$@renewal.CustomerAmount.ToString("F2")</dd>
+                                    <dt class="text-sm font-medium text-gray-500">Amount</dt>
+                                    <dd class="mt-1 text-lg font-semibold text-gray-900">$@renewal.Amount.ToString("F2")</dd>
                                 </div>
-                                <div>
-                                    <dt class="text-sm font-medium text-gray-500">ASIC Amount</dt>
-                                    <dd class="mt-1 text-sm text-gray-900">$@renewal.AsicAmount.ToString("F2")</dd>
-                                </div>
-                                @if (!renewal.IsManualPayment)
+                                @if (!string.IsNullOrEmpty(renewal.ExternalPaymentReference))
+                                {
+                                    <div>
+                                        <dt class="text-sm font-medium text-gray-500">Payment Reference</dt>
+                                        <dd class="mt-1 text-sm text-gray-900">@renewal.ExternalPaymentReference</dd>
+                                    </div>
+                                }
+                                @if (renewal.PaymentType == PaymentType.Stripe)
                                 {
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Stripe Payment Intent</dt>
