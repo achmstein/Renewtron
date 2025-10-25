@@ -232,12 +232,12 @@
             var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
             var sessionId = httpContext?.Session?.Id;
 
-                // Try to get from cache first
-                Asic.Client.Models.BusinessNamesResult searchResult;
+            // Try to get from cache first
+            BusinessNamesResult searchResult;
             if (!MemoryCache.TryGetValue(cacheKey, out searchResult))
             {
                 // Not in cache, perform search using ASIC Renewal Service
-                searchResult = await AsicRenewalClient.SearchAsync(cleanAbn);
+                searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
 
                 // Cache the result for 15 minutes
                 var cacheOptions = new MemoryCacheEntryOptions()

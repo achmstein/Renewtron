@@ -8,7 +8,7 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAsic(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddScoped<IAsicRenewalClient, AsicRenewalClient>();
+        services.AddTransient<IAsicRenewalClient, AsicRenewalClient>();
         services.AddScoped<IAsicPaymentClient, AsicPaymentClient>();
 
         return services;

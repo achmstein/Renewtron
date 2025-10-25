@@ -224,7 +224,7 @@
             if (!MemoryCache.TryGetValue(cacheKey, out result))
             {
                 // Not in cache, perform search using ASIC Renewal Service
-                result = await RenewalClient.SearchAsync(searchAbn);
+                result = await RenewalClient.SearchByAbnAsync(searchAbn);
 
                 // Cache the result for 15 minutes
                 var cacheOptions = new MemoryCacheEntryOptions()

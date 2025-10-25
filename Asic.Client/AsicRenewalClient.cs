@@ -28,7 +28,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
-    public async Task<BusinessNamesResult> SearchAsync(string abn)
+    public async Task<BusinessNamesResult> SearchByAbnAsync(string abn)
     {
         try
         {
@@ -40,7 +40,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             }
 
             // Step 2: Submit ABN to get business name list
-            var (success, content) = await SubmitSearchAsync(abn, adfWindowId, viewState);
+            var (success, content) = await SubmitAbnForSearchAsync(abn, adfWindowId, viewState);
             if (!success)
             {
                 // Check for specific error messages and provide user-friendly responses
@@ -79,7 +79,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
     }
 
-    private async Task<(bool Success, string Content)> SubmitSearchAsync(string abn, string adfWindowId, string viewState)
+    private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
