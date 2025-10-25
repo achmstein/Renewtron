@@ -42,24 +42,8 @@ public class AsicRenewalClient : IAsicRenewalClient
             var (success, content) = await SubmitAbnForSearchAsync(abn, adfWindowId, viewState);
             if (!success)
             {
-                // Check for specific error messages and provide user-friendly responses
-                if (content.Contains("We are processing your renewal application"))
-                {
-                    return BusinessNamesResult.Failed(
-                        "A renewal for this ABN is already in progress. " +
-                        "Please complete or cancel the existing renewal before starting a new one. " +
-                        "Check your email for the invoice or wait 48 hours for processing to complete.");
-                }
-
-                if (content.Contains("This business name registration is not due for renewal"))
-                {
-                    return BusinessNamesResult.Failed(
-                        "This business name is not due for renewal yet. " +
-                        "ASIC will send a renewal notice when it becomes due. " +
-                        "Check the business name register to see the next renewal date.");
-                }
-
-                return BusinessNamesResult.Failed("Failed to search for business names. Please check the ABN and try again.");
+                var errorMessage = GetUserFriendlyErrorMessage(content);
+                return BusinessNamesResult.Failed(errorMessage ?? "Failed to search for business names. Please check the ABN and try again.");
             }
 
             // Step 3: Parse the response to extract business names
@@ -95,22 +79,14 @@ public class AsicRenewalClient : IAsicRenewalClient
             // Check for "already processing" error
             if (!success)
             {
-                if (message.Contains("We are processing your renewal application"))
+                var errorMessage = GetUserFriendlyErrorMessage(message);
+                if (errorMessage != null)
                 {
-                    return RenewalResult.Failed(
-                        "A renewal for this ABN is already in progress. " +
-                        "Please complete or cancel the existing renewal before starting a new one. " +
-                        "Check your email for the invoice or wait 48 hours for processing to complete.",
-                        "Already Processing");
-                }
-
-                if (message.Contains("This business name registration is not due for renewal"))
-                {
-                    return RenewalResult.Failed(
-                        "This business name is not due for renewal yet. " +
-                        "ASIC will send a renewal notice when it becomes due. " +
-                        "Check the business name register to see the next renewal date.",
-                        "Not Due For Renewal");
+                    // Determine the step name based on the error type
+                    var step = message.Contains("We are processing your renewal application")
+                        ? "Already Processing"
+                        : "Not Due For Renewal";
+                    return RenewalResult.Failed(errorMessage, step);
                 }
 
                 return RenewalResult.Failed($"Failed to submit ABN: {message}", "Submit ABN");
@@ -688,6 +664,29 @@ public class AsicRenewalClient : IAsicRenewalClient
             {
                 return radioMatches[i].Groups[1].Value;
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Checks the response content for known ASIC error messages and returns a user-friendly error message.
+    /// Returns null if no specific error pattern is found.
+    /// </summary>
+    private string GetUserFriendlyErrorMessage(string content)
+    {
+        if (content.Contains("We are processing your renewal application"))
+        {
+            return "A renewal for this ABN is already in progress. " +
+                   "Please complete or cancel the existing renewal before starting a new one. " +
+                   "Check your email for the invoice or wait 48 hours for processing to complete.";
+        }
+
+        if (content.Contains("This business name registration is not due for renewal"))
+        {
+            return "This business name is not due for renewal yet. " +
+                   "ASIC will send a renewal notice when it becomes due. " +
+                   "Check the business name register to see the next renewal date.";
         }
 
         return null;
