@@ -3,10 +3,10 @@ namespace Asic.Client.Models;
 public class BusinessNamesSearchResult
 {
     public bool Success { get; set; }
-    public List<SimplifiedBusinessName> BusinessNames { get; set; } = [];
+    public List<BusinessName> BusinessNames { get; set; } = [];
     public string? ErrorMessage { get; set; }
 
-    public static BusinessNamesSearchResult Succeeded(List<SimplifiedBusinessName> businessNames)
+    public static BusinessNamesSearchResult Succeeded(List<BusinessName> businessNames)
     {
         return new BusinessNamesSearchResult
         {
@@ -23,11 +23,4 @@ public class BusinessNamesSearchResult
             ErrorMessage = errorMessage
         };
     }
-}
-
-public class SimplifiedBusinessName
-{
-    public string Name { get; set; }
-    public string AccountNumber { get; set; }
-    public string RegistrationDate { get; set; }
 }

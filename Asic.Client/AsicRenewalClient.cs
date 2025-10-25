@@ -1,4 +1,5 @@
-﻿using AngleSharp.Html.Parser;
+﻿using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
 using System.Text;
@@ -27,7 +28,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
-    public async Task<BusinessNamesSearchResult> SearchByAbnAsync(string abn)
+    public async Task<BusinessNamesSearchResult> SearchAsync(string abn)
     {
         try
         {
@@ -39,7 +40,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             }
 
             // Step 2: Submit ABN to get business name list
-            var (success, content) = await SubmitAbnForSearchAsync(abn, adfWindowId, viewState);
+            var (success, content) = await SubmitSearchAsync(abn, adfWindowId, viewState);
             if (!success)
             {
                 return BusinessNamesSearchResult.Failed("Failed to search for business names");
@@ -61,7 +62,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
     }
 
-    private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
+    private async Task<(bool Success, string Content)> SubmitSearchAsync(string abn, string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -91,9 +92,9 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (success, content);
     }
 
-    private List<SimplifiedBusinessName> ParseBusinessNamesFromResponse(string xmlContent)
+    private List<BusinessName> ParseBusinessNamesFromResponse(string xmlContent)
     {
-        var businessNames = new List<SimplifiedBusinessName>();
+        var businessNames = new List<BusinessName>();
 
         // Extract business name
         var nameMatch = Regex.Match(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
@@ -113,7 +114,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         var accountNumber = dataTextMatches[1].Value.Replace("<span class=\"dataText\">", "").Replace("</span>", "");
         var registrationDate = dataTextMatches[2].Value.Replace("<span class=\"dataText\">", "").Replace("</span>", "");
 
-        businessNames.Add(new SimplifiedBusinessName
+        businessNames.Add(new BusinessName
         {
             Name = name,
             AccountNumber = accountNumber,
