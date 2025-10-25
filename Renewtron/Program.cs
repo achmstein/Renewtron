@@ -1,4 +1,3 @@
-using Asic.Client.Captcha;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -46,11 +45,6 @@ builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 
 // Encryption service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
-
-// Configure settings
-builder.Services.AddOptions<TwoCaptchaSettings>()
-    .BindConfiguration("TwoCaptcha")
-    .ValidateDataAnnotations();
 
 builder.Services.AddOptions<StripeSettings>()
     .BindConfiguration("Stripe")

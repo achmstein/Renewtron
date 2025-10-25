@@ -1,6 +1,5 @@
 @page "/admin/settings"
 
-@using Asic.Client.Captcha
 @using Renewtron.Abstractions
 @using Renewtron.Settings
 
@@ -64,10 +63,6 @@
                                 class="@(activeTab == Tab.Stripe ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
                             Stripe
                         </button>
-                        <button @onclick="() => activeTab = Tab.TwoCaptcha"
-                                class="@(activeTab == Tab.TwoCaptcha ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
-                            2Captcha
-                        </button>
                         <button @onclick="() => activeTab = Tab.Pricing"
                                 class="@(activeTab == Tab.Pricing ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
                             Pricing
@@ -127,39 +122,6 @@
                                 <div>
                                     <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
                                         Save Stripe Settings
-                                    </button>
-                                </div>
-                            </div>
-                        </EditForm>
-                    </div>
-                </div>
-            }
-            else if (activeTab == Tab.TwoCaptcha)
-            {
-                <div class="overflow-hidden rounded-lg bg-white shadow">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">2Captcha Settings</h3>
-                        <EditForm Model="@twoCaptchaSettings" OnValidSubmit="SaveTwoCaptchaSettings">
-                            <div class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">API Key</label>
-                                    <InputText @bind-Value="twoCaptchaSettings.ApiKey" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Default Timeout (seconds)</label>
-                                    <InputNumber @bind-Value="twoCaptchaSettings.DefaultTimeout" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Recaptcha Timeout (seconds)</label>
-                                    <InputNumber @bind-Value="twoCaptchaSettings.RecaptchaTimeout" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Polling Interval (seconds)</label>
-                                    <InputNumber @bind-Value="twoCaptchaSettings.PollingInterval" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
-                                </div>
-                                <div>
-                                    <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-                                        Save 2Captcha Settings
                                     </button>
                                 </div>
                             </div>
@@ -249,13 +211,12 @@
 </div>
 
 @code {
-    private enum Tab { SendGrid, Stripe, TwoCaptcha, Pricing, AsicCreditCard }
+    private enum Tab { SendGrid, Stripe, Pricing, AsicCreditCard }
 
     private Tab activeTab = Tab.SendGrid;
 
     private SendGridSettings sendGridSettings = new();
     private StripeSettings stripeSettings = new();
-    private TwoCaptchaSettings twoCaptchaSettings = new();
     private PricingSettings pricingSettings = new();
     private AsicCreditCardSettings asicCreditCardSettings = new();
 
@@ -271,7 +232,6 @@
     {
         sendGridSettings = await SettingsService.GetSendGridSettingsAsync();
         stripeSettings = await SettingsService.GetStripeSettingsAsync();
-        twoCaptchaSettings = await SettingsService.GetTwoCaptchaSettingsAsync();
         pricingSettings = await SettingsService.GetPricingSettingsAsync();
         asicCreditCardSettings = await SettingsService.GetAsicCreditCardSettingsAsync();
     }
@@ -302,21 +262,6 @@
         catch (Exception ex)
         {
             errorMessage = $"Error saving Stripe settings: {ex.Message}";
-            successMessage = "";
-        }
-    }
-
-    private async Task SaveTwoCaptchaSettings()
-    {
-        try
-        {
-            await SettingsService.UpdateTwoCaptchaSettingsAsync(twoCaptchaSettings);
-            successMessage = "2Captcha settings saved successfully!";
-            errorMessage = "";
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error saving 2Captcha settings: {ex.Message}";
             successMessage = "";
         }
     }

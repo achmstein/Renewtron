@@ -28,7 +28,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
-    public async Task<BusinessNamesSearchResult> SearchAsync(string abn)
+    public async Task<BusinessNamesResult> SearchAsync(string abn)
     {
         try
         {
@@ -36,7 +36,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
             {
-                return BusinessNamesSearchResult.Failed("Failed to initialize renewal session");
+                return BusinessNamesResult.Failed("Failed to initialize renewal session");
             }
 
             // Step 2: Submit ABN to get business name list
@@ -46,7 +46,7 @@ public class AsicRenewalClient : IAsicRenewalClient
                 // Check for specific error messages and provide user-friendly responses
                 if (content.Contains("We are processing your renewal application"))
                 {
-                    return BusinessNamesSearchResult.Failed(
+                    return BusinessNamesResult.Failed(
                         "A renewal for this ABN is already in progress. " +
                         "Please complete or cancel the existing renewal before starting a new one. " +
                         "Check your email for the invoice or wait 48 hours for processing to complete.");
@@ -54,13 +54,13 @@ public class AsicRenewalClient : IAsicRenewalClient
 
                 if (content.Contains("This business name registration is not due for renewal"))
                 {
-                    return BusinessNamesSearchResult.Failed(
+                    return BusinessNamesResult.Failed(
                         "This business name is not due for renewal yet. " +
                         "ASIC will send a renewal notice when it becomes due. " +
                         "Check the business name register to see the next renewal date.");
                 }
 
-                return BusinessNamesSearchResult.Failed("Failed to search for business names. Please check the ABN and try again.");
+                return BusinessNamesResult.Failed("Failed to search for business names. Please check the ABN and try again.");
             }
 
             // Step 3: Parse the response to extract business names
@@ -68,14 +68,14 @@ public class AsicRenewalClient : IAsicRenewalClient
 
             if (businessNames.Count == 0)
             {
-                return BusinessNamesSearchResult.Failed("No business names found for this ABN");
+                return BusinessNamesResult.Failed("No business names found for this ABN");
             }
 
-            return BusinessNamesSearchResult.Succeeded(businessNames);
+            return BusinessNamesResult.Succeeded(businessNames);
         }
         catch (Exception ex)
         {
-            return BusinessNamesSearchResult.Failed($"Search failed: {ex.Message}");
+            return BusinessNamesResult.Failed($"Search failed: {ex.Message}");
         }
     }
 

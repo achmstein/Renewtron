@@ -119,13 +119,8 @@ namespace Renewtron.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SearchLogId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     BusinessName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
-                    RegistrationDate = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    RenewalDate = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CancelledDate = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    CancellationUnderReview = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    AddressForServiceDocuments = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    PrincipalPlaceOfBusiness = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    AccountNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    RegistrationDate = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -224,27 +219,6 @@ namespace Renewtron.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Holders",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    SearchResultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Type = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
-                    Abn = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Holders", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Holders_SearchResults_SearchResultId",
-                        column: x => x.SearchResultId,
-                        principalTable: "SearchResults",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "RenewalRequests",
                 columns: table => new
                 {
@@ -300,11 +274,6 @@ namespace Renewtron.Data.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Holders_SearchResultId",
-                table: "Holders",
-                column: "SearchResultId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_InitiatedAt",
@@ -401,9 +370,6 @@ namespace Renewtron.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "Holders");
-
             migrationBuilder.DropTable(
                 name: "RoleClaims");
 

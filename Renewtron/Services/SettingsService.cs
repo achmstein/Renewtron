@@ -1,4 +1,3 @@
-using Asic.Client.Captcha;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
@@ -11,7 +10,6 @@ public class SettingsService : ISettingsService
 {
     private readonly IOptions<SendGridSettings> _sendGridSettings;
     private readonly IOptions<StripeSettings> _stripeSettings;
-    private readonly IOptions<TwoCaptchaSettings> _twoCaptchaSettings;
     private readonly IOptions<PricingSettings> _pricingSettings;
     private readonly IOptions<AsicCreditCardSettings> _asicCreditCardSettings;
     private readonly IWebHostEnvironment _environment;
@@ -19,14 +17,12 @@ public class SettingsService : ISettingsService
     public SettingsService(
         IOptions<SendGridSettings> sendGridSettings,
         IOptions<StripeSettings> stripeSettings,
-        IOptions<TwoCaptchaSettings> twoCaptchaSettings,
         IOptions<PricingSettings> pricingSettings,
         IOptions<AsicCreditCardSettings> asicCreditCardSettings,
         IWebHostEnvironment environment)
     {
         _sendGridSettings = sendGridSettings;
         _stripeSettings = stripeSettings;
-        _twoCaptchaSettings = twoCaptchaSettings;
         _pricingSettings = pricingSettings;
         _asicCreditCardSettings = asicCreditCardSettings;
         _environment = environment;
@@ -40,11 +36,6 @@ public class SettingsService : ISettingsService
     public Task<StripeSettings> GetStripeSettingsAsync()
     {
         return Task.FromResult(_stripeSettings.Value);
-    }
-
-    public Task<TwoCaptchaSettings> GetTwoCaptchaSettingsAsync()
-    {
-        return Task.FromResult(_twoCaptchaSettings.Value);
     }
 
     public Task<PricingSettings> GetPricingSettingsAsync()
@@ -65,11 +56,6 @@ public class SettingsService : ISettingsService
     public async Task UpdateStripeSettingsAsync(StripeSettings settings)
     {
         await UpdateSettingsSectionAsync("Stripe", settings);
-    }
-
-    public async Task UpdateTwoCaptchaSettingsAsync(TwoCaptchaSettings settings)
-    {
-        await UpdateSettingsSectionAsync("TwoCaptcha", settings);
     }
 
     public async Task UpdatePricingSettingsAsync(PricingSettings settings)

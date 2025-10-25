@@ -3,7 +3,7 @@
 namespace Asic.Client.Abstractions;
 public interface IAsicRenewalClient
 {
-    Task<BusinessNamesSearchResult> SearchAsync(string abn);
+    Task<BusinessNamesResult> SearchAsync(string abn);
 
     Task<RenewalResult> RenewBusinessNameAsync(
         string abn,

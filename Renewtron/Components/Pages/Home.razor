@@ -232,8 +232,8 @@
             var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
             var sessionId = httpContext?.Session?.Id;
 
-            // Try to get from cache first
-            BusinessNamesSearchResult searchResult;
+                // Try to get from cache first
+                Asic.Client.Models.BusinessNamesResult searchResult;
             if (!MemoryCache.TryGetValue(cacheKey, out searchResult))
             {
                 // Not in cache, perform search using ASIC Renewal Service
@@ -271,7 +271,7 @@
             {
                 foreach (var business in searchResult.BusinessNames)
                 {
-                    var searchResultEntity = new SearchResult
+                    var searchResultEntity = new Data.SearchResult
                     {
                         Id = Guid.NewGuid(),
                         SearchLogId = searchLog.Id,

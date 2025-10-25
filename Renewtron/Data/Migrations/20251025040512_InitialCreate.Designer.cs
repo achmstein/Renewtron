@@ -12,7 +12,7 @@ using Renewtron.Data;
 namespace Renewtron.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251023124614_InitialCreate")]
+    [Migration("20251025040512_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace Renewtron.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.5")
+                .HasAnnotation("ProductVersion", "10.0.0-rc.2.25502.107")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -223,35 +223,6 @@ namespace Renewtron.Data.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
-            modelBuilder.Entity("Renewtron.Data.Holder", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Abn")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid>("SearchResultId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Type")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SearchResultId");
-
-                    b.ToTable("Holders");
-                });
-
             modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -410,35 +381,23 @@ namespace Renewtron.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("AddressForServiceDocuments")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("BusinessName")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("CancellationUnderReview")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CancelledDate")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PrincipalPlaceOfBusiness")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("RegistrationDate")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("RenewalDate")
-                        .HasColumnType("nvarchar(max)");
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<Guid>("SearchLogId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
@@ -533,17 +492,6 @@ namespace Renewtron.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Renewtron.Data.Holder", b =>
-                {
-                    b.HasOne("Renewtron.Data.SearchResult", "SearchResult")
-                        .WithMany("Holders")
-                        .HasForeignKey("SearchResultId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SearchResult");
-                });
-
             modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
                     b.HasOne("Renewtron.Data.SearchResult", "SearchResult")
@@ -597,8 +545,6 @@ namespace Renewtron.Data.Migrations
 
             modelBuilder.Entity("Renewtron.Data.SearchResult", b =>
                 {
-                    b.Navigation("Holders");
-
                     b.Navigation("RenewalRequest");
                 });
 #pragma warning restore 612, 618

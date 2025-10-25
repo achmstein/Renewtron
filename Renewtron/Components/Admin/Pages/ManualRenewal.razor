@@ -220,7 +220,7 @@
             var cacheKey = $"abn_search_{searchAbn}";
 
             // Try to get from cache first
-            BusinessNamesSearchResult result;
+            Asic.Client.Models.BusinessNamesResult result;
             if (!MemoryCache.TryGetValue(cacheKey, out result))
             {
                 // Not in cache, perform search using ASIC Renewal Service
