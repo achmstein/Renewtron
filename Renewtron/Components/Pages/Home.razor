@@ -248,7 +248,34 @@
 
             progress = 100;
 
-            // Create search log
+            // Check if search failed
+            if (!searchResult.Success)
+            {
+                // Log the failed search
+                var failedSearchLog = new SearchLog
+                {
+                    Id = Guid.NewGuid(),
+                    Abn = cleanAbn,
+                    SearchedAt = DateTime.UtcNow,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    SessionId = sessionId,
+                    Success = false,
+                    InitiatedBy = SearchInitiator.Customer,
+                    ErrorMessage = searchResult.ErrorMessage ?? "Search failed",
+                    ResultsCount = 0
+                };
+
+                DbContext.SearchLogs.Add(failedSearchLog);
+                await DbContext.SaveChangesAsync();
+
+                // Show error message to user
+                errorMessage = searchResult.ErrorMessage ?? "An error occurred while searching. Please try again.";
+                isSearching = false;
+                return;
+            }
+
+            // Create search log for successful search
             var searchLog = new SearchLog
             {
                 Id = Guid.NewGuid(),
@@ -257,9 +284,9 @@
                 IpAddress = ipAddress,
                 UserAgent = userAgent,
                 SessionId = sessionId,
-                Success = searchResult.Success,
+                Success = true,
                 InitiatedBy = SearchInitiator.Customer,
-                ErrorMessage = searchResult.Success ? null : searchResult.ErrorMessage ?? "Search failed",
+                ErrorMessage = null,
                 ResultsCount = searchResult.BusinessNames?.Count ?? 0
             };
 
@@ -267,7 +294,7 @@
             await DbContext.SaveChangesAsync();
 
             // Save each result
-            if (searchResult.Success && searchResult.BusinessNames != null)
+            if (searchResult.BusinessNames != null)
             {
                 foreach (var business in searchResult.BusinessNames)
                 {
