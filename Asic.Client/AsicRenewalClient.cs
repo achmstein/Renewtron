@@ -66,129 +66,236 @@ public class AsicRenewalClient : IAsicRenewalClient
     {
         try
         {
-            // Step 1: Initialize renewal session (always starts fresh)
-            var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
-            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
-            {
-                return RenewalResult.Failed("Failed to initialize renewal session", "Initialize Session");
-            }
+            var initialData = RenewalStepData.Create(abn, accountNumber, renewalYears, email, cardDetails);
 
-            // Step 2: Submit ABN to get business name list
-            var (success, message, pageContent) = await SubmitAbnForRenewalAsync(abn, adfWindowId, viewState);
+            // Railway-oriented pipeline: each step only executes if the previous step succeeded
+            var initResult = await InitializeSessionStepAsync(initialData);
+            var result = await initResult
+                .ThenAsync("Submit ABN", SubmitAbnStepAsync)
+                .ThenAsync("Select Business", SelectBusinessStepAsync)
+                .ThenAsync("Proceed to Renewal Period", ProceedToRenewalPeriodStepAsync)
+                .ThenAsync("Select Renewal Period", SelectRenewalPeriodStepAsync)
+                .ThenAsync("Proceed to Review", ProceedToReviewStepAsync)
+                .ThenAsync("Select Authority Declaration", SelectAuthorityDeclarationStepAsync)
+                .ThenAsync("Proceed to Payment", ProceedToPaymentStepAsync)
+                .ThenAsync("Submit Email", SubmitEmailStepAsync)
+                .ThenAsync("Select Payment Method", SelectPaymentMethodStepAsync)
+                .ThenAsync("Open Payment Gateway", OpenPaymentGatewayStepAsync)
+                .ThenAsync("Process Payment", ProcessPaymentStepAsync);
 
-            // Check for "already processing" error
-            if (!success)
-            {
-                var errorMessage = GetUserFriendlyErrorMessage(message);
-                if (errorMessage != null)
-                {
-                    // Determine the step name based on the error type
-                    var step = message.Contains("We are processing your renewal application")
-                        ? "Already Processing"
-                        : "Not Due For Renewal";
-                    return RenewalResult.Failed(errorMessage, step);
-                }
-
-                return RenewalResult.Failed($"Failed to submit ABN: {message}", "Submit ABN");
-            }
-
-            // Step 3: Select specific business name from the list by account number
-            var selectionResult = await SelectBusinessNameAsync(accountNumber, pageContent, adfWindowId, viewState);
-            if (!selectionResult.Success)
-            {
-                return RenewalResult.Failed($"Failed to select business name: {selectionResult.Message}", "Select Business Name");
-            }
-
-            // Step 4: Click next to proceed to renewal period selection (or jump to email if resumed)
-            var periodPageResult = await ProceedToRenewalPeriodAsync(adfWindowId, viewState);
-            if (!periodPageResult.Success)
-            {
-                return RenewalResult.Failed("Failed to proceed to renewal period", "Proceed to Renewal Period");
-            }
-
-            string transactionReference = periodPageResult.TransactionReference;
-
-            // Normal flow - we're on renewal period page
-            if (!periodPageResult.JumpedToEmail)
-            {
-                // Step 5: Select renewal period (1 or 3 years)
-                var periodResult = await SelectRenewalPeriodAsync(renewalYears, adfWindowId, viewState);
-                if (!periodResult.Success)
-                {
-                    return RenewalResult.Failed("Failed to select renewal period", "Select Renewal Period");
-                }
-
-                // Step 6: Click next to proceed to review page
-                var reviewPageResult = await ProceedToReviewAsync(adfWindowId, viewState);
-                if (!reviewPageResult.Success)
-                {
-                    return RenewalResult.Failed("Failed to proceed to review", "Proceed to Review");
-                }
-
-                // Step 7: Select authority declaration (Representative declaration)
-                var authorityResult = await SelectAuthorityDeclarationAsync(adfWindowId, viewState);
-                if (!authorityResult.Success)
-                {
-                    return RenewalResult.Failed("Failed to select authority declaration", "Select Authority Declaration");
-                }
-
-                // Step 8: Click next to proceed to payment page
-                var paymentPageResult = await ProceedToPaymentAsync(adfWindowId, viewState);
-                if (!paymentPageResult.Success)
-                {
-                    return RenewalResult.Failed("Failed to proceed to payment", "Proceed to Payment");
-                }
-            }
-
-            // Both flows converge here: Email submission and payment
-
-            // Step 9: Enter email and confirm email (normal flow) or Step 5: Enter email (resumed flow)
-            var emailResult = await SubmitEmailAsync(email, adfWindowId, viewState, periodPageResult.Content);
-            if (!emailResult.Success)
-            {
-                return RenewalResult.Failed(
-                    periodPageResult.JumpedToEmail ? "Failed to submit email (resumed session)" : "Failed to submit email",
-                    "Submit Email");
-            }
-
-            // Step 10: Select payment method (Pay now by credit card) - both flows
-            var paymentMethodResult = await SelectPaymentMethodAsync(adfWindowId, viewState, emailResult.Content);
-            if (!paymentMethodResult.Success)
-            {
-                return RenewalResult.Failed("Failed to select payment method", "Select Payment Method");
-            }
-
-            // Step 11: Click Pay Now to open payment gateway - both flows
-            var paymentGatewayResult = await OpenPaymentGatewayAsync(adfWindowId, viewState, paymentMethodResult.Content);
-            if (!paymentGatewayResult.Success)
-            {
-                return RenewalResult.Failed("Failed to open payment gateway", "Open Payment Gateway");
-            }
-
-            // Step 12: Process payment through payment gateway - both flows
-            var paymentResult = await _paymentClient.ProcessPaymentAsync(
-                paymentGatewayResult.PaymentUrl,
-                periodPageResult.TransactionReference,
-                adfWindowId,
-                cardDetails);
-
-            if (!paymentResult.Success)
-            {
-                return RenewalResult.Failed(
-                    $"Renewal initiated but payment failed: {paymentResult.Message}. " +
-                    $"Transaction reference: {transactionReference ?? "Unknown"}",
-                    "Process Payment");
-            }
-
-            return RenewalResult.Success(
-                transactionReference ?? (periodPageResult.JumpedToEmail ? "RESUMED" : "Unknown"),
-                paymentResult.HostedTokenizationId);
+            return result.ToRenewalResult(data =>
+                RenewalResult.Success(
+                    data.TransactionReference ?? (data.JumpedToEmail ? "RESUMED" : "Unknown"),
+                    data.HostedTokenizationId));
         }
         catch (Exception ex)
         {
             return RenewalResult.Failed($"Renewal failed: {ex.Message}", "Exception");
         }
     }
+
+    // ========== Railway Pattern Step Methods ==========
+
+    private async Task<StepResult<RenewalStepData>> InitializeSessionStepAsync(RenewalStepData data)
+    {
+        var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
+
+        if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to initialize renewal session", "Initialize Session");
+        }
+
+        data.SessionId = sessionId;
+        data.AdfWindowId = adfWindowId;
+        data.ViewState = viewState;
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> SubmitAbnStepAsync(RenewalStepData data)
+    {
+        var (success, message, pageContent) = await SubmitAbnForRenewalAsync(data.Abn, data.AdfWindowId, data.ViewState);
+
+        if (!success)
+        {
+            var errorMessage = GetUserFriendlyErrorMessage(message);
+            if (errorMessage != null)
+            {
+                var step = message.Contains("We are processing your renewal application")
+                    ? "Already Processing"
+                    : "Not Due For Renewal";
+                return StepResult<RenewalStepData>.Failure(errorMessage, step);
+            }
+
+            return StepResult<RenewalStepData>.Failure($"Failed to submit ABN: {message}", "Submit ABN");
+        }
+
+        data.PageContent = pageContent;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> SelectBusinessStepAsync(RenewalStepData data)
+    {
+        var (success, message) = await SelectBusinessNameAsync(data.AccountNumber, data.PageContent, data.AdfWindowId, data.ViewState);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure($"Failed to select business name: {message}", "Select Business Name");
+        }
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> ProceedToRenewalPeriodStepAsync(RenewalStepData data)
+    {
+        var periodPageResult = await ProceedToRenewalPeriodAsync(data.AdfWindowId, data.ViewState);
+
+        if (!periodPageResult.Success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to proceed to renewal period", "Proceed to Renewal Period");
+        }
+
+        data.TransactionReference = periodPageResult.TransactionReference;
+        data.JumpedToEmail = periodPageResult.JumpedToEmail;
+        data.PageContent = periodPageResult.Content;
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> SelectRenewalPeriodStepAsync(RenewalStepData data)
+    {
+        // Skip if we jumped to email (resumed session)
+        if (data.JumpedToEmail)
+        {
+            return StepResult<RenewalStepData>.Success(data);
+        }
+
+        var (success, message) = await SelectRenewalPeriodAsync(data.RenewalYears, data.AdfWindowId, data.ViewState);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to select renewal period", "Select Renewal Period");
+        }
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> ProceedToReviewStepAsync(RenewalStepData data)
+    {
+        // Skip if we jumped to email (resumed session)
+        if (data.JumpedToEmail)
+        {
+            return StepResult<RenewalStepData>.Success(data);
+        }
+
+        var (success, message) = await ProceedToReviewAsync(data.AdfWindowId, data.ViewState);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to proceed to review", "Proceed to Review");
+        }
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> SelectAuthorityDeclarationStepAsync(RenewalStepData data)
+    {
+        // Skip if we jumped to email (resumed session)
+        if (data.JumpedToEmail)
+        {
+            return StepResult<RenewalStepData>.Success(data);
+        }
+
+        var (success, message) = await SelectAuthorityDeclarationAsync(data.AdfWindowId, data.ViewState);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to select authority declaration", "Select Authority Declaration");
+        }
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> ProceedToPaymentStepAsync(RenewalStepData data)
+    {
+        // Skip if we jumped to email (resumed session)
+        if (data.JumpedToEmail)
+        {
+            return StepResult<RenewalStepData>.Success(data);
+        }
+
+        var (success, message) = await ProceedToPaymentAsync(data.AdfWindowId, data.ViewState);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to proceed to payment", "Proceed to Payment");
+        }
+
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> SubmitEmailStepAsync(RenewalStepData data)
+    {
+        var (success, message, content) = await SubmitEmailAsync(data.Email, data.AdfWindowId, data.ViewState, data.PageContent);
+
+        if (!success)
+        {
+            var errorMsg = data.JumpedToEmail
+                ? "Failed to submit email (resumed session)"
+                : "Failed to submit email";
+            return StepResult<RenewalStepData>.Failure(errorMsg, "Submit Email");
+        }
+
+        data.PageContent = content;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> SelectPaymentMethodStepAsync(RenewalStepData data)
+    {
+        var (success, message, content) = await SelectPaymentMethodAsync(data.AdfWindowId, data.ViewState, data.PageContent);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to select payment method", "Select Payment Method");
+        }
+
+        data.PageContent = content;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> OpenPaymentGatewayStepAsync(RenewalStepData data)
+    {
+        var (success, paymentUrl) = await OpenPaymentGatewayAsync(data.AdfWindowId, data.ViewState, data.PageContent);
+
+        if (!success)
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to open payment gateway", "Open Payment Gateway");
+        }
+
+        data.PaymentUrl = paymentUrl;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private async Task<StepResult<RenewalStepData>> ProcessPaymentStepAsync(RenewalStepData data)
+    {
+        var paymentResult = await _paymentClient.ProcessPaymentAsync(
+            data.PaymentUrl,
+            data.TransactionReference,
+            data.AdfWindowId,
+            data.CardDetails);
+
+        if (!paymentResult.Success)
+        {
+            var errorMsg = $"Renewal initiated but payment failed: {paymentResult.Message}. " +
+                          $"Transaction reference: {data.TransactionReference ?? "Unknown"}";
+            return StepResult<RenewalStepData>.Failure(errorMsg, "Process Payment");
+        }
+
+        data.HostedTokenizationId = paymentResult.HostedTokenizationId;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    // ========== End Railway Pattern Step Methods ==========
 
     private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
     {
