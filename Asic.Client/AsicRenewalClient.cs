@@ -32,7 +32,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         try
         {
             // Step 1: Initialize renewal session
-            var (sessionId, adfWindowId, viewState) = await InitializeRenewalSessionAsync();
+            var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
             {
                 return BusinessNamesSearchResult.Failed("Failed to initialize renewal session");
@@ -140,7 +140,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         try
         {
             // Step 1: Initialize renewal session (always starts fresh)
-            var (sessionId, adfWindowId, viewState) = await InitializeRenewalSessionAsync();
+            var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
             if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
             {
                 return RenewalResult.Failed("Failed to initialize renewal session", "Initialize Session");
@@ -277,7 +277,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return match.Success ? match.Groups[1].Value : null;
     }
 
-    async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeRenewalSessionAsync()
+    async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
     {
         // Step 1: Initial GET to renewal page
         var response = await _http.GetAsync("public/faces/renewal");

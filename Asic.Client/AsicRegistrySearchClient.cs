@@ -367,19 +367,7 @@ public class AsicRegistrySearchClient : IAsicRegistrySearchClient
         return new()
         {
             Name = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Business name:"))?.NextElementSibling.TextContent,
-            Status = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Status:"))?.NextElementSibling.TextContent,
             RegistrationDate = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Registration date:"))?.NextElementSibling.TextContent,
-            RenewalDate = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Renewal date:"))?.NextElementSibling.TextContent,
-            CancelledDate = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Cancelled date:"))?.NextElementSibling.TextContent,
-            CancellationUnderReview = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Cancellation under review:"))?.NextElementSibling.TextContent,
-            AddressForServiceDocuments = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Address for service of documents:"))?.NextElementSibling.TextContent,
-            PrincipalPlaceOfBusiness = element.QuerySelectorAll("th").FirstOrDefault(x => x.TextContent.Contains("Principal place of business:"))?.NextElementSibling.TextContent,
-            Holders = [.. holderNames.Select((x, i) => new Holder
-            {
-                Name = x,
-                Type = holderTypes[i],
-                Abn = holderAbns[i].Replace("(External Link)", "").Trim()
-            })],
         };
     }
 }
