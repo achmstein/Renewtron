@@ -86,7 +86,7 @@ public class RenewalProcessingService : IRenewalProcessingService
             // Process the ASIC renewal
             var result = await _renewalClient.RenewBusinessNameAsync(
                 renewalRequest.SearchResult.SearchLog.Abn,
-                renewalRequest.SearchResult.BusinessName,
+                renewalRequest.SearchResult.AccountNumber,
                 renewalRequest.RenewalYears,
                 renewalRequest.Email ?? "",
                 asicCardDetails

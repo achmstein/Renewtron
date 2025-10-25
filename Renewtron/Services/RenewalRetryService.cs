@@ -73,7 +73,7 @@ public class RenewalRetryService : IRenewalRetryService
             // Retry the ASIC renewal
             var result = await _renewalClient.RenewBusinessNameAsync(
                 renewalRequest.SearchResult.SearchLog.Abn,
-                renewalRequest.SearchResult.BusinessName,
+                renewalRequest.SearchResult.AccountNumber,
                 renewalRequest.RenewalYears,
                 renewalRequest.Email ?? "",
                 asicCardDetails

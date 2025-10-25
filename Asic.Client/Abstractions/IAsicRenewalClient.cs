@@ -7,7 +7,7 @@ public interface IAsicRenewalClient
 
     Task<RenewalResult> RenewBusinessNameAsync(
         string abn,
-        string businessName,
+        string accountNumber,
         int renewalYears,
         string email,
         CreditCardDetails cardDetails);

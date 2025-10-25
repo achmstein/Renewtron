@@ -146,7 +146,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return businessNames;
     }
 
-    public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string businessName, int renewalYears, string email, CreditCardDetails cardDetails)
+    public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string accountNumber, int renewalYears, string email, CreditCardDetails cardDetails)
     {
         try
         {
@@ -158,12 +158,12 @@ public class AsicRenewalClient : IAsicRenewalClient
             }
 
             // Step 2: Submit ABN to get business name list
-            var businessListResult = await SubmitAbnForRenewalAsync(abn, adfWindowId, viewState);
+            var (success, message, pageContent) = await SubmitAbnForRenewalAsync(abn, adfWindowId, viewState);
 
             // Check for "already processing" error
-            if (!businessListResult.Success)
+            if (!success)
             {
-                if (businessListResult.Message.Contains("We are processing your renewal application"))
+                if (message.Contains("We are processing your renewal application"))
                 {
                     return RenewalResult.Failed(
                         "A renewal for this ABN is already in progress. " +
@@ -172,7 +172,7 @@ public class AsicRenewalClient : IAsicRenewalClient
                         "Already Processing");
                 }
 
-                if (businessListResult.Message.Contains("This business name registration is not due for renewal"))
+                if (message.Contains("This business name registration is not due for renewal"))
                 {
                     return RenewalResult.Failed(
                         "This business name is not due for renewal yet. " +
@@ -181,14 +181,14 @@ public class AsicRenewalClient : IAsicRenewalClient
                         "Not Due For Renewal");
                 }
 
-                return RenewalResult.Failed($"Failed to submit ABN: {businessListResult.Message}", "Submit ABN");
+                return RenewalResult.Failed($"Failed to submit ABN: {message}", "Submit ABN");
             }
 
-            // Step 3: Select specific business name from the list
-            var selectionResult = await SelectBusinessNameAsync(businessName, adfWindowId, viewState);
+            // Step 3: Select specific business name from the list by account number
+            var selectionResult = await SelectBusinessNameAsync(accountNumber, pageContent, adfWindowId, viewState);
             if (!selectionResult.Success)
             {
-                return RenewalResult.Failed("Failed to select business name", "Select Business Name");
+                return RenewalResult.Failed($"Failed to select business name: {selectionResult.Message}", "Select Business Name");
             }
 
             // Step 4: Click next to proceed to renewal period selection (or jump to email if resumed)
@@ -317,7 +317,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (sessionId, adfWindowId, viewState);
     }
 
-    async Task<(bool Success, string Message)> SubmitAbnForRenewalAsync(string abn, string adfWindowId, string viewState)
+    async Task<(bool Success, string Message, string Content)> SubmitAbnForRenewalAsync(string abn, string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -345,7 +345,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         // Check for "already processing" error
         if (content.Contains("We are processing your renewal application"))
         {
-            return (false, "We are processing your renewal application");
+            return (false, "We are processing your renewal application", content);
         }
 
         var success = response.IsSuccessStatusCode &&
@@ -353,25 +353,36 @@ public class AsicRenewalClient : IAsicRenewalClient
                       content.Contains("Email required for online payment") ||
                       content.Contains("Select Payment Preference"));
 
-        return (success, success ? "Success" : "Failed");
+        return (success, success ? "Success" : "Failed", content);
     }
 
-    async Task<(bool Success, string Message)> SelectBusinessNameAsync(string businessName, string adfWindowId, string viewState)
+    async Task<(bool Success, string Message)> SelectBusinessNameAsync(string accountNumber, string pageContent, string adfWindowId, string viewState)
     {
+        // Find the radio button ID for the specified account number
+        var radioButtonId = FindRadioButtonIdByAccountNumber(pageContent, accountNumber);
+
+        if (string.IsNullOrEmpty(radioButtonId))
+        {
+            return (false, $"Could not find business name with account number {accountNumber}");
+        }
+
+        // URL encode the radio button ID for form data
+        var encodedRadioButtonId = Uri.EscapeDataString(radioButtonId);
+
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
-        formData.Append("bngrp=tmpt%3Aregion%3A1%3Aform%3Asbr1&");
+        formData.Append($"bngrp={encodedRadioButtonId}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={adfWindowId}&");
         formData.Append("Adf-Page-Id=0&");
         formData.Append($"javax.faces.ViewState={viewState}&");
         formData.Append("oracle.adf.view.rich.DELTAS=%7Btmpt%3Awaitpopup%3D%7B_shown%3D%7D%7D&");
-        formData.Append("event=tmpt%3Aregion%3A1%3Aform%3Asbr1&");
-        formData.Append("event.tmpt:region:1:form:sbr1=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
-        formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A1%3Aform%3Asbr1");
+        formData.Append($"event={encodedRadioButtonId}&");
+        formData.Append($"event.{radioButtonId}=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+        formData.Append($"oracle.adf.view.rich.PROCESS={encodedRadioButtonId}");
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=0");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
@@ -652,5 +663,34 @@ public class AsicRenewalClient : IAsicRenewalClient
         // Look for patterns like: tmpt:region:N:form:componentId or tmpt:region:N:componentId
         var match = Regex.Match(content, @"tmpt:region:(\d+):[^:]*");
         return match.Success ? match.Groups[1].Value : "0";
+    }
+
+    private string FindRadioButtonIdByAccountNumber(string content, string accountNumber)
+    {
+        // The HTML structure has radio buttons followed by business data
+        // Each row contains: radio button, business name, account number, registration date
+        // Radio button pattern: <span id="tmpt:region:1:form:sbr1..." class="selectBooleanRadioHiddenLabel"
+        // Data pattern: <span class="dataText">VALUE</span>
+
+        // Find all radio button IDs
+        var radioMatches = Regex.Matches(content, @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
+
+        // Find all dataText spans (business names, account numbers, registration dates)
+        var dataTextMatches = Regex.Matches(content, @"<span class=""dataText"">([^<]+)</span>");
+
+        // Match radio buttons to account numbers
+        // Each table row has 3 dataText spans: [name, account, date]
+        for (int i = 0; i < radioMatches.Count && (i * 3 + 1) < dataTextMatches.Count; i++)
+        {
+            var accountIndex = i * 3 + 1; // Account number is the second item (index 1) in each group
+            var accountValue = dataTextMatches[accountIndex].Groups[1].Value.Trim();
+
+            if (accountValue == accountNumber)
+            {
+                return radioMatches[i].Groups[1].Value;
+            }
+        }
+
+        return null;
     }
 }
