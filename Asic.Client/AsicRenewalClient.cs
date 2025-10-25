@@ -43,7 +43,24 @@ public class AsicRenewalClient : IAsicRenewalClient
             var (success, content) = await SubmitSearchAsync(abn, adfWindowId, viewState);
             if (!success)
             {
-                return BusinessNamesSearchResult.Failed("Failed to search for business names");
+                // Check for specific error messages and provide user-friendly responses
+                if (content.Contains("We are processing your renewal application"))
+                {
+                    return BusinessNamesSearchResult.Failed(
+                        "A renewal for this ABN is already in progress. " +
+                        "Please complete or cancel the existing renewal before starting a new one. " +
+                        "Check your email for the invoice or wait 48 hours for processing to complete.");
+                }
+
+                if (content.Contains("This business name registration is not due for renewal"))
+                {
+                    return BusinessNamesSearchResult.Failed(
+                        "This business name is not due for renewal yet. " +
+                        "ASIC will send a renewal notice when it becomes due. " +
+                        "Check the business name register to see the next renewal date.");
+                }
+
+                return BusinessNamesSearchResult.Failed("Failed to search for business names. Please check the ABN and try again.");
             }
 
             // Step 3: Parse the response to extract business names
