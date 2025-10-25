@@ -397,7 +397,6 @@ public class AsicPaymentClient : IAsicPaymentClient
             var request = new HttpRequestMessage(HttpMethod.Post,
                 $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={adfWindowId}&Adf-Page-Id=3");
 
-            request.Headers.Add("Referer", $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SST={hostedTokenizationId}&SessionId={sessionId}");
 
             var formBytes = Encoding.UTF8.GetBytes(formData.ToString());
             request.Content = new ByteArrayContent(formBytes);
@@ -406,7 +405,7 @@ public class AsicPaymentClient : IAsicPaymentClient
             request.Headers.Add("Adf-Rich-Message", "true");
             request.Headers.Add("Adf-Ads-Page-Id", "5");
             request.Headers.Add("Origin", "https://regpayment.asic.gov.au");
-            request.Headers.Add("Referer", "https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx");
+            request.Headers.TryAddWithoutValidation("Referer", $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SST={hostedTokenizationId}&SessionId={sessionId}");
 
             var response = await _http.SendAsync(request);
             var content = await response.Content.ReadAsStringAsync();

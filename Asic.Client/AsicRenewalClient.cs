@@ -1,5 +1,4 @@
-﻿using AngleSharp.Dom;
-using AngleSharp.Html.Parser;
+﻿using AngleSharp.Html.Parser;
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
 using System.Text;
