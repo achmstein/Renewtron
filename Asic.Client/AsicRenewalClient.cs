@@ -118,29 +118,7 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     private async Task<StepResult<RenewalStepData>> InitializeSessionStepAsync(RenewalStepData data)
     {
-        // Step 1: Initial GET to renewal page
-        var response = await _http.GetAsync("public/faces/renewal");
-        var content = await response.Content.ReadAsStringAsync();
-
-        // Extract session ID from Set-Cookie header
-        var sessionId = response.Headers.GetValues("Set-Cookie")
-            .FirstOrDefault(x => x.StartsWith("JSESSIONID="))?
-            .Split(';')[0]
-            .Replace("JSESSIONID=", "");
-
-        // Extract parameters from JavaScript
-        var afrLoop = Regex.Match(content, @"'_afrLoop',\s*'(\d+)'").Groups[1].Value;
-        var afrPage = Regex.Match(content, @"'_afrPage',\s*'',\s*'(\w+)'").Groups[1].Value;
-
-        // Step 2: GET with full parameters
-        var url = $"public/faces/renewal;jsessionid={sessionId}?_afrLoop={afrLoop}&_afrWindowMode=2&Adf-Window-Id={afrPage}&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0";
-
-        response = await _http.GetAsync(url);
-        content = await response.Content.ReadAsStringAsync();
-
-        var document = await _htmlParser.ParseDocumentAsync(content);
-        var adfWindowId = document.QuerySelector("input[name='Adf-Window-Id']")?.GetAttribute("value");
-        var viewState = document.QuerySelector("input[name='javax.faces.ViewState']")?.GetAttribute("value");
+        var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
 
         if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
         {
@@ -600,6 +578,43 @@ public class AsicRenewalClient : IAsicRenewalClient
     }
 
     // ========== End Railway Pattern Step Methods ==========
+
+    // ========== Shared Helper Methods ==========
+
+    /// <summary>
+    /// Initializes a new ASIC session and returns session credentials.
+    /// Shared by both search and renewal operations.
+    /// </summary>
+    private async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
+    {
+        // Step 1: Initial GET to renewal page
+        var response = await _http.GetAsync("public/faces/renewal");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Extract session ID from Set-Cookie header
+        var sessionId = response.Headers.GetValues("Set-Cookie")
+            .FirstOrDefault(x => x.StartsWith("JSESSIONID="))?
+            .Split(';')[0]
+            .Replace("JSESSIONID=", "");
+
+        // Extract parameters from JavaScript
+        var afrLoop = Regex.Match(content, @"'_afrLoop',\s*'(\d+)'").Groups[1].Value;
+        var afrPage = Regex.Match(content, @"'_afrPage',\s*'',\s*'(\w+)'").Groups[1].Value;
+
+        // Step 2: GET with full parameters
+        var url = $"public/faces/renewal;jsessionid={sessionId}?_afrLoop={afrLoop}&_afrWindowMode=2&Adf-Window-Id={afrPage}&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0";
+
+        response = await _http.GetAsync(url);
+        content = await response.Content.ReadAsStringAsync();
+
+        var document = await _htmlParser.ParseDocumentAsync(content);
+        var adfWindowId = document.QuerySelector("input[name='Adf-Window-Id']")?.GetAttribute("value");
+        var viewState = document.QuerySelector("input[name='javax.faces.ViewState']")?.GetAttribute("value");
+
+        return (sessionId, adfWindowId, viewState);
+    }
+
+    // ========== End Shared Helper Methods ==========
 
     private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
     {
