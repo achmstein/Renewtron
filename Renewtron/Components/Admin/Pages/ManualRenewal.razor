@@ -4,6 +4,7 @@
 @using Renewtron.Abstractions
 @using Asic.Client.Abstractions
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
 @using Hangfire
 
 @inject ApplicationDbContext DbContext
@@ -11,6 +12,7 @@
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IBackgroundJobClient BackgroundJobClient
+@inject IMemoryCache MemoryCache
 
 <PageTitle>Manual Renewal - Renewtron</PageTitle>
 
@@ -215,8 +217,21 @@
 
         try
         {
-            // Use ASIC Renewal Service for searching
-            var result = await RenewalClient.SearchByAbnAsync(searchAbn);
+            var cacheKey = $"abn_search_{searchAbn}";
+
+            // Try to get from cache first
+            BusinessNamesSearchResult result;
+            if (!MemoryCache.TryGetValue(cacheKey, out result))
+            {
+                // Not in cache, perform search using ASIC Renewal Service
+                result = await RenewalClient.SearchAsync(searchAbn);
+
+                // Cache the result for 15 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(15));
+
+                MemoryCache.Set(cacheKey, result, cacheOptions);
+            }
 
             if (!result.Success)
             {

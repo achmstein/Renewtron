@@ -98,6 +98,9 @@ builder.Services.AddHangfire(configuration => configuration
 // Add the processing server as IHostedService
 builder.Services.AddHangfireServer();
 
+// Add in-memory cache for ABN search results
+builder.Services.AddMemoryCache();
+
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>

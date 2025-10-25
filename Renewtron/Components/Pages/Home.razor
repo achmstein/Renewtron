@@ -5,11 +5,13 @@
 @using Asic.Client.Models
 @using Renewtron.Data
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
 
 @inject IAsicRenewalClient AsicRenewalClient
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
+@inject IMemoryCache MemoryCache
 
 <PageTitle>Business Name Renewal - Renewtron</PageTitle>
 
@@ -222,6 +224,7 @@
         try
         {
             var cleanAbn = abn.Replace(" ", "");
+            var cacheKey = $"abn_search_{cleanAbn}";
 
             // Get user info
             var httpContext = HttpContextAccessor.HttpContext;
@@ -229,8 +232,20 @@
             var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
             var sessionId = httpContext?.Session?.Id;
 
-            // Perform search using ASIC Renewal Service
-            var searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
+            // Try to get from cache first
+            BusinessNamesSearchResult searchResult;
+            if (!MemoryCache.TryGetValue(cacheKey, out searchResult))
+            {
+                // Not in cache, perform search using ASIC Renewal Service
+                searchResult = await AsicRenewalClient.SearchAsync(cleanAbn);
+
+                // Cache the result for 15 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(15));
+
+                MemoryCache.Set(cacheKey, searchResult, cacheOptions);
+            }
+
             progress = 100;
 
             // Create search log
