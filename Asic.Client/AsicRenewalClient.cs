@@ -79,73 +79,6 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
     }
 
-    private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
-    {
-        var formData = new StringBuilder();
-        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
-        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
-        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
-        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
-        formData.Append("tmpt:region:0:form:accInput=&");
-        formData.Append($"tmpt:region:0:form:it2={abn}&");
-        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
-        formData.Append($"Adf-Window-Id={adfWindowId}&");
-        formData.Append($"javax.faces.ViewState={viewState}&");
-        formData.Append("Adf-Page-Id=1&");
-        formData.Append("event=tmpt%3Aregion%3A0%3Aform%3AnextButt&");
-        formData.Append("event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
-        formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt");
-
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
-        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-        request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "3");
-
-        var response = await _http.SendAsync(request);
-        var content = await response.Content.ReadAsStringAsync();
-
-        var success = response.IsSuccessStatusCode && content.Contains("Business name to be renewed");
-
-        return (success, content);
-    }
-
-    private List<BusinessName> ParseBusinessNamesFromResponse(string xmlContent)
-    {
-        var businessNames = new List<BusinessName>();
-
-        // Find all dataText spans - each table row has 3 spans (name, account, date)
-        var dataTextMatches = Regex.Matches(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
-
-        if (dataTextMatches.Count < 3)
-        {
-            return businessNames;
-        }
-
-        // Parse business names in groups of 3 (each row in the table)
-        // Row format: [Business Name, Account Number, Registration Date]
-        for (int i = 0; i < dataTextMatches.Count; i += 3)
-        {
-            // Make sure we have all 3 values for this row
-            if (i + 2 >= dataTextMatches.Count)
-            {
-                break;
-            }
-
-            var name = dataTextMatches[i].Groups[1].Value;
-            var accountNumber = dataTextMatches[i + 1].Groups[1].Value;
-            var registrationDate = dataTextMatches[i + 2].Groups[1].Value;
-
-            businessNames.Add(new BusinessName
-            {
-                Name = name,
-                AccountNumber = accountNumber,
-                RegistrationDate = registrationDate
-            });
-        }
-
-        return businessNames;
-    }
-
     public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string accountNumber, int renewalYears, string email, CreditCardDetails cardDetails)
     {
         try
@@ -282,13 +215,74 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
     }
 
-    private string ExtractTransactionReference(string content)
+    private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
     {
-        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
-        return match.Success ? match.Groups[1].Value : null;
+        var formData = new StringBuilder();
+        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+        formData.Append("tmpt:region:0:form:accInput=&");
+        formData.Append($"tmpt:region:0:form:it2={abn}&");
+        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+        formData.Append($"Adf-Window-Id={adfWindowId}&");
+        formData.Append($"javax.faces.ViewState={viewState}&");
+        formData.Append("Adf-Page-Id=1&");
+        formData.Append("event=tmpt%3Aregion%3A0%3Aform%3AnextButt&");
+        formData.Append("event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+        formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
+        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+        request.Headers.Add("Adf-Rich-Message", "true");
+        request.Headers.Add("Adf-Ads-Page-Id", "3");
+
+        var response = await _http.SendAsync(request);
+        var content = await response.Content.ReadAsStringAsync();
+
+        var success = response.IsSuccessStatusCode && content.Contains("Business name to be renewed");
+
+        return (success, content);
     }
 
-    async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
+    private List<BusinessName> ParseBusinessNamesFromResponse(string xmlContent)
+    {
+        var businessNames = new List<BusinessName>();
+
+        // Find all dataText spans - each table row has 3 spans (name, account, date)
+        var dataTextMatches = Regex.Matches(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
+
+        if (dataTextMatches.Count < 3)
+        {
+            return businessNames;
+        }
+
+        // Parse business names in groups of 3 (each row in the table)
+        // Row format: [Business Name, Account Number, Registration Date]
+        for (int i = 0; i < dataTextMatches.Count; i += 3)
+        {
+            // Make sure we have all 3 values for this row
+            if (i + 2 >= dataTextMatches.Count)
+            {
+                break;
+            }
+
+            var name = dataTextMatches[i].Groups[1].Value;
+            var accountNumber = dataTextMatches[i + 1].Groups[1].Value;
+            var registrationDate = dataTextMatches[i + 2].Groups[1].Value;
+
+            businessNames.Add(new BusinessName
+            {
+                Name = name,
+                AccountNumber = accountNumber,
+                RegistrationDate = registrationDate
+            });
+        }
+
+        return businessNames;
+    }
+
+    private async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
     {
         // Step 1: Initial GET to renewal page
         var response = await _http.GetAsync("public/faces/renewal");
@@ -317,7 +311,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (sessionId, adfWindowId, viewState);
     }
 
-    async Task<(bool Success, string Message, string Content)> SubmitAbnForRenewalAsync(string abn, string adfWindowId, string viewState)
+    private async Task<(bool Success, string Message, string Content)> SubmitAbnForRenewalAsync(string abn, string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -356,7 +350,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (success, success ? "Success" : "Failed", content);
     }
 
-    async Task<(bool Success, string Message)> SelectBusinessNameAsync(string accountNumber, string pageContent, string adfWindowId, string viewState)
+    private async Task<(bool Success, string Message)> SelectBusinessNameAsync(string accountNumber, string pageContent, string adfWindowId, string viewState)
     {
         // Find the radio button ID for the specified account number
         var radioButtonId = FindRadioButtonIdByAccountNumber(pageContent, accountNumber);
@@ -395,8 +389,8 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("buttonNextNew"),
                 response.IsSuccessStatusCode ? "Success" : "Failed");
     }
-  
-    async Task<RenewalPeriodResult> ProceedToRenewalPeriodAsync(string adfWindowId, string viewState)
+
+    private async Task<RenewalPeriodResult> ProceedToRenewalPeriodAsync(string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -444,7 +438,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return RenewalPeriodResult.Succeeded(transactionRef, content, jumpedToEmail);
     }
 
-    async Task<(bool Success, string Message)> SelectRenewalPeriodAsync(int years, string adfWindowId, string viewState)
+    private async Task<(bool Success, string Message)> SelectRenewalPeriodAsync(int years, string adfWindowId, string viewState)
     {
         // years: 0 = 1 year, 1 = 3 years
         var periodValue = years == 3 ? "1" : "0";
@@ -474,7 +468,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("buttonNextNew"), "Success");
     }
 
-    async Task<(bool Success, string Message)> ProceedToReviewAsync(string adfWindowId, string viewState)
+    private async Task<(bool Success, string Message)> ProceedToReviewAsync(string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -501,7 +495,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("Review"), "Success");
     }
 
-    async Task<(bool Success, string Message)> SelectAuthorityDeclarationAsync(string adfWindowId, string viewState)
+    private async Task<(bool Success, string Message)> SelectAuthorityDeclarationAsync(string adfWindowId, string viewState)
     {
         // Select "Representative declaration" (auth2)
         var formData = new StringBuilder();
@@ -529,7 +523,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("buttonNextNew"), "Success");
     }
 
-    async Task<(bool Success, string Message)> ProceedToPaymentAsync(string adfWindowId, string viewState)
+    private async Task<(bool Success, string Message)> ProceedToPaymentAsync(string adfWindowId, string viewState)
     {
         var formData = new StringBuilder();
         formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
@@ -556,7 +550,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("Email required for online payment"), "Success");
     }
 
-    async Task<(bool Success, string Message, string Content)> SubmitEmailAsync(string email, string adfWindowId, string viewState, string pageContent)
+    private async Task<(bool Success, string Message, string Content)> SubmitEmailAsync(string email, string adfWindowId, string viewState, string pageContent)
     {
         var encodedEmail = Uri.EscapeDataString(email);
 
@@ -591,7 +585,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("Select Payment Preference"), "Success", content);
     }
 
-    async Task<(bool Success, string Message, string Content)> SelectPaymentMethodAsync(string adfWindowId, string viewState, string pageContent)
+    private async Task<(bool Success, string Message, string Content)> SelectPaymentMethodAsync(string adfWindowId, string viewState, string pageContent)
     {
         // Extract the actual region index from the current page
         var regionIndex = ExtractCurrentRegionIndex(pageContent);
@@ -623,7 +617,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return (response.IsSuccessStatusCode && content.Contains("Pay Now"), "Success", content);
     }
 
-    async Task<(bool Success, string PaymentUrl)> OpenPaymentGatewayAsync(string adfWindowId, string viewState, string pageContent)
+    private async Task<(bool Success, string PaymentUrl)> OpenPaymentGatewayAsync(string adfWindowId, string viewState, string pageContent)
     {
         // Extract the actual region index from the current page
         var regionIndex = ExtractCurrentRegionIndex(pageContent);
@@ -656,6 +650,12 @@ public class AsicRenewalClient : IAsicRenewalClient
         var paymentUrl = paymentUrlMatch.Success ? paymentUrlMatch.Groups[1].Value : "";
 
         return (response.IsSuccessStatusCode && !string.IsNullOrEmpty(paymentUrl), paymentUrl);
+    }
+
+    private string ExtractTransactionReference(string content)
+    {
+        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
+        return match.Success ? match.Groups[1].Value : null;
     }
 
     private string ExtractCurrentRegionIndex(string content)
