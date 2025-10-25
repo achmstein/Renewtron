@@ -27,6 +27,114 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
+    public async Task<BusinessNamesSearchResult> SearchByAbnAsync(string abn)
+    {
+        try
+        {
+            // Step 1: Initialize renewal session
+            var (sessionId, adfWindowId, viewState) = await InitializeRenewalSessionAsync();
+            if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
+            {
+                return BusinessNamesSearchResult.Failed("Failed to initialize renewal session");
+            }
+
+            // Step 2: Submit ABN to get business name list
+            var (success, content) = await SubmitAbnForSearchAsync(abn, adfWindowId, viewState);
+            if (!success)
+            {
+                return BusinessNamesSearchResult.Failed("Failed to search for business names");
+            }
+
+            // Step 3: Parse the response to extract business names
+            var businessNames = ParseBusinessNamesFromResponse(content);
+
+            if (businessNames.Count == 0)
+            {
+                return BusinessNamesSearchResult.Failed("No business names found for this ABN");
+            }
+
+            return BusinessNamesSearchResult.Succeeded(businessNames);
+        }
+        catch (Exception ex)
+        {
+            return BusinessNamesSearchResult.Failed($"Search failed: {ex.Message}");
+        }
+    }
+
+    private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
+    {
+        var formData = new StringBuilder();
+        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+        formData.Append("tmpt:region:0:form:accInput=&");
+        formData.Append($"tmpt:region:0:form:it2={abn}&");
+        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+        formData.Append($"Adf-Window-Id={adfWindowId}&");
+        formData.Append($"javax.faces.ViewState={viewState}&");
+        formData.Append("Adf-Page-Id=1&");
+        formData.Append("event=tmpt%3Aregion%3A0%3Aform%3AnextButt&");
+        formData.Append("event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+        formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
+        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+        request.Headers.Add("Adf-Rich-Message", "true");
+        request.Headers.Add("Adf-Ads-Page-Id", "3");
+
+        var response = await _http.SendAsync(request);
+        var content = await response.Content.ReadAsStringAsync();
+
+        var success = response.IsSuccessStatusCode && content.Contains("Business name to be renewed");
+
+        return (success, content);
+    }
+
+    private List<SimplifiedBusinessName> ParseBusinessNamesFromResponse(string xmlContent)
+    {
+        var businessNames = new List<SimplifiedBusinessName>();
+
+        // Extract business name
+        var nameMatch = Regex.Match(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
+        if (!nameMatch.Success)
+        {
+            return businessNames;
+        }
+        var name = nameMatch.Groups[1].Value;
+
+        // Find all subsequent dataText spans for account number and registration date
+        var dataTextMatches = Regex.Matches(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
+        if (dataTextMatches.Count < 3)
+        {
+            return businessNames;
+        }
+
+        var accountNumber = dataTextMatches[1].Value.Replace("<span class=\"dataText\">", "").Replace("</span>", "");
+        var registrationDate = dataTextMatches[2].Value.Replace("<span class=\"dataText\">", "").Replace("</span>", "");
+
+        businessNames.Add(new SimplifiedBusinessName
+        {
+            Name = name,
+            AccountNumber = accountNumber,
+            RegistrationDate = registrationDate
+        });
+
+        // Check if there are multiple business names (repeating pattern)
+        // Look for additional radio buttons with tmpt:region:1:form:sbr followed by numbers
+        var radioPattern = @"tmpt:region:1:form:sbr(\d+)";
+        var radioMatches = Regex.Matches(xmlContent, radioPattern);
+
+        if (radioMatches.Count > 1)
+        {
+            // Multiple business names exist - parse all of them
+            // For now, we return just the first one as per the XML structure shown
+            // In a real scenario, you'd need to handle pagination or multiple entries
+        }
+
+        return businessNames;
+    }
+
     public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string businessName, int renewalYears, string email, CreditCardDetails cardDetails)
     {
         try

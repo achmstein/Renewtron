@@ -6,7 +6,7 @@
 @using Renewtron.Data
 @using Microsoft.EntityFrameworkCore
 
-@inject IAsicRegistrySearchClient AsicRegistrySearchClient
+@inject IAsicRenewalClient AsicRenewalClient
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
@@ -229,8 +229,8 @@
             var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
             var sessionId = httpContext?.Session?.Id;
 
-            // Perform search
-            var searchResult = await AsicRegistrySearchClient.SearchAsync(cleanAbn);
+            // Perform search using ASIC Renewal Service
+            var searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
             progress = 100;
 
             // Create search log
@@ -244,52 +244,30 @@
                 SessionId = sessionId,
                 Success = searchResult.Success,
                 InitiatedBy = SearchInitiator.Customer,
-                ErrorMessage = searchResult.Success ? null : "Search failed",
-                ResultsCount = searchResult.Data?.BusinessNames?.Count ?? 0
+                ErrorMessage = searchResult.Success ? null : searchResult.ErrorMessage ?? "Search failed",
+                ResultsCount = searchResult.BusinessNames?.Count ?? 0
             };
 
             DbContext.SearchLogs.Add(searchLog);
             await DbContext.SaveChangesAsync();
 
-            // Save each result with holders
-            if (searchResult.Success && searchResult.Data?.BusinessNames != null)
+            // Save each result
+            if (searchResult.Success && searchResult.BusinessNames != null)
             {
-                foreach (var business in searchResult.Data.BusinessNames)
+                foreach (var business in searchResult.BusinessNames)
                 {
                     var searchResultEntity = new SearchResult
                     {
                         Id = Guid.NewGuid(),
                         SearchLogId = searchLog.Id,
                         BusinessName = business.Name,
-                        Status = business.Status,
-                        RegistrationDate = business.RegistrationDate,
-                        RenewalDate = business.RenewalDate,
-                        CancelledDate = business.CancelledDate,
-                        CancellationUnderReview = business.CancellationUnderReview,
-                        AddressForServiceDocuments = business.AddressForServiceDocuments,
-                        PrincipalPlaceOfBusiness = business.PrincipalPlaceOfBusiness
+                        AccountNumber = business.AccountNumber,
+                        RegistrationDate = business.RegistrationDate
                     };
 
                     DbContext.SearchResults.Add(searchResultEntity);
-                    await DbContext.SaveChangesAsync();
-
-                    // Add holders
-                    if (business.Holders != null)
-                    {
-                        foreach (var holder in business.Holders)
-                        {
-                            DbContext.Holders.Add(new()
-                            {
-                                Id = Guid.NewGuid(),
-                                SearchResultId = searchResultEntity.Id,
-                                Name = holder.Name,
-                                Type = holder.Type,
-                                Abn = holder.Abn
-                            });
-                        }
-                        await DbContext.SaveChangesAsync();
-                    }
                 }
+                await DbContext.SaveChangesAsync();
             }
 
             // Redirect to results page

@@ -8,7 +8,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<SearchLog> SearchLogs { get; set; }
     public DbSet<SearchResult> SearchResults { get; set; }
-    public DbSet<Holder> Holders { get; set; }
     public DbSet<RenewalRequest> RenewalRequests { get; set; }
     public DbSet<SavedCreditCard> SavedCreditCards { get; set; }
     public DbSet<StripePayment> StripePayments { get; set; }
@@ -40,26 +39,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.AccountNumber).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.RegistrationDate).IsRequired().HasMaxLength(50);
             entity.HasIndex(e => e.SearchLogId);
 
             entity.HasOne(e => e.SearchLog)
                 .WithMany(s => s.Results)
                 .HasForeignKey(e => e.SearchLogId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<Holder>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Type).HasMaxLength(100);
-            entity.Property(e => e.Abn).HasMaxLength(20);
-            entity.HasIndex(e => e.SearchResultId);
-
-            entity.HasOne(e => e.SearchResult)
-                .WithMany(s => s.Holders)
-                .HasForeignKey(e => e.SearchResultId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
