@@ -96,41 +96,34 @@ public class AsicRenewalClient : IAsicRenewalClient
     {
         var businessNames = new List<BusinessName>();
 
-        // Extract business name
-        var nameMatch = Regex.Match(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
-        if (!nameMatch.Success)
-        {
-            return businessNames;
-        }
-        var name = nameMatch.Groups[1].Value;
-
-        // Find all subsequent dataText spans for account number and registration date
+        // Find all dataText spans - each table row has 3 spans (name, account, date)
         var dataTextMatches = Regex.Matches(xmlContent, @"<span class=""dataText"">([^<]+)</span>");
+
         if (dataTextMatches.Count < 3)
         {
             return businessNames;
         }
 
-        var accountNumber = dataTextMatches[1].Value.Replace("<span class=\"dataText\">", "").Replace("</span>", "");
-        var registrationDate = dataTextMatches[2].Value.Replace("<span class=\"dataText\">", "").Replace("</span>", "");
-
-        businessNames.Add(new BusinessName
+        // Parse business names in groups of 3 (each row in the table)
+        // Row format: [Business Name, Account Number, Registration Date]
+        for (int i = 0; i < dataTextMatches.Count; i += 3)
         {
-            Name = name,
-            AccountNumber = accountNumber,
-            RegistrationDate = registrationDate
-        });
+            // Make sure we have all 3 values for this row
+            if (i + 2 >= dataTextMatches.Count)
+            {
+                break;
+            }
 
-        // Check if there are multiple business names (repeating pattern)
-        // Look for additional radio buttons with tmpt:region:1:form:sbr followed by numbers
-        var radioPattern = @"tmpt:region:1:form:sbr(\d+)";
-        var radioMatches = Regex.Matches(xmlContent, radioPattern);
+            var name = dataTextMatches[i].Groups[1].Value;
+            var accountNumber = dataTextMatches[i + 1].Groups[1].Value;
+            var registrationDate = dataTextMatches[i + 2].Groups[1].Value;
 
-        if (radioMatches.Count > 1)
-        {
-            // Multiple business names exist - parse all of them
-            // For now, we return just the first one as per the XML structure shown
-            // In a real scenario, you'd need to handle pagination or multiple entries
+            businessNames.Add(new BusinessName
+            {
+                Name = name,
+                AccountNumber = accountNumber,
+                RegistrationDate = registrationDate
+            });
         }
 
         return businessNames;
