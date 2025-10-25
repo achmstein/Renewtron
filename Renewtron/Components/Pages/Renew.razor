@@ -75,16 +75,12 @@
                             <dd class="mt-1 text-sm font-semibold text-gray-900">@searchResult.BusinessName</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Status</dt>
-                            <dd class="mt-1">
-                                <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset @GetStatusClass(searchResult.Status)">
-                                    @searchResult.Status
-                                </span>
-                            </dd>
+                            <dt class="text-sm font-medium text-gray-500">Account Number</dt>
+                            <dd class="mt-1 text-sm text-gray-900">@searchResult.AccountNumber</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Current Renewal Date</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RenewalDate</dd>
+                            <dt class="text-sm font-medium text-gray-500">Registration Date</dt>
+                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RegistrationDate</dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">ABN</dt>
@@ -150,16 +146,12 @@
                             <dd class="mt-1 text-sm font-semibold text-gray-900">@searchResult.BusinessName</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Status</dt>
-                            <dd class="mt-1">
-                                <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset @GetStatusClass(searchResult.Status)">
-                                    @searchResult.Status
-                                </span>
-                            </dd>
+                            <dt class="text-sm font-medium text-gray-500">Account Number</dt>
+                            <dd class="mt-1 text-sm text-gray-900">@searchResult.AccountNumber</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-gray-500">Current Renewal Date</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RenewalDate</dd>
+                            <dt class="text-sm font-medium text-gray-500">Registration Date</dt>
+                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RegistrationDate</dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-gray-500">ABN</dt>
@@ -326,7 +318,6 @@
         isLoading = true;
         searchResult = await DbContext.SearchResults
             .Include(r => r.SearchLog)
-            .Include(r => r.Holders)
             .FirstOrDefaultAsync(r => r.Id == Id);
 
         // Check if there's an existing renewal request for this search result
@@ -515,17 +506,5 @@
             expiryDate = input[..2] + "/" + input[2..Math.Min(4, input.Length)];
         else
             expiryDate = input;
-    }
-
-    private string GetStatusClass(string? status)
-    {
-        return status?.ToLower() switch
-        {
-            "registered" => "bg-green-50 text-green-700 ring-green-600/20",
-            "active" => "bg-green-50 text-green-700 ring-green-600/20",
-            "cancelled" => "bg-red-50 text-red-700 ring-red-600/20",
-            "expired" => "bg-yellow-50 text-yellow-800 ring-yellow-600/20",
-            _ => "bg-gray-50 text-gray-600 ring-gray-500/10"
-        };
     }
 }

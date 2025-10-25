@@ -39,7 +39,7 @@ public class AsicPaymentClient : IAsicPaymentClient
         try
         {
             // Step 1: Navigate to the initial payment URL
-            var initResult = await InitializePaymentSessionAsync(paymentUrl);
+            var initResult = await InitializeSessionAsync(paymentUrl);
             if (!initResult.Success)
             {
                 return PaymentResult.Failed($"Failed to navigate to payment page: {initResult.Message}");
@@ -104,7 +104,7 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    private async Task<(bool Success, string Message, string TokenizationFormUrl, string AdfWindowId, string ViewState)> InitializePaymentSessionAsync(string paymentUrl)
+    private async Task<(bool Success, string Message, string TokenizationFormUrl, string AdfWindowId, string ViewState)> InitializeSessionAsync(string paymentUrl)
     {
         try
         {

@@ -4,13 +4,15 @@
 @using Renewtron.Abstractions
 @using Asic.Client.Abstractions
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
 @using Hangfire
 
 @inject ApplicationDbContext DbContext
-@inject IAsicRegistrySearchClient SearchClient
+@inject IAsicRenewalClient RenewalClient
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IBackgroundJobClient BackgroundJobClient
+@inject IMemoryCache MemoryCache
 
 <PageTitle>Manual Renewal - Renewtron</PageTitle>
 
@@ -105,7 +107,7 @@
                                         </div>
                                         <div class="ml-3 text-sm leading-6">
                                             <label class="font-medium text-gray-900">@result.BusinessName</label>
-                                            <p class="text-gray-500">Status: @result.Status | Renewal Date: @result.RenewalDate</p>
+                                            <p class="text-gray-500">Account: @result.AccountNumber | Registration: @result.RegistrationDate</p>
                                         </div>
                                     </div>
                                 }
@@ -215,15 +217,29 @@
 
         try
         {
-            var result = await SearchClient.SearchAsync(searchAbn);
+            var cacheKey = $"abn_search_{searchAbn}";
+
+            // Try to get from cache first
+            Asic.Client.Models.BusinessNamesResult result;
+            if (!MemoryCache.TryGetValue(cacheKey, out result))
+            {
+                // Not in cache, perform search using ASIC Renewal Service
+                result = await RenewalClient.SearchByAbnAsync(searchAbn);
+
+                // Cache the result for 15 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(15));
+
+                MemoryCache.Set(cacheKey, result, cacheOptions);
+            }
 
             if (!result.Success)
             {
-                errorMessage = "Failed to search ASIC registry";
+                errorMessage = result.ErrorMessage ?? "Failed to search ASIC renewal service";
                 return;
             }
 
-            if (result.Data?.BusinessNames == null || !result.Data.BusinessNames.Any())
+            if (result.BusinessNames == null || !result.BusinessNames.Any())
             {
                 errorMessage = "No business names found for this ABN";
                 return;
@@ -246,51 +262,29 @@
                 Success = true,
                 ErrorMessage = null,
                 InitiatedBy = SearchInitiator.Admin,
-                ResultsCount = result.Data.BusinessNames.Count
+                ResultsCount = result.BusinessNames.Count
             };
 
             DbContext.SearchLogs.Add(searchLog);
             await DbContext.SaveChangesAsync();
 
-            // Save each business result with holders
-            foreach (var business in result.Data.BusinessNames)
+            // Save each business result
+            foreach (var business in result.BusinessNames)
             {
                 var searchResultEntity = new SearchResult
                 {
                     Id = Guid.NewGuid(),
                     SearchLogId = searchLog.Id,
                     BusinessName = business.Name,
-                    Status = business.Status,
-                    RegistrationDate = business.RegistrationDate,
-                    RenewalDate = business.RenewalDate,
-                    CancelledDate = business.CancelledDate,
-                    CancellationUnderReview = business.CancellationUnderReview,
-                    AddressForServiceDocuments = business.AddressForServiceDocuments,
-                    PrincipalPlaceOfBusiness = business.PrincipalPlaceOfBusiness
+                    AccountNumber = business.AccountNumber,
+                    RegistrationDate = business.RegistrationDate
                 };
 
                 DbContext.SearchResults.Add(searchResultEntity);
-                await DbContext.SaveChangesAsync();
-
-                // Add holders
-                if (business.Holders != null)
-                {
-                    foreach (var holder in business.Holders)
-                    {
-                        DbContext.Holders.Add(new Holder
-                        {
-                            Id = Guid.NewGuid(),
-                            SearchResultId = searchResultEntity.Id,
-                            Name = holder.Name,
-                            Type = holder.Type,
-                            Abn = holder.Abn
-                        });
-                    }
-                    await DbContext.SaveChangesAsync();
-                }
-
                 searchResults.Add(searchResultEntity);
             }
+
+            await DbContext.SaveChangesAsync();
 
             successMessage = $"Found and saved {searchResults.Count} business name(s) for ABN {searchAbn}";
         }

@@ -5,11 +5,13 @@
 @using Asic.Client.Models
 @using Renewtron.Data
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
 
-@inject IAsicRegistrySearchClient AsicRegistrySearchClient
+@inject IAsicRenewalClient AsicRenewalClient
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
+@inject IMemoryCache MemoryCache
 
 <PageTitle>Business Name Renewal - Renewtron</PageTitle>
 
@@ -222,6 +224,7 @@
         try
         {
             var cleanAbn = abn.Replace(" ", "");
+            var cacheKey = $"abn_search_{cleanAbn}";
 
             // Get user info
             var httpContext = HttpContextAccessor.HttpContext;
@@ -229,11 +232,50 @@
             var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
             var sessionId = httpContext?.Session?.Id;
 
-            // Perform search
-            var searchResult = await AsicRegistrySearchClient.SearchAsync(cleanAbn);
+            // Try to get from cache first
+            BusinessNamesResult searchResult;
+            if (!MemoryCache.TryGetValue(cacheKey, out searchResult))
+            {
+                // Not in cache, perform search using ASIC Renewal Service
+                searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
+
+                // Cache the result for 15 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(15));
+
+                MemoryCache.Set(cacheKey, searchResult, cacheOptions);
+            }
+
             progress = 100;
 
-            // Create search log
+            // Check if search failed
+            if (!searchResult.Success)
+            {
+                // Log the failed search
+                var failedSearchLog = new SearchLog
+                {
+                    Id = Guid.NewGuid(),
+                    Abn = cleanAbn,
+                    SearchedAt = DateTime.UtcNow,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    SessionId = sessionId,
+                    Success = false,
+                    InitiatedBy = SearchInitiator.Customer,
+                    ErrorMessage = searchResult.ErrorMessage ?? "Search failed",
+                    ResultsCount = 0
+                };
+
+                DbContext.SearchLogs.Add(failedSearchLog);
+                await DbContext.SaveChangesAsync();
+
+                // Show error message to user
+                errorMessage = searchResult.ErrorMessage ?? "An error occurred while searching. Please try again.";
+                isSearching = false;
+                return;
+            }
+
+            // Create search log for successful search
             var searchLog = new SearchLog
             {
                 Id = Guid.NewGuid(),
@@ -242,54 +284,32 @@
                 IpAddress = ipAddress,
                 UserAgent = userAgent,
                 SessionId = sessionId,
-                Success = searchResult.Success,
+                Success = true,
                 InitiatedBy = SearchInitiator.Customer,
-                ErrorMessage = searchResult.Success ? null : "Search failed",
-                ResultsCount = searchResult.Data?.BusinessNames?.Count ?? 0
+                ErrorMessage = null,
+                ResultsCount = searchResult.BusinessNames?.Count ?? 0
             };
 
             DbContext.SearchLogs.Add(searchLog);
             await DbContext.SaveChangesAsync();
 
-            // Save each result with holders
-            if (searchResult.Success && searchResult.Data?.BusinessNames != null)
+            // Save each result
+            if (searchResult.BusinessNames != null)
             {
-                foreach (var business in searchResult.Data.BusinessNames)
+                foreach (var business in searchResult.BusinessNames)
                 {
-                    var searchResultEntity = new SearchResult
+                    var searchResultEntity = new Data.SearchResult
                     {
                         Id = Guid.NewGuid(),
                         SearchLogId = searchLog.Id,
                         BusinessName = business.Name,
-                        Status = business.Status,
-                        RegistrationDate = business.RegistrationDate,
-                        RenewalDate = business.RenewalDate,
-                        CancelledDate = business.CancelledDate,
-                        CancellationUnderReview = business.CancellationUnderReview,
-                        AddressForServiceDocuments = business.AddressForServiceDocuments,
-                        PrincipalPlaceOfBusiness = business.PrincipalPlaceOfBusiness
+                        AccountNumber = business.AccountNumber,
+                        RegistrationDate = business.RegistrationDate
                     };
 
                     DbContext.SearchResults.Add(searchResultEntity);
-                    await DbContext.SaveChangesAsync();
-
-                    // Add holders
-                    if (business.Holders != null)
-                    {
-                        foreach (var holder in business.Holders)
-                        {
-                            DbContext.Holders.Add(new()
-                            {
-                                Id = Guid.NewGuid(),
-                                SearchResultId = searchResultEntity.Id,
-                                Name = holder.Name,
-                                Type = holder.Type,
-                                Abn = holder.Abn
-                            });
-                        }
-                        await DbContext.SaveChangesAsync();
-                    }
                 }
+                await DbContext.SaveChangesAsync();
             }
 
             // Redirect to results page

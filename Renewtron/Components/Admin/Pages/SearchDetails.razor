@@ -130,68 +130,14 @@
                                                     <dd class="mt-1 text-sm text-gray-900">@result.Id</dd>
                                                 </div>
                                                 <div>
+                                                    <dt class="text-xs font-medium text-gray-500">Account Number</dt>
+                                                    <dd class="mt-1 text-sm text-gray-900">@result.AccountNumber</dd>
+                                                </div>
+                                                <div>
                                                     <dt class="text-xs font-medium text-gray-500">Registration Date</dt>
-                                                    <dd class="mt-1 text-sm text-gray-900">@(result.RegistrationDate ?? "N/A")</dd>
+                                                    <dd class="mt-1 text-sm text-gray-900">@result.RegistrationDate</dd>
                                                 </div>
-                                                <div>
-                                                    <dt class="text-xs font-medium text-gray-500">Renewal Date</dt>
-                                                    <dd class="mt-1 text-sm text-gray-900">@(result.RenewalDate ?? "N/A")</dd>
-                                                </div>
-                                                <div>
-                                                    <dt class="text-xs font-medium text-gray-500">Status</dt>
-                                                    <dd class="mt-1">
-                                                        @if (!string.IsNullOrEmpty(result.Status))
-                                                        {
-                                                            <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset @GetStatusClass(result.Status)">
-                                                                @result.Status
-                                                            </span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="text-xs text-gray-400">N/A</span>
-                                                        }
-                                                    </dd>
-                                                </div>
-                                                @if (!string.IsNullOrEmpty(result.CancelledDate))
-                                                {
-                                                    <div>
-                                                        <dt class="text-xs font-medium text-gray-500">Cancelled Date</dt>
-                                                        <dd class="mt-1 text-sm text-red-600">@result.CancelledDate</dd>
-                                                    </div>
-                                                }
-                                                @if (!string.IsNullOrEmpty(result.AddressForServiceDocuments))
-                                                {
-                                                    <div class="sm:col-span-2 lg:col-span-3">
-                                                        <dt class="text-xs font-medium text-gray-500">Address for Service Documents</dt>
-                                                        <dd class="mt-1 text-sm text-gray-900">@result.AddressForServiceDocuments</dd>
-                                                    </div>
-                                                }
-                                                @if (!string.IsNullOrEmpty(result.PrincipalPlaceOfBusiness))
-                                                {
-                                                    <div class="sm:col-span-2 lg:col-span-3">
-                                                        <dt class="text-xs font-medium text-gray-500">Principal Place of Business</dt>
-                                                        <dd class="mt-1 text-sm text-gray-900">@result.PrincipalPlaceOfBusiness</dd>
-                                                    </div>
-                                                }
                                             </dl>
-
-                                            @if (result.Holders.Any())
-                                            {
-                                                <div class="mt-4">
-                                                    <h4 class="text-sm font-medium text-gray-900 mb-2">Holders</h4>
-                                                    <div class="space-y-2">
-                                                        @foreach (var holder in result.Holders)
-                                                        {
-                                                            <div class="flex items-center rounded-md bg-gray-50 px-3 py-2">
-                                                                <svg class="h-4 w-4 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                                                                </svg>
-                                                                <span class="text-sm text-gray-700">@holder.Name</span>
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                </div>
-                                            }
 
                                             @if (result.RenewalRequest != null)
                                             {
@@ -271,23 +217,10 @@
 
         searchLog = await DbContext.SearchLogs
             .Include(s => s.Results)
-                .ThenInclude(r => r.Holders)
-            .Include(s => s.Results)
                 .ThenInclude(r => r.RenewalRequest)
             .FirstOrDefaultAsync(s => s.Id == Id);
 
         isLoading = false;
     }
 
-    private string GetStatusClass(string? status)
-    {
-        return status?.ToLower() switch
-        {
-            "registered" => "bg-green-50 text-green-700 ring-green-600/20",
-            "active" => "bg-green-50 text-green-700 ring-green-600/20",
-            "cancelled" => "bg-red-50 text-red-700 ring-red-600/20",
-            "expired" => "bg-yellow-50 text-yellow-800 ring-yellow-600/20",
-            _ => "bg-gray-50 text-gray-600 ring-gray-500/10"
-        };
-    }
 }

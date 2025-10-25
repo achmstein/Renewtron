@@ -1,4 +1,3 @@
-using Asic.Client.Captcha;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -47,11 +46,6 @@ builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 // Encryption service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
-// Configure settings
-builder.Services.AddOptions<TwoCaptchaSettings>()
-    .BindConfiguration("TwoCaptcha")
-    .ValidateDataAnnotations();
-
 builder.Services.AddOptions<StripeSettings>()
     .BindConfiguration("Stripe")
     .ValidateDataAnnotations();
@@ -97,6 +91,9 @@ builder.Services.AddHangfire(configuration => configuration
 
 // Add the processing server as IHostedService
 builder.Services.AddHangfireServer();
+
+// Add in-memory cache for ABN search results
+builder.Services.AddMemoryCache();
 
 // Add Session support for tracking users
 builder.Services.AddDistributedMemoryCache();
