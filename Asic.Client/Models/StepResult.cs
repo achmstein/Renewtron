@@ -61,3 +61,33 @@ public class StepResult<T>
             : RenewalResult.Failed(ErrorMessage, StepName);
     }
 }
+
+/// <summary>
+/// Extension methods for Task&lt;StepResult&lt;T&gt;&gt; to enable fluent async chaining.
+/// </summary>
+public static class StepResultExtensions
+{
+    /// <summary>
+    /// Chains the next async operation on a Task&lt;StepResult&lt;T&gt;&gt;.
+    /// Only executes if the previous step succeeded.
+    /// </summary>
+    public static async Task<StepResult<TNext>> ThenAsync<T, TNext>(
+        this Task<StepResult<T>> resultTask,
+        string stepName,
+        Func<T, Task<StepResult<TNext>>> next)
+    {
+        var result = await resultTask;
+        return await result.ThenAsync(stepName, next);
+    }
+
+    /// <summary>
+    /// Converts a Task&lt;StepResult&lt;T&gt;&gt; to a RenewalResult.
+    /// </summary>
+    public static async Task<RenewalResult> ToRenewalResultAsync<T>(
+        this Task<StepResult<T>> resultTask,
+        Func<T, RenewalResult> onSuccess)
+    {
+        var result = await resultTask;
+        return result.ToRenewalResult(onSuccess);
+    }
+}
