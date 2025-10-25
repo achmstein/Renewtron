@@ -118,7 +118,29 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     private async Task<StepResult<RenewalStepData>> InitializeSessionStepAsync(RenewalStepData data)
     {
-        var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
+        // Step 1: Initial GET to renewal page
+        var response = await _http.GetAsync("public/faces/renewal");
+        var content = await response.Content.ReadAsStringAsync();
+
+        // Extract session ID from Set-Cookie header
+        var sessionId = response.Headers.GetValues("Set-Cookie")
+            .FirstOrDefault(x => x.StartsWith("JSESSIONID="))?
+            .Split(';')[0]
+            .Replace("JSESSIONID=", "");
+
+        // Extract parameters from JavaScript
+        var afrLoop = Regex.Match(content, @"'_afrLoop',\s*'(\d+)'").Groups[1].Value;
+        var afrPage = Regex.Match(content, @"'_afrPage',\s*'',\s*'(\w+)'").Groups[1].Value;
+
+        // Step 2: GET with full parameters
+        var url = $"public/faces/renewal;jsessionid={sessionId}?_afrLoop={afrLoop}&_afrWindowMode=2&Adf-Window-Id={afrPage}&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0";
+
+        response = await _http.GetAsync(url);
+        content = await response.Content.ReadAsStringAsync();
+
+        var document = await _htmlParser.ParseDocumentAsync(content);
+        var adfWindowId = document.QuerySelector("input[name='Adf-Window-Id']")?.GetAttribute("value");
+        var viewState = document.QuerySelector("input[name='javax.faces.ViewState']")?.GetAttribute("value");
 
         if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
         {
@@ -134,20 +156,47 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     private async Task<StepResult<RenewalStepData>> SubmitAbnStepAsync(RenewalStepData data)
     {
-        var (success, message, pageContent) = await SubmitAbnForRenewalAsync(data.Abn, data.AdfWindowId, data.ViewState);
+        var formData = new StringBuilder();
+        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+        formData.Append("tmpt:region:0:form:accInput=&");
+        formData.Append($"tmpt:region:0:form:it2={data.Abn}&");
+        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+        formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
+        formData.Append($"javax.faces.ViewState={data.ViewState}&");
+        formData.Append("Adf-Page-Id=0&");
+        formData.Append("event=tmpt%3Aregion%3A0%3Aform%3AnextButt&");
+        formData.Append("event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+        formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+        request.Headers.Add("Adf-Rich-Message", "true");
+        request.Headers.Add("Adf-Ads-Page-Id", "1");
+
+        var response = await _http.SendAsync(request);
+        var pageContent = await response.Content.ReadAsStringAsync();
+
+        // Check for specific error conditions
+        var errorMessage = GetUserFriendlyErrorMessage(pageContent);
+        if (errorMessage != null)
+        {
+            var step = pageContent.Contains("We are processing your renewal application")
+                ? "Already Processing"
+                : "Not Due For Renewal";
+            return StepResult<RenewalStepData>.Failure(errorMessage, step);
+        }
+
+        var success = response.IsSuccessStatusCode &&
+                     (pageContent.Contains("Business name to be renewed") ||
+                      pageContent.Contains("Email required for online payment") ||
+                      pageContent.Contains("Select Payment Preference"));
 
         if (!success)
         {
-            var errorMessage = GetUserFriendlyErrorMessage(message);
-            if (errorMessage != null)
-            {
-                var step = message.Contains("We are processing your renewal application")
-                    ? "Already Processing"
-                    : "Not Due For Renewal";
-                return StepResult<RenewalStepData>.Failure(errorMessage, step);
-            }
-
-            return StepResult<RenewalStepData>.Failure($"Failed to submit ABN: {message}", "Submit ABN");
+            return StepResult<RenewalStepData>.Failure("Failed to submit ABN", "Submit ABN");
         }
 
         data.PageContent = pageContent;
@@ -156,11 +205,45 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     private async Task<StepResult<RenewalStepData>> SelectBusinessStepAsync(RenewalStepData data)
     {
-        var (success, message) = await SelectBusinessNameAsync(data.AccountNumber, data.PageContent, data.AdfWindowId, data.ViewState);
+        // Find the radio button ID for the specified account number
+        var radioButtonId = FindRadioButtonIdByAccountNumber(data.PageContent, data.AccountNumber);
 
-        if (!success)
+        if (string.IsNullOrEmpty(radioButtonId))
         {
-            return StepResult<RenewalStepData>.Failure($"Failed to select business name: {message}", "Select Business Name");
+            return StepResult<RenewalStepData>.Failure(
+                $"Could not find business name with account number {data.AccountNumber}",
+                "Select Business Name");
+        }
+
+        // URL encode the radio button ID for form data
+        var encodedRadioButtonId = Uri.EscapeDataString(radioButtonId);
+
+        var formData = new StringBuilder();
+        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+        formData.Append($"bngrp={encodedRadioButtonId}&");
+        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+        formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
+        formData.Append("Adf-Page-Id=0&");
+        formData.Append($"javax.faces.ViewState={data.ViewState}&");
+        formData.Append("oracle.adf.view.rich.DELTAS=%7Btmpt%3Awaitpopup%3D%7B_shown%3D%7D%7D&");
+        formData.Append($"event={encodedRadioButtonId}&");
+        formData.Append($"event.{radioButtonId}=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+        formData.Append($"oracle.adf.view.rich.PROCESS={encodedRadioButtonId}");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+        request.Headers.Add("Adf-Rich-Message", "true");
+        request.Headers.Add("Adf-Ads-Page-Id", "1");
+
+        var response = await _http.SendAsync(request);
+        var content = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode || !content.Contains("buttonNextNew"))
+        {
+            return StepResult<RenewalStepData>.Failure("Failed to select business name", "Select Business Name");
         }
 
         return StepResult<RenewalStepData>.Success(data);
