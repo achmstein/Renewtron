@@ -47,7 +47,7 @@ public class AsicPaymentClient : IAsicPaymentClient
                 .ThenAsync("Prepare 3DS", PrepareThreeDSStepAsync)
                 .ThenAsync("Submit Initial Payment", SubmitInitialPaymentStepAsync)
                 .ThenAsync("Submit Tokenization", SubmitTokenizationStepAsync)
-                .ThenAsync("Complete Payment", CompletePaymentStepAsync)
+                .ThenAsync("Complete Payment Gateway", CompletePaymentGatewayStepAsync)
                 .ToPaymentResultAsync(data => PaymentResult.Succeeded(data.HostedTokenizationId));
         }
         catch (Exception ex)
@@ -297,7 +297,7 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    private async Task<StepResult<PaymentStepData>> CompletePaymentStepAsync(PaymentStepData data)
+    private async Task<StepResult<PaymentStepData>> CompletePaymentGatewayStepAsync(PaymentStepData data)
     {
         var deviceInfo = CreateDeviceInfo();
         var result = await CompletePaymentAsync(deviceInfo, data.PaymentUrl, data.SessionId,
@@ -305,8 +305,11 @@ public class AsicPaymentClient : IAsicPaymentClient
 
         if (!result.Success)
         {
-            return StepResult<PaymentStepData>.Failure($"Failed to complete payment: {result.Message}", "Complete Payment");
+            return StepResult<PaymentStepData>.Failure($"Failed to complete payment gateway: {result.Message}", "Complete Payment Gateway");
         }
+
+        // Update the hostedTokenizationId in case it was modified during completion
+        data.HostedTokenizationId = result.HostedTokenizationId;
 
         return StepResult<PaymentStepData>.Success(data);
     }
@@ -364,10 +367,11 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    public async Task<PaymentResult> CompletePaymentAsync(DeviceInfo deviceInfo, string paymentReturnUrl, string sessionId, string hostedTokenizationId, string adfWindowId, string viewState)
+    private async Task<PaymentResult> CompletePaymentAsync(DeviceInfo deviceInfo, string paymentReturnUrl, string sessionId, string hostedTokenizationId, string adfWindowId, string viewState)
     {
         try
         {
+            // Step 1: Submit device information
             var deviceInfoXml = $"acceptHeader%22%3E%3Cs%3E{Uri.EscapeDataString(deviceInfo.AcceptHeader)}%3C%2Fs%3E%3C%2Fk%3E" +
                               $"%3Ck+v%3D%22colorDepth%22%3E%3Cn%3E{deviceInfo.ColorDepth}%3C%2Fn%3E%3C%2Fk%3E" +
                               $"%3Ck+v%3D%22screenHeight%22%3E%3Cn%3E{deviceInfo.ScreenHeight}%3C%2Fn%3E%3C%2Fk%3E" +
@@ -391,16 +395,19 @@ public class AsicPaymentClient : IAsicPaymentClient
                 $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
 
             request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-
             request.Headers.Add("Adf-Rich-Message", "true");
             request.Headers.Add("Adf-Ads-Page-Id", "2");
             request.Headers.Add("Origin", "https://regpayment.asic.gov.au");
             request.Headers.TryAddWithoutValidation("Referer", $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SST={hostedTokenizationId}&SessionId={sessionId}");
 
             var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
 
-            // Step 1: POST to payment gateway to close the window (Adf-Window-Unloaded)
+            if (!response.IsSuccessStatusCode)
+            {
+                return PaymentResult.Failed("Failed to submit device information");
+            }
+
+            // Step 2: POST to payment gateway to close the window (Adf-Window-Unloaded)
             var closeWindowRequest = new HttpRequestMessage(HttpMethod.Post, "https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx");
             var closeWindowContent = new StringBuilder();
             closeWindowContent.Append($"Adf-Window-Id={adfWindowId}&");
@@ -413,7 +420,7 @@ public class AsicPaymentClient : IAsicPaymentClient
             var closeResponse = await _http.SendAsync(closeWindowRequest);
             // Response should be: <?xml version="1.0" ?><partial-response><noop/></partial-response>
 
-            // Step 2: GET the payment success callback page
+            // Step 3: GET the payment success callback page
             var successUrl = $"https://asicconnect.asic.gov.au/public/paymentSuccess.jsp?SessionId={sessionId}&SST={hostedTokenizationId}";
             var successResponse = await _http.GetAsync(successUrl);
             var successContent = await successResponse.Content.ReadAsStringAsync();
@@ -423,53 +430,9 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return PaymentResult.Failed("Failed to retrieve payment success callback");
             }
 
-            // Step 3: POST the payment success action back to the renewal page
-            var paymentSuccessRequest = new HttpRequestMessage(HttpMethod.Post,
-                $"https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
-
-            var paymentSuccessData = new StringBuilder();
-            paymentSuccessData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
-            paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle=&");
-            paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
-            paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
-            paymentSuccessData.Append($"popt=tmpt%3Aregion%3A3%3ApayNow&");
-            paymentSuccessData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
-            paymentSuccessData.Append($"Adf-Window-Id={adfWindowId}&");
-            paymentSuccessData.Append("Adf-Page-Id=0&");
-            paymentSuccessData.Append($"javax.faces.ViewState={viewState}&");
-            paymentSuccessData.Append($"oracle.adf.view.rich.DELTAS=%7Btmpt%3Aregion%3A3%3ApayNowPopup%3D%7B_shown%3D%7D%2Ctmpt%3Aregion%3A3%3ApayNowInline%3D%7Bsource%3D%7D%7D&");
-            paymentSuccessData.Append($"event=tmpt%3Aregion%3A3%3ApayNowPopup&");
-            paymentSuccessData.Append($"event.tmpt:region:3:payNowPopup=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22_custom%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22sessionId%22%3E%3Cs%3E{sessionId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22SST%22%3E%3Cs%3E{hostedTokenizationId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22immediate%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EpaymentSuccessAction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
-            paymentSuccessData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A3%3ApayNowPopup");
-
-            paymentSuccessRequest.Content = new StringContent(paymentSuccessData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-            paymentSuccessRequest.Headers.Add("Adf-Rich-Message", "true");
-            paymentSuccessRequest.Headers.Add("Adf-Ads-Page-Id", "1");
-
-            var finalResponse = await _http.SendAsync(paymentSuccessRequest);
-            var finalContent = await finalResponse.Content.ReadAsStringAsync();
-
-            // Check for errors in the response
-            if (finalContent.Contains("declined") || finalContent.Contains("Your transaction has been declined"))
-            {
-                return PaymentResult.Failed("Payment was declined by your financial institution");
-            }
-
-            if (finalContent.Contains("error") || finalContent.Contains("<html>") && finalContent.Contains("<p>"))
-            {
-                // Extract error message from HTML
-                var errorMatch = Regex.Match(finalContent, @"<p>(.*?)</p>", RegexOptions.Singleline);
-                var errorMessage = errorMatch.Success ? errorMatch.Groups[1].Value.Trim() : "Payment error occurred";
-                return PaymentResult.Failed(errorMessage);
-            }
-
-            // Success - check for confirmation
-            if (finalResponse.IsSuccessStatusCode && !finalContent.Contains("declined") && !finalContent.Contains("error"))
-            {
-                return PaymentResult.Succeeded(sessionId);
-            }
-
-            return PaymentResult.Failed("Unknown payment status");
+            // Payment gateway processing complete - return hostedTokenizationId
+            // The final payment success action will be handled by the RenewalClient
+            return PaymentResult.Succeeded(hostedTokenizationId);
         }
         catch (Exception ex)
         {
