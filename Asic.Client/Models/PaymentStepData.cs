@@ -14,7 +14,6 @@ public class PaymentStepData
 
     // Payment gateway data
     public string TokenizationFormUrl { get; set; }
-    public string PaymentAdfWindowId { get; set; }
     public string ViewState { get; set; }
 
     // Card information
@@ -23,13 +22,12 @@ public class PaymentStepData
     // Tokenization result
     public string HostedTokenizationId { get; set; }
 
-    public static PaymentStepData Create(string paymentUrl, string sessionId, string adfWindowId, CreditCardDetails cardDetails)
+    public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {
         return new PaymentStepData
         {
             PaymentUrl = paymentUrl,
             SessionId = sessionId,
-            AdfWindowId = adfWindowId,
             CardDetails = cardDetails
         };
     }

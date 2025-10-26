@@ -561,7 +561,6 @@ public class AsicRenewalClient : IAsicRenewalClient
         var paymentResult = await _paymentClient.ProcessPaymentAsync(
             data.PaymentUrl,
             data.TransactionReference,
-            data.AdfWindowId,
             data.CardDetails);
 
         if (!paymentResult.Success)

@@ -34,11 +34,11 @@ public class AsicPaymentClient : IAsicPaymentClient
         _htmlParser = new HtmlParser();
     }
 
-    public async Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string sessionId, string adfWindowId, CreditCardDetails cardDetails)
+    public async Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {
         try
         {
-            var initialData = PaymentStepData.Create(paymentUrl, sessionId, adfWindowId, cardDetails);
+            var initialData = PaymentStepData.Create(paymentUrl, sessionId, cardDetails);
 
             // Railway-oriented pipeline: each step only executes if the previous step succeeded
             return await InitializeSessionStepAsync(initialData)
@@ -72,7 +72,7 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
 
         data.TokenizationFormUrl = tokenizationFormUrl;
-        data.PaymentAdfWindowId = adfWindowId;
+        data.AdfWindowId = adfWindowId;
         data.ViewState = viewState;
 
         return StepResult<PaymentStepData>.Success(data);
@@ -200,7 +200,7 @@ public class AsicPaymentClient : IAsicPaymentClient
         {
             var formData = new StringBuilder();
             formData.Append("org.apache.myfaces.trinidad.faces.FORM=frmASICPayment&");
-            formData.Append($"Adf-Window-Id={data.PaymentAdfWindowId}&");
+            formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
             formData.Append($"javax.faces.ViewState={data.ViewState}&");
             formData.Append("Adf-Page-Id=3&");
             formData.Append("event=r1%3A0%3AsubmitBtn&");
@@ -208,7 +208,7 @@ public class AsicPaymentClient : IAsicPaymentClient
             formData.Append("oracle.adf.view.rich.PROCESS=r1%2Cr1%3A0%3AsubmitBtn");
 
             var request = new HttpRequestMessage(HttpMethod.Post,
-                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={data.PaymentAdfWindowId}&Adf-Page-Id=3");
+                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=3");
 
             request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
             request.Headers.Add("Adf-Rich-Message", "true");
@@ -381,22 +381,19 @@ public class AsicPaymentClient : IAsicPaymentClient
             var formData = new StringBuilder();
             formData.Append("org.apache.myfaces.trinidad.faces.FORM=frmASICPayment&");
             formData.Append($"Adf-Window-Id={adfWindowId}&");
-            formData.Append("Adf-Page-Id=3&");
+            formData.Append("Adf-Page-Id=1&");
             formData.Append($"javax.faces.ViewState={viewState}&");
             formData.Append("event=r1%3A0%3AsubmitBtn&");
             formData.Append($"event.r1:0:submitBtn=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22_custom%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22{deviceInfoXml}%3Ck+v%3D%22immediate%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EinvokeJavaMethod%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
             formData.Append("oracle.adf.view.rich.PROCESS=r1%3A0%3AsubmitBtn");
 
             var request = new HttpRequestMessage(HttpMethod.Post,
-                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={adfWindowId}&Adf-Page-Id=3");
+                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
 
-
-            var formBytes = Encoding.UTF8.GetBytes(formData.ToString());
-            request.Content = new ByteArrayContent(formBytes);
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
+            request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
 
             request.Headers.Add("Adf-Rich-Message", "true");
-            request.Headers.Add("Adf-Ads-Page-Id", "5");
+            request.Headers.Add("Adf-Ads-Page-Id", "2");
             request.Headers.Add("Origin", "https://regpayment.asic.gov.au");
             request.Headers.TryAddWithoutValidation("Referer", $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SST={hostedTokenizationId}&SessionId={sessionId}");
 
