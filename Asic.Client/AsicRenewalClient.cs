@@ -105,7 +105,7 @@ public class AsicRenewalClient : IAsicRenewalClient
                 .ThenAsync("Process Payment", ProcessPaymentStepAsync)
                 .ToRenewalResultAsync(data =>
                     RenewalResult.Success(
-                        data.TransactionReference ?? (data.JumpedToEmail ? "RESUMED" : "Unknown"),
+                        data.TransactionReference,
                         data.HostedTokenizationId));
         }
         catch (Exception ex)
@@ -114,7 +114,6 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
     }
 
-    // ========== Railway Pattern Step Methods ==========
 
     private async Task<StepResult<RenewalStepData>> InitializeSessionStepAsync(RenewalStepData data)
     {
@@ -577,14 +576,6 @@ public class AsicRenewalClient : IAsicRenewalClient
         return StepResult<RenewalStepData>.Success(data);
     }
 
-    // ========== End Railway Pattern Step Methods ==========
-
-    // ========== Shared Helper Methods ==========
-
-    /// <summary>
-    /// Initializes a new ASIC session and returns session credentials.
-    /// Shared by both search and renewal operations.
-    /// </summary>
     private async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
     {
         // Step 1: Initial GET to renewal page
@@ -613,8 +604,6 @@ public class AsicRenewalClient : IAsicRenewalClient
 
         return (sessionId, adfWindowId, viewState);
     }
-
-    // ========== End Shared Helper Methods ==========
 
     private async Task<(bool Success, string Content)> SubmitAbnForSearchAsync(string abn, string adfWindowId, string viewState)
     {

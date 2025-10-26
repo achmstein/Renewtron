@@ -56,7 +56,6 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    // ========== Railway Pattern Step Methods ==========
 
     private async Task<StepResult<PaymentStepData>> InitializeSessionStepAsync(PaymentStepData data)
     {
@@ -312,8 +311,6 @@ public class AsicPaymentClient : IAsicPaymentClient
         return StepResult<PaymentStepData>.Success(data);
     }
 
-    // ========== End Railway Pattern Step Methods ==========
-
     private async Task<(bool Success, string Message, string TokenizationFormUrl, string AdfWindowId, string ViewState)> InitializeSessionAsync(string paymentUrl)
     {
         try
@@ -482,6 +479,7 @@ public class AsicPaymentClient : IAsicPaymentClient
             return PaymentResult.Failed($"Payment completion failed: {ex.Message}");
         }
     }
+  
     private string ExtractTokenFromUrl(string url)
     {
         // Extract the last part of the URL path (the token)
