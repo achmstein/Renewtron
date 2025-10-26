@@ -221,16 +221,17 @@
             }
         }, null, 0, 1000);
 
+        var cleanAbn = abn.Replace(" ", "");
+
+        // Get user info (declare outside try block for exception handler)
+        var httpContext = HttpContextAccessor.HttpContext;
+        var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
+        var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
+        var sessionId = httpContext?.Session?.Id;
+
         try
         {
-            var cleanAbn = abn.Replace(" ", "");
             var cacheKey = $"abn_search_{cleanAbn}";
-
-            // Get user info
-            var httpContext = HttpContextAccessor.HttpContext;
-            var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
-            var userAgent = httpContext?.Request.Headers["User-Agent"].ToString();
-            var sessionId = httpContext?.Session?.Id;
 
             // Try to get from cache first
             BusinessNamesResult searchResult;
@@ -317,6 +318,31 @@
         }
         catch (Exception ex)
         {
+            // Log the exception as a failed search
+            try
+            {
+                var exceptionSearchLog = new SearchLog
+                {
+                    Id = Guid.NewGuid(),
+                    Abn = cleanAbn,
+                    SearchedAt = DateTime.UtcNow,
+                    IpAddress = ipAddress,
+                    UserAgent = userAgent,
+                    SessionId = sessionId,
+                    Success = false,
+                    InitiatedBy = SearchInitiator.Customer,
+                    ErrorMessage = $"Exception: {ex.Message}",
+                    ResultsCount = 0
+                };
+
+                DbContext.SearchLogs.Add(exceptionSearchLog);
+                await DbContext.SaveChangesAsync();
+            }
+            catch
+            {
+                // Silently fail if we can't log - don't want to mask the original error
+            }
+
             errorMessage = "An error occurred while searching. Please try again.";
             isSearching = false;
         }
