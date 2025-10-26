@@ -80,6 +80,59 @@
                 </div>
             </div>
 
+            <!-- Filters -->
+            <div class="mb-6 rounded-lg bg-white shadow">
+                <div class="px-4 py-5 sm:px-6">
+                    <h3 class="text-sm font-medium text-gray-900 mb-4">Filters</h3>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <!-- Status Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select @bind="filterStatus" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All Statuses</option>
+                                <option value="@RenewalStatus.Pending">Pending</option>
+                                <option value="@RenewalStatus.Processing">Processing</option>
+                                <option value="@RenewalStatus.Completed">Completed</option>
+                                <option value="@RenewalStatus.Failed">Failed</option>
+                            </select>
+                        </div>
+
+                        <!-- Initiated By Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Initiated By</label>
+                            <select @bind="filterInitiatedBy" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All</option>
+                                <option value="@SearchInitiator.Customer">Customer</option>
+                                <option value="@SearchInitiator.Admin">Admin</option>
+                            </select>
+                        </div>
+
+                        <!-- Date From -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                            <input type="date" @bind="filterDateFrom" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                        </div>
+
+                        <!-- Date To -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                            <input type="date" @bind="filterDateTo" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                        </div>
+                    </div>
+                    @if (HasActiveFilters())
+                    {
+                        <div class="mt-4">
+                            <button @onclick="ClearFilters" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500">
+                                <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Clear all filters
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+
             <!-- Card Grid -->
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 @foreach (var renewal in renewals)
@@ -143,12 +196,30 @@
                                     <dd class="mt-1 font-medium text-gray-900">$@renewal.Amount.ToString("F2")</dd>
                                 </div>
                                 <div>
-                                    <dt class="text-gray-500">Email</dt>
-                                    <dd class="mt-1 text-gray-900 truncate">@renewal.Email</dd>
+                                    <dt class="text-gray-500">Initiated By</dt>
+                                    <dd class="mt-1 text-gray-900">
+                                        @if (renewal.SearchResult.SearchLog.InitiatedBy == SearchInitiator.Admin)
+                                        {
+                                            <span class="inline-flex items-center gap-1 text-indigo-600 font-medium">
+                                                <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                                                </svg>
+                                                Admin
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-gray-900">Customer</span>
+                                        }
+                                    </dd>
                                 </div>
                                 <div>
                                     <dt class="text-gray-500">Renewal Period</dt>
                                     <dd class="mt-1 font-medium text-gray-900">@renewal.RenewalYears @(renewal.RenewalYears == 1 ? "Year" : "Years")</dd>
+                                </div>
+                                <div class="col-span-2">
+                                    <dt class="text-gray-500">Email</dt>
+                                    <dd class="mt-1 text-gray-900 truncate">@renewal.Email</dd>
                                 </div>
                                 <div class="col-span-2">
                                     <dt class="text-gray-500">Transaction Reference</dt>
@@ -277,7 +348,7 @@
 @code {
     private List<RenewalRequest> renewals = new();
     private int currentPage = 1;
-    private int pageSize = 50;
+    private int pageSize = 10;
     private int totalCount = 0;
     private bool isRefreshing = false;
     private bool isRetrying = false;
@@ -286,6 +357,12 @@
     private string errorMessage = "";
     private bool showErrorModal = false;
     private string currentErrorMessage = "";
+
+    // Filter variables
+    private string filterStatus = "";
+    private string filterInitiatedBy = "";
+    private DateTime? filterDateFrom = null;
+    private DateTime? filterDateTo = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -300,12 +377,37 @@
 
         try
         {
-            totalCount = await DbContext.RenewalRequests.CountAsync();
-
-            renewals = await DbContext.RenewalRequests
+            var query = DbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr.SearchLog)
                 .Include(r => r.StripePayment)
+                .AsQueryable();
+
+            // Apply filters
+            if (!string.IsNullOrEmpty(filterStatus) && Enum.TryParse<RenewalStatus>(filterStatus, out var status))
+            {
+                query = query.Where(r => r.Status == status);
+            }
+
+            if (!string.IsNullOrEmpty(filterInitiatedBy) && Enum.TryParse<SearchInitiator>(filterInitiatedBy, out var initiator))
+            {
+                query = query.Where(r => r.SearchResult.SearchLog.InitiatedBy == initiator);
+            }
+
+            if (filterDateFrom.HasValue)
+            {
+                query = query.Where(r => r.InitiatedAt >= filterDateFrom.Value);
+            }
+
+            if (filterDateTo.HasValue)
+            {
+                var dateTo = filterDateTo.Value.AddDays(1); // Include the entire day
+                query = query.Where(r => r.InitiatedAt < dateTo);
+            }
+
+            totalCount = await query.CountAsync();
+
+            renewals = await query
                 .OrderByDescending(r => r.InitiatedAt)
                 .Skip((currentPage - 1) * pageSize)
                 .Take(pageSize)
@@ -317,6 +419,30 @@
         {
             isRefreshing = false;
         }
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1; // Reset to first page when filters change
+        await LoadData();
+    }
+
+    private async Task ClearFilters()
+    {
+        filterStatus = "";
+        filterInitiatedBy = "";
+        filterDateFrom = null;
+        filterDateTo = null;
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrEmpty(filterStatus) ||
+               !string.IsNullOrEmpty(filterInitiatedBy) ||
+               filterDateFrom.HasValue ||
+               filterDateTo.HasValue;
     }
 
     private async Task RetryRenewal(Guid renewalId)

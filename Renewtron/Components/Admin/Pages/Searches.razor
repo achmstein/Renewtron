@@ -19,134 +19,208 @@
 
     <main>
         <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            <div class="overflow-hidden rounded-lg bg-white shadow">
-                <div class="px-4 py-5 sm:p-6">
-                    <div class="mb-4 flex items-center justify-between">
-                        <h3 class="text-lg font-medium leading-6 text-gray-900">Recent Searches (@totalCount)</h3>
-                        <button @onclick="LoadData" disabled="@isRefreshing" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                            @if (isRefreshing)
-                            {
-                                <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Refreshing...</span>
-                            }
-                            else
-                            {
-                                <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                </svg>
-                                <span>Refresh</span>
-                            }
-                        </button>
+            <!-- Header -->
+            <div class="mb-6 rounded-lg bg-white shadow">
+                <div class="px-4 py-5 sm:px-6 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-medium leading-6 text-gray-900">Search Logs</h3>
+                        <p class="mt-1 text-sm text-gray-500">@totalCount total searches</p>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Date/Time</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ABN</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">IP Address</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Session ID</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Results</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 bg-white">
-                                @foreach (var search in searches)
-                                {
-                                    <tr>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                                            @search.SearchedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")
-                                        </td>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm font-medium text-gray-900">@search.Abn</td>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                            <div class="flex items-center gap-2">
-                                                <span>@search.IpAddress</span>
-                                                @if (search.InitiatedBy == SearchInitiator.Admin)
-                                                {
-                                                    <svg class="size-5 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" title="admin-initiated">
-                                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
-                                                    </svg>
-                                                }
-                                            </div>
-                                        </td>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                                            <span class="font-mono text-xs">@search.SessionId</span>
-                                        </td>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-500">@search.ResultsCount</td>
-                                        <td class="whitespace-nowrap px-6 py-4">
-                                            @if (search.Success)
-                                            {
-                                                <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Success</span>
-                                            }
-                                            else
-                                            {
-                                                <span class="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
-                                            }
-                                        </td>
-                                        <td class="whitespace-nowrap px-6 py-4 text-sm">
-                                            <a href="/admin/searches/@search.Id" class="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500">
-                                                <svg class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                </svg>
-                                                View
-                                            </a>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
+                    <button @onclick="LoadData" disabled="@isRefreshing" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        @if (isRefreshing)
+                        {
+                            <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Refreshing...</span>
+                        }
+                        else
+                        {
+                            <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                            </svg>
+                            <span>Refresh</span>
+                        }
+                    </button>
+                </div>
+            </div>
 
-                    @if (totalCount > pageSize)
+            <!-- Filters -->
+            <div class="mb-6 rounded-lg bg-white shadow">
+                <div class="px-4 py-5 sm:px-6">
+                    <h3 class="text-sm font-medium text-gray-900 mb-4">Filters</h3>
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        <!-- Status Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select @bind="filterSuccess" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All</option>
+                                <option value="true">Success</option>
+                                <option value="false">Failed</option>
+                            </select>
+                        </div>
+
+                        <!-- Initiated By Filter -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Initiated By</label>
+                            <select @bind="filterInitiatedBy" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All</option>
+                                <option value="@SearchInitiator.Customer">Customer</option>
+                                <option value="@SearchInitiator.Admin">Admin</option>
+                            </select>
+                        </div>
+
+                        <!-- Date From -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                            <input type="date" @bind="filterDateFrom" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                        </div>
+
+                        <!-- Date To -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                            <input type="date" @bind="filterDateTo" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                        </div>
+                    </div>
+                    @if (HasActiveFilters())
                     {
-                        <div class="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
-                            <div class="flex flex-1 justify-between sm:hidden">
-                                <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="relative inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                                    Previous
-                                </button>
-                                <button @onclick="NextPage" disabled="@(currentPage* pageSize >= totalCount)" class="relative ml-3 inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                                    Next
-                                </button>
-                            </div>
-                            <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                                <div>
-                                    <p class="text-sm text-gray-700">
-                                        Showing
-                                        <span class="font-medium">@((currentPage - 1) * pageSize + 1)</span>
-                                        to
-                                        <span class="font-medium">@Math.Min(currentPage * pageSize, totalCount)</span>
-                                        of
-                                        <span class="font-medium">@totalCount</span>
-                                        results
-                                    </p>
-                                </div>
-                                <div>
-                                    <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm">
-                                        <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
-                                            <span class="sr-only">Previous</span>
-                                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
-                                            </svg>
-                                        </button>
-                                        <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300">
-                                            Page @currentPage of @((int)Math.Ceiling(totalCount / (double)pageSize))
-                                        </span>
-                                        <button @onclick="NextPage" disabled="@(currentPage* pageSize >= totalCount)" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
-                                            <span class="sr-only">Next</span>
-                                            <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
-                                            </svg>
-                                        </button>
-                                    </nav>
-                                </div>
-                            </div>
+                        <div class="mt-4">
+                            <button @onclick="ClearFilters" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500">
+                                <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Clear all filters
+                            </button>
                         </div>
                     }
+                </div>
+            </div>
+
+            <!-- Card Grid -->
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                @foreach (var search in searches)
+                {
+                    <div class="overflow-hidden rounded-lg bg-white shadow hover:shadow-lg transition-shadow @(search.Success ? "border-l-4 border-green-500" : "border-l-4 border-red-500")">
+                        <div class="px-4 py-5 sm:p-6">
+                            <!-- Header Row -->
+                            <div class="flex items-start justify-between mb-4">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-base font-semibold text-gray-900">ABN: @search.Abn</h3>
+                                        @if (search.InitiatedBy == SearchInitiator.Admin)
+                                        {
+                                            <svg class="shrink-0 h-4 w-4 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" title="Admin-initiated">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                                            </svg>
+                                        }
+                                    </div>
+                                    <p class="text-sm text-gray-500 mt-1 font-mono text-xs">Session: @search.SessionId</p>
+                                </div>
+                                <div>
+                                    @if (search.Success)
+                                    {
+                                        <span class="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">Success</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">Failed</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Details Grid -->
+                            <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                <div>
+                                    <dt class="text-gray-500">Date & Time</dt>
+                                    <dd class="mt-1 font-medium text-gray-900">@search.SearchedAt.ToLocalTime().ToString("MMM dd, yyyy")</dd>
+                                    <dd class="text-xs text-gray-500">@search.SearchedAt.ToLocalTime().ToString("HH:mm:ss")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-gray-500">Results Count</dt>
+                                    <dd class="mt-1 font-medium text-gray-900">@search.ResultsCount</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-gray-500">Initiated By</dt>
+                                    <dd class="mt-1 text-gray-900">
+                                        @if (search.InitiatedBy == SearchInitiator.Admin)
+                                        {
+                                            <span class="inline-flex items-center gap-1 text-indigo-600 font-medium">
+                                                <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
+                                                </svg>
+                                                Admin
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-gray-900">Customer</span>
+                                        }
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-gray-500">IP Address</dt>
+                                    <dd class="mt-1 text-gray-900">@search.IpAddress</dd>
+                                </div>
+                            </dl>
+
+                            <!-- Actions -->
+                            <div class="mt-4 flex items-center justify-end gap-2 pt-4 border-t border-gray-200">
+                                <a href="/admin/searches/@search.Id"
+                                   class="inline-flex items-center rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                                    <svg class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Pagination -->
+            <div class="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
+                <div class="flex flex-1 justify-between sm:hidden">
+                    <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="relative inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                        Previous
+                    </button>
+                    <button @onclick="NextPage" disabled="@(currentPage* pageSize >= totalCount)" class="relative ml-3 inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                        Next
+                    </button>
+                </div>
+                <div class="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            Showing
+                            <span class="font-medium">@((currentPage - 1) * pageSize + 1)</span>
+                            to
+                            <span class="font-medium">@Math.Min(currentPage * pageSize, totalCount)</span>
+                            of
+                            <span class="font-medium">@totalCount</span>
+                            results
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="isolate inline-flex -space-x-px rounded-md shadow-sm">
+                            <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                                <span class="sr-only">Previous</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <span class="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300">
+                                Page @currentPage of @((int)Math.Ceiling(totalCount / (double)pageSize))
+                            </span>
+                            <button @onclick="NextPage" disabled="@(currentPage* pageSize >= totalCount)" class="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                                <span class="sr-only">Next</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </div>
@@ -156,9 +230,15 @@
 @code {
     private List<SearchLog> searches = new();
     private int currentPage = 1;
-    private int pageSize = 50;
+    private int pageSize = 10;
     private int totalCount = 0;
     private bool isRefreshing = false;
+
+    // Filter variables
+    private string filterSuccess = "";
+    private string filterInitiatedBy = "";
+    private DateTime? filterDateFrom = null;
+    private DateTime? filterDateTo = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -171,9 +251,33 @@
 
         try
         {
-            totalCount = await DbContext.SearchLogs.CountAsync();
+            var query = DbContext.SearchLogs.AsQueryable();
 
-            searches = await DbContext.SearchLogs
+            // Apply filters
+            if (!string.IsNullOrEmpty(filterSuccess) && bool.TryParse(filterSuccess, out var success))
+            {
+                query = query.Where(s => s.Success == success);
+            }
+
+            if (!string.IsNullOrEmpty(filterInitiatedBy) && Enum.TryParse<SearchInitiator>(filterInitiatedBy, out var initiator))
+            {
+                query = query.Where(s => s.InitiatedBy == initiator);
+            }
+
+            if (filterDateFrom.HasValue)
+            {
+                query = query.Where(s => s.SearchedAt >= filterDateFrom.Value);
+            }
+
+            if (filterDateTo.HasValue)
+            {
+                var dateTo = filterDateTo.Value.AddDays(1); // Include the entire day
+                query = query.Where(s => s.SearchedAt < dateTo);
+            }
+
+            totalCount = await query.CountAsync();
+
+            searches = await query
                 .OrderByDescending(s => s.SearchedAt)
                 .Skip((currentPage - 1) * pageSize)
                 .Take(pageSize)
@@ -185,6 +289,30 @@
         {
             isRefreshing = false;
         }
+    }
+
+    private async Task ApplyFilters()
+    {
+        currentPage = 1; // Reset to first page when filters change
+        await LoadData();
+    }
+
+    private async Task ClearFilters()
+    {
+        filterSuccess = "";
+        filterInitiatedBy = "";
+        filterDateFrom = null;
+        filterDateTo = null;
+        currentPage = 1;
+        await LoadData();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrEmpty(filterSuccess) ||
+               !string.IsNullOrEmpty(filterInitiatedBy) ||
+               filterDateFrom.HasValue ||
+               filterDateTo.HasValue;
     }
 
     private async Task NextPage()
