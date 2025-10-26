@@ -29,7 +29,7 @@
                     <div class="flex items-center gap-2">
                         <!-- Filters Button -->
                         <div class="relative">
-                            <button @onclick="() => showFilterPopover = !showFilterPopover" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                            <button @onclick="OpenFilterPopover" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                                 <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
                                 </svg>
@@ -46,13 +46,13 @@
                                             <!-- ABN Filter -->
                                             <div>
                                                 <label class="block text-xs font-medium text-gray-700 mb-1">ABN</label>
-                                                <input type="text" @bind="filterAbn" placeholder="Search ABN" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
+                                                <input type="text" @bind="tempFilterAbn" placeholder="Search ABN" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
                                             </div>
 
                                             <!-- Status Filter -->
                                             <div>
                                                 <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                                                <select @bind="filterSuccess" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2">
+                                                <select @bind="tempFilterSuccess" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2">
                                                     <option value="">All</option>
                                                     <option value="true">Success</option>
                                                     <option value="false">Failed</option>
@@ -62,7 +62,7 @@
                                             <!-- Initiated By Filter -->
                                             <div>
                                                 <label class="block text-xs font-medium text-gray-700 mb-1">Initiated By</label>
-                                                <select @bind="filterInitiatedBy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2">
+                                                <select @bind="tempFilterInitiatedBy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2">
                                                     <option value="">All</option>
                                                     <option value="@SearchInitiator.Customer">Customer</option>
                                                     <option value="@SearchInitiator.Admin">Admin</option>
@@ -73,11 +73,11 @@
                                             <div class="grid grid-cols-2 gap-2">
                                                 <div>
                                                     <label class="block text-xs font-medium text-gray-700 mb-1">From Date</label>
-                                                    <input type="date" @bind="filterDateFrom" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
+                                                    <input type="date" @bind="tempFilterDateFrom" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
                                                 </div>
                                                 <div>
                                                     <label class="block text-xs font-medium text-gray-700 mb-1">To Date</label>
-                                                    <input type="date" @bind="filterDateTo" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
+                                                    <input type="date" @bind="tempFilterDateTo" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
                                                 </div>
                                             </div>
                                         </div>
@@ -87,7 +87,7 @@
                                             <button @onclick="ApplyFiltersAndClose" class="flex-1 inline-flex justify-center items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
                                                 Apply
                                             </button>
-                                            <button @onclick="ClearFilters" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                                            <button @onclick="ClearFiltersAndClose" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                                                 Clear
                                             </button>
                                         </div>
@@ -363,7 +363,14 @@
     private string currentErrorMessage = "";
     private bool showFilterPopover = false;
 
-    // Filter variables
+    // Temp filter variables (for popover)
+    private string tempFilterAbn = "";
+    private string tempFilterSuccess = "";
+    private string tempFilterInitiatedBy = "";
+    private DateTime? tempFilterDateFrom = null;
+    private DateTime? tempFilterDateTo = null;
+
+    // Actual filter variables (applied)
     private string filterAbn = "";
     private string filterSuccess = "";
     private string filterInitiatedBy = "";
@@ -466,8 +473,45 @@
         return count;
     }
 
+    private void OpenFilterPopover()
+    {
+        // Initialize temp variables with current filter values
+        tempFilterAbn = filterAbn;
+        tempFilterSuccess = filterSuccess;
+        tempFilterInitiatedBy = filterInitiatedBy;
+        tempFilterDateFrom = filterDateFrom;
+        tempFilterDateTo = filterDateTo;
+        showFilterPopover = true;
+    }
+
     private async Task ApplyFiltersAndClose()
     {
+        // Copy temp values to actual filter values
+        filterAbn = tempFilterAbn;
+        filterSuccess = tempFilterSuccess;
+        filterInitiatedBy = tempFilterInitiatedBy;
+        filterDateFrom = tempFilterDateFrom;
+        filterDateTo = tempFilterDateTo;
+
+        showFilterPopover = false;
+        await ApplyFilters();
+    }
+
+    private async Task ClearFiltersAndClose()
+    {
+        // Clear both temp and actual filter values
+        tempFilterAbn = "";
+        tempFilterSuccess = "";
+        tempFilterInitiatedBy = "";
+        tempFilterDateFrom = null;
+        tempFilterDateTo = null;
+
+        filterAbn = "";
+        filterSuccess = "";
+        filterInitiatedBy = "";
+        filterDateFrom = null;
+        filterDateTo = null;
+
         showFilterPopover = false;
         await ApplyFilters();
     }
