@@ -299,7 +299,19 @@ public class AsicPaymentClient : IAsicPaymentClient
 
     private async Task<StepResult<PaymentStepData>> CompletePaymentGatewayStepAsync(PaymentStepData data)
     {
-        var deviceInfo = CreateDeviceInfo();
+        var deviceInfo = new DeviceInfo
+        {
+            AcceptHeader = "en-US",
+            ColorDepth = 24,
+            ScreenHeight = 1080,
+            ScreenWidth = 1920,
+            Locale = "en-US",
+            JavaEnabled = false,
+            TimezoneOffsetUtcMinutes = -180,
+            IpAddress = "0.0.0.0",
+            UserAgent = UserAgent
+        };
+
         var result = await CompletePaymentAsync(deviceInfo, data.PaymentUrl, data.SessionId,
             data.HostedTokenizationId, data.AdfWindowId, data.ViewState);
 
@@ -446,21 +458,5 @@ public class AsicPaymentClient : IAsicPaymentClient
         var uri = new Uri(url);
         var segments = uri.Segments;
         return segments[segments.Length - 1];
-    }
-
-    private DeviceInfo CreateDeviceInfo()
-    {
-        return new DeviceInfo
-        {
-            AcceptHeader = "en-US",
-            ColorDepth = 24,
-            ScreenHeight = 1080,
-            ScreenWidth = 1920,
-            Locale = "en-US",
-            JavaEnabled = false,
-            TimezoneOffsetUtcMinutes = -180,
-            IpAddress = "0.0.0.0",
-            UserAgent = UserAgent
-        };
     }
 }

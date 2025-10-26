@@ -183,7 +183,29 @@ public class AsicRenewalClient : IAsicRenewalClient
     private async Task<StepResult<RenewalStepData>> SelectBusinessStepAsync(RenewalStepData data)
     {
         // Find the radio button ID for the specified account number
-        var radioButtonId = FindRadioButtonIdByAccountNumber(data.PageContent, data.AccountNumber);
+        // The HTML structure has radio buttons followed by business data
+        // Each row contains: radio button, business name, account number, registration date
+        string radioButtonId = null;
+
+        // Find all radio button IDs
+        var radioMatches = Regex.Matches(data.PageContent, @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
+
+        // Find all dataText spans (business names, account numbers, registration dates)
+        var dataTextMatches = Regex.Matches(data.PageContent, @"<span class=""dataText"">([^<]+)</span>");
+
+        // Match radio buttons to account numbers
+        // Each table row has 3 dataText spans: [name, account, date]
+        for (int i = 0; i < radioMatches.Count && (i * 3 + 1) < dataTextMatches.Count; i++)
+        {
+            var accountIndex = i * 3 + 1; // Account number is the second item (index 1) in each group
+            var accountValue = dataTextMatches[accountIndex].Groups[1].Value.Trim();
+
+            if (accountValue == data.AccountNumber)
+            {
+                radioButtonId = radioMatches[i].Groups[1].Value;
+                break;
+            }
+        }
 
         if (string.IsNullOrEmpty(radioButtonId))
         {
@@ -257,7 +279,8 @@ public class AsicRenewalClient : IAsicRenewalClient
         var content = await response.Content.ReadAsStringAsync();
 
         // Extract transaction reference from response
-        var transactionRef = ExtractTransactionReference(content);
+        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
+        var transactionRef = match.Success ? match.Groups[1].Value : null;
 
         // Check if we jumped to email page (ASIC resumed session)
         bool jumpedToEmail = content.Contains("Please provide a valid email which is required for ASIC online payment.");
@@ -753,46 +776,11 @@ public class AsicRenewalClient : IAsicRenewalClient
         return businessNames;
     }
 
-    private string ExtractTransactionReference(string content)
-    {
-        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
-        return match.Success ? match.Groups[1].Value : null;
-    }
-
     private string ExtractCurrentRegionIndex(string content)
     {
         // Look for patterns like: tmpt:region:N:form:componentId or tmpt:region:N:componentId
         var match = Regex.Match(content, @"tmpt:region:(\d+):[^:]*");
         return match.Success ? match.Groups[1].Value : "0";
-    }
-
-    private string FindRadioButtonIdByAccountNumber(string content, string accountNumber)
-    {
-        // The HTML structure has radio buttons followed by business data
-        // Each row contains: radio button, business name, account number, registration date
-        // Radio button pattern: <span id="tmpt:region:1:form:sbr1..." class="selectBooleanRadioHiddenLabel"
-        // Data pattern: <span class="dataText">VALUE</span>
-
-        // Find all radio button IDs
-        var radioMatches = Regex.Matches(content, @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
-
-        // Find all dataText spans (business names, account numbers, registration dates)
-        var dataTextMatches = Regex.Matches(content, @"<span class=""dataText"">([^<]+)</span>");
-
-        // Match radio buttons to account numbers
-        // Each table row has 3 dataText spans: [name, account, date]
-        for (int i = 0; i < radioMatches.Count && (i * 3 + 1) < dataTextMatches.Count; i++)
-        {
-            var accountIndex = i * 3 + 1; // Account number is the second item (index 1) in each group
-            var accountValue = dataTextMatches[accountIndex].Groups[1].Value.Trim();
-
-            if (accountValue == accountNumber)
-            {
-                return radioMatches[i].Groups[1].Value;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>
