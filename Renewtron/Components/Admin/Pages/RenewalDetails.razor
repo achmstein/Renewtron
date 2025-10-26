@@ -122,6 +122,10 @@
                                     <dt class="text-sm font-medium text-gray-500">Initiated At</dt>
                                     <dd class="mt-1 text-sm text-gray-900">@renewal.InitiatedAt.ToLocalTime().ToString("MMM dd, yyyy HH:mm:ss")</dd>
                                 </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Initiated By</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">@renewal.SearchResult.SearchLog.InitiatedBy.ToString()</dd>
+                                </div>
                                 @if (renewal.CompletedAt.HasValue)
                                 {
                                     <div>
@@ -140,13 +144,7 @@
                                 <div>
                                     <dt class="text-sm font-medium text-gray-500">IP Address</dt>
                                     <dd class="mt-1 text-sm text-gray-900 font-mono">
-                                        <div class="flex items-center gap-2">
-                                            <span>@renewal.SearchResult.SearchLog.IpAddress</span>
-                                            @if (renewal.SearchResult.SearchLog.InitiatedBy == SearchInitiator.Admin)
-                                            {
-                                                <span class="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">Admin</span>
-                                            }
-                                        </div>
+                                        <span>@renewal.SearchResult.SearchLog.IpAddress</span>
                                     </dd>
                                 </div>
                             </dl>

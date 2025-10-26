@@ -1,15 +1,9 @@
 ﻿using AngleSharp.Html.Parser;
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Web;
 
 namespace Asic.Client;

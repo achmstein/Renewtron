@@ -9,7 +9,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAsic(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddTransient<IAsicRenewalClient, AsicRenewalClient>();
-        services.AddScoped<IAsicPaymentClient, AsicPaymentClient>();
+        services.AddTransient<IAsicPaymentClient, AsicPaymentClient>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 ﻿using AngleSharp.Html.Parser;
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -8,6 +9,7 @@ namespace Asic.Client;
 
 public class AsicRenewalClient : IAsicRenewalClient
 {
+
     private readonly HttpClient _http;
     private readonly HttpClientHandler _httpHandler;
     private readonly HtmlParser _htmlParser;
@@ -18,7 +20,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         _httpHandler = new HttpClientHandler
         {
             UseCookies = true,
-            CookieContainer = new System.Net.CookieContainer()
+            CookieContainer = new CookieContainer()
         };
 
         _http = new HttpClient(_httpHandler)
@@ -34,13 +36,15 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
-    /// <summary>
-    /// Clears all cookies and resets the session state.
-    /// Call this before starting a new search to ensure a fresh session.
-    /// </summary>
     private void ResetSession()
     {
-        _httpHandler.CookieContainer = new System.Net.CookieContainer();
+        var cookies = _httpHandler.CookieContainer.GetCookies(_http.BaseAddress);
+
+        foreach (Cookie cookie in cookies)
+        {
+            cookie.Expired = true;
+            cookie.Expires = DateTime.Now.AddDays(-1);
+        }
     }
 
     public async Task<BusinessNamesResult> SearchByAbnAsync(string abn)
@@ -113,7 +117,6 @@ public class AsicRenewalClient : IAsicRenewalClient
             return RenewalResult.Failed($"Renewal failed: {ex.Message}", "Exception");
         }
     }
-
 
     private async Task<StepResult<RenewalStepData>> InitializeSessionStepAsync(RenewalStepData data)
     {
@@ -245,6 +248,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             return StepResult<RenewalStepData>.Failure("Failed to select business name", "Select Business Name");
         }
 
+        data.PageContent = content;
         return StepResult<RenewalStepData>.Success(data);
     }
 
@@ -453,6 +457,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             return StepResult<RenewalStepData>.Failure("Failed to proceed to payment", "Proceed to Payment");
         }
 
+        data.PageContent = content;
         return StepResult<RenewalStepData>.Success(data);
     }
 
@@ -575,6 +580,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             return StepResult<RenewalStepData>.Failure("Failed to open payment gateway", "Open Payment Gateway");
         }
 
+        data.PageContent = content;
         data.PaymentUrl = paymentUrl;
         return StepResult<RenewalStepData>.Success(data);
     }
@@ -612,15 +618,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         return StepResult<RenewalStepData>.Success(data);
     }
 
-    /// <summary>
-    /// Posts the payment success action back to the renewal page to complete the payment flow.
-    /// This uses renewal page context (adfWindowId, viewState) rather than payment gateway context.
-    /// </summary>
-    private async Task<PaymentResult> CompletePaymentActionAsync(
-        string sessionId,
-        string hostedTokenizationId,
-        string adfWindowId,
-        string viewState)
+    private async Task<PaymentResult> CompletePaymentActionAsync(string sessionId, string hostedTokenizationId, string adfWindowId, string viewState)
     {
         try
         {
@@ -783,10 +781,6 @@ public class AsicRenewalClient : IAsicRenewalClient
         return match.Success ? match.Groups[1].Value : "0";
     }
 
-    /// <summary>
-    /// Checks the response content for known ASIC error messages and returns a user-friendly error message.
-    /// Returns null if no specific error pattern is found.
-    /// </summary>
     private string GetUserFriendlyErrorMessage(string content)
     {
         if (content.Contains("We are processing your renewal application"))
