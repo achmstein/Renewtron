@@ -38,71 +38,281 @@ public class AsicPaymentClient : IAsicPaymentClient
     {
         try
         {
-            // Step 1: Navigate to the initial payment URL
-            var initResult = await InitializeSessionAsync(paymentUrl);
-            if (!initResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to navigate to payment page: {initResult.Message}");
-            }
+            var initialData = PaymentStepData.Create(paymentUrl, sessionId, adfWindowId, cardDetails);
 
-            // Step 2: Get the tokenization form URL
-            var tokenizationFormUrl = initResult.TokenizationFormUrl;
-            if (string.IsNullOrEmpty(tokenizationFormUrl))
-            {
-                return PaymentResult.Failed("Failed to extract tokenization form URL");
-            }
-
-            // Step 3: Load the tokenization form
-            var formResult = await LoadTokenizationFormAsync(tokenizationFormUrl);
-            if (!formResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to load tokenization form: {formResult.Message}");
-            }
-
-            // Step 4: Get card information (BIN lookup)
-            var cardInfoResult = await GetCardInformationAsync(tokenizationFormUrl, cardDetails.CardNumber);
-            if (!cardInfoResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to get card information: {cardInfoResult.Message}");
-            }
-
-            // Step 5: Prepare 3DS
-            var threeDsResult = await PrepareThreeDSAsync(tokenizationFormUrl, cardDetails.CardNumber, cardInfoResult.BrandName);
-            if (!threeDsResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to prepare 3DS: {threeDsResult.Message}");
-            }
-
-            // Step 6: Submit initial payment button (first POST to ASIC)
-            var submitInitialResult = await SubmitInitialPaymentAsync(initResult.AdfWindowId, initResult.ViewState);
-            if (!submitInitialResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to submit initial payment: {submitInitialResult.Message}");
-            }
-
-            // Step 7: Submit the tokenization
-            var submitResult = await SubmitTokenizationAsync(tokenizationFormUrl, cardDetails, cardInfoResult.BrandName);
-            if (!submitResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to submit tokenization: {submitResult.Message}");
-            }
-
-            var deviceInfo = CreateDeviceInfo();
-            var completeResult = await CompletePaymentAsync(deviceInfo, paymentUrl, sessionId, submitResult.HostedTokenizationId,
-                adfWindowId, initResult.ViewState);
-
-            if (!completeResult.Success)
-            {
-                return PaymentResult.Failed($"Failed to complete payment: {completeResult.Message}");
-            }
-
-            return PaymentResult.Succeeded(submitResult.HostedTokenizationId);
+            // Railway-oriented pipeline: each step only executes if the previous step succeeded
+            return await InitializeSessionStepAsync(initialData)
+                .ThenAsync("Load Tokenization Form", LoadTokenizationFormStepAsync)
+                .ThenAsync("Get Card Information", GetCardInformationStepAsync)
+                .ThenAsync("Prepare 3DS", PrepareThreeDSStepAsync)
+                .ThenAsync("Submit Initial Payment", SubmitInitialPaymentStepAsync)
+                .ThenAsync("Submit Tokenization", SubmitTokenizationStepAsync)
+                .ThenAsync("Complete Payment", CompletePaymentStepAsync)
+                .ToPaymentResultAsync(data => PaymentResult.Succeeded(data.HostedTokenizationId));
         }
         catch (Exception ex)
         {
             return PaymentResult.Failed($"Payment processing failed: {ex.Message}");
         }
     }
+
+    // ========== Railway Pattern Step Methods ==========
+
+    private async Task<StepResult<PaymentStepData>> InitializeSessionStepAsync(PaymentStepData data)
+    {
+        var (success, message, tokenizationFormUrl, adfWindowId, viewState) = await InitializeSessionAsync(data.PaymentUrl);
+
+        if (!success)
+        {
+            return StepResult<PaymentStepData>.Failure($"Failed to navigate to payment page: {message}", "Initialize Session");
+        }
+
+        if (string.IsNullOrEmpty(tokenizationFormUrl))
+        {
+            return StepResult<PaymentStepData>.Failure("Failed to extract tokenization form URL", "Initialize Session");
+        }
+
+        data.TokenizationFormUrl = tokenizationFormUrl;
+        data.PaymentAdfWindowId = adfWindowId;
+        data.ViewState = viewState;
+
+        return StepResult<PaymentStepData>.Success(data);
+    }
+
+    private async Task<StepResult<PaymentStepData>> LoadTokenizationFormStepAsync(PaymentStepData data)
+    {
+        try
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, data.TokenizationFormUrl);
+            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+            request.Headers.Add("Sec-Fetch-Site", "cross-site");
+            request.Headers.Add("Sec-Fetch-Mode", "navigate");
+            request.Headers.Add("Sec-Fetch-Dest", "iframe");
+            request.Headers.Add("Referer", "https://regpayment.asic.gov.au/");
+
+            var response = await _http.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return StepResult<PaymentStepData>.Failure($"HTTP {response.StatusCode}", "Load Tokenization Form");
+            }
+
+            return StepResult<PaymentStepData>.Success(data);
+        }
+        catch (Exception ex)
+        {
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Load Tokenization Form");
+        }
+    }
+
+    private async Task<StepResult<PaymentStepData>> GetCardInformationStepAsync(PaymentStepData data)
+    {
+        try
+        {
+            // Extract the token from the URL
+            var token = ExtractTokenFromUrl(data.TokenizationFormUrl);
+            var binUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/bin/getcardinformation/{token}";
+
+            // Get first 13 digits for BIN lookup
+            var cleanCardNumber = data.CardDetails.CardNumber.Replace(" ", "");
+            var firstDigits = cleanCardNumber.Substring(0, Math.Min(13, cleanCardNumber.Length));
+
+            var formData = $"firstdigits={firstDigits}&partialDetection=false";
+
+            var request = new HttpRequestMessage(HttpMethod.Post, binUrl);
+            request.Content = new StringContent(formData, Encoding.UTF8, "application/x-www-form-urlencoded");
+            request.Headers.Add("Accept", "*/*");
+            request.Headers.Add("Origin", "https://payment.anzworldline-solutions.com.au");
+            request.Headers.Add("Sec-Fetch-Site", "same-origin");
+            request.Headers.Add("Sec-Fetch-Mode", "cors");
+            request.Headers.Add("Sec-Fetch-Dest", "empty");
+            request.Headers.Add("Referer", data.TokenizationFormUrl);
+
+            var response = await _http.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return StepResult<PaymentStepData>.Failure($"HTTP {response.StatusCode}", "Get Card Information");
+            }
+
+            // Parse the JSON response
+            var json = JsonDocument.Parse(content);
+            var brands = json.RootElement.GetProperty("brands");
+
+            if (brands.GetArrayLength() == 0)
+            {
+                return StepResult<PaymentStepData>.Failure("No card brand detected", "Get Card Information");
+            }
+
+            var brandName = brands[0].GetProperty("name").GetString();
+            data.BrandName = brandName;
+
+            return StepResult<PaymentStepData>.Success(data);
+        }
+        catch (Exception ex)
+        {
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Get Card Information");
+        }
+    }
+
+    private async Task<StepResult<PaymentStepData>> PrepareThreeDSStepAsync(PaymentStepData data)
+    {
+        try
+        {
+            var token = ExtractTokenFromUrl(data.TokenizationFormUrl);
+            var threeDsUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/ThreeDSecure/PrepareThreeDS/{token}";
+
+            var payload = new
+            {
+                cardNumber = data.CardDetails.CardNumber + " ",
+                brandName = data.BrandName
+            };
+
+            var jsonContent = JsonSerializer.Serialize(payload);
+
+            var request = new HttpRequestMessage(HttpMethod.Post, threeDsUrl);
+            request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+            request.Headers.Add("Accept", "*/*");
+            request.Headers.Add("Origin", "https://payment.anzworldline-solutions.com.au");
+            request.Headers.Add("Sec-Fetch-Site", "same-origin");
+            request.Headers.Add("Sec-Fetch-Mode", "cors");
+            request.Headers.Add("Sec-Fetch-Dest", "empty");
+            request.Headers.Add("Referer", data.TokenizationFormUrl);
+
+            var response = await _http.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return StepResult<PaymentStepData>.Failure($"HTTP {response.StatusCode}", "Prepare 3DS");
+            }
+
+            return StepResult<PaymentStepData>.Success(data);
+        }
+        catch (Exception ex)
+        {
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Prepare 3DS");
+        }
+    }
+
+    private async Task<StepResult<PaymentStepData>> SubmitInitialPaymentStepAsync(PaymentStepData data)
+    {
+        try
+        {
+            var formData = new StringBuilder();
+            formData.Append("org.apache.myfaces.trinidad.faces.FORM=frmASICPayment&");
+            formData.Append($"Adf-Window-Id={data.PaymentAdfWindowId}&");
+            formData.Append($"javax.faces.ViewState={data.ViewState}&");
+            formData.Append("Adf-Page-Id=3&");
+            formData.Append("event=r1%3A0%3AsubmitBtn&");
+            formData.Append("event.r1:0:submitBtn=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+            formData.Append("oracle.adf.view.rich.PROCESS=r1%2Cr1%3A0%3AsubmitBtn");
+
+            var request = new HttpRequestMessage(HttpMethod.Post,
+                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={data.PaymentAdfWindowId}&Adf-Page-Id=3");
+
+            request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+            request.Headers.Add("Adf-Rich-Message", "true");
+            request.Headers.Add("Adf-Ads-Page-Id", "5");
+            request.Headers.Add("Origin", "https://regpayment.asic.gov.au");
+            request.Headers.Add("Referer", "https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx");
+
+            var response = await _http.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return StepResult<PaymentStepData>.Failure("Failed", "Submit Initial Payment");
+            }
+
+            return StepResult<PaymentStepData>.Success(data);
+        }
+        catch (Exception ex)
+        {
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Submit Initial Payment");
+        }
+    }
+
+    private async Task<StepResult<PaymentStepData>> SubmitTokenizationStepAsync(PaymentStepData data)
+    {
+        try
+        {
+            var token = ExtractTokenFromUrl(data.TokenizationFormUrl);
+            var submitUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/Tokenization/Submit/{token}";
+
+            // Build form data
+            var formData = new StringBuilder();
+            formData.Append("isTemporary=false&");
+            formData.Append($"brand={data.BrandName}&");
+            formData.Append($"cardnumber={Regex.Replace(data.CardDetails.CardNumber, ".{4}", "$0 ").TrimEnd()}&");
+            formData.Append("browserColorDepth=24&");
+            formData.Append("browserJavaEnabled=false&");
+            formData.Append("browserLanguage=en-US&");
+            formData.Append("browserScreenHeight=1080&");
+            formData.Append("browserScreenWidth=1920&");
+            formData.Append("browserTimeZone=-180&");
+            formData.Append("cobadging=&");
+            formData.Append("cobadding-indicator=default&");
+            formData.Append($"selected-brand-for-groupcards={data.BrandName}&");
+            formData.Append($"cardholdername={data.CardDetails.CardholderName.Replace(" ", "+")}&");
+            formData.Append($"cardexpirationmonth={data.CardDetails.ExpiryMonth}&");
+            formData.Append($"cardexpirationyear={data.CardDetails.ExpiryYear}&");
+            formData.Append($"cvc={data.CardDetails.Cvc}");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, submitUrl);
+            request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+            if (request.Content.Headers.ContentType != null)
+            {
+                request.Content.Headers.ContentType.CharSet = null;
+            }
+            request.Headers.TryAddWithoutValidation("Accept", "*/*");
+            request.Headers.TryAddWithoutValidation("Referer", data.TokenizationFormUrl);
+            request.Headers.TryAddWithoutValidation("Origin", "https://payment.anzworldline-solutions.com.au");
+            request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
+            request.Headers.TryAddWithoutValidation("Accept-Encoding", "gzip, deflate, br, zstd");
+            request.Headers.TryAddWithoutValidation("sec-ch-ua", "\"Microsoft Edge\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"");
+            request.Headers.TryAddWithoutValidation("sec-ch-ua-platform", "\"Windows\"");
+            request.Headers.TryAddWithoutValidation("sec-ch-ua-mobile", "?0");
+            request.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
+            request.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
+            request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
+            request.Headers.TryAddWithoutValidation("Sec-Fetch-Storage-Access", "none");
+
+            var response = await _http.SendAsync(request);
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return StepResult<PaymentStepData>.Failure($"HTTP {response.StatusCode}", "Submit Tokenization");
+            }
+
+            // Parse response to get hostedTokenizationId
+            var json = JsonDocument.Parse(content);
+            var hostedTokenizationId = json.RootElement.GetProperty("hostedTokenizationId").GetString();
+            data.HostedTokenizationId = hostedTokenizationId;
+
+            return StepResult<PaymentStepData>.Success(data);
+        }
+        catch (Exception ex)
+        {
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Submit Tokenization");
+        }
+    }
+
+    private async Task<StepResult<PaymentStepData>> CompletePaymentStepAsync(PaymentStepData data)
+    {
+        var deviceInfo = CreateDeviceInfo();
+        var result = await CompletePaymentAsync(deviceInfo, data.PaymentUrl, data.SessionId,
+            data.HostedTokenizationId, data.AdfWindowId, data.ViewState);
+
+        if (!result.Success)
+        {
+            return StepResult<PaymentStepData>.Failure($"Failed to complete payment: {result.Message}", "Complete Payment");
+        }
+
+        return StepResult<PaymentStepData>.Success(data);
+    }
+
+    // ========== End Railway Pattern Step Methods ==========
 
     private async Task<(bool Success, string Message, string TokenizationFormUrl, string AdfWindowId, string ViewState)> InitializeSessionAsync(string paymentUrl)
     {
@@ -154,220 +364,6 @@ public class AsicPaymentClient : IAsicPaymentClient
         catch (Exception ex)
         {
             return (false, ex.Message, null, null, null);
-        }
-    }
-
-    private async Task<(bool Success, string Message)> LoadTokenizationFormAsync(string tokenizationFormUrl)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, tokenizationFormUrl);
-            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-            request.Headers.Add("Sec-Fetch-Site", "cross-site");
-            request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Dest", "iframe");
-            request.Headers.Add("Referer", "https://regpayment.asic.gov.au/");
-
-            var response = await _http.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return (false, $"HTTP {response.StatusCode}");
-            }
-
-            return (true, "Success");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
-
-    private async Task<(bool Success, string Message, string BrandName)> GetCardInformationAsync(string tokenizationFormUrl, string cardNumber)
-    {
-        try
-        {
-            // Extract the token from the URL
-            var token = ExtractTokenFromUrl(tokenizationFormUrl);
-            var binUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/bin/getcardinformation/{token}";
-
-            // Get first 13 digits for BIN lookup
-            var cleanCardNumber = cardNumber.Replace(" ", "");
-            var firstDigits = cleanCardNumber.Substring(0, Math.Min(13, cleanCardNumber.Length));
-
-            var formData = $"firstdigits={firstDigits}&partialDetection=false";
-
-            var request = new HttpRequestMessage(HttpMethod.Post, binUrl);
-            request.Content = new StringContent(formData, Encoding.UTF8, "application/x-www-form-urlencoded");
-            request.Headers.Add("Accept", "*/*");
-            request.Headers.Add("Origin", "https://payment.anzworldline-solutions.com.au");
-            request.Headers.Add("Sec-Fetch-Site", "same-origin");
-            request.Headers.Add("Sec-Fetch-Mode", "cors");
-            request.Headers.Add("Sec-Fetch-Dest", "empty");
-            request.Headers.Add("Referer", tokenizationFormUrl);
-
-            var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return (false, $"HTTP {response.StatusCode}", null);
-            }
-
-            // Parse the JSON response
-            var json = JsonDocument.Parse(content);
-            var brands = json.RootElement.GetProperty("brands");
-
-            if (brands.GetArrayLength() == 0)
-            {
-                return (false, "No card brand detected", null);
-            }
-
-            var brandName = brands[0].GetProperty("name").GetString();
-
-            return (true, "Success", brandName);
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message, null);
-        }
-    }
-
-    private async Task<(bool Success, string Message)> PrepareThreeDSAsync(string tokenizationFormUrl, string cardNumber, string brandName)
-    {
-        try
-        {
-            var token = ExtractTokenFromUrl(tokenizationFormUrl);
-            var threeDsUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/ThreeDSecure/PrepareThreeDS/{token}";
-
-            var payload = new
-            {
-                cardNumber = cardNumber + " ",
-                brandName = brandName
-            };
-
-            var jsonContent = JsonSerializer.Serialize(payload);
-
-            var request = new HttpRequestMessage(HttpMethod.Post, threeDsUrl);
-            request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            request.Headers.Add("Accept", "*/*");
-            request.Headers.Add("Origin", "https://payment.anzworldline-solutions.com.au");
-            request.Headers.Add("Sec-Fetch-Site", "same-origin");
-            request.Headers.Add("Sec-Fetch-Mode", "cors");
-            request.Headers.Add("Sec-Fetch-Dest", "empty");
-            request.Headers.Add("Referer", tokenizationFormUrl);
-
-            var response = await _http.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return (false, $"HTTP {response.StatusCode}");
-            }
-
-            return (true, "Success");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
-
-    private async Task<(bool Success, string Message)> SubmitInitialPaymentAsync(string adfWindowId, string viewState)
-    {
-        try
-        {
-            var formData = new StringBuilder();
-            formData.Append("org.apache.myfaces.trinidad.faces.FORM=frmASICPayment&");
-            formData.Append($"Adf-Window-Id={adfWindowId}&");
-            formData.Append($"javax.faces.ViewState={viewState}&");
-            formData.Append("Adf-Page-Id=3&");
-            formData.Append("event=r1%3A0%3AsubmitBtn&");
-            formData.Append("event.r1:0:submitBtn=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
-            formData.Append("oracle.adf.view.rich.PROCESS=r1%2Cr1%3A0%3AsubmitBtn");
-
-            var request = new HttpRequestMessage(HttpMethod.Post,
-                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={adfWindowId}&Adf-Page-Id=3");
-
-            request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-            request.Headers.Add("Adf-Rich-Message", "true");
-            request.Headers.Add("Adf-Ads-Page-Id", "5");
-            request.Headers.Add("Origin", "https://regpayment.asic.gov.au");
-            request.Headers.Add("Referer", "https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx");
-
-            var response = await _http.SendAsync(request);
-            return (response.IsSuccessStatusCode, response.IsSuccessStatusCode ? "Success" : "Failed");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
-
-    private async Task<(bool Success, string Message, string HostedTokenizationId)> SubmitTokenizationAsync(
-        string tokenizationFormUrl,
-        CreditCardDetails cardDetails,
-        string brandName)
-    {
-        try
-        {
-            var token = ExtractTokenFromUrl(tokenizationFormUrl);
-            var submitUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/Tokenization/Submit/{token}";
-
-            // Build form data
-            var formData = new StringBuilder();
-            formData.Append("isTemporary=false&");
-            formData.Append($"brand={brandName}&");
-            formData.Append($"cardnumber={Regex.Replace(cardDetails.CardNumber, ".{4}", "$0 ").TrimEnd()}&");
-            formData.Append("browserColorDepth=24&");
-            formData.Append("browserJavaEnabled=false&");
-            formData.Append("browserLanguage=en-US&");
-            formData.Append("browserScreenHeight=1080&");
-            formData.Append("browserScreenWidth=1920&");
-            formData.Append("browserTimeZone=-180&");
-            formData.Append("cobadging=&");
-            formData.Append("cobadging-indicator=default&");
-            formData.Append($"selected-brand-for-groupcards={brandName}&");
-            formData.Append($"cardholdername={cardDetails.CardholderName.Replace(" ", "+")}&");
-            formData.Append($"cardexpirationmonth={cardDetails.ExpiryMonth}&");
-            formData.Append($"cardexpirationyear={cardDetails.ExpiryYear}&");
-            formData.Append($"cvc={cardDetails.Cvc}");
-
-            var request = new HttpRequestMessage(HttpMethod.Post, submitUrl);
-            request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-            if (request.Content.Headers.ContentType != null)
-            {
-                request.Content.Headers.ContentType.CharSet = null;
-            }
-            request.Headers.TryAddWithoutValidation("Accept", "*/*");
-            request.Headers.TryAddWithoutValidation("Referer", tokenizationFormUrl);
-            request.Headers.TryAddWithoutValidation("Origin", "https://payment.anzworldline-solutions.com.au");
-            request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
-            request.Headers.TryAddWithoutValidation("Accept-Encoding", "gzip, deflate, br, zstd");
-            request.Headers.TryAddWithoutValidation("sec-ch-ua", "\"Microsoft Edge\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"");
-            request.Headers.TryAddWithoutValidation("sec-ch-ua-platform", "\"Windows\"");
-            request.Headers.TryAddWithoutValidation("sec-ch-ua-mobile", "?0");
-            request.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
-            request.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
-            request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
-            request.Headers.TryAddWithoutValidation("Sec-Fetch-Storage-Access", "none");
-
-            var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return (false, $"HTTP {response.StatusCode}", null);
-            }
-
-            // Parse response to get hostedTokenizationId
-            var json = JsonDocument.Parse(content);
-            var hostedTokenizationId = json.RootElement.GetProperty("hostedTokenizationId").GetString();
-
-            return (true, "Success", hostedTokenizationId);
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message, null);
         }
     }
 

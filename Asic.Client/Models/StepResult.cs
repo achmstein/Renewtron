@@ -90,4 +90,17 @@ public static class StepResultExtensions
         var result = await resultTask;
         return result.ToRenewalResult(onSuccess);
     }
+
+    /// <summary>
+    /// Converts a Task&lt;StepResult&lt;T&gt;&gt; to a PaymentResult.
+    /// </summary>
+    public static async Task<PaymentResult> ToPaymentResultAsync<T>(
+        this Task<StepResult<T>> resultTask,
+        Func<T, PaymentResult> onSuccess)
+    {
+        var result = await resultTask;
+        return result.IsSuccess
+            ? onSuccess(result.Value)
+            : PaymentResult.Failed(result.ErrorMessage);
+    }
 }
