@@ -199,7 +199,7 @@
             @if (showErrorModal)
             {
                 <div class="relative z-50" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-                    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @onclick="CloseErrorModal"></div>
+                    <div class="fixed inset-0 bg-gray-500 opacity-75 transition-opacity" @onclick="CloseErrorModal"></div>
                     <div class="fixed inset-0 z-10 overflow-y-auto">
                         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                             <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
@@ -227,9 +227,8 @@
                 </div>
             }
 
-                    @if (totalCount > pageSize)
-                    {
-                        <div class="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
+            <!-- Pagination -->
+            <div class="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
                             <div class="flex flex-1 justify-between sm:hidden">
                                 <button @onclick="PreviousPage" disabled="@(currentPage == 1)" class="relative inline-flex items-center rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                                     Previous
@@ -271,9 +270,6 @@
                                 </div>
                             </div>
                         </div>
-                    }
-                </div>
-            </div>
         </div>
     </main>
 </div>
