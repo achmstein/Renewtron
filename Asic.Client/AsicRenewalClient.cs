@@ -183,7 +183,29 @@ public class AsicRenewalClient : IAsicRenewalClient
     private async Task<StepResult<RenewalStepData>> SelectBusinessStepAsync(RenewalStepData data)
     {
         // Find the radio button ID for the specified account number
-        var radioButtonId = FindRadioButtonIdByAccountNumber(data.PageContent, data.AccountNumber);
+        // The HTML structure has radio buttons followed by business data
+        // Each row contains: radio button, business name, account number, registration date
+        string radioButtonId = null;
+
+        // Find all radio button IDs
+        var radioMatches = Regex.Matches(data.PageContent, @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
+
+        // Find all dataText spans (business names, account numbers, registration dates)
+        var dataTextMatches = Regex.Matches(data.PageContent, @"<span class=""dataText"">([^<]+)</span>");
+
+        // Match radio buttons to account numbers
+        // Each table row has 3 dataText spans: [name, account, date]
+        for (int i = 0; i < radioMatches.Count && (i * 3 + 1) < dataTextMatches.Count; i++)
+        {
+            var accountIndex = i * 3 + 1; // Account number is the second item (index 1) in each group
+            var accountValue = dataTextMatches[accountIndex].Groups[1].Value.Trim();
+
+            if (accountValue == data.AccountNumber)
+            {
+                radioButtonId = radioMatches[i].Groups[1].Value;
+                break;
+            }
+        }
 
         if (string.IsNullOrEmpty(radioButtonId))
         {
@@ -257,7 +279,8 @@ public class AsicRenewalClient : IAsicRenewalClient
         var content = await response.Content.ReadAsStringAsync();
 
         // Extract transaction reference from response
-        var transactionRef = ExtractTransactionReference(content);
+        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
+        var transactionRef = match.Success ? match.Groups[1].Value : null;
 
         // Check if we jumped to email page (ASIC resumed session)
         bool jumpedToEmail = content.Contains("Please provide a valid email which is required for ASIC online payment.");
@@ -571,7 +594,90 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
 
         data.HostedTokenizationId = paymentResult.HostedTokenizationId;
+
+        // Complete the payment action on the renewal page
+        var completeResult = await CompletePaymentActionAsync(
+            data.TransactionReference,
+            data.HostedTokenizationId,
+            data.AdfWindowId,
+            data.ViewState);
+
+        if (!completeResult.Success)
+        {
+            var errorMsg = $"Payment processed but completion failed: {completeResult.Message}. " +
+                          $"Transaction reference: {data.TransactionReference ?? "Unknown"}";
+            return StepResult<RenewalStepData>.Failure(errorMsg, "Complete Payment Action");
+        }
+
         return StepResult<RenewalStepData>.Success(data);
+    }
+
+    /// <summary>
+    /// Posts the payment success action back to the renewal page to complete the payment flow.
+    /// This uses renewal page context (adfWindowId, viewState) rather than payment gateway context.
+    /// </summary>
+    private async Task<PaymentResult> CompletePaymentActionAsync(
+        string sessionId,
+        string hostedTokenizationId,
+        string adfWindowId,
+        string viewState)
+    {
+        try
+        {
+            // POST the payment success action back to the renewal page
+            var paymentSuccessRequest = new HttpRequestMessage(HttpMethod.Post,
+                $"public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
+
+            var paymentSuccessData = new StringBuilder();
+            paymentSuccessData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+            paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+            paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+            paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+            paymentSuccessData.Append($"popt=tmpt%3Aregion%3A3%3ApayNow&");
+            paymentSuccessData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+            paymentSuccessData.Append($"Adf-Window-Id={adfWindowId}&");
+            paymentSuccessData.Append("Adf-Page-Id=0&");
+            paymentSuccessData.Append($"javax.faces.ViewState={viewState}&");
+            paymentSuccessData.Append($"oracle.adf.view.rich.DELTAS=%7Btmpt%3Aregion%3A3%3ApayNowPopup%3D%7B_shown%3D%7D%2Ctmpt%3Aregion%3A3%3ApayNowInline%3D%7Bsource%3D%7D%7D&");
+            paymentSuccessData.Append($"event=tmpt%3Aregion%3A3%3ApayNowPopup&");
+            paymentSuccessData.Append($"event.tmpt:region:3:payNowPopup=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22_custom%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22sessionId%22%3E%3Cs%3E{sessionId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22SST%22%3E%3Cs%3E{hostedTokenizationId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22immediate%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EpaymentSuccessAction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+            paymentSuccessData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A3%3ApayNowPopup");
+
+            paymentSuccessRequest.Content = new StringContent(paymentSuccessData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+            paymentSuccessRequest.Headers.Add("Adf-Rich-Message", "true");
+            paymentSuccessRequest.Headers.Add("Adf-Ads-Page-Id", "1");
+
+            var finalResponse = await _http.SendAsync(paymentSuccessRequest);
+            var finalContent = await finalResponse.Content.ReadAsStringAsync();
+
+            // Check for errors in the XML response
+            if (finalContent.Contains("declined") || finalContent.Contains("Your transaction has been declined"))
+            {
+                return PaymentResult.Failed("Payment was declined by your financial institution");
+            }
+
+            if (finalContent.Contains("error") || (finalContent.Contains("<html>") && finalContent.Contains("<p>")))
+            {
+                // Extract error message from HTML in XML response
+                var errorMatch = Regex.Match(finalContent, @"<p>(.*?)</p>", RegexOptions.Singleline);
+                var errorMessage = errorMatch.Success
+                    ? Regex.Replace(errorMatch.Groups[1].Value.Trim(), @"<br\s*/?>", " ").Trim()
+                    : "Payment error occurred";
+                return PaymentResult.Failed(errorMessage);
+            }
+
+            // Success - check for confirmation
+            if (finalResponse.IsSuccessStatusCode && !finalContent.Contains("declined") && !finalContent.Contains("error"))
+            {
+                return PaymentResult.Succeeded(hostedTokenizationId);
+            }
+
+            return PaymentResult.Failed("Unknown payment status");
+        }
+        catch (Exception ex)
+        {
+            return PaymentResult.Failed($"Payment completion failed: {ex.Message}");
+        }
     }
 
     private async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
@@ -670,46 +776,11 @@ public class AsicRenewalClient : IAsicRenewalClient
         return businessNames;
     }
 
-    private string ExtractTransactionReference(string content)
-    {
-        var match = Regex.Match(content, @"Transaction reference number:<\/strong>\s*([A-Z0-9\-]+)");
-        return match.Success ? match.Groups[1].Value : null;
-    }
-
     private string ExtractCurrentRegionIndex(string content)
     {
         // Look for patterns like: tmpt:region:N:form:componentId or tmpt:region:N:componentId
         var match = Regex.Match(content, @"tmpt:region:(\d+):[^:]*");
         return match.Success ? match.Groups[1].Value : "0";
-    }
-
-    private string FindRadioButtonIdByAccountNumber(string content, string accountNumber)
-    {
-        // The HTML structure has radio buttons followed by business data
-        // Each row contains: radio button, business name, account number, registration date
-        // Radio button pattern: <span id="tmpt:region:1:form:sbr1..." class="selectBooleanRadioHiddenLabel"
-        // Data pattern: <span class="dataText">VALUE</span>
-
-        // Find all radio button IDs
-        var radioMatches = Regex.Matches(content, @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
-
-        // Find all dataText spans (business names, account numbers, registration dates)
-        var dataTextMatches = Regex.Matches(content, @"<span class=""dataText"">([^<]+)</span>");
-
-        // Match radio buttons to account numbers
-        // Each table row has 3 dataText spans: [name, account, date]
-        for (int i = 0; i < radioMatches.Count && (i * 3 + 1) < dataTextMatches.Count; i++)
-        {
-            var accountIndex = i * 3 + 1; // Account number is the second item (index 1) in each group
-            var accountValue = dataTextMatches[accountIndex].Groups[1].Value.Trim();
-
-            if (accountValue == accountNumber)
-            {
-                return radioMatches[i].Groups[1].Value;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>
