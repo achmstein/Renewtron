@@ -1,6 +1,7 @@
 ﻿using AngleSharp.Html.Parser;
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -8,6 +9,7 @@ namespace Asic.Client;
 
 public class AsicRenewalClient : IAsicRenewalClient
 {
+
     private readonly HttpClient _http;
     private readonly HttpClientHandler _httpHandler;
     private readonly HtmlParser _htmlParser;
@@ -18,7 +20,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         _httpHandler = new HttpClientHandler
         {
             UseCookies = true,
-            CookieContainer = new System.Net.CookieContainer()
+            CookieContainer = new CookieContainer()
         };
 
         _http = new HttpClient(_httpHandler)
@@ -34,13 +36,15 @@ public class AsicRenewalClient : IAsicRenewalClient
         _paymentClient = paymentClient;
     }
 
-    /// <summary>
-    /// Clears all cookies and resets the session state.
-    /// Call this before starting a new search to ensure a fresh session.
-    /// </summary>
     private void ResetSession()
     {
-        _httpHandler.CookieContainer = new System.Net.CookieContainer();
+        var cookies = _httpHandler.CookieContainer.GetCookies(_http.BaseAddress);
+
+        foreach (Cookie cookie in cookies)
+        {
+            cookie.Expired = true;
+            cookie.Expires = DateTime.Now.AddDays(-1);
+        }
     }
 
     public async Task<BusinessNamesResult> SearchByAbnAsync(string abn)
