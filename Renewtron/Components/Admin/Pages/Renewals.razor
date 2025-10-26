@@ -77,7 +77,7 @@
 
                         <!-- Filters Button -->
                         <div class="relative">
-                            <button @onclick="OpenFilterPopover" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                            <button @onclick="ToggleFilterPopover" class="@(showFilterPopover ? "bg-gray-100" : "bg-white") inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
                                 <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
                                 </svg>
@@ -86,7 +86,10 @@
 
                             @if (showFilterPopover)
                             {
-                                <div class="absolute right-0 z-10 mt-2 w-80 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                <!-- Backdrop to close on outside click -->
+                                <div class="fixed inset-0 z-10" @onclick="CloseFilterPopover"></div>
+
+                                <div class="absolute right-0 z-20 mt-2 w-80 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
                                     <div class="p-4">
                                         <h3 class="text-sm font-medium text-gray-900 mb-3">Filter Renewals</h3>
 
@@ -648,15 +651,27 @@
         return count;
     }
 
-    private void OpenFilterPopover()
+    private void ToggleFilterPopover()
     {
-        // Initialize temp variables with current filter values
-        tempFilterAbn = filterAbn;
-        tempFilterStatus = filterStatus;
-        tempFilterInitiatedBy = filterInitiatedBy;
-        tempFilterDateFrom = filterDateFrom;
-        tempFilterDateTo = filterDateTo;
-        showFilterPopover = true;
+        if (showFilterPopover)
+        {
+            showFilterPopover = false;
+        }
+        else
+        {
+            // Initialize temp variables with current filter values
+            tempFilterAbn = filterAbn;
+            tempFilterStatus = filterStatus;
+            tempFilterInitiatedBy = filterInitiatedBy;
+            tempFilterDateFrom = filterDateFrom;
+            tempFilterDateTo = filterDateTo;
+            showFilterPopover = true;
+        }
+    }
+
+    private void CloseFilterPopover()
+    {
+        showFilterPopover = false;
     }
 
     private async Task ApplyFiltersAndClose()
