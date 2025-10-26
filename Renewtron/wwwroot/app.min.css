@@ -36,8 +36,10 @@
     --color-blue-900: oklch(37.9% 0.146 265.522);
     --color-indigo-50: oklch(96.2% 0.018 272.314);
     --color-indigo-100: oklch(93% 0.034 272.788);
+    --color-indigo-200: oklch(87% 0.065 274.039);
     --color-indigo-500: oklch(58.5% 0.233 277.117);
     --color-indigo-600: oklch(51.1% 0.262 276.966);
+    --color-indigo-700: oklch(45.7% 0.24 277.023);
     --color-indigo-800: oklch(39.8% 0.195 277.366);
     --color-indigo-900: oklch(35.9% 0.144 278.697);
     --color-purple-100: oklch(94.6% 0.033 307.174);
@@ -352,6 +354,9 @@
   .mt-16 {
     margin-top: calc(var(--spacing) * 16);
   }
+  .-mr-1 {
+    margin-right: calc(var(--spacing) * -1);
+  }
   .mr-1 {
     margin-right: calc(var(--spacing) * 1);
   }
@@ -525,6 +530,9 @@
   .min-w-0 {
     min-width: calc(var(--spacing) * 0);
   }
+  .min-w-full {
+    min-width: 100%;
+  }
   .flex-1 {
     flex: 1;
   }
@@ -554,6 +562,9 @@
   }
   .flex-col {
     flex-direction: column;
+  }
+  .flex-wrap {
+    flex-wrap: wrap;
   }
   .items-baseline {
     align-items: baseline;
@@ -624,6 +635,12 @@
       margin-block-start: calc(calc(var(--spacing) * 6) * var(--tw-space-y-reverse));
       margin-block-end: calc(calc(var(--spacing) * 6) * calc(1 - var(--tw-space-y-reverse)));
     }
+  }
+  .gap-x-1 {
+    column-gap: calc(var(--spacing) * 1);
+  }
+  .gap-x-1\.5 {
+    column-gap: calc(var(--spacing) * 1.5);
   }
   .gap-x-2 {
     column-gap: calc(var(--spacing) * 2);
@@ -1003,6 +1020,10 @@
     --tw-tracking: var(--tracking-tight);
     letter-spacing: var(--tracking-tight);
   }
+  .tracking-wider {
+    --tw-tracking: var(--tracking-wider);
+    letter-spacing: var(--tracking-wider);
+  }
   .break-all {
     word-break: break-all;
   }
@@ -1063,6 +1084,9 @@
   .text-indigo-600 {
     color: var(--color-indigo-600);
   }
+  .text-indigo-700 {
+    color: var(--color-indigo-700);
+  }
   .text-indigo-800 {
     color: var(--color-indigo-800);
   }
@@ -1092,6 +1116,9 @@
   }
   .text-yellow-800 {
     color: var(--color-yellow-800);
+  }
+  .uppercase {
+    text-transform: uppercase;
   }
   .opacity-25 {
     opacity: 25%;
@@ -1199,6 +1226,20 @@
     &:hover {
       @media (hover: hover) {
         background-color: var(--color-gray-50);
+      }
+    }
+  }
+  .hover\:bg-gray-200 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-gray-200);
+      }
+    }
+  }
+  .hover\:bg-indigo-200 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-indigo-200);
       }
     }
   }

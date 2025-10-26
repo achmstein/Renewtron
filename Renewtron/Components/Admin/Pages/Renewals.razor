@@ -110,7 +110,7 @@
                         {
                             <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
                                 ABN: @filterAbn
-                                <button @onclick="() => { filterAbn = \"\"; ApplyFilters(); }" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
+                                <button @onclick="@(async () => { filterAbn = ""; await ApplyFilters(); })" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
                                     <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="currentColor">
                                         <path d="M4 4l6 6m0-6l-6 6" />
                                     </svg>
@@ -121,7 +121,7 @@
                         {
                             <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
                                 Status: @filterStatus
-                                <button @onclick="() => { filterStatus = \"\"; ApplyFilters(); }" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
+                                <button @onclick="@(async () => { filterStatus = ""; await ApplyFilters(); })" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
                                     <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="currentColor">
                                         <path d="M4 4l6 6m0-6l-6 6" />
                                     </svg>
@@ -132,7 +132,7 @@
                         {
                             <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
                                 Initiated By: @filterInitiatedBy
-                                <button @onclick="() => { filterInitiatedBy = \"\"; ApplyFilters(); }" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
+                                <button @onclick="@(async () => { filterInitiatedBy = ""; await ApplyFilters(); })" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
                                     <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="currentColor">
                                         <path d="M4 4l6 6m0-6l-6 6" />
                                     </svg>
@@ -143,7 +143,7 @@
                         {
                             <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
                                 From: @filterDateFrom.Value.ToString("MMM dd, yyyy")
-                                <button @onclick="() => { filterDateFrom = null; ApplyFilters(); }" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
+                            <button @onclick="@(async () => { filterDateFrom = null; await ApplyFilters(); })" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
                                     <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="currentColor">
                                         <path d="M4 4l6 6m0-6l-6 6" />
                                     </svg>
@@ -154,7 +154,7 @@
                         {
                             <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
                                 To: @filterDateTo.Value.ToString("MMM dd, yyyy")
-                                <button @onclick="() => { filterDateTo = null; ApplyFilters(); }" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
+                                <button @onclick="@(async () => { filterDateTo = null; await ApplyFilters(); })" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
                                     <svg class="h-3.5 w-3.5" viewBox="0 0 14 14" fill="currentColor">
                                         <path d="M4 4l6 6m0-6l-6 6" />
                                     </svg>
