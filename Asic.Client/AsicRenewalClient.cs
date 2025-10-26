@@ -260,8 +260,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         var transactionRef = ExtractTransactionReference(content);
 
         // Check if we jumped to email page (ASIC resumed session)
-        bool jumpedToEmail = content.Contains("Please provide a valid email which is required for ASIC online payment.") ||
-                             content.Contains("Email required for online payment");
+        bool jumpedToEmail = content.Contains("Please provide a valid email which is required for ASIC online payment.");
 
         // Verify we're on a valid page
         bool onRenewalPeriodPage = content.Contains("Renewal period");
