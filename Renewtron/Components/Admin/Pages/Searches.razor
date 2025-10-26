@@ -50,11 +50,17 @@
             <div class="mb-6 rounded-lg bg-white shadow">
                 <div class="px-4 py-5 sm:px-6">
                     <h3 class="text-sm font-medium text-gray-900 mb-4">Filters</h3>
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                        <!-- ABN Search -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ABN</label>
+                            <input type="text" @bind="filterAbn" @bind:after="ApplyFilters" placeholder="Search ABN" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2" />
+                        </div>
+
                         <!-- Status Filter -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                            <select @bind="filterSuccess" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <select @bind="filterSuccess" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2">
                                 <option value="">All</option>
                                 <option value="true">Success</option>
                                 <option value="false">Failed</option>
@@ -64,7 +70,7 @@
                         <!-- Initiated By Filter -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Initiated By</label>
-                            <select @bind="filterInitiatedBy" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <select @bind="filterInitiatedBy" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2">
                                 <option value="">All</option>
                                 <option value="@SearchInitiator.Customer">Customer</option>
                                 <option value="@SearchInitiator.Admin">Admin</option>
@@ -74,13 +80,13 @@
                         <!-- Date From -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
-                            <input type="date" @bind="filterDateFrom" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                            <input type="date" @bind="filterDateFrom" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2" />
                         </div>
 
                         <!-- Date To -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
-                            <input type="date" @bind="filterDateTo" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                            <input type="date" @bind="filterDateTo" @bind:after="ApplyFilters" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2" />
                         </div>
                     </div>
                     @if (HasActiveFilters())
@@ -106,15 +112,7 @@
                             <!-- Header Row -->
                             <div class="flex items-start justify-between mb-4">
                                 <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <h3 class="text-base font-semibold text-gray-900">ABN: @search.Abn</h3>
-                                        @if (search.InitiatedBy == SearchInitiator.Admin)
-                                        {
-                                            <svg class="shrink-0 h-4 w-4 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" title="Admin-initiated">
-                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clip-rule="evenodd" />
-                                            </svg>
-                                        }
-                                    </div>
+                                    <h3 class="text-base font-semibold text-gray-900">ABN: @search.Abn</h3>
                                     <p class="text-sm text-gray-500 mt-1 font-mono text-xs">Session: @search.SessionId</p>
                                 </div>
                                 <div>
@@ -235,6 +233,7 @@
     private bool isRefreshing = false;
 
     // Filter variables
+    private string filterAbn = "";
     private string filterSuccess = "";
     private string filterInitiatedBy = "";
     private DateTime? filterDateFrom = null;
@@ -254,6 +253,11 @@
             var query = DbContext.SearchLogs.AsQueryable();
 
             // Apply filters
+            if (!string.IsNullOrEmpty(filterAbn))
+            {
+                query = query.Where(s => s.Abn.Contains(filterAbn));
+            }
+
             if (!string.IsNullOrEmpty(filterSuccess) && bool.TryParse(filterSuccess, out var success))
             {
                 query = query.Where(s => s.Success == success);
@@ -299,6 +303,7 @@
 
     private async Task ClearFilters()
     {
+        filterAbn = "";
         filterSuccess = "";
         filterInitiatedBy = "";
         filterDateFrom = null;
@@ -309,7 +314,8 @@
 
     private bool HasActiveFilters()
     {
-        return !string.IsNullOrEmpty(filterSuccess) ||
+        return !string.IsNullOrEmpty(filterAbn) ||
+               !string.IsNullOrEmpty(filterSuccess) ||
                !string.IsNullOrEmpty(filterInitiatedBy) ||
                filterDateFrom.HasValue ||
                filterDateTo.HasValue;
