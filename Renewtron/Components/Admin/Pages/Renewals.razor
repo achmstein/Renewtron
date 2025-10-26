@@ -57,11 +57,22 @@
                 <div class="px-4 py-5 sm:p-6">
                     <div class="mb-4 flex items-center justify-between">
                         <h3 class="text-lg font-medium leading-6 text-gray-900">All Renewal Requests (@totalCount)</h3>
-                        <button @onclick="LoadData" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                            <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                            </svg>
-                            Refresh
+                        <button @onclick="LoadData" disabled="@isRefreshing" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            @if (isRefreshing)
+                            {
+                                <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Refreshing...</span>
+                            }
+                            else
+                            {
+                                <svg class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                </svg>
+                                <span>Refresh</span>
+                            }
                         </button>
                     </div>
                     <div class="overflow-x-auto">
@@ -118,13 +129,22 @@
                                                     <span class="inline-flex rounded-full bg-yellow-100 px-2 text-xs font-semibold leading-5 text-yellow-800">Pending</span>
                                                     break;
                                                 case RenewalStatus.Failed:
-                                                    <div class="flex flex-col gap-1">
+                                                    <div class="flex flex-col gap-1.5">
                                                         <span class="self-start inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
                                                         @if (!string.IsNullOrEmpty(renewal.ErrorMessage))
                                                         {
-                                                            <span class="text-xs text-gray-600" title="@renewal.ErrorMessage">
-                                                                @(renewal.ErrorMessage.Length > 30 ? renewal.ErrorMessage.Substring(0, 30) + "..." : renewal.ErrorMessage)
-                                                            </span>
+                                                            <div class="rounded-md bg-red-50 p-2 border border-red-200">
+                                                                <div class="flex">
+                                                                    <div class="shrink-0">
+                                                                        <svg class="h-3 w-3 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                                                        </svg>
+                                                                    </div>
+                                                                    <div class="ml-1.5">
+                                                                        <p class="text-xs text-red-700 break-words max-w-xs">@renewal.ErrorMessage</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         }
                                                     </div>
                                                     break;
@@ -228,6 +248,7 @@
     private int currentPage = 1;
     private int pageSize = 50;
     private int totalCount = 0;
+    private bool isRefreshing = false;
     private bool isRetrying = false;
     private Guid? retryingId = null;
     private string successMessage = "";
@@ -240,21 +261,29 @@
 
     private async Task LoadData()
     {
+        isRefreshing = true;
         successMessage = "";
         errorMessage = "";
 
-        totalCount = await DbContext.RenewalRequests.CountAsync();
+        try
+        {
+            totalCount = await DbContext.RenewalRequests.CountAsync();
 
-        renewals = await DbContext.RenewalRequests
-            .Include(r => r.SearchResult)
-                .ThenInclude(sr => sr.SearchLog)
-            .Include(r => r.StripePayment)
-            .OrderByDescending(r => r.InitiatedAt)
-            .Skip((currentPage - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
+            renewals = await DbContext.RenewalRequests
+                .Include(r => r.SearchResult)
+                    .ThenInclude(sr => sr.SearchLog)
+                .Include(r => r.StripePayment)
+                .OrderByDescending(r => r.InitiatedAt)
+                .Skip((currentPage - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
-        await InvokeAsync(StateHasChanged);
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     private async Task RetryRenewal(Guid renewalId)
@@ -271,7 +300,20 @@
             if (success)
             {
                 successMessage = message;
-                await LoadData(); // Reload to show updated status
+
+                // Poll for updated status (background job may take a moment to update)
+                for (int i = 0; i < 5; i++)
+                {
+                    await Task.Delay(1000); // Wait 1 second
+                    await LoadData();
+
+                    // Check if status changed
+                    var renewal = renewals.FirstOrDefault(r => r.Id == renewalId);
+                    if (renewal != null && renewal.Status != RenewalStatus.Failed)
+                    {
+                        break; // Status changed, stop polling
+                    }
+                }
             }
             else
             {
@@ -286,6 +328,7 @@
         {
             isRetrying = false;
             retryingId = null;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
