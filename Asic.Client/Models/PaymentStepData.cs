@@ -19,14 +19,31 @@ public class PaymentStepData
     // Card information
     public string BrandName { get; set; }
 
-    // ThreeDS
-    public string ThreeDSRedirectUrl { get; set; }
+    // ThreeDS preparation
     public string ThreeDSServerTransactionId { get; set; }
-
 
     // Tokenization result
     public string HostedTokenizationId { get; set; }
-   
+
+    // 3DS flow data
+    public string ThreeDSRedirectUrl { get; set; }
+    public string ThreeDSIframeUrl { get; set; }
+    public string ThreeDSFormAction { get; set; }
+    public string ThreeDSMethodData { get; set; }
+    public string ThreeDSCallbackUrl { get; set; }
+    public string ThreeDSCallbackData { get; set; }
+    public string ThreeDSResultUrl { get; set; }
+    public bool ThreeDSComplete { get; set; }
+
+    // 3DS Challenge data
+    public string ThreeDSChallengeResponseContent { get; set; }
+    public string ThreeDSChallengeUrl { get; set; }
+    public string ThreeDSSessionData { get; set; }
+    public string ThreeDSCReq { get; set; }
+    public string ThreeDSIssuerId { get; set; }
+    public string ThreeDSTransactionId { get; set; }
+    public bool ThreeDSRequiresOTP { get; set; }
+
     public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {
         return new PaymentStepData
