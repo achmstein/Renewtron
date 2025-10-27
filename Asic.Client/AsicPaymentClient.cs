@@ -21,13 +21,7 @@ public class AsicPaymentClient : IAsicPaymentClient
 
     public AsicPaymentClient()
     {
-        var handler = new HttpClientHandler
-        {
-            AllowAutoRedirect = true,
-            UseCookies = true
-        };
-
-        _http = new HttpClient(handler);
+        _http = new HttpClient();
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
 
         _htmlParser = new HtmlParser();
