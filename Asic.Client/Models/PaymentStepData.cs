@@ -19,10 +19,14 @@ public class PaymentStepData
     // Card information
     public string BrandName { get; set; }
 
+    // ThreeDS
+    public string ThreeDSRedirectUrl { get; set; }
+    public string ThreeDSServerTransactionId { get; set; }
+
+
     // Tokenization result
     public string HostedTokenizationId { get; set; }
-    public object ThreeDSServerTransactionId { get; internal set; }
-
+   
     public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {
         return new PaymentStepData

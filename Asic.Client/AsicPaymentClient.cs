@@ -189,7 +189,7 @@ public class AsicPaymentClient : IAsicPaymentClient
 
             var json = JsonNode.Parse(content).AsObject();
 
-            data.ThreeDSServerTransactionId = json["threeDSServerTransactionId"];
+            data.ThreeDSServerTransactionId = json["threeDSServerTransactionId"].ToString();
 
             return StepResult<PaymentStepData>.Success(data);
         }
@@ -328,8 +328,10 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return StepResult<PaymentStepData>.Failure("Failed to submit device information", "Complete Payment Gateway");
             }
 
+            data.ThreeDSRedirectUrl = redirectUrl;
+
             // Step 2: Process 3DS authentication flow
-            var threeDsResult = await Process3DSAuthenticationAsync(redirectUrl, data);
+            var threeDsResult = await Process3DSAuthenticationAsync(data);
             if (!threeDsResult.Success)
             {
                 return StepResult<PaymentStepData>.Failure($"3DS authentication failed: {threeDsResult.Message}", "Complete Payment Gateway");
@@ -415,12 +417,12 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    private async Task<PaymentResult> Process3DSAuthenticationAsync(string redirectUrl, PaymentStepData data)
+    private async Task<PaymentResult> Process3DSAuthenticationAsync(PaymentStepData data)
     {
         try
         {
             // Step 1: GET the initial 3DS redirect page
-            var request1 = new HttpRequestMessage(HttpMethod.Get, redirectUrl);
+            var request1 = new HttpRequestMessage(HttpMethod.Get, data.ThreeDSRedirectUrl);
             request1.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
             request1.Headers.Add("Sec-Fetch-Site", "cross-site");
             request1.Headers.Add("Sec-Fetch-Mode", "navigate");
@@ -444,7 +446,7 @@ public class AsicPaymentClient : IAsicPaymentClient
             request2.Headers.Add("Sec-Fetch-Site", "same-origin");
             request2.Headers.Add("Sec-Fetch-Mode", "navigate");
             request2.Headers.Add("Sec-Fetch-Dest", "iframe");
-            request2.Headers.Add("Referer", redirectUrl);
+            request2.Headers.Add("Referer", data.ThreeDSRedirectUrl);
 
             var response2 = await _http.SendAsync(request2);
             var content2 = await response2.Content.ReadAsStringAsync();
