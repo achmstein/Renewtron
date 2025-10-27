@@ -733,7 +733,6 @@ public class AsicPaymentClient : IAsicPaymentClient
                 Content = new FormUrlEncodedContent(postData)
             };
 
-            validateRequest.Headers.Add("Accept", "application/json, text/javascript, *; q=0.01");
             validateRequest.Headers.Referrer = new Uri(data.ThreeDSChallengeUrl);
 
             var validateResponse = await _http.SendAsync(validateRequest);
