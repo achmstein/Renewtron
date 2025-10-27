@@ -1,6 +1,9 @@
 ﻿using AngleSharp.Html.Parser;
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
+using Polly;
+using Polly.Retry;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -270,7 +273,22 @@ public class AsicPaymentClient : IAsicPaymentClient
             request.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
             request.Headers.TryAddWithoutValidation("Sec-Fetch-Storage-Access", "none");
 
-            var response = await _http.SendAsync(request);
+            // Polly retry policy (fixed 2-second interval)
+            AsyncRetryPolicy<HttpResponseMessage> retryPolicy = Policy
+                .Handle<HttpRequestException>()
+                .Or<TaskCanceledException>() // request timeout
+                .OrResult<HttpResponseMessage>(r => r.StatusCode == HttpStatusCode.RequestTimeout)
+                .WaitAndRetryAsync(
+                    retryCount: 3,
+                    sleepDurationProvider: _ => TimeSpan.FromSeconds(2),
+                    onRetry: (outcome, timespan, retryAttempt, context) =>
+                    {
+                        Console.WriteLine($"[Retry {retryAttempt}] Retrying after 2 seconds due to {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}");
+                    });
+
+            // Execute the request with retry
+            var response = await retryPolicy.ExecuteAsync(() => _http.SendAsync(request));
+
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
@@ -412,6 +430,18 @@ public class AsicPaymentClient : IAsicPaymentClient
             {
                 return PaymentResult.Failed("Failed to submit device information");
             }
+
+            var content = await response.Content.ReadAsStringAsync();
+
+            var redirectUrlMatch = Regex.Match(content, @"window\.location\.href\s*=\s*'([^']+)'", 
+                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            if (!redirectUrlMatch.Success)
+            {
+                return PaymentResult.Failed("Could not extract 3DS redirect URL from response");
+            }
+
+            var redirectUrl = redirectUrlMatch.Groups[1].Value;
 
             // Step 2: POST to payment gateway to close the window (Adf-Window-Unloaded)
             var closeWindowRequest = new HttpRequestMessage(HttpMethod.Post, "https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx");
