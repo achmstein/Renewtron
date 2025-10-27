@@ -21,6 +21,7 @@ public class PaymentStepData
 
     // Tokenization result
     public string HostedTokenizationId { get; set; }
+    public object ThreeDSServerTransactionId { get; internal set; }
 
     public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {
