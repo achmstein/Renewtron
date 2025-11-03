@@ -600,15 +600,19 @@ public class AsicPaymentClient : IAsicPaymentClient
             var response = await _http.SendAsync(request);
             var content = await response.Content.ReadAsStringAsync();
 
-            var doc = await _htmlParser.ParseDocumentAsync(content);
-            var challengeForm = doc.QuerySelector("form");
-
-            if (challengeForm == null)
+            if(content.Contains("Frictionless Redirection"))
             {
-                // No challenge - frictionless success
                 data.ThreeDSComplete = true;
                 return StepResult<PaymentStepData>.Success(data);
             }
+
+            if(!content.Contains("Challenge Redirection"))
+            {
+                return StepResult<PaymentStepData>.Failure("Unexpected 3DS result page content", "Check 3DS Challenge");
+            }
+
+            var doc = await _htmlParser.ParseDocumentAsync(content);
+            var challengeForm = doc.QuerySelector("form");
 
             var challengeUrl = HttpUtility.HtmlDecode(challengeForm.GetAttribute("action"));
             var threeDSSessionData = challengeForm.QuerySelector("[name='threeDSSessionData']")?.GetAttribute("value");

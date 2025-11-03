@@ -248,6 +248,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             return StepResult<RenewalStepData>.Failure("Failed to select business name", "Select Business Name");
         }
 
+        data.SelectedBusinessNameId = encodedRadioButtonId;
         data.PageContent = content;
         return StepResult<RenewalStepData>.Success(data);
     }
@@ -259,7 +260,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
-        formData.Append("bngrp=tmpt%3Aregion%3A1%3Aform%3Asbr1&");
+        formData.Append($"bngrp={data.SelectedBusinessNameId}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
         formData.Append("Adf-Page-Id=0&");
@@ -342,6 +343,8 @@ public class AsicRenewalClient : IAsicRenewalClient
             return StepResult<RenewalStepData>.Failure("Failed to select renewal period", "Select Renewal Period");
         }
 
+        data.PeriodValue = periodValue;
+
         return StepResult<RenewalStepData>.Success(data);
     }
 
@@ -358,7 +361,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
         formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
-        formData.Append("tmpt:region:2:form:selRen=0&");
+        formData.Append($"tmpt:region:2:form:selRen={data.PeriodValue}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
         formData.Append("Adf-Page-Id=0&");
@@ -765,7 +768,7 @@ public class AsicRenewalClient : IAsicRenewalClient
 
             businessNames.Add(new BusinessName
             {
-                Name = name,
+                Name = WebUtility.HtmlDecode(name),
                 AccountNumber = accountNumber,
                 RegistrationDate = registrationDate
             });
