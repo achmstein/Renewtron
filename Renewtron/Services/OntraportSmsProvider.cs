@@ -45,26 +45,26 @@ public class OntraportSmsProvider : ISmsProvider
                 });
     }
 
-    public async Task<bool> InitializeAsync()
-    {
-        var cleared = await ClearLastInboundSmsAsync(_settings.ContactId);
-
-        if (cleared)
-        {
-            _logger.LogInformation($"Successfully cleared last_inbound_sms for contact {_settings.ContactId}");
-        }
-        else
-        {
-            _logger.LogWarning($"Warning: Failed to clear last_inbound_sms for contact {_settings.ContactId}");
-        }
-
-        return cleared;
-    }
-
     public async Task<string> GetOtpAsync()
     {
         try
         {
+            // Clear old SMS first to ensure we get a fresh OTP
+            _logger.LogInformation($"Clearing old SMS for contact {_settings.ContactId}");
+            var cleared = await ClearLastInboundSmsAsync(_settings.ContactId);
+
+            if (cleared)
+            {
+                _logger.LogInformation($"Successfully cleared last_inbound_sms for contact {_settings.ContactId}");
+            }
+            else
+            {
+                _logger.LogWarning($"Warning: Failed to clear last_inbound_sms for contact {_settings.ContactId}");
+            }
+
+            // Wait a moment for the clear operation to propagate
+            await Task.Delay(1000);
+
             // Use Polly retry policy to poll for SMS with OTP
             var smsText = await _retryPolicy.ExecuteAsync(async () =>
             {
@@ -89,17 +89,6 @@ public class OntraportSmsProvider : ISmsProvider
             }
 
             _logger.LogInformation($"Successfully retrieved OTP: {otpCode}");
-
-            // Clear the SMS field to prevent conflicts with future payments
-            var cleared = await ClearLastInboundSmsAsync(_settings.ContactId);
-            if (cleared)
-            {
-                _logger.LogInformation($"Successfully cleared last_inbound_sms for contact {_settings.ContactId}");
-            }
-            else
-            {
-                _logger.LogWarning($"Warning: Failed to clear last_inbound_sms for contact {_settings.ContactId}");
-            }
 
             return otpCode;
         }

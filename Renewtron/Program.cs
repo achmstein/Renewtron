@@ -114,9 +114,11 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddHttpContextAccessor();
 
-builder.Services.AddAsic(builder.Configuration);
-
-builder.Services.AddHttpClient<ISmsProvider, OntraportSmsProvider>();
+builder.Services.AddAsic(builder.Configuration, services =>
+{
+    // Register SMS provider implementation
+    services.AddHttpClient<ISmsProvider, OntraportSmsProvider>();
+});
 
 builder.Services.AddCreditCardsInteropAsScoped();
 

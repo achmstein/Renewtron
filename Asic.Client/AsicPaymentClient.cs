@@ -100,11 +100,6 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return StepResult<PaymentStepData>.Failure("Missing ADF parameters in script", "Initialize Session");
             }
 
-            if(!await _smsProvider.InitializeAsync())
-            {
-                return StepResult<PaymentStepData>.Failure("Failed to initialize SMS provider", "Initialize Session");
-            }
-
             var afrLoop = afrLoopMatch.Groups[1].Value;
             var afdWindowId = windowIdMatch.Groups[1].Value;
 
