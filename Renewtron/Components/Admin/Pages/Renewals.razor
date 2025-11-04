@@ -1,9 +1,11 @@
 @page "/admin/renewals"
+@implements IDisposable
 
 @using Renewtron.Data
 @using Renewtron.Abstractions
 @using Microsoft.EntityFrameworkCore
 @using Hangfire
+@using System.Timers
 
 @inject ApplicationDbContext DbContext
 @inject IBackgroundJobClient BackgroundJobClient
@@ -553,9 +555,20 @@
     private DateTime? filterDateFrom = null;
     private DateTime? filterDateTo = null;
 
+    // Polling timer for auto-refresh
+    private System.Timers.Timer? pollingTimer;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+        StartPollingIfNeeded();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload data when navigating back to this page
+        await LoadData();
+        StartPollingIfNeeded();
     }
 
     private async Task LoadData()
@@ -608,6 +621,9 @@
                 .ToListAsync();
 
             await InvokeAsync(StateHasChanged);
+
+            // Start polling if we have any Processing or Pending renewals
+            StartPollingIfNeeded();
         }
         finally
         {
@@ -796,5 +812,41 @@
     {
         showErrorModal = false;
         currentErrorMessage = "";
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        // Stop any existing timer
+        pollingTimer?.Dispose();
+
+        // If any renewal is Processing or Pending, poll every 5 seconds
+        if (renewals.Any(r => r.Status == RenewalStatus.Processing || r.Status == RenewalStatus.Pending))
+        {
+            pollingTimer = new System.Timers.Timer(5000); // 5 seconds
+            pollingTimer.Elapsed += async (sender, e) => await PollForUpdates();
+            pollingTimer.Start();
+        }
+    }
+
+    private async Task PollForUpdates()
+    {
+        var hadProcessingOrPending = renewals.Any(r => r.Status == RenewalStatus.Processing || r.Status == RenewalStatus.Pending);
+
+        await LoadData();
+
+        // If we no longer have any Processing or Pending renewals, stop polling
+        var hasProcessingOrPending = renewals.Any(r => r.Status == RenewalStatus.Processing || r.Status == RenewalStatus.Pending);
+        if (hadProcessingOrPending && !hasProcessingOrPending)
+        {
+            pollingTimer?.Dispose();
+            pollingTimer = null;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        pollingTimer?.Dispose();
     }
 }
