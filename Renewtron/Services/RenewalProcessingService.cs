@@ -1,5 +1,6 @@
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
@@ -30,6 +31,7 @@ public class RenewalProcessingService : IRenewalProcessingService
         _logger = logger;
     }
 
+    [DisableConcurrentExecution(timeoutInSeconds: 600)]
     public async Task ProcessRenewalAsync(Guid renewalRequestId)
     {
         try
