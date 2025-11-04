@@ -18,11 +18,17 @@ public class RenewalStepData
     public string AdfWindowId { get; set; }
     public string ViewState { get; set; }
 
+    // Business name selection
+    public string SelectedBusinessNameId { get; set; }
+
     // Page content from various steps
     public string PageContent { get; set; }
 
     // Flow control
     public bool JumpedToEmail { get; set; }
+
+    // Pricing data
+    public string PeriodValue { get; set; }
 
     // Transaction data
     public string TransactionReference { get; set; }
