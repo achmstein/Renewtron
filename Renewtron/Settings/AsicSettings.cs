@@ -1,7 +1,8 @@
-﻿namespace Renewtron.Settings;
+namespace Renewtron.Settings;
 
-public class AsicCreditCardSettings
+public class AsicSettings
 {
+    public string Email { get; set; }
     public string CardNumber { get; set; }
     public string CardholderName { get; set; }
     public string ExpiryMonth { get; set; }

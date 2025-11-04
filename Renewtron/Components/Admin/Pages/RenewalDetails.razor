@@ -1,11 +1,14 @@
 @page "/admin/renewals/{id:guid}"
+@implements IDisposable
 
 @using Renewtron.Data
 @using Renewtron.Abstractions
 @using Microsoft.EntityFrameworkCore
+@using Hangfire
+@using System.Timers
 
 @inject ApplicationDbContext DbContext
-@inject IRenewalRetryService RetryService
+@inject IBackgroundJobClient BackgroundJobClient
 @inject NavigationManager Navigation
 
 <PageTitle>Renewal Request Details - Renewtron</PageTitle>
@@ -314,10 +317,53 @@
     private bool isRetrying = false;
     private string successMessage = "";
     private string errorMessage = "";
+    private System.Timers.Timer? pollingTimer;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+        StartPollingIfProcessing();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload data when navigating back to this page
+        await LoadData();
+        StartPollingIfProcessing();
+    }
+
+    private void StartPollingIfProcessing()
+    {
+        // Stop any existing timer
+        pollingTimer?.Dispose();
+
+        // If status is Processing, poll every 3 seconds
+        if (renewal?.Status == RenewalStatus.Processing)
+        {
+            pollingTimer = new System.Timers.Timer(3000);
+            pollingTimer.Elapsed += async (sender, e) => await PollForUpdates();
+            pollingTimer.Start();
+        }
+    }
+
+    private async Task PollForUpdates()
+    {
+        var previousStatus = renewal?.Status;
+        await LoadData();
+
+        // If status changed from Processing, stop polling
+        if (previousStatus == RenewalStatus.Processing && renewal?.Status != RenewalStatus.Processing)
+        {
+            pollingTimer?.Dispose();
+            pollingTimer = null;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        pollingTimer?.Dispose();
     }
 
     private async Task LoadData()
@@ -340,17 +386,42 @@
 
         try
         {
-            var (success, message) = await RetryService.RetryRenewalAsync(Id);
+            // Validate the renewal request before enqueuing
+            if (renewal == null)
+            {
+                errorMessage = "Renewal request not found";
+                return;
+            }
 
-            if (success)
+            if (renewal.Status == RenewalStatus.Completed)
             {
-                successMessage = message;
-                await LoadData(); // Reload to show updated status
+                errorMessage = "This renewal has already been completed successfully";
+                return;
             }
-            else
+
+            // Check if payment was successful (only for Stripe payments)
+            if (renewal.PaymentType == PaymentType.Stripe &&
+                (renewal.StripePayment == null || renewal.StripePayment.PaymentStatus != "succeeded"))
             {
-                errorMessage = message;
+                errorMessage = "Cannot retry: Payment was not successful. Customer needs to retry payment.";
+                return;
             }
+
+            // Reset status to pending before enqueuing
+            renewal.Status = RenewalStatus.Pending;
+            renewal.ErrorMessage = null;
+            renewal.FailedAtStep = null;
+            await DbContext.SaveChangesAsync();
+
+            // Enqueue the same background job that Hangfire uses
+            BackgroundJobClient.Enqueue<IRenewalProcessingService>(
+                service => service.ProcessRenewalAsync(Id));
+
+            successMessage = "Renewal has been queued for retry and will be processed shortly.";
+
+            // Reload data and start polling
+            await LoadData();
+            StartPollingIfProcessing();
         }
         catch (Exception ex)
         {

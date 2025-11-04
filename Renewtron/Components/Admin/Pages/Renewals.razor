@@ -3,9 +3,10 @@
 @using Renewtron.Data
 @using Renewtron.Abstractions
 @using Microsoft.EntityFrameworkCore
+@using Hangfire
 
 @inject ApplicationDbContext DbContext
-@inject IRenewalRetryService RetryService
+@inject IBackgroundJobClient BackgroundJobClient
 @inject NavigationManager Navigation
 
 <PageTitle>Renewal Requests - Renewtron</PageTitle>
@@ -715,30 +716,45 @@
 
         try
         {
-            var (success, message) = await RetryService.RetryRenewalAsync(renewalId);
+            // Validate the renewal request before enqueuing
+            var renewal = await DbContext.RenewalRequests
+                .Include(r => r.StripePayment)
+                .FirstOrDefaultAsync(r => r.Id == renewalId);
 
-            if (success)
+            if (renewal == null)
             {
-                successMessage = message;
-
-                // Poll for updated status (background job may take a moment to update)
-                for (int i = 0; i < 5; i++)
-                {
-                    await Task.Delay(1000); // Wait 1 second
-                    await LoadData();
-
-                    // Check if status changed
-                    var renewal = renewals.FirstOrDefault(r => r.Id == renewalId);
-                    if (renewal != null && renewal.Status != RenewalStatus.Failed)
-                    {
-                        break; // Status changed, stop polling
-                    }
-                }
+                errorMessage = "Renewal request not found";
+                return;
             }
-            else
+
+            if (renewal.Status == RenewalStatus.Completed)
             {
-                errorMessage = message;
+                errorMessage = "This renewal has already been completed successfully";
+                return;
             }
+
+            // Check if payment was successful (only for Stripe payments)
+            if (renewal.PaymentType == PaymentType.Stripe &&
+                (renewal.StripePayment == null || renewal.StripePayment.PaymentStatus != "succeeded"))
+            {
+                errorMessage = "Cannot retry: Payment was not successful. Customer needs to retry payment.";
+                return;
+            }
+
+            // Reset status to pending before enqueuing
+            renewal.Status = RenewalStatus.Pending;
+            renewal.ErrorMessage = null;
+            renewal.FailedAtStep = null;
+            await DbContext.SaveChangesAsync();
+
+            // Enqueue the same background job that Hangfire uses
+            BackgroundJobClient.Enqueue<IRenewalProcessingService>(
+                service => service.ProcessRenewalAsync(renewalId));
+
+            successMessage = "Renewal has been queued for retry and will be processed shortly.";
+
+            // Reload data to show updated status
+            await LoadData();
         }
         catch (Exception ex)
         {
