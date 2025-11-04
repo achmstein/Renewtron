@@ -2,6 +2,5 @@
 
 public interface ISmsProvider
 {
-    Task<bool> InitializeAsync();
     Task<string> GetOtpAsync();
 }

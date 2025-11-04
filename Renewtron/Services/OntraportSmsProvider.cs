@@ -36,7 +36,7 @@ public class OntraportSmsProvider : ISmsProvider
             .Handle<OntraportException>()
             .OrResult(sms => string.IsNullOrWhiteSpace(sms))
             .WaitAndRetryAsync(
-                retryCount: 20, // Poll up to 20 times
+                retryCount: 40, // Poll up to 40 times
                 sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(3), // Wait 3 seconds between polls
                 onRetry: (outcome, timespan, retryAttempt, context) =>
                 {
@@ -45,38 +45,41 @@ public class OntraportSmsProvider : ISmsProvider
                 });
     }
 
-    public async Task<bool> InitializeAsync()
-    {
-        var cleared = await ClearLastInboundSmsAsync(_settings.ContactId);
-
-        if (cleared)
-        {
-            _logger.LogInformation($"Successfully cleared last_inbound_sms for contact {_settings.ContactId}");
-        }
-        else
-        {
-            _logger.LogWarning($"Warning: Failed to clear last_inbound_sms for contact {_settings.ContactId}");
-        }
-
-        return cleared;
-    }
-
     public async Task<string> GetOtpAsync()
     {
         try
         {
-            // Use Polly retry policy to poll for SMS with OTP
+            // Capture the current timestamp - only process messages AFTER this time
+            var startTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _logger.LogInformation($"Starting OTP polling for conversation {_settings.ConversationId} from timestamp {startTimestamp}");
+
+            // Use Polly retry policy to poll for new SMS messages with OTP
             var smsText = await _retryPolicy.ExecuteAsync(async () =>
             {
-                var sms = await GetLastInboundSmsAsync(_settings.ContactId);
+                var messages = await GetConversationMessagesAsync(_settings.ConversationId);
 
-                // Check if SMS contains OTP pattern
-                if (!string.IsNullOrWhiteSpace(sms) && ContainsOtpPattern(sms))
+                // Look for messages received AFTER we started waiting
+                var newMessages = messages
+                    .Where(m =>
+                        long.TryParse(m.Date, out var msgDate) &&
+                        msgDate > startTimestamp &&
+                        m.Type == "CONVO_MESSAGE" &&
+                        m.Topic == "TEXT" &&
+                        !string.IsNullOrWhiteSpace(m.Resource))
+                    .OrderBy(m => m.Date) // Process oldest first
+                    .ToList();
+
+                // Check if any new message contains OTP
+                foreach (var message in newMessages)
                 {
-                    return sms;
+                    if (ContainsOtpPattern(message.Resource!))
+                    {
+                        _logger.LogInformation($"Found OTP in message ID {message.Id} dated {message.Date}");
+                        return message.Resource!;
+                    }
                 }
 
-                // Return empty to trigger retry
+                // No OTP found yet, trigger retry
                 return string.Empty;
             });
 
@@ -90,17 +93,6 @@ public class OntraportSmsProvider : ISmsProvider
 
             _logger.LogInformation($"Successfully retrieved OTP: {otpCode}");
 
-            // Clear the SMS field to prevent conflicts with future payments
-            var cleared = await ClearLastInboundSmsAsync(_settings.ContactId);
-            if (cleared)
-            {
-                _logger.LogInformation($"Successfully cleared last_inbound_sms for contact {_settings.ContactId}");
-            }
-            else
-            {
-                _logger.LogWarning($"Warning: Failed to clear last_inbound_sms for contact {_settings.ContactId}");
-            }
-
             return otpCode;
         }
         catch (Exception ex) when (ex is not OntraportException)
@@ -109,67 +101,32 @@ public class OntraportSmsProvider : ISmsProvider
         }
     }
 
-    private async Task<string> GetLastInboundSmsAsync(string contactId)
+    private async Task<List<ConversationMessage>> GetConversationMessagesAsync(string conversationId)
     {
         try
         {
-            var response = await _httpClient.GetAsync($"Contact?id={contactId}");
+            // Use the date parameter to filter messages from the start timestamp
+            var url = $"Conversation/getMessages?id={conversationId}&date=&direction=0";
+            var response = await _httpClient.GetAsync(url);
 
             if (!response.IsSuccessStatusCode)
             {
-                throw new OntraportException($"Failed to fetch contact: {response.StatusCode}");
+                throw new OntraportException($"Failed to fetch conversation messages: {response.StatusCode}");
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<OntraportResponse>(content);
+            var result = JsonSerializer.Deserialize<OntraportConversationResponse>(content);
 
             if (result?.Code != 0 || result?.Data == null)
             {
-                throw new OntraportException("Invalid response from Ontraport API");
+                throw new OntraportException("Invalid response from Ontraport Conversation API");
             }
 
-            // Extract last_inbound_sms from the data object
-            if (result.Data.TryGetProperty("last_inbound_sms", out var smsElement))
-            {
-                return smsElement.GetString() ?? string.Empty;
-            }
-
-            return string.Empty;
+            return result.Data.Messages ?? new List<ConversationMessage>();
         }
         catch (Exception ex) when (ex is not OntraportException)
         {
-            throw new OntraportException($"Error retrieving SMS from Ontraport: {ex.Message}", ex);
-        }
-    }
-
-    private async Task<bool> ClearLastInboundSmsAsync(string contactId)
-    {
-        try
-        {
-            var formData = new Dictionary<string, string>
-            {
-                ["id"] = contactId,
-                ["last_inbound_sms"] = string.Empty
-            };
-
-            var content = new FormUrlEncodedContent(formData);
-            var response = await _httpClient.PutAsync("Contacts", content);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError($"Failed to clear SMS field: {response.StatusCode}");
-                return false;
-            }
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<OntraportResponse>(responseContent);
-
-            return result?.Code == 0;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error clearing SMS field: {ex.Message}");
-            return false;
+            throw new OntraportException($"Error retrieving conversation messages from Ontraport: {ex.Message}", ex);
         }
     }
 
@@ -232,14 +189,95 @@ public class OntraportException : Exception
         : base(message, innerException) { }
 }
 
-public class OntraportResponse
+public class OntraportConversationResponse
 {
     [JsonPropertyName("code")]
     public int Code { get; set; }
 
     [JsonPropertyName("data")]
-    public JsonElement Data { get; set; }
+    public ConversationData? Data { get; set; }
 
     [JsonPropertyName("account_id")]
     public int AccountId { get; set; }
+}
+
+public class ConversationData
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("date")]
+    public string? Date { get; set; }
+
+    [JsonPropertyName("max_date")]
+    public string? MaxDate { get; set; }
+
+    [JsonPropertyName("hasNext")]
+    public bool HasNext { get; set; }
+
+    [JsonPropertyName("hasPrev")]
+    public bool HasPrev { get; set; }
+
+    [JsonPropertyName("messages")]
+    public List<ConversationMessage> Messages { get; set; } = new();
+
+    [JsonPropertyName("count")]
+    public int Count { get; set; }
+}
+
+public class ConversationMessage
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("user_id")]
+    public string? UserId { get; set; }
+
+    [JsonPropertyName("contact_id")]
+    public string? ContactId { get; set; }
+
+    [JsonPropertyName("item_id")]
+    public string? ItemId { get; set; }
+
+    [JsonPropertyName("merge_data")]
+    public string? MergeData { get; set; }
+
+    [JsonPropertyName("vtype")]
+    public string? VType { get; set; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; set; }
+
+    [JsonPropertyName("error_code")]
+    public string? ErrorCode { get; set; }
+
+    [JsonPropertyName("attachments")]
+    public string? Attachments { get; set; }
+
+    [JsonPropertyName("cc")]
+    public string? Cc { get; set; }
+
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("date")]
+    public string? Date { get; set; }
+
+    [JsonPropertyName("uid")]
+    public string? Uid { get; set; }
+
+    [JsonPropertyName("object_type_id")]
+    public string? ObjectTypeId { get; set; }
+
+    [JsonPropertyName("topic")]
+    public string? Topic { get; set; }
+
+    [JsonPropertyName("sender_data")]
+    public string? SenderData { get; set; }
+
+    [JsonPropertyName("thread_meta")]
+    public string? ThreadMeta { get; set; }
+
+    [JsonPropertyName("resource")]
+    public string? Resource { get; set; }
 }
