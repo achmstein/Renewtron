@@ -42,7 +42,7 @@ public class PaymentStepData
     public string ThreeDSCReq { get; set; }
     public string ThreeDSIssuerId { get; set; }
     public string ThreeDSTransactionId { get; set; }
-    public bool ThreeDSRequiresOTP { get; set; }
+    public bool ThreeDSRequiresOtp { get; set; }
 
     public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {

@@ -1,3 +1,4 @@
+using Asic.Client.Abstractions;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -62,6 +63,10 @@ builder.Services.AddOptions<PricingSettings>()
     .BindConfiguration("Pricing")
     .ValidateDataAnnotations();
 
+builder.Services.AddOptions<OntraportSettings>()
+    .BindConfiguration("Ontraport")
+    .ValidateDataAnnotations();
+
 // Payment and Email services
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -110,6 +115,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddAsic(builder.Configuration);
+
+builder.Services.AddHttpClient<ISmsProvider, OntraportSmsProvider>();
 
 builder.Services.AddCreditCardsInteropAsScoped();
 

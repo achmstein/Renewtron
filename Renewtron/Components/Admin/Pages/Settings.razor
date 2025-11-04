@@ -71,6 +71,10 @@
                                 class="@(activeTab == Tab.AsicCreditCard ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
                             ASIC Card
                         </button>
+                        <button @onclick="() => activeTab = Tab.Ontraport"
+                                class="@(activeTab == Tab.Ontraport ? "border-indigo-500 text-indigo-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
+                            Ontraport
+                        </button>
                     </nav>
                 </div>
             </div>
@@ -167,7 +171,7 @@
                     </div>
                 </div>
             }
-            else
+            else if (activeTab == Tab.AsicCreditCard)
             {
                 <div class="overflow-hidden rounded-lg bg-white shadow">
                     <div class="px-4 py-5 sm:p-6">
@@ -206,12 +210,41 @@
                     </div>
                 </div>
             }
+            else if (activeTab == Tab.Ontraport)
+            {
+                <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Ontraport Settings</h3>
+                        <EditForm Model="@ontraportSettings" OnValidSubmit="SaveOntraportSettings">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">API App ID</label>
+                                    <InputText @bind-Value="ontraportSettings.ApiAppId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">API Key</label>
+                                    <InputText @bind-Value="ontraportSettings.ApiKey" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Contact ID</label>
+                                    <InputText @bind-Value="ontraportSettings.ContactId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" type="password" />
+                                </div>
+                                <div>
+                                    <button type="submit" class="inline-flex justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                                        Save Ontraport Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            }
         </div>
     </main>
 </div>
 
 @code {
-    private enum Tab { SendGrid, Stripe, Pricing, AsicCreditCard }
+    private enum Tab { SendGrid, Stripe, Pricing, AsicCreditCard, Ontraport }
 
     private Tab activeTab = Tab.SendGrid;
 
@@ -219,6 +252,7 @@
     private StripeSettings stripeSettings = new();
     private PricingSettings pricingSettings = new();
     private AsicCreditCardSettings asicCreditCardSettings = new();
+    private OntraportSettings ontraportSettings = new();
 
     private string successMessage = "";
     private string errorMessage = "";
@@ -234,6 +268,7 @@
         stripeSettings = await SettingsService.GetStripeSettingsAsync();
         pricingSettings = await SettingsService.GetPricingSettingsAsync();
         asicCreditCardSettings = await SettingsService.GetAsicCreditCardSettingsAsync();
+        ontraportSettings = await SettingsService.GetOntraportSettingsAsync();
     }
 
     private async Task SaveSendGridSettings()
@@ -292,6 +327,21 @@
         catch (Exception ex)
         {
             errorMessage = $"Error saving ASIC Credit Card settings: {ex.Message}";
+            successMessage = "";
+        }
+    }
+
+    private async Task SaveOntraportSettings()
+    {
+        try
+        {
+            await SettingsService.UpdateOntraportSettingsAsync(ontraportSettings);
+            successMessage = "Ontraport settings saved successfully!";
+            errorMessage = "";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error saving Ontraport settings: {ex.Message}";
             successMessage = "";
         }
     }

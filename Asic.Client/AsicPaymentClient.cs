@@ -16,15 +16,16 @@ public class AsicPaymentClient : IAsicPaymentClient
 {
     private readonly HttpClient _http;
     private readonly HtmlParser _htmlParser;
-
+    private readonly ISmsProvider _smsProvider;
     private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0";
 
-    public AsicPaymentClient()
+    public AsicPaymentClient(ISmsProvider smsProvider)
     {
         _http = new HttpClient();
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
 
         _htmlParser = new HtmlParser();
+        _smsProvider = smsProvider;
     }
 
     public async Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
@@ -47,11 +48,11 @@ public class AsicPaymentClient : IAsicPaymentClient
                 .ThenAsync("Process 3DS Callback", Process3DSCallbackStepAsync)
                 .ThenAsync("Check 3DS Challenge", Check3DSChallengeStepAsync)
                 .ThenAsync("Handle 3DS Challenge", Handle3DSChallengeStepAsync)
-                .ThenAsync("Submit OTP", SubmitOTPStepAsync)
+                .ThenAsync("Submit OTP", SubmitOtpStepAsync)
                 .ThenAsync("Close Payment Window", ClosePaymentWindowStepAsync)
                 .ToPaymentResultAsync(data =>
                 {
-                    if (data.ThreeDSRequiresOTP)
+                    if (data.ThreeDSRequiresOtp)
                     {
                         return PaymentResult.Failed(
                             $"3DS Challenge requires OTP. Transaction ID: {data.ThreeDSTransactionId}, " +
@@ -97,6 +98,11 @@ public class AsicPaymentClient : IAsicPaymentClient
             if (!afrLoopMatch.Success || !windowIdMatch.Success)
             {
                 return StepResult<PaymentStepData>.Failure("Missing ADF parameters in script", "Initialize Session");
+            }
+
+            if(!await _smsProvider.InitializeAsync())
+            {
+                return StepResult<PaymentStepData>.Failure("Failed to initialize SMS provider", "Initialize Session");
             }
 
             var afrLoop = afrLoopMatch.Groups[1].Value;
@@ -673,7 +679,7 @@ public class AsicPaymentClient : IAsicPaymentClient
 
                 data.ThreeDSIssuerId = issuerId;
                 data.ThreeDSTransactionId = transactionId;
-                data.ThreeDSRequiresOTP = true;
+                data.ThreeDSRequiresOtp = true;
 
                 // Store the challenge response content for later OTP submission
                 data.ThreeDSChallengeResponseContent = content;
@@ -692,24 +698,25 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    private async Task<StepResult<PaymentStepData>> SubmitOTPStepAsync(PaymentStepData data)
+    private async Task<StepResult<PaymentStepData>> SubmitOtpStepAsync(PaymentStepData data)
     {
         // Skip if OTP not required
-        if (!data.ThreeDSRequiresOTP)
+        if (!data.ThreeDSRequiresOtp)
             return StepResult<PaymentStepData>.Success(data);
 
         try
         {
-            //This step would need to be implemented based on how you want to handle OTP
-            //For now, we just pass through and let the final result handler report OTP is needed
-
-            //If you have an OTP provider / callback, you would:
-            // 1.Get the OTP(from user input, SMS service, etc.)
-            // 2.Submit it using the code below
-
-            // Example implementation(commented out):
-
-            var otp = "123456"; // Implement this based on your needs
+            string otp;
+            try
+            {
+                otp = await _smsProvider.GetOtpAsync();
+            }
+            catch (Exception ex)
+            {
+                return StepResult<PaymentStepData>.Failure(
+                    $"Failed to retrieve OTP: {ex.Message}",
+                    "Submit OTP");
+            }
 
             var postData = new Dictionary<string, string>
             {
@@ -787,7 +794,7 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return StepResult<PaymentStepData>.Failure($"Failed to send CRes: {finalResponse.StatusCode}", "Submit OTP");
 
             data.ThreeDSComplete = true;
-            data.ThreeDSRequiresOTP = false;
+            data.ThreeDSRequiresOtp = false;
 
             return StepResult<PaymentStepData>.Success(data);
         }

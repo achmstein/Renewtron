@@ -12,6 +12,7 @@ public class SettingsService : ISettingsService
     private readonly IOptions<StripeSettings> _stripeSettings;
     private readonly IOptions<PricingSettings> _pricingSettings;
     private readonly IOptions<AsicCreditCardSettings> _asicCreditCardSettings;
+    private readonly IOptions<OntraportSettings> _ontraportSettings;
     private readonly IWebHostEnvironment _environment;
 
     public SettingsService(
@@ -19,12 +20,14 @@ public class SettingsService : ISettingsService
         IOptions<StripeSettings> stripeSettings,
         IOptions<PricingSettings> pricingSettings,
         IOptions<AsicCreditCardSettings> asicCreditCardSettings,
+        IOptions<OntraportSettings> ontraportSettings,
         IWebHostEnvironment environment)
     {
         _sendGridSettings = sendGridSettings;
         _stripeSettings = stripeSettings;
         _pricingSettings = pricingSettings;
         _asicCreditCardSettings = asicCreditCardSettings;
+        _ontraportSettings = ontraportSettings;
         _environment = environment;
     }
 
@@ -48,6 +51,11 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_asicCreditCardSettings.Value);
     }
 
+    public Task<OntraportSettings> GetOntraportSettingsAsync()
+    {
+        return Task.FromResult(_ontraportSettings.Value);
+    }
+
     public async Task UpdateSendGridSettingsAsync(SendGridSettings settings)
     {
         await UpdateSettingsSectionAsync("SendGrid", settings);
@@ -66,6 +74,11 @@ public class SettingsService : ISettingsService
     public async Task UpdateAsicCreditCardSettingsAsync(AsicCreditCardSettings settings)
     {
         await UpdateSettingsSectionAsync("AsicCreditCard", settings);
+    }
+
+    public async Task UpdateOntraportSettingsAsync(OntraportSettings settings)
+    {
+        await UpdateSettingsSectionAsync("Ontraport", settings);
     }
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)
