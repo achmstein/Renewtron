@@ -14,20 +14,20 @@ public class RenewalProcessingService : IRenewalProcessingService
     private readonly ApplicationDbContext _dbContext;
     private readonly IAsicRenewalClient _renewalClient;
     private readonly IEmailService _emailService;
-    private readonly IOptions<AsicCreditCardSettings> _asicCardSettings;
+    private readonly IOptions<AsicSettings> _asicSettings;
     private readonly ILogger<RenewalProcessingService> _logger;
 
     public RenewalProcessingService(
         ApplicationDbContext dbContext,
         IAsicRenewalClient renewalClient,
         IEmailService emailService,
-        IOptions<AsicCreditCardSettings> asicCardSettings,
+        IOptions<AsicSettings> asicSettings,
         ILogger<RenewalProcessingService> logger)
     {
         _dbContext = dbContext;
         _renewalClient = renewalClient;
         _emailService = emailService;
-        _asicCardSettings = asicCardSettings;
+        _asicSettings = asicSettings;
         _logger = logger;
     }
 
@@ -70,27 +70,27 @@ public class RenewalProcessingService : IRenewalProcessingService
                 return;
             }
 
-            // Get ASIC card details from configuration
-            var asicCard = _asicCardSettings.Value;
+            // Get ASIC settings from configuration
+            var asicSettings = _asicSettings.Value;
             var asicCardDetails = new CreditCardDetails
             {
-                CardNumber = asicCard.CardNumber,
-                CardholderName = asicCard.CardholderName,
-                ExpiryMonth = asicCard.ExpiryMonth,
-                ExpiryYear = asicCard.ExpiryYear,
-                Cvc = asicCard.Cvc
+                CardNumber = asicSettings.CardNumber,
+                CardholderName = asicSettings.CardholderName,
+                ExpiryMonth = asicSettings.ExpiryMonth,
+                ExpiryYear = asicSettings.ExpiryYear,
+                Cvc = asicSettings.Cvc
             };
 
             _logger.LogInformation("Processing ASIC renewal for {BusinessName} (ABN: {Abn})",
                 renewalRequest.SearchResult.BusinessName,
                 renewalRequest.SearchResult.SearchLog.Abn);
 
-            // Process the ASIC renewal
+            // Process the ASIC renewal using settings email
             var result = await _renewalClient.RenewBusinessNameAsync(
                 renewalRequest.SearchResult.SearchLog.Abn,
                 renewalRequest.SearchResult.AccountNumber,
                 renewalRequest.RenewalYears,
-                renewalRequest.Email ?? "",
+                asicSettings.Email ?? "",
                 asicCardDetails
             );
 

@@ -55,8 +55,8 @@ builder.Services.AddOptions<SendGridSettings>()
     .BindConfiguration("SendGrid")
     .ValidateDataAnnotations();
 
-builder.Services.AddOptions<AsicCreditCardSettings>()
-    .BindConfiguration("AsicCreditCard")
+builder.Services.AddOptions<AsicSettings>()
+    .BindConfiguration("Asic")
     .ValidateDataAnnotations();
 
 builder.Services.AddOptions<PricingSettings>()

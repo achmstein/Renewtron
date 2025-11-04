@@ -11,7 +11,7 @@ public class SettingsService : ISettingsService
     private readonly IOptions<SendGridSettings> _sendGridSettings;
     private readonly IOptions<StripeSettings> _stripeSettings;
     private readonly IOptions<PricingSettings> _pricingSettings;
-    private readonly IOptions<AsicCreditCardSettings> _asicCreditCardSettings;
+    private readonly IOptions<AsicSettings> _asicSettings;
     private readonly IOptions<OntraportSettings> _ontraportSettings;
     private readonly IWebHostEnvironment _environment;
 
@@ -19,14 +19,14 @@ public class SettingsService : ISettingsService
         IOptions<SendGridSettings> sendGridSettings,
         IOptions<StripeSettings> stripeSettings,
         IOptions<PricingSettings> pricingSettings,
-        IOptions<AsicCreditCardSettings> asicCreditCardSettings,
+        IOptions<AsicSettings> asicSettings,
         IOptions<OntraportSettings> ontraportSettings,
         IWebHostEnvironment environment)
     {
         _sendGridSettings = sendGridSettings;
         _stripeSettings = stripeSettings;
         _pricingSettings = pricingSettings;
-        _asicCreditCardSettings = asicCreditCardSettings;
+        _asicSettings = asicSettings;
         _ontraportSettings = ontraportSettings;
         _environment = environment;
     }
@@ -46,9 +46,9 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_pricingSettings.Value);
     }
 
-    public Task<AsicCreditCardSettings> GetAsicCreditCardSettingsAsync()
+    public Task<AsicSettings> GetAsicSettingsAsync()
     {
-        return Task.FromResult(_asicCreditCardSettings.Value);
+        return Task.FromResult(_asicSettings.Value);
     }
 
     public Task<OntraportSettings> GetOntraportSettingsAsync()
@@ -71,9 +71,9 @@ public class SettingsService : ISettingsService
         await UpdateSettingsSectionAsync("Pricing", settings);
     }
 
-    public async Task UpdateAsicCreditCardSettingsAsync(AsicCreditCardSettings settings)
+    public async Task UpdateAsicSettingsAsync(AsicSettings settings)
     {
-        await UpdateSettingsSectionAsync("AsicCreditCard", settings);
+        await UpdateSettingsSectionAsync("Asic", settings);
     }
 
     public async Task UpdateOntraportSettingsAsync(OntraportSettings settings)

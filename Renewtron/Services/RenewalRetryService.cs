@@ -13,18 +13,18 @@ public class RenewalRetryService : IRenewalRetryService
     private readonly ApplicationDbContext _dbContext;
     private readonly IAsicRenewalClient _renewalClient;
     private readonly IEmailService _emailService;
-    private readonly IOptions<AsicCreditCardSettings> _asicCardSettings;
+    private readonly IOptions<AsicSettings> _asicSettings;
 
     public RenewalRetryService(
         ApplicationDbContext dbContext,
         IAsicRenewalClient renewalClient,
         IEmailService emailService,
-        IOptions<AsicCreditCardSettings> asicCardSettings)
+        IOptions<AsicSettings> asicSettings)
     {
         _dbContext = dbContext;
         _renewalClient = renewalClient;
         _emailService = emailService;
-        _asicCardSettings = asicCardSettings;
+        _asicSettings = asicSettings;
     }
 
     public async Task<(bool success, string message)> RetryRenewalAsync(Guid renewalRequestId)
@@ -59,23 +59,23 @@ public class RenewalRetryService : IRenewalRetryService
                 return (false, "Cannot retry: Payment was not successful. Customer needs to retry payment.");
             }
 
-            // Get ASIC card details
-            var asicCard = _asicCardSettings.Value;
+            // Get ASIC settings
+            var asicSettings = _asicSettings.Value;
             var asicCardDetails = new CreditCardDetails
             {
-                CardNumber = asicCard.CardNumber,
-                CardholderName = asicCard.CardholderName,
-                ExpiryMonth = asicCard.ExpiryMonth,
-                ExpiryYear = asicCard.ExpiryYear,
-                Cvc = asicCard.Cvc
+                CardNumber = asicSettings.CardNumber,
+                CardholderName = asicSettings.CardholderName,
+                ExpiryMonth = asicSettings.ExpiryMonth,
+                ExpiryYear = asicSettings.ExpiryYear,
+                Cvc = asicSettings.Cvc
             };
 
-            // Retry the ASIC renewal
+            // Retry the ASIC renewal using settings email
             var result = await _renewalClient.RenewBusinessNameAsync(
                 renewalRequest.SearchResult.SearchLog.Abn,
                 renewalRequest.SearchResult.AccountNumber,
                 renewalRequest.RenewalYears,
-                renewalRequest.Email ?? "",
+                asicSettings.Email ?? "",
                 asicCardDetails
             );
 
