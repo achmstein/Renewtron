@@ -41,7 +41,7 @@ public class OntraportSmsProvider : ISmsProvider
                 onRetry: (outcome, timespan, retryAttempt, context) =>
                 {
                     var message = outcome.Exception?.Message ?? "SMS not yet available";
-                    _logger.LogInformation($"[Polling SMS - Attempt {retryAttempt}/20] {message}. Retrying in {timespan.TotalSeconds} seconds...");
+                    _logger.LogInformation($"[Polling SMS - Attempt {retryAttempt}/40] {message}. Retrying in {timespan.TotalSeconds} seconds...");
                 });
     }
 

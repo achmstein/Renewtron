@@ -651,24 +651,29 @@ public class AsicRenewalClient : IAsicRenewalClient
             var finalResponse = await _http.SendAsync(paymentSuccessRequest);
             var finalContent = await finalResponse.Content.ReadAsStringAsync();
 
-            // Check for errors in the XML response
-            if (finalContent.Contains("declined") || finalContent.Contains("Your transaction has been declined"))
+            // Check for success: button should say "Next" and be disabled
+            var nextButtonMatch = Regex.Match(finalContent, @"<button[^>]*disabled[^>]*>Next</button>", RegexOptions.IgnoreCase);
+            if (nextButtonMatch.Success)
             {
-                return PaymentResult.Failed("Payment was declined by your financial institution");
+                return PaymentResult.Succeeded(hostedTokenizationId);
             }
 
-            if (finalContent.Contains("error") || (finalContent.Contains("<html>") && finalContent.Contains("<p>")))
+            // Check for failure: button says "Pay Now" (still on payment screen)
+            if (finalContent.Contains(">Pay Now</button>"))
             {
-                // Extract error message from HTML in XML response
+                // Try to extract error message from errorPanel if available
                 var errorMatch = Regex.Match(finalContent, @"<p>(.*?)</p>", RegexOptions.Singleline);
-                var errorMessage = errorMatch.Success
-                    ? Regex.Replace(errorMatch.Groups[1].Value.Trim(), @"<br\s*/?>", " ").Trim()
-                    : "Payment error occurred";
-                return PaymentResult.Failed(errorMessage);
+                if (errorMatch.Success)
+                {
+                    var errorMessage = Regex.Replace(errorMatch.Groups[1].Value.Trim(), @"<br\s*/?>", " ").Trim();
+                    return PaymentResult.Failed(errorMessage);
+                }
+
+                return PaymentResult.Failed("Payment was declined or an error occurred");
             }
 
-            // Success - check for confirmation
-            if (finalResponse.IsSuccessStatusCode && !finalContent.Contains("declined") && !finalContent.Contains("error"))
+            // Fallback: if HTTP OK but we can't determine state
+            if (finalResponse.IsSuccessStatusCode)
             {
                 return PaymentResult.Succeeded(hostedTokenizationId);
             }

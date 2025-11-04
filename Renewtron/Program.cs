@@ -163,4 +163,8 @@ var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextI
 await initialiser.InitialiseAsync();
 await initialiser.SeedAsync();
 
+//var ontraport = scope.ServiceProvider.GetService<ISmsProvider>();
+
+//var otp = await ontraport?.GetOtpAsync();
+
 app.Run();
