@@ -49,34 +49,37 @@ public class OntraportSmsProvider : ISmsProvider
     {
         try
         {
-            // Clear old SMS first to ensure we get a fresh OTP
-            _logger.LogInformation($"Clearing old SMS for contact {_settings.ContactId}");
-            var cleared = await ClearLastInboundSmsAsync(_settings.ContactId);
+            // Capture the current timestamp - only process messages AFTER this time
+            var startTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _logger.LogInformation($"Starting OTP polling for conversation {_settings.ConversationId} from timestamp {startTimestamp}");
 
-            if (cleared)
-            {
-                _logger.LogInformation($"Successfully cleared last_inbound_sms for contact {_settings.ContactId}");
-            }
-            else
-            {
-                _logger.LogWarning($"Warning: Failed to clear last_inbound_sms for contact {_settings.ContactId}");
-            }
-
-            // Wait a moment for the clear operation to propagate
-            await Task.Delay(1000);
-
-            // Use Polly retry policy to poll for SMS with OTP
+            // Use Polly retry policy to poll for new SMS messages with OTP
             var smsText = await _retryPolicy.ExecuteAsync(async () =>
             {
-                var sms = await GetLastInboundSmsAsync(_settings.ContactId);
+                var messages = await GetConversationMessagesAsync(_settings.ConversationId, startTimestamp);
 
-                // Check if SMS contains OTP pattern
-                if (!string.IsNullOrWhiteSpace(sms) && ContainsOtpPattern(sms))
+                // Look for messages received AFTER we started waiting
+                var newMessages = messages
+                    .Where(m =>
+                        long.TryParse(m.Date, out var msgDate) &&
+                        msgDate > startTimestamp &&
+                        m.Type == "CONVO_MESSAGE" &&
+                        m.Topic == "TEXT" &&
+                        !string.IsNullOrWhiteSpace(m.Resource))
+                    .OrderBy(m => m.Date) // Process oldest first
+                    .ToList();
+
+                // Check if any new message contains OTP
+                foreach (var message in newMessages)
                 {
-                    return sms;
+                    if (ContainsOtpPattern(message.Resource!))
+                    {
+                        _logger.LogInformation($"Found OTP in message ID {message.Id} dated {message.Date}");
+                        return message.Resource!;
+                    }
                 }
 
-                // Return empty to trigger retry
+                // No OTP found yet, trigger retry
                 return string.Empty;
             });
 
@@ -98,67 +101,32 @@ public class OntraportSmsProvider : ISmsProvider
         }
     }
 
-    private async Task<string> GetLastInboundSmsAsync(string contactId)
+    private async Task<List<ConversationMessage>> GetConversationMessagesAsync(string conversationId, long startTimestamp)
     {
         try
         {
-            var response = await _httpClient.GetAsync($"Contact?id={contactId}");
+            // Use the date parameter to filter messages from the start timestamp
+            var url = $"Conversation/getMessages?id={conversationId}&date={startTimestamp}&direction=1";
+            var response = await _httpClient.GetAsync(url);
 
             if (!response.IsSuccessStatusCode)
             {
-                throw new OntraportException($"Failed to fetch contact: {response.StatusCode}");
+                throw new OntraportException($"Failed to fetch conversation messages: {response.StatusCode}");
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<OntraportResponse>(content);
+            var result = JsonSerializer.Deserialize<OntraportConversationResponse>(content);
 
             if (result?.Code != 0 || result?.Data == null)
             {
-                throw new OntraportException("Invalid response from Ontraport API");
+                throw new OntraportException("Invalid response from Ontraport Conversation API");
             }
 
-            // Extract last_inbound_sms from the data object
-            if (result.Data.TryGetProperty("last_inbound_sms", out var smsElement))
-            {
-                return smsElement.GetString() ?? string.Empty;
-            }
-
-            return string.Empty;
+            return result.Data.Messages ?? new List<ConversationMessage>();
         }
         catch (Exception ex) when (ex is not OntraportException)
         {
-            throw new OntraportException($"Error retrieving SMS from Ontraport: {ex.Message}", ex);
-        }
-    }
-
-    private async Task<bool> ClearLastInboundSmsAsync(string contactId)
-    {
-        try
-        {
-            var formData = new Dictionary<string, string>
-            {
-                ["id"] = contactId,
-                ["last_inbound_sms"] = string.Empty
-            };
-
-            var content = new FormUrlEncodedContent(formData);
-            var response = await _httpClient.PutAsync("Contacts", content);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogError($"Failed to clear SMS field: {response.StatusCode}");
-                return false;
-            }
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<OntraportResponse>(responseContent);
-
-            return result?.Code == 0;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError($"Error clearing SMS field: {ex.Message}");
-            return false;
+            throw new OntraportException($"Error retrieving conversation messages from Ontraport: {ex.Message}", ex);
         }
     }
 
@@ -219,16 +187,4 @@ public class OntraportException : Exception
     public OntraportException(string message) : base(message) { }
     public OntraportException(string message, Exception innerException)
         : base(message, innerException) { }
-}
-
-public class OntraportResponse
-{
-    [JsonPropertyName("code")]
-    public int Code { get; set; }
-
-    [JsonPropertyName("data")]
-    public JsonElement Data { get; set; }
-
-    [JsonPropertyName("account_id")]
-    public int AccountId { get; set; }
 }
