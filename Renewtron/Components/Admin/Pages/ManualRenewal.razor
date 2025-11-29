@@ -5,6 +5,8 @@
 @using Asic.Client.Abstractions
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Caching.Memory
+@using Microsoft.Extensions.Options
+@using Renewtron.Settings
 @using Hangfire
 
 @inject ApplicationDbContext DbContext
@@ -13,6 +15,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IBackgroundJobClient BackgroundJobClient
 @inject IMemoryCache MemoryCache
+@inject IOptionsSnapshot<PricingSettings> PricingSettings
 
 <PageTitle>Manual Renewal - Renewtron</PageTitle>
 
@@ -68,10 +71,10 @@
                         <label for="abn" class="block text-sm font-medium text-gray-700">ABN</label>
                         <div class="mt-1 flex rounded-md">
                             <input type="text" @bind="searchAbn" @bind:event="oninput" id="abn"
-                                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
+                                   class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2"
                                    placeholder="Enter 11-digit ABN" maxlength="11" />
                             <button @onclick="SearchBusiness" disabled="@isSearching"
-                                    class="ml-3 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="ml-3 inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
                                 @if (isSearching)
                                 {
                                     <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
@@ -103,7 +106,7 @@
                                             <input type="radio" name="business" value="@result.Id"
                                                    @onchange="() => SelectBusiness(result)"
                                                    checked="@(selectedResult?.Id == result.Id)"
-                                                   class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600" />
+                                                   class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600" />
                                         </div>
                                         <div class="ml-3 text-sm leading-6">
                                             <label class="font-medium text-gray-900">@result.BusinessName</label>
@@ -128,17 +131,17 @@
                         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div>
                                 <label for="renewalYears" class="block text-sm font-medium text-gray-700">Renewal Years</label>
-                                <select @bind="renewalYears" id="renewalYears"
-                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2">
-                                    <option value="1">1 Year</option>
-                                    <option value="3">3 Years</option>
+                                <select value="@renewalYears" @onchange="OnRenewalYearsChanged" id="renewalYears"
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2">
+                                    <option value="1">1 Year - Default: $@pricing.GetCustomerPrice(1).ToString("F2")</option>
+                                    <option value="3">3 Years - Default: $@pricing.GetCustomerPrice(3).ToString("F2")</option>
                                 </select>
                             </div>
 
                             <div>
                                 <label for="email" class="block text-sm font-medium text-gray-700">Customer Email</label>
                                 <input type="email" @bind="customerEmail" id="email"
-                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
+                                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2"
                                        placeholder="customer@example.com" />
                             </div>
 
@@ -149,16 +152,15 @@
                                         <span class="text-gray-500 sm:text-sm">$</span>
                                     </div>
                                     <input type="number" @bind="amount" id="amount" step="0.01" min="0"
-                                           class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2"
-                                           placeholder="0.00" />
+                                           class="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2" />
                                 </div>
-                                <p class="mt-1 text-xs text-gray-500">Amount received from customer via external payment method</p>
+                                <p class="mt-1 text-xs text-gray-500">Pre-filled with default price. Adjust if customer paid a different amount.</p>
                             </div>
                         </div>
 
                         <div class="mt-6">
                             <button @onclick="ProcessManualRenewal" disabled="@isProcessing"
-                                    class="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
                                 @if (isProcessing)
                                 {
                                     <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
@@ -194,11 +196,27 @@
     private int renewalYears = 1;
     private string customerEmail = "";
     private decimal amount = 0;
+    private PricingSettings pricing = null!;
 
     // Processing
     private bool isProcessing = false;
     private string successMessage = "";
     private string errorMessage = "";
+
+    protected override void OnInitialized()
+    {
+        pricing = PricingSettings.Value;
+        amount = pricing.GetCustomerPrice(renewalYears);
+    }
+
+    private void OnRenewalYearsChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var years))
+        {
+            renewalYears = years;
+            amount = pricing.GetCustomerPrice(years);
+        }
+    }
 
     private async Task SearchBusiness()
     {

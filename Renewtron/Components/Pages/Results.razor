@@ -1,4 +1,4 @@
-﻿@page "/results/{id:guid}"
+@page "/results/{id:guid}"
 
 @using Renewtron.Data
 @using Microsoft.EntityFrameworkCore
@@ -20,7 +20,7 @@
     {
         <div class="flex min-h-screen items-center justify-center">
             <div class="text-center">
-                <svg class="mx-auto h-12 w-12 animate-spin text-indigo-600" fill="none" viewBox="0 0 24 24">
+                <svg class="mx-auto h-12 w-12 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -38,7 +38,7 @@
                 <h3 class="mt-4 text-lg font-semibold text-gray-900">Search not found</h3>
                 <p class="mt-2 text-sm text-gray-600">The search results you're looking for don't exist.</p>
                 <div class="mt-6">
-                    <a href="/" class="inline-flex items-center rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                    <a href="/" class="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
                         Back to Home
                     </a>
                 </div>
@@ -67,40 +67,90 @@
 
             @if (searchLog.Results?.Any() == true)
             {
+                <!-- Selection Controls -->
+                <div class="mt-6 flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox"
+                                   checked="@AreAllSelected()"
+                                   @onchange="ToggleSelectAll"
+                                   class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600" />
+                            <span class="text-sm font-medium text-gray-700">Select all</span>
+                        </label>
+                        @if (selectedResults.Any())
+                        {
+                            <span class="text-sm text-gray-500">(@selectedResults.Count selected)</span>
+                        }
+                    </div>
+                    @if (selectedResults.Any())
+                    {
+                        <button @onclick="RenewSelected"
+                                class="inline-flex items-center gap-x-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                            Renew selected (@selectedResults.Count)
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                            </svg>
+                        </button>
+                    }
+                </div>
+
                 <!-- Results List -->
-                <div class="mt-8 space-y-6">
+                <div class="mt-6 space-y-4">
                     @foreach (var result in searchLog.Results)
                     {
-                        <div class="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black ring-opacity-5">
+                        <div class="overflow-hidden rounded-lg bg-white shadow ring-1 @(IsSelected(result.Id) ? "ring-blue-500 ring-2" : "ring-black ring-opacity-5")">
                             <div class="px-6 py-6">
-                                <div class="flex items-start justify-between">
-                                    <div class="flex-1">
-                                        <h3 class="text-xl font-semibold text-gray-900">@result.BusinessName</h3>
+                                <div class="flex items-start gap-4">
+                                    <!-- Checkbox -->
+                                    <div class="flex items-center pt-1">
+                                        <input type="checkbox"
+                                               id="result-@result.Id"
+                                               checked="@IsSelected(result.Id)"
+                                               @onchange="@(() => ToggleSelection(result.Id))"
+                                               class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 cursor-pointer" />
                                     </div>
+
+                                    <!-- Business Info -->
+                                    <label for="result-@result.Id" class="flex-1 cursor-pointer">
+                                        <h3 class="text-xl font-semibold text-gray-900">@result.BusinessName</h3>
+
+                                        <!-- Business Details -->
+                                        <dl class="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                                            <div>
+                                                <dt class="text-sm font-medium text-gray-500">Account Number</dt>
+                                                <dd class="mt-1 text-sm text-gray-900">@result.AccountNumber</dd>
+                                            </div>
+                                            <div>
+                                                <dt class="text-sm font-medium text-gray-500">Registration date</dt>
+                                                <dd class="mt-1 text-sm text-gray-900">@result.RegistrationDate</dd>
+                                            </div>
+                                        </dl>
+                                    </label>
+
+                                    <!-- Individual Renew Button -->
                                     <a href="/renew/@result.Id"
-                                       class="ml-4 inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
-                                        Renew now
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                                        </svg>
+                                       class="ml-4 inline-flex items-center gap-x-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-blue-600 shadow-sm ring-1 ring-inset ring-blue-200 hover:bg-blue-50">
+                                        Renew
                                     </a>
                                 </div>
-
-                                <!-- Business Details -->
-                                <dl class="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-                                    <div>
-                                        <dt class="text-sm font-medium text-gray-500">Account Number</dt>
-                                        <dd class="mt-1 text-sm text-gray-900">@result.AccountNumber</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-sm font-medium text-gray-500">Registration date</dt>
-                                        <dd class="mt-1 text-sm text-gray-900">@result.RegistrationDate</dd>
-                                    </div>
-                                </dl>
                             </div>
                         </div>
                     }
                 </div>
+
+                <!-- Bulk Action Footer (sticky when items selected) -->
+                @if (selectedResults.Any())
+                {
+                    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 sm:hidden">
+                        <button @onclick="RenewSelected"
+                                class="w-full inline-flex items-center justify-center gap-x-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
+                            Renew @selectedResults.Count business name@(selectedResults.Count > 1 ? "s" : "")
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                            </svg>
+                        </button>
+                    </div>
+                }
             }
             else
             {
@@ -113,7 +163,7 @@
                     <p class="mt-2 text-sm text-gray-600">We couldn't find any business names registered to this ABN.</p>
                     <div class="mt-6">
                         <a href="/"
-                           class="inline-flex items-center rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                           class="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
                             Try another ABN
                         </a>
                     </div>
@@ -129,6 +179,7 @@
 
     private bool isLoading = true;
     private SearchLog? searchLog;
+    private HashSet<Guid> selectedResults = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -146,4 +197,41 @@
         isLoading = false;
     }
 
+    private bool IsSelected(Guid resultId) => selectedResults.Contains(resultId);
+
+    private bool AreAllSelected() => searchLog?.Results != null &&
+                                     searchLog.Results.Any() &&
+                                     searchLog.Results.All(r => selectedResults.Contains(r.Id));
+
+    private void ToggleSelection(Guid resultId)
+    {
+        if (selectedResults.Contains(resultId))
+            selectedResults.Remove(resultId);
+        else
+            selectedResults.Add(resultId);
+    }
+
+    private void ToggleSelectAll()
+    {
+        if (AreAllSelected())
+        {
+            selectedResults.Clear();
+        }
+        else if (searchLog?.Results != null)
+        {
+            foreach (var result in searchLog.Results)
+            {
+                selectedResults.Add(result.Id);
+            }
+        }
+    }
+
+    private void RenewSelected()
+    {
+        if (selectedResults.Any())
+        {
+            var ids = string.Join(",", selectedResults);
+            Navigation.NavigateTo($"/renew-bulk?ids={ids}");
+        }
+    }
 }

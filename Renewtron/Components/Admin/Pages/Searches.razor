@@ -28,12 +28,12 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="inline-flex rounded-md shadow-sm" role="group">
-                            <button @onclick="() => viewMode = ViewMode.Table" type="button" class="@(viewMode == ViewMode.Table ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50") inline-flex items-center px-3 py-2 text-sm font-semibold ring-1 ring-inset ring-gray-300 rounded-l-md">
+                            <button @onclick="() => viewMode = ViewMode.Table" type="button" class="@(viewMode == ViewMode.Table ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50") inline-flex items-center px-3 py-2 text-sm font-semibold ring-1 ring-inset ring-gray-300 rounded-l-md">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5" />
                                 </svg>
                             </button>
-                            <button @onclick="() => viewMode = ViewMode.Cards" type="button" class="@(viewMode == ViewMode.Cards ? "bg-indigo-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50") inline-flex items-center px-3 py-2 text-sm font-semibold ring-1 ring-inset ring-gray-300 rounded-r-md">
+                            <button @onclick="() => viewMode = ViewMode.Cards" type="button" class="@(viewMode == ViewMode.Cards ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50") inline-flex items-center px-3 py-2 text-sm font-semibold ring-1 ring-inset ring-gray-300 rounded-r-md">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
                                 </svg>
@@ -62,13 +62,13 @@
                                             <!-- ABN Filter -->
                                             <div>
                                                 <label class="block text-xs font-medium text-gray-700 mb-1">ABN</label>
-                                                <input type="text" @bind="tempFilterAbn" placeholder="Search ABN" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
+                                                <input type="text" @bind="tempFilterAbn" placeholder="Search ABN" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2" />
                                             </div>
 
                                             <!-- Status Filter -->
                                             <div>
                                                 <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                                                <select @bind="tempFilterSuccess" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2">
+                                                <select @bind="tempFilterSuccess" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2">
                                                     <option value="">All</option>
                                                     <option value="true">Success</option>
                                                     <option value="false">Failed</option>
@@ -78,7 +78,7 @@
                                             <!-- Initiated By Filter -->
                                             <div>
                                                 <label class="block text-xs font-medium text-gray-700 mb-1">Initiated By</label>
-                                                <select @bind="tempFilterInitiatedBy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2">
+                                                <select @bind="tempFilterInitiatedBy" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2">
                                                     <option value="">All</option>
                                                     <option value="@SearchInitiator.Customer">Customer</option>
                                                     <option value="@SearchInitiator.Admin">Admin</option>
@@ -89,18 +89,18 @@
                                             <div class="grid grid-cols-2 gap-2">
                                                 <div>
                                                     <label class="block text-xs font-medium text-gray-700 mb-1">From Date</label>
-                                                    <input type="date" @bind="tempFilterDateFrom" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
+                                                    <input type="date" @bind="tempFilterDateFrom" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2" />
                                                 </div>
                                                 <div>
                                                     <label class="block text-xs font-medium text-gray-700 mb-1">To Date</label>
-                                                    <input type="date" @bind="tempFilterDateTo" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2" />
+                                                    <input type="date" @bind="tempFilterDateTo" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2" />
                                                 </div>
                                             </div>
                                         </div>
 
                                         <!-- Actions -->
                                         <div class="mt-4 flex gap-2">
-                                            <button @onclick="ApplyFiltersAndClose" class="flex-1 inline-flex justify-center items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                                            <button @onclick="ApplyFiltersAndClose" class="flex-1 inline-flex justify-center items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
                                                 Apply
                                             </button>
                                             <button @onclick="ClearFiltersAndClose" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
@@ -137,10 +137,10 @@
                     <div class="px-4 pb-4 sm:px-6 flex flex-wrap gap-2">
                         @if (!string.IsNullOrEmpty(filterAbn))
                         {
-                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                                 ABN: @filterAbn
-                                <button @onclick="@(async () => { filterAbn = ""; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
-                                    <svg class="h-3.5 w-3.5 stroke-indigo-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
+                                <button @onclick="@(async () => { filterAbn = ""; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-blue-200">
+                                    <svg class="h-3.5 w-3.5 stroke-blue-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
                                         <path stroke-linecap="round" d="M1 1l6 6m0-6L1 7" />
                                     </svg>
                                 </button>
@@ -148,10 +148,10 @@
                         }
                         @if (!string.IsNullOrEmpty(filterSuccess))
                         {
-                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                                 Status: @(filterSuccess == "true" ? "Success" : "Failed")
-                                <button @onclick="@(async () => { filterSuccess = ""; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
-                                    <svg class="h-3.5 w-3.5 stroke-indigo-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
+                                <button @onclick="@(async () => { filterSuccess = ""; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-blue-200">
+                                    <svg class="h-3.5 w-3.5 stroke-blue-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
                                         <path stroke-linecap="round" d="M1 1l6 6m0-6L1 7" />
                                     </svg>
                                 </button>
@@ -159,10 +159,10 @@
                         }
                         @if (!string.IsNullOrEmpty(filterInitiatedBy))
                         {
-                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                                 Initiated By: @filterInitiatedBy
-                                <button @onclick="@(async () => { filterInitiatedBy = ""; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
-                                    <svg class="h-3.5 w-3.5 stroke-indigo-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
+                                <button @onclick="@(async () => { filterInitiatedBy = ""; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-blue-200">
+                                    <svg class="h-3.5 w-3.5 stroke-blue-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
                                         <path stroke-linecap="round" d="M1 1l6 6m0-6L1 7" />
                                     </svg>
                                 </button>
@@ -170,10 +170,10 @@
                         }
                         @if (filterDateFrom.HasValue)
                         {
-                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                                 From: @filterDateFrom.Value.ToString("MMM dd, yyyy")
-                                <button @onclick="@(async () => { filterDateFrom = null; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
-                                    <svg class="h-3.5 w-3.5 stroke-indigo-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
+                                <button @onclick="@(async () => { filterDateFrom = null; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-blue-200">
+                                    <svg class="h-3.5 w-3.5 stroke-blue-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
                                         <path stroke-linecap="round" d="M1 1l6 6m0-6L1 7" />
                                     </svg>
                                 </button>
@@ -181,10 +181,10 @@
                         }
                         @if (filterDateTo.HasValue)
                         {
-                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+                            <span class="inline-flex items-center gap-x-1.5 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                                 To: @filterDateTo.Value.ToString("MMM dd, yyyy")
-                                <button @onclick="@(async () => { filterDateTo = null; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-indigo-200">
-                                    <svg class="h-3.5 w-3.5 stroke-indigo-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
+                                <button @onclick="@(async () => { filterDateTo = null; await ApplyFilters(); })" type="button" class="group relative -mr-1 h-3.5 w-3.5 rounded-sm hover:bg-blue-200">
+                                    <svg class="h-3.5 w-3.5 stroke-blue-600" fill="none" viewBox="0 0 8 8" stroke-width="1.5">
                                         <path stroke-linecap="round" d="M1 1l6 6m0-6L1 7" />
                                     </svg>
                                 </button>
@@ -344,7 +344,7 @@
                                     <td class="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                                         @if (search.InitiatedBy == SearchInitiator.Admin)
                                         {
-                                            <span class="text-indigo-600 font-medium">Admin</span>
+                                            <span class="text-blue-600 font-medium">Admin</span>
                                         }
                                         else
                                         {
@@ -371,7 +371,7 @@
                                         <div class="text-xs">@search.SearchedAt.ToLocalTime().ToString("HH:mm:ss")</div>
                                     </td>
                                     <td class="whitespace-nowrap px-6 py-4 text-sm">
-                                        <a href="/admin/searches/@search.Id" class="inline-flex items-center text-indigo-600 hover:text-indigo-900">
+                                        <a href="/admin/searches/@search.Id" class="inline-flex items-center text-blue-600 hover:text-blue-900">
                                             View
                                         </a>
                                     </td>
@@ -448,7 +448,7 @@
                                     </div>
                                 </div>
                                 <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                                    <button @onclick="CloseErrorModal" type="button" class="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:ml-3 sm:w-auto">
+                                    <button @onclick="CloseErrorModal" type="button" class="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:ml-3 sm:w-auto">
                                         Close
                                     </button>
                                 </div>
