@@ -145,6 +145,14 @@
                                     <dd class="mt-1 text-sm text-gray-900">@renewal.Email</dd>
                                 </div>
                                 <div>
+                                    <dt class="text-sm font-medium text-gray-500">Mobile Number</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">@(renewal.MobileNumber ?? "N/A")</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Date of Birth</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">@(renewal.DateOfBirth?.ToString("dd/MM/yyyy") ?? "N/A")</dd>
+                                </div>
+                                <div>
                                     <dt class="text-sm font-medium text-gray-500">IP Address</dt>
                                     <dd class="mt-1 text-sm text-gray-900 font-mono">
                                         <span>@renewal.SearchResult.SearchLog.IpAddress</span>

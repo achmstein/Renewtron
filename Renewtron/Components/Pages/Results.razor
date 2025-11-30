@@ -128,10 +128,10 @@
                                     </label>
 
                                     <!-- Individual Renew Button -->
-                                    <a href="/renew/@result.Id"
+                                    <button @onclick="@(() => RenewSingle(result.Id))" @onclick:stopPropagation="true"
                                        class="ml-4 inline-flex items-center gap-x-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-blue-600 shadow-sm ring-1 ring-inset ring-blue-200 hover:bg-blue-50">
                                         Renew
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -231,7 +231,12 @@
         if (selectedResults.Any())
         {
             var ids = string.Join(",", selectedResults);
-            Navigation.NavigateTo($"/renew-bulk?ids={ids}");
+            Navigation.NavigateTo($"/renew?ids={ids}");
         }
+    }
+
+    private void RenewSingle(Guid resultId)
+    {
+        Navigation.NavigateTo($"/renew?ids={resultId}");
     }
 }

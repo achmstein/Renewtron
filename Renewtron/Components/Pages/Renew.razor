@@ -1,4 +1,4 @@
-﻿@page "/renew/{id:guid}"
+@page "/renew"
 
 @using Asic.Client.Models
 @using Renewtron.Abstractions
@@ -31,275 +31,266 @@
     </div>
 
     <div class="py-8 px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto max-w-3xl">
-        @if (isLoading)
-        {
-            <div class="text-center">
-                <svg class="mx-auto h-12 w-12 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="mt-4 text-sm text-gray-600">Loading...</p>
-            </div>
-        }
-        else if (searchResult == null)
-        {
-            <div class="text-center">
-                <h3 class="text-lg font-semibold text-gray-900">Business not found</h3>
-                <p class="mt-2 text-sm text-gray-600">The business you're trying to renew doesn't exist.</p>
-                <a href="/" class="mt-4 inline-block text-blue-600 hover:text-blue-500">Back to Home</a>
-            </div>
-        }
-        else if (isProcessing)
-        {
-            <div class="rounded-lg bg-white p-8 shadow text-center">
-                <svg class="mx-auto h-16 w-16 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <h3 class="mt-4 text-lg font-semibold text-gray-900">@processingStatus</h3>
-                <p class="mt-2 text-sm text-gray-600">Please wait while we process your request...</p>
-            </div>
-        }
-        else if (showSupportMessage)
-        {
-            <!-- Business Info Card -->
-            <div class="mb-8 overflow-hidden rounded-lg bg-white shadow">
-                <div class="bg-blue-600 px-6 py-4">
-                    <h2 class="text-xl font-semibold text-white">Renewal In Progress</h2>
+        <div class="mx-auto max-w-4xl">
+            @if (isLoading)
+            {
+                <div class="text-center">
+                    <svg class="mx-auto h-12 w-12 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p class="mt-4 text-sm text-gray-600">Loading...</p>
                 </div>
-                <div class="px-6 py-4">
-                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Business Name</dt>
-                            <dd class="mt-1 text-sm font-semibold text-gray-900">@searchResult.BusinessName</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Account Number</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.AccountNumber</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Registration Date</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RegistrationDate</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">ABN</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.SearchLog?.Abn</dd>
-                        </div>
-                    </dl>
+            }
+            else if (!searchResults.Any())
+            {
+                <div class="text-center">
+                    <h3 class="text-lg font-semibold text-gray-900">No business names selected</h3>
+                    <p class="mt-2 text-sm text-gray-600">Please go back and select the business names you want to renew.</p>
+                    <a href="/" class="mt-4 inline-block text-blue-600 hover:text-blue-500">Back to Home</a>
                 </div>
-            </div>
+            }
+            else if (isProcessing)
+            {
+                <div class="rounded-lg bg-white p-8 shadow text-center">
+                    <svg class="mx-auto h-16 w-16 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <h3 class="mt-4 text-lg font-semibold text-gray-900">@processingStatus</h3>
+                    <p class="mt-2 text-sm text-gray-600">Please wait while we process your requests...</p>
 
-            <!-- Customer Support Message -->
-            <div class="rounded-lg bg-white shadow overflow-hidden">
-                <div class="px-6 py-8">
-                    <div class="flex items-start">
-                        <div class="flex-shrink-0">
-                            <svg class="h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                            </svg>
-                        </div>
-                        <div class="ml-4 flex-1">
-                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Our Customer Support Team is Working on Your Renewal</h3>
-                            <div class="text-sm text-gray-700 space-y-3">
-                                <p>Thank you for your payment. We received your payment successfully, but encountered an issue while processing your renewal with ASIC.</p>
-                                <p><strong>Don't worry!</strong> Our customer support team has been notified and is actively working to complete your business name renewal.</p>
-                                <div class="mt-4 bg-blue-50 rounded-md p-4 border border-blue-200">
-                                    <div class="flex">
-                                        <div class="flex-shrink-0">
-                                            <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                                            </svg>
-                                        </div>
-                                        <div class="ml-3">
-                                            <h4 class="text-sm font-medium text-blue-800">Reference Number</h4>
-                                            <p class="mt-1 text-sm text-blue-700 font-mono">@existingRenewalRequest.Id</p>
-                                            <p class="mt-2 text-xs text-blue-600">Please keep this reference number for your records. You can use it to track the status of your renewal.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <p class="mt-4">We'll send you an email confirmation at <strong>@existingRenewalRequest.Email</strong> once your renewal is completed.</p>
+                    @if (processedCount > 0)
+                    {
+                        <div class="mt-4">
+                            <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                                <div class="h-full rounded-full bg-blue-600 transition-all duration-500"
+                                     style="width: @((processedCount * 100 / searchResults.Count))%"></div>
                             </div>
+                            <p class="mt-2 text-xs text-gray-500">@processedCount of @searchResults.Count processed</p>
                         </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-gray-900">Renew Business Name@(searchResults.Count > 1 ? "s" : "")</h1>
+                    <p class="mt-1 text-sm text-gray-600">
+                        You're renewing @searchResults.Count business name@(searchResults.Count > 1 ? "s" : "")
+                    </p>
+                </div>
+
+                <!-- Selected Business Names -->
+                <div class="mb-8 overflow-hidden rounded-lg bg-white shadow">
+                    <div class="bg-blue-600 px-6 py-4">
+                        <h2 class="text-lg font-semibold text-white">@(searchResults.Count > 1 ? "Selected Business Names" : "Business Name")</h2>
                     </div>
-                </div>
-            </div>
-
-            <!-- Back Link -->
-            <div class="mt-6">
-                <a href="/results/@searchResult.SearchLogId" class="text-sm text-blue-600 hover:text-blue-500">
-                    ← Back to results
-                </a>
-            </div>
-        }
-        else
-        {
-            <!-- Business Info Card -->
-            <div class="mb-8 overflow-hidden rounded-lg bg-white shadow">
-                <div class="bg-blue-600 px-6 py-4">
-                    <h2 class="text-xl font-semibold text-white">Renew Business Name</h2>
-                </div>
-                <div class="px-6 py-4">
-                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Business Name</dt>
-                            <dd class="mt-1 text-sm font-semibold text-gray-900">@searchResult.BusinessName</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Account Number</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.AccountNumber</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">Registration Date</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.RegistrationDate</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-gray-500">ABN</dt>
-                            <dd class="mt-1 text-sm text-gray-900">@searchResult.SearchLog?.Abn</dd>
-                        </div>
-                    </dl>
-                </div>
-            </div>
-
-            <!-- Renewal Form -->
-            <div class="overflow-hidden rounded-lg bg-white shadow">
-                <div class="px-6 py-6">
-                    <h3 class="text-lg font-medium text-gray-900 mb-6">Renewal Details</h3>
-
-                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
-                        <!-- Renewal Period -->
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Renewal Period</label>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="relative flex items-start">
-                                    <div class="flex h-6 items-center">
-                                        <input id="1year" name="renewalYears" type="radio" value="1" @onchange="@(() => renewalYears = 1)" checked="@(renewalYears == 1)"
-                                               class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600">
-                                    </div>
-                                    <div class="ml-3">
-                                        <label for="1year" class="text-sm font-medium text-gray-900">1 Year</label>
-                                        <p class="text-sm text-gray-500">$@pricing.GetCustomerPrice(1).ToString("F2")</p>
-                                    </div>
-                                </div>
-                                <div class="relative flex items-start">
-                                    <div class="flex h-6 items-center">
-                                        <input id="3years" name="renewalYears" type="radio" value="3" @onchange="@(() => renewalYears = 3)" checked="@(renewalYears == 3)"
-                                               class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600">
-                                    </div>
-                                    <div class="ml-3">
-                                        <label for="3years" class="text-sm font-medium text-gray-900">3 Years</label>
-                                        <p class="text-sm text-gray-500">$@pricing.GetCustomerPrice(3).ToString("F2")</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Credit Card Fields -->
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium text-gray-700 mb-3">Payment Information</label>
-                              <CreditCard @ref="creditCardComponent"
-                                        CardNumber="@cardNumber"
-                                        CardholderName="@cardHolder"
-                                        ExpiryDate="@expiryDate"
-                                        Cvc="@cvv" />
-                            <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div>
-                                    <label for="cardHolder" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
-                                    <input id="cardHolder" type="text" @bind="cardHolder" @bind:event="oninput" required placeholder="Name on card"
-                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                </div>
-
-                                <div>
-                                    <label for="cardNumber" class="block text-sm font-medium text-gray-700">Card Number</label>
-                                    <input id="cardNumber" type="text" inputmode="numeric" maxlength="19" @bind="cardNumber" @oninput="FormatCardNumber" required placeholder="xxxx xxxx xxxx xxxx"
-                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                </div>
-
-                                <div>
-                                    <label for="expiryDate" class="block text-sm font-medium text-gray-700">Expiry (MM/YY)</label>
-                                    <input id="expiryDate" type="text" maxlength="5" @bind="expiryDate" @oninput="FormatExpiryDate" required placeholder="MM/YY"
-                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                </div>
-
-                                <div>
-                                    <label for="cvv" class="block text-sm font-medium text-gray-700">CVC</label>
-                                    <input id="cvv" type="password" maxlength="4" @bind="cvv" required placeholder="•••"
-                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Email -->
-                        <div class="mb-6">
-                            <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
-                            <input type="email" id="email" @bind="email" required
-                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300">
-                            <p class="mt-1 text-xs text-gray-500">Receipt and confirmation will be sent to this email</p>
-                        </div>
-
-                        @if (!string.IsNullOrEmpty(errorMessage))
+                    <div class="divide-y divide-gray-200">
+                        @foreach (var result in searchResults)
                         {
-                            <div class="mb-4 rounded-md bg-red-50 p-4">
-                                <div class="flex">
-                                    <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                    </svg>
-                                    <div class="ml-3">
-                                        <p class="text-sm text-red-800">@errorMessage</p>
+                            <div class="px-6 py-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="font-medium text-gray-900">@result.BusinessName</h3>
+                                        <p class="text-sm text-gray-500">Account: @result.AccountNumber</p>
                                     </div>
+                                    @if (searchResults.Count > 1)
+                                    {
+                                        <button @onclick="@(() => RemoveFromSelection(result.Id))"
+                                                class="text-gray-400 hover:text-red-500">
+                                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    }
                                 </div>
                             </div>
                         }
-
-                        <!-- Submit Button -->
-                        <div class="flex items-center justify-between">
-                            <a href="/results/@searchResult.SearchLogId" class="text-sm text-gray-600 hover:text-gray-900">
-                                ← Back to results
-                            </a>
-                            <button type="submit" disabled="@(!IsFormValid())"
-                                    class="inline-flex items-center rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Process Renewal - $@pricing.GetCustomerPrice(renewalYears).ToString("F2")
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Security Notice -->
-            <div class="mt-6 rounded-lg bg-blue-50 p-4">
-                <div class="flex">
-                    <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                    </svg>
-                    <div class="ml-3">
-                        <p class="text-sm text-blue-800">
-                            <strong>Secure Payment:</strong> Your payment is processed securely via Stripe. 
-                            We'll handle the ASIC renewal on your behalf.
-                        </p>
                     </div>
                 </div>
-            </div>
-        }
+
+                <!-- Renewal Form -->
+                <div class="overflow-hidden rounded-lg bg-white shadow">
+                    <div class="px-6 py-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-6">Renewal Details</h3>
+
+                        <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
+                            <!-- Renewal Period -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Renewal Period@(searchResults.Count > 1 ? " (applies to all)" : "")</label>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="relative flex items-start">
+                                        <div class="flex h-6 items-center">
+                                            <input id="1year" name="renewalYears" type="radio" value="1" @onchange="@(() => renewalYears = 1)" checked="@(renewalYears == 1)"
+                                                   class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600">
+                                        </div>
+                                        <div class="ml-3">
+                                            <label for="1year" class="text-sm font-medium text-gray-900">1 Year</label>
+                                            <p class="text-sm text-gray-500">$@pricing.GetCustomerPrice(1).ToString("F2") each</p>
+                                        </div>
+                                    </div>
+                                    <div class="relative flex items-start">
+                                        <div class="flex h-6 items-center">
+                                            <input id="3years" name="renewalYears" type="radio" value="3" @onchange="@(() => renewalYears = 3)" checked="@(renewalYears == 3)"
+                                                   class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600">
+                                        </div>
+                                        <div class="ml-3">
+                                            <label for="3years" class="text-sm font-medium text-gray-900">3 Years</label>
+                                            <p class="text-sm text-gray-500">$@pricing.GetCustomerPrice(3).ToString("F2") each</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Price Summary -->
+                            <div class="mb-6 rounded-lg bg-gray-50 p-4">
+                                @if (searchResults.Count > 1)
+                                {
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-600">@searchResults.Count business names x $@pricing.GetCustomerPrice(renewalYears).ToString("F2")</span>
+                                        <span class="font-medium text-gray-900">$@GetTotalPrice().ToString("F2")</span>
+                                    </div>
+                                    <div class="mt-2 flex justify-between border-t border-gray-200 pt-2">
+                                        <span class="font-medium text-gray-900">Total</span>
+                                        <span class="font-semibold text-blue-600">$@GetTotalPrice().ToString("F2")</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex justify-between">
+                                        <span class="font-medium text-gray-900">Total</span>
+                                        <span class="font-semibold text-blue-600">$@GetTotalPrice().ToString("F2")</span>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Credit Card Fields -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-3">Payment Information</label>
+                                <CreditCard @ref="creditCardComponent"
+                                            CardNumber="@cardNumber"
+                                            CardholderName="@cardHolder"
+                                            ExpiryDate="@expiryDate"
+                                            Cvc="@cvv" />
+                                <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label for="cardHolder" class="block text-sm font-medium text-gray-700">Cardholder Name</label>
+                                        <input id="cardHolder" type="text" @bind="cardHolder" @bind:event="oninput" required placeholder="Name on card"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+
+                                    <div>
+                                        <label for="cardNumber" class="block text-sm font-medium text-gray-700">Card Number</label>
+                                        <input id="cardNumber" type="text" inputmode="numeric" maxlength="19" @bind="cardNumber" @oninput="FormatCardNumber" required placeholder="xxxx xxxx xxxx xxxx"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+
+                                    <div>
+                                        <label for="expiryDate" class="block text-sm font-medium text-gray-700">Expiry (MM/YY)</label>
+                                        <input id="expiryDate" type="text" maxlength="5" @bind="expiryDate" @oninput="FormatExpiryDate" required placeholder="MM/YY"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+
+                                    <div>
+                                        <label for="cvv" class="block text-sm font-medium text-gray-700">CVC</label>
+                                        <input id="cvv" type="password" maxlength="4" @bind="cvv" required placeholder="•••"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contact Information -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-3">Contact Information</label>
+                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div class="sm:col-span-2">
+                                        <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                                        <input type="email" id="email" @bind="email" required
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300">
+                                        <p class="mt-1 text-xs text-gray-500">Receipts and confirmations will be sent to this email</p>
+                                    </div>
+
+                                    <div>
+                                        <label for="mobileNumber" class="block text-sm font-medium text-gray-700">Mobile Number</label>
+                                        <input type="tel" id="mobileNumber" @bind="mobileNumber" required placeholder="04XX XXX XXX"
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300">
+                                    </div>
+
+                                    <div>
+                                        <label for="dateOfBirth" class="block text-sm font-medium text-gray-700">Date of Birth</label>
+                                        <input type="date" id="dateOfBirth" @bind="dateOfBirth" required
+                                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-4 py-2 ring-1 ring-inset ring-gray-300">
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(errorMessage))
+                            {
+                                <div class="mb-4 rounded-md bg-red-50 p-4">
+                                    <div class="flex">
+                                        <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                        </svg>
+                                        <div class="ml-3">
+                                            <p class="text-sm text-red-800">@errorMessage</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Submit Button -->
+                            <div class="flex items-center justify-between">
+                                <button type="button" @onclick="GoBack" class="text-sm text-gray-600 hover:text-gray-900">
+                                    ← Back to results
+                                </button>
+                                <button type="submit" disabled="@(!IsFormValid())"
+                                        class="inline-flex items-center rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Process Renewal@(searchResults.Count > 1 ? $"s ({searchResults.Count})" : "") - $@GetTotalPrice().ToString("F2")
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Security Notice -->
+                <div class="mt-6 rounded-lg bg-blue-50 p-4">
+                    <div class="flex">
+                        <svg class="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                        </svg>
+                        <div class="ml-3">
+                            <p class="text-sm text-blue-800">
+                                <strong>Secure Payment:</strong> Your payment is processed securely via Stripe.
+                                We'll handle the ASIC renewal on your behalf.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
-    [Parameter]
-    public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "ids")]
+    public string? Ids { get; set; }
 
     private bool isLoading = true;
     private bool isProcessing = false;
-    private string processingStatus = "Processing payment...";
-    private SearchResult? searchResult;
-    private RenewalRequest? existingRenewalRequest;
-    private bool showSupportMessage = false;
+    private string processingStatus = "Processing payments...";
+    private int processedCount = 0;
+    private List<SearchResult> searchResults = new();
     private string errorMessage = "";
-    private PricingSettings pricing;
+    private PricingSettings pricing = null!;
+    private Guid? searchLogId;
 
     // Form fields
     private int renewalYears = 1;
     private string email = "";
+    private string mobileNumber = "";
+    private DateOnly? dateOfBirth;
 
     private CreditCard? creditCardComponent;
     private string cardNumber = "";
@@ -316,44 +307,72 @@
     private async Task LoadBusinessDetails()
     {
         isLoading = true;
-        searchResult = await DbContext.SearchResults
-            .Include(r => r.SearchLog)
-            .FirstOrDefaultAsync(r => r.Id == Id);
 
-        // Check if there's an existing renewal request for this search result
-        // (1-to-1 relationship: each SearchResult has only one RenewalRequest)
-        if (searchResult != null)
+        if (string.IsNullOrEmpty(Ids))
         {
-            existingRenewalRequest = await DbContext.RenewalRequests
-                .Include(r => r.StripePayment)
-                .FirstOrDefaultAsync(r => r.SearchResultId == searchResult.Id);
+            isLoading = false;
+            return;
+        }
 
-            // Show support message if payment succeeded but ASIC renewal failed
-            if (existingRenewalRequest != null &&
-                existingRenewalRequest.StripePayment?.PaymentStatus == "succeeded" &&
-                existingRenewalRequest.Status == RenewalStatus.Failed)
-            {
-                showSupportMessage = true;
-            }
+        var idList = Ids.Split(',')
+            .Where(s => Guid.TryParse(s, out _))
+            .Select(Guid.Parse)
+            .ToList();
+
+        searchResults = await DbContext.SearchResults
+            .Include(r => r.SearchLog)
+            .Where(r => idList.Contains(r.Id))
+            .ToListAsync();
+
+        if (searchResults.Any())
+        {
+            searchLogId = searchResults.First().SearchLogId;
         }
 
         isLoading = false;
     }
 
+    private decimal GetTotalPrice() => pricing.GetCustomerPrice(renewalYears) * searchResults.Count;
+
     private bool IsFormValid()
     {
         return !string.IsNullOrWhiteSpace(email) &&
+               !string.IsNullOrWhiteSpace(mobileNumber) &&
+               dateOfBirth.HasValue &&
                !string.IsNullOrWhiteSpace(cardNumber) &&
                !string.IsNullOrWhiteSpace(cardHolder) &&
                !string.IsNullOrWhiteSpace(expiryDate) &&
                !string.IsNullOrWhiteSpace(cvv) &&
-               cardNumber.Replace(" ", "").Length >= 15;
+               cardNumber.Replace(" ", "").Length >= 15 &&
+               searchResults.Any();
+    }
+
+    private void RemoveFromSelection(Guid resultId)
+    {
+        searchResults = searchResults.Where(r => r.Id != resultId).ToList();
+        if (!searchResults.Any() && searchLogId.HasValue)
+        {
+            Navigation.NavigateTo($"/results/{searchLogId}");
+        }
+    }
+
+    private void GoBack()
+    {
+        if (searchLogId.HasValue)
+        {
+            Navigation.NavigateTo($"/results/{searchLogId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/");
+        }
     }
 
     private async Task HandleSubmit()
     {
         errorMessage = "";
         isProcessing = true;
+        processedCount = 0;
         processingStatus = "Processing payment...";
 
         try
@@ -367,7 +386,8 @@
             var expiryMonth = expiryParts[0];
             var expiryYear = "20" + expiryParts[1];
 
-            var amount = pricing.GetCustomerPrice(renewalYears);
+            var pricePerRenewal = pricing.GetCustomerPrice(renewalYears);
+            var totalAmount = GetTotalPrice();
 
             // Step 1: Save customer's card (for display only)
             var customerCard = new SavedCreditCard
@@ -375,7 +395,7 @@
                 Id = Guid.NewGuid(),
                 CardholderName = cardHolder,
                 CardNumberLast4 = cardNumber.Replace(" ", "").Substring(cardNumber.Replace(" ", "").Length - 4),
-                CardBrand = creditCardComponent?.Type, 
+                CardBrand = creditCardComponent?.Type,
                 ExpiryMonth = expiryMonth,
                 ExpiryYear = expiryYear,
                 EncryptedCardNumber = EncryptionService.Encrypt(cardNumber.Replace(" ", "")),
@@ -388,101 +408,116 @@
             DbContext.SavedCreditCards.Add(customerCard);
             await DbContext.SaveChangesAsync();
 
-            // Step 2: Update existing renewal request or create new one
-            var renewalRequest = await DbContext.RenewalRequests
-                .FirstOrDefaultAsync(r => r.SearchResultId == searchResult!.Id);
-
-            if (renewalRequest != null)
-            {
-                // Update existing renewal request (payment retry scenario)
-                renewalRequest.RenewalYears = renewalYears;
-                renewalRequest.Email = email;
-                renewalRequest.PaymentType = PaymentType.Stripe;
-                renewalRequest.Amount = amount;
-                // Clear previous error states
-                renewalRequest.ErrorMessage = null;
-                renewalRequest.FailedAtStep = null;
-                renewalRequest.Status = RenewalStatus.Pending;
-                renewalRequest.CompletedAt = null;
-                renewalRequest.TransactionReference = null;
-                renewalRequest.HostedTokenizationId = null;
-
-                // Remove old Stripe payment if exists
-                if (renewalRequest.StripePayment != null)
-                {
-                    DbContext.StripePayments.Remove(renewalRequest.StripePayment);
-                }
-            }
-            else
-            {
-                // Create new renewal request (first attempt)
-                renewalRequest = new RenewalRequest
-                {
-                    Id = Guid.NewGuid(),
-                    SearchResultId = searchResult!.Id,
-                    InitiatedAt = DateTime.UtcNow,
-                    RenewalYears = renewalYears,
-                    Email = email,
-                    PaymentType = PaymentType.Stripe,
-                    Amount = amount,
-                    Status = RenewalStatus.Pending
-                };
-                DbContext.RenewalRequests.Add(renewalRequest);
-            }
-
-            await DbContext.SaveChangesAsync();
-
-            // Step 3: Process Stripe payment
-            processingStatus = "Processing your payment...";
-            StateHasChanged();
-
+            // Step 2: Process single payment for all renewals
+            var businessNames = string.Join(", ", searchResults.Select(r => r.BusinessName));
             var metadata = new Dictionary<string, string>
             {
-                { "renewal_request_id", renewalRequest.Id.ToString() },
-                { "business_name", searchResult.BusinessName },
-                { "abn", searchResult.SearchLog.Abn },
+                { "renewal_count", searchResults.Count.ToString() },
+                { "business_names", businessNames.Length > 500 ? businessNames.Substring(0, 500) : businessNames },
                 { "renewal_years", renewalYears.ToString() }
             };
 
             var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.CreatePaymentIntentAsync(
-                amount,
+                totalAmount,
                 email,
-                $"Business Name Renewal - {searchResult.BusinessName}",
+                $"Business Name Renewal - {searchResults.Count} renewal(s)",
                 metadata);
 
             if (!paymentSuccess)
             {
-                renewalRequest.ErrorMessage = $"Stripe payment failed: {paymentError}";
-                await DbContext.SaveChangesAsync();
                 errorMessage = $"Payment failed: {paymentError}";
                 isProcessing = false;
                 return;
             }
 
-            // Create Stripe payment record
-            var stripePayment = new StripePayment
-            {
-                Id = Guid.NewGuid(),
-                RenewalRequestId = renewalRequest.Id,
-                CustomerCreditCardId = customerCard.Id,
-                PaymentIntentId = paymentIntentId!,
-                PaymentStatus = "succeeded",
-                PaidAt = DateTime.UtcNow
-            };
-
-            DbContext.StripePayments.Add(stripePayment);
-            await DbContext.SaveChangesAsync();
-
-            // Step 4: Queue background job to process ASIC renewal
-            processingStatus = "Confirming your request...";
+            // Step 3: Create renewal requests for each business name
+            processingStatus = "Creating renewal requests...";
             StateHasChanged();
 
-            // Queue the renewal processing job to run in the background
-            BackgroundJobClient.Enqueue<IRenewalProcessingService>(service =>
-                service.ProcessRenewalAsync(renewalRequest.Id));
+            var renewalRequestIds = new List<Guid>();
 
-            // Step 5: Redirect to confirmation page immediately
-            Navigation.NavigateTo($"/renewal-confirmation/{renewalRequest.Id}");
+            foreach (var searchResult in searchResults)
+            {
+                processedCount++;
+
+                // Check if renewal request already exists
+                var renewalRequest = await DbContext.RenewalRequests
+                    .FirstOrDefaultAsync(r => r.SearchResultId == searchResult.Id);
+
+                if (renewalRequest != null)
+                {
+                    // Update existing
+                    renewalRequest.RenewalYears = renewalYears;
+                    renewalRequest.Email = email;
+                    renewalRequest.MobileNumber = mobileNumber;
+                    renewalRequest.DateOfBirth = dateOfBirth;
+                    renewalRequest.PaymentType = PaymentType.Stripe;
+                    renewalRequest.Amount = pricePerRenewal;
+                    renewalRequest.ErrorMessage = null;
+                    renewalRequest.FailedAtStep = null;
+                    renewalRequest.Status = RenewalStatus.Pending;
+                    renewalRequest.CompletedAt = null;
+                    renewalRequest.TransactionReference = null;
+                    renewalRequest.HostedTokenizationId = null;
+
+                    if (renewalRequest.StripePayment != null)
+                    {
+                        DbContext.StripePayments.Remove(renewalRequest.StripePayment);
+                    }
+                }
+                else
+                {
+                    // Create new
+                    renewalRequest = new RenewalRequest
+                    {
+                        Id = Guid.NewGuid(),
+                        SearchResultId = searchResult.Id,
+                        InitiatedAt = DateTime.UtcNow,
+                        RenewalYears = renewalYears,
+                        Email = email,
+                        MobileNumber = mobileNumber,
+                        DateOfBirth = dateOfBirth,
+                        PaymentType = PaymentType.Stripe,
+                        Amount = pricePerRenewal,
+                        Status = RenewalStatus.Pending
+                    };
+                    DbContext.RenewalRequests.Add(renewalRequest);
+                }
+
+                await DbContext.SaveChangesAsync();
+
+                // Create Stripe payment record for each renewal
+                var stripePayment = new StripePayment
+                {
+                    Id = Guid.NewGuid(),
+                    RenewalRequestId = renewalRequest.Id,
+                    CustomerCreditCardId = customerCard.Id,
+                    PaymentIntentId = paymentIntentId!,
+                    PaymentStatus = "succeeded",
+                    PaidAt = DateTime.UtcNow
+                };
+
+                DbContext.StripePayments.Add(stripePayment);
+                await DbContext.SaveChangesAsync();
+
+                renewalRequestIds.Add(renewalRequest.Id);
+
+                StateHasChanged();
+            }
+
+            // Step 4: Queue background jobs for each renewal
+            processingStatus = "Scheduling renewal processing...";
+            StateHasChanged();
+
+            foreach (var renewalRequestId in renewalRequestIds)
+            {
+                BackgroundJobClient.Enqueue<IRenewalProcessingService>(service =>
+                    service.ProcessRenewalAsync(renewalRequestId));
+            }
+
+            // Step 5: Redirect to confirmation page
+            var idsParam = string.Join(",", renewalRequestIds);
+            Navigation.NavigateTo($"/renewal-confirmation?ids={idsParam}");
         }
         catch (Exception ex)
         {

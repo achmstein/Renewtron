@@ -9,6 +9,8 @@ public class RenewalRequest
     // Renewal details
     public int RenewalYears { get; set; }
     public string? Email { get; set; }
+    public string? MobileNumber { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
 
     // Payment
     public PaymentType PaymentType { get; set; }
