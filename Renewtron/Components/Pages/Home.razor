@@ -15,85 +15,7 @@
 
 <PageTitle>Business Name Renewal - Renewtron</PageTitle>
 
-<div class="h-screen bg-white flex flex-col overflow-hidden">
-    <!-- Navigation Header with Disclosure -->
-    <header class="bg-blue-800">
-        <nav class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div class="flex h-16 items-center justify-between">
-                <!-- Logo -->
-                <a href="/" class="flex items-center gap-2 shrink-0">
-                    <img src="/imgs/logo.svg" alt="Renewtron" class="h-8 w-auto" />
-                    <span class="text-lg sm:text-xl font-semibold text-white">Business Name Renewal</span>
-                </a>
-
-                <!-- Desktop Navigation Links -->
-                <div class="hidden md:flex items-center gap-x-1">
-                    <a href="/" class="rounded-md px-3 py-2 text-sm font-medium text-white bg-blue-900/50 hover:bg-blue-900">
-                        Renew Business Name
-                    </a>
-                    <a href="#" class="rounded-md px-3 py-2 text-sm font-medium text-blue-100 hover:bg-blue-700 hover:text-white">
-                        Register an ABN
-                    </a>
-                    <a href="#" class="rounded-md px-3 py-2 text-sm font-medium text-blue-100 hover:bg-blue-700 hover:text-white">
-                        Register a Company
-                    </a>
-                    <a href="#" class="rounded-md px-3 py-2 text-sm font-medium text-blue-100 hover:bg-blue-700 hover:text-white">
-                        Contact Us
-                    </a>
-                </div>
-
-                <!-- Mobile Menu Button (Disclosure Toggle) - Only visible on mobile -->
-                <div class="md:hidden">
-                    <button type="button"
-                            @onclick="ToggleMobileMenu"
-                            class="inline-flex items-center justify-center rounded-md p-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
-                            aria-expanded="@mobileMenuOpen">
-                        <span class="sr-only">Open main menu</span>
-                        @if (!mobileMenuOpen)
-                        {
-                            <!-- Menu icon -->
-                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                            </svg>
-                        }
-                        else
-                        {
-                            <!-- Close icon -->
-                            <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        }
-                    </button>
-                </div>
-            </div>
-
-            <!-- Mobile Navigation Panel (Disclosure Panel) -->
-            @if (mobileMenuOpen)
-            {
-                <div class="md:hidden border-t border-blue-700">
-                    <div class="space-y-1 px-2 pb-3 pt-2">
-                        <a href="/"
-                           class="block rounded-md bg-blue-900 px-3 py-2 text-base font-medium text-white">
-                            Renew Business Name
-                        </a>
-                        <a href="#"
-                           class="block rounded-md px-3 py-2 text-base font-medium text-blue-100 hover:bg-blue-700 hover:text-white">
-                            Register an ABN
-                        </a>
-                        <a href="#"
-                           class="block rounded-md px-3 py-2 text-base font-medium text-blue-100 hover:bg-blue-700 hover:text-white">
-                            Register a Company
-                        </a>
-                        <a href="#"
-                           class="block rounded-md px-3 py-2 text-base font-medium text-blue-100 hover:bg-blue-700 hover:text-white">
-                            Contact Us
-                        </a>
-                    </div>
-                </div>
-            }
-        </nav>
-    </header>
-    @if (!isSearching)
+@if (!isSearching)
     {
         <!-- Landing Page - Tailwind UI Pro Style -->
         <div class="relative isolate overflow-auto flex-1">
@@ -187,7 +109,6 @@
             </div>
         </div>
     }
-</div>
 
 @code {
     private string abn = "";
@@ -197,9 +118,6 @@
     private int progress = 0;
     private Timer? loadingTimer;
     private Timer? progressTimer;
-    private bool mobileMenuOpen = false;
-
-    private void ToggleMobileMenu() => mobileMenuOpen = !mobileMenuOpen;
 
     private readonly string[] loadingMessages = new[]
     {

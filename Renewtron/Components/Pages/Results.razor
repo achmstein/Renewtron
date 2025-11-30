@@ -8,15 +8,7 @@
 
 <PageTitle>Search Results - Renewtron</PageTitle>
 
-<div class="min-h-screen bg-white">
-    <!-- Logo -->
-    <div class="flex justify-center pt-10 mb-8">
-        <div class="flex items-center gap-2">
-            <img src="/imgs/logo.svg" alt="Renewtron" class="h-10 w-auto" />
-            <span class="text-2xl font-semibold text-gray-900">Renewtron</span>
-        </div>
-    </div>
-    @if (isLoading)
+@if (isLoading)
     {
         <div class="flex min-h-screen items-center justify-center">
             <div class="text-center">
@@ -74,7 +66,7 @@
                             <input type="checkbox"
                                    checked="@AreAllSelected()"
                                    @onchange="ToggleSelectAll"
-                                   class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600" />
+                                   class="h-4 w-4 rounded border-gray-300 accent-blue-600 focus:ring-blue-600" />
                             <span class="text-sm font-medium text-gray-700">Select all</span>
                         </label>
                         @if (selectedResults.Any())
@@ -98,7 +90,7 @@
                 <div class="mt-6 space-y-4">
                     @foreach (var result in searchLog.Results)
                     {
-                        <div class="overflow-hidden rounded-lg bg-white shadow ring-1 @(IsSelected(result.Id) ? "ring-blue-500 ring-2" : "ring-black ring-opacity-5")">
+                        <div class="overflow-hidden rounded-lg bg-white shadow ring-1 @(IsSelected(result.Id) ? "ring-blue-500 ring-2" : "ring-gray-300")">
                             <div class="px-6 py-6">
                                 <div class="flex items-start gap-4">
                                     <!-- Checkbox -->
@@ -107,7 +99,7 @@
                                                id="result-@result.Id"
                                                checked="@IsSelected(result.Id)"
                                                @onchange="@(() => ToggleSelection(result.Id))"
-                                               class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600 cursor-pointer" />
+                                               class="h-5 w-5 rounded border-gray-300 accent-blue-600 focus:ring-blue-600 cursor-pointer" />
                                     </div>
 
                                     <!-- Business Info -->
@@ -126,12 +118,6 @@
                                             </div>
                                         </dl>
                                     </label>
-
-                                    <!-- Individual Renew Button -->
-                                    <button @onclick="@(() => RenewSingle(result.Id))" @onclick:stopPropagation="true"
-                                       class="ml-4 inline-flex items-center gap-x-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-blue-600 shadow-sm ring-1 ring-inset ring-blue-200 hover:bg-blue-50">
-                                        Renew
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -171,7 +157,6 @@
             }
         </div>
     }
-</div>
 
 @code {
     [Parameter]
@@ -233,10 +218,5 @@
             var ids = string.Join(",", selectedResults);
             Navigation.NavigateTo($"/renew?ids={ids}");
         }
-    }
-
-    private void RenewSingle(Guid resultId)
-    {
-        Navigation.NavigateTo($"/renew?ids={resultId}");
     }
 }

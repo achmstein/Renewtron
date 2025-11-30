@@ -21,16 +21,7 @@
 
 <PageTitle>Renew Business Name - Renewtron</PageTitle>
 
-<div class="min-h-screen bg-gray-50">
-    <!-- Logo -->
-    <div class="flex justify-center pt-10 mb-8">
-        <div class="flex items-center gap-2">
-            <img src="/imgs/logo.svg" alt="Renewtron" class="h-10 w-auto" />
-            <span class="text-2xl font-semibold text-gray-900">Renewtron</span>
-        </div>
-    </div>
-
-    <div class="py-8 px-4 sm:px-6 lg:px-8">
+<div class="py-8 px-4 sm:px-6 lg:px-8">
         <div class="mx-auto max-w-4xl">
             @if (isLoading)
             {
@@ -52,24 +43,35 @@
             }
             else if (isProcessing)
             {
-                <div class="rounded-lg bg-white p-8 shadow text-center">
-                    <svg class="mx-auto h-16 w-16 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <h3 class="mt-4 text-lg font-semibold text-gray-900">@processingStatus</h3>
-                    <p class="mt-2 text-sm text-gray-600">Please wait while we process your requests...</p>
+                <div class="mx-auto max-w-sm pt-10 lg:pt-20">
+                    <div class="text-center">
+                        <!-- Spinner -->
+                        <div class="mx-auto mb-8 flex h-16 w-16 items-center justify-center">
+                            <svg class="h-16 w-16 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </div>
 
-                    @if (processedCount > 0)
-                    {
+                        <h2 class="text-lg font-semibold text-gray-900">@processingStatus</h2>
+                        <p class="mt-2 text-sm text-gray-600">Please do not close this page.</p>
+
+                        <!-- Status Message -->
+                        <div class="mt-8">
+                            <div class="flex items-center justify-center gap-2 text-sm text-gray-600">
+                                <div class="h-2 w-2 animate-pulse rounded-full bg-blue-600"></div>
+                                <span>@processedCount of @searchResults.Count processed</span>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
                         <div class="mt-4">
                             <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200">
                                 <div class="h-full rounded-full bg-blue-600 transition-all duration-500"
-                                     style="width: @((processedCount * 100 / searchResults.Count))%"></div>
+                                     style="width: @(searchResults.Count > 0 ? (processedCount * 100 / searchResults.Count) : 0)%"></div>
                             </div>
-                            <p class="mt-2 text-xs text-gray-500">@processedCount of @searchResults.Count processed</p>
                         </div>
-                    }
+                    </div>
                 </div>
             }
             else
@@ -124,7 +126,7 @@
                                     <div class="relative flex items-start">
                                         <div class="flex h-6 items-center">
                                             <input id="1year" name="renewalYears" type="radio" value="1" @onchange="@(() => renewalYears = 1)" checked="@(renewalYears == 1)"
-                                                   class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600">
+                                                   class="h-4 w-4 border-gray-300 accent-blue-600 focus:ring-blue-600">
                                         </div>
                                         <div class="ml-3">
                                             <label for="1year" class="text-sm font-medium text-gray-900">1 Year</label>
@@ -134,7 +136,7 @@
                                     <div class="relative flex items-start">
                                         <div class="flex h-6 items-center">
                                             <input id="3years" name="renewalYears" type="radio" value="3" @onchange="@(() => renewalYears = 3)" checked="@(renewalYears == 3)"
-                                                   class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-600">
+                                                   class="h-4 w-4 border-gray-300 accent-blue-600 focus:ring-blue-600">
                                         </div>
                                         <div class="ml-3">
                                             <label for="3years" class="text-sm font-medium text-gray-900">3 Years</label>
@@ -271,7 +273,6 @@
             }
         </div>
     </div>
-</div>
 
 @code {
     [SupplyParameterFromQuery(Name = "ids")]
@@ -342,9 +343,36 @@
                !string.IsNullOrWhiteSpace(cardNumber) &&
                !string.IsNullOrWhiteSpace(cardHolder) &&
                !string.IsNullOrWhiteSpace(expiryDate) &&
+               IsValidExpiryDate(expiryDate) &&
                !string.IsNullOrWhiteSpace(cvv) &&
+               cvv.Length >= 3 &&
                cardNumber.Replace(" ", "").Length >= 15 &&
                searchResults.Any();
+    }
+
+    private bool IsValidExpiryDate(string expiry)
+    {
+        if (string.IsNullOrWhiteSpace(expiry) || expiry.Length != 5 || expiry[2] != '/')
+            return false;
+
+        var parts = expiry.Split('/');
+        if (parts.Length != 2)
+            return false;
+
+        if (!int.TryParse(parts[0], out var month) || !int.TryParse(parts[1], out var year))
+            return false;
+
+        // Month must be 01-12
+        if (month < 1 || month > 12)
+            return false;
+
+        // Convert 2-digit year to 4-digit (assuming 20xx)
+        var fullYear = 2000 + year;
+        var now = DateTime.Now;
+        var expiryDateTime = new DateTime(fullYear, month, 1).AddMonths(1).AddDays(-1); // End of expiry month
+
+        // Card must not be expired
+        return expiryDateTime >= now;
     }
 
     private void RemoveFromSelection(Guid resultId)
@@ -353,6 +381,12 @@
         if (!searchResults.Any() && searchLogId.HasValue)
         {
             Navigation.NavigateTo($"/results/{searchLogId}");
+        }
+        else
+        {
+            // Update URL to reflect the new selection
+            var ids = string.Join(",", searchResults.Select(r => r.Id));
+            Navigation.NavigateTo($"/renew?ids={ids}", replace: true);
         }
     }
 

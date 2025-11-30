@@ -8,10 +8,7 @@
 
 <PageTitle>Search Logs - Renewtron</PageTitle>
 
-<div class="min-h-full">
-    <AdminNavMenu />
-
-    <header class="relative bg-white shadow-sm">
+<header class="relative bg-white shadow-sm">
         <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
             <h1 class="text-lg/6 font-semibold text-gray-900">Search Logs</h1>
         </div>
@@ -54,7 +51,7 @@
                                 <!-- Backdrop to close on outside click -->
                                 <div class="fixed inset-0 z-10" @onclick="CloseFilterPopover"></div>
 
-                                <div class="absolute right-0 z-20 mt-2 w-80 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                                <div class="absolute right-0 z-20 mt-2 w-80 origin-top-right rounded-md bg-white shadow ring-1 ring-gray-300 focus:outline-none">
                                     <div class="p-4">
                                         <h3 class="text-sm font-medium text-gray-900 mb-3">Filter Searches</h3>
 
@@ -459,7 +456,6 @@
             }
         </div>
     </main>
-</div>
 
 @code {
     private enum ViewMode { Cards, Table }
