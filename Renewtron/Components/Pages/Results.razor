@@ -74,20 +74,18 @@
                             <span class="text-sm text-gray-500">(@selectedResults.Count selected)</span>
                         }
                     </div>
-                    @if (selectedResults.Any())
-                    {
-                        <button @onclick="RenewSelected"
-                                class="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
-                            Renew selected (@selectedResults.Count)
-                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                            </svg>
-                        </button>
-                    }
+                    <button @onclick="RenewSelected"
+                            disabled="@(!selectedResults.Any())"
+                            class="hidden sm:inline-flex items-center gap-x-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
+                        Renew selected@(selectedResults.Any() ? $" ({selectedResults.Count})" : "")
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                    </button>
                 </div>
 
                 <!-- Results List -->
-                <div class="mt-6 space-y-4 @(selectedResults.Any() ? "pb-20 sm:pb-0" : "")">
+                <div class="mt-6 space-y-4 pb-20 sm:pb-0">
                     @foreach (var result in searchLog.Results)
                     {
                         <div class="overflow-hidden rounded-lg bg-white shadow ring-1 @(IsSelected(result.Id) ? "ring-blue-500 ring-2" : "ring-gray-300")">
@@ -124,19 +122,17 @@
                     }
                 </div>
 
-                <!-- Bulk Action Footer (sticky when items selected) -->
-                @if (selectedResults.Any())
-                {
-                    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 sm:hidden">
-                        <button @onclick="RenewSelected"
-                                class="w-full inline-flex items-center justify-center gap-x-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-                            Renew @selectedResults.Count business name@(selectedResults.Count > 1 ? "s" : "")
-                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                            </svg>
-                        </button>
-                    </div>
-                }
+                <!-- Bulk Action Footer (sticky) -->
+                <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 sm:hidden">
+                    <button @onclick="RenewSelected"
+                            disabled="@(!selectedResults.Any())"
+                            class="w-full inline-flex items-center justify-center gap-x-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
+                        Renew@(selectedResults.Any() ? $" {selectedResults.Count} business name{(selectedResults.Count > 1 ? "s" : "")}" : " selected")
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                    </button>
+                </div>
             }
             else
             {
