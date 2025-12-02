@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
 using Stripe;
@@ -15,14 +15,34 @@ public class StripePaymentService : IStripePaymentService
         StripeConfiguration.ApiKey = _settings.SecretKey;
     }
 
-    public async Task<(bool Success, string? PaymentIntentId, string? ErrorMessage)> CreatePaymentIntentAsync(
+    public async Task<(bool Success, string? PaymentIntentId, string? ErrorMessage)> ConfirmPaymentAsync(
         decimal amount,
         string customerEmail,
         string description,
-        Dictionary<string, string> metadata)
+        Dictionary<string, string> metadata,
+        string cardNumber,
+        string expiryMonth,
+        string expiryYear,
+        string cvc)
     {
         try
         {
+            // Create a PaymentMethod with card details
+            var paymentMethodService = new PaymentMethodService();
+            var paymentMethodOptions = new PaymentMethodCreateOptions
+            {
+                Type = "card",
+                Card = new PaymentMethodCardOptions
+                {
+                    Number = cardNumber,
+                    ExpMonth = long.Parse(expiryMonth),
+                    ExpYear = long.Parse(expiryYear),
+                    Cvc = cvc,
+                },
+            };
+            var paymentMethod = await paymentMethodService.CreateAsync(paymentMethodOptions);
+
+            // Create and confirm PaymentIntent in one call
             var options = new PaymentIntentCreateOptions
             {
                 Amount = (long)(amount * 100), // Stripe expects amount in cents
@@ -30,47 +50,23 @@ public class StripePaymentService : IStripePaymentService
                 Description = description,
                 ReceiptEmail = customerEmail,
                 Metadata = metadata,
-                AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
-                {
-                    Enabled = true,
-                },
+                PaymentMethod = paymentMethod.Id,
+                Confirm = true,
             };
 
             var service = new PaymentIntentService();
             var paymentIntent = await service.CreateAsync(options);
 
-            return (true, paymentIntent.Id, null);
+            if (paymentIntent.Status == "succeeded")
+            {
+                return (true, paymentIntent.Id, null);
+            }
+
+            return (false, paymentIntent.Id, $"Payment status: {paymentIntent.Status}");
         }
         catch (StripeException ex)
         {
             return (false, null, ex.Message);
-        }
-    }
-
-    public async Task<(bool Success, string? ErrorMessage)> ConfirmPaymentAsync(
-        string paymentIntentId,
-        string paymentMethodId)
-    {
-        try
-        {
-            var service = new PaymentIntentService();
-            var options = new PaymentIntentConfirmOptions
-            {
-                PaymentMethod = paymentMethodId,
-            };
-
-            var paymentIntent = await service.ConfirmAsync(paymentIntentId, options);
-
-            if (paymentIntent.Status == "succeeded")
-            {
-                return (true, null);
-            }
-
-            return (false, $"Payment status: {paymentIntent.Status}");
-        }
-        catch (StripeException ex)
-        {
-            return (false, ex.Message);
         }
     }
 }

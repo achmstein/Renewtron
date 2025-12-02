@@ -1,14 +1,14 @@
-﻿namespace Renewtron.Abstractions;
+namespace Renewtron.Abstractions;
 
 public interface IStripePaymentService
 {
-    Task<(bool Success, string PaymentIntentId, string ErrorMessage)> CreatePaymentIntentAsync(
+    Task<(bool Success, string? PaymentIntentId, string? ErrorMessage)> ConfirmPaymentAsync(
         decimal amount,
         string customerEmail,
         string description,
-        Dictionary<string, string> metadata);
-
-    Task<(bool Success, string ErrorMessage)> ConfirmPaymentAsync(
-        string paymentIntentId,
-        string paymentMethodId);
+        Dictionary<string, string> metadata,
+        string cardNumber,
+        string expiryMonth,
+        string expiryYear,
+        string cvc);
 }

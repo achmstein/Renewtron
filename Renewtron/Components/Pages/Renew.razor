@@ -451,11 +451,15 @@
                 { "renewal_years", renewalYears.ToString() }
             };
 
-            var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.CreatePaymentIntentAsync(
+            var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.ConfirmPaymentAsync(
                 totalAmount,
                 email,
                 $"Business Name Renewal - {searchResults.Count} renewal(s)",
-                metadata);
+                metadata,
+                cardNumber.Replace(" ", ""),
+                expiryMonth,
+                expiryYear,
+                cvv);
 
             if (!paymentSuccess)
             {
