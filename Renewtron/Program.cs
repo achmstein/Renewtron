@@ -10,7 +10,6 @@ using Renewtron.Components.Account;
 using Renewtron.Data;
 using Renewtron.Services;
 using Renewtron.Settings;
-using Soenneker.Blazor.CreditCards.Registrars;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -116,8 +115,6 @@ builder.Services.AddAsic(builder.Configuration, services =>
     // Register SMS provider implementation
     services.AddHttpClient<ISmsProvider, OntraportSmsProvider>();
 });
-
-builder.Services.AddCreditCardsInteropAsScoped();
 
 var app = builder.Build();
 

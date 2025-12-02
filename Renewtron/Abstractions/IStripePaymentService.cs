@@ -7,8 +7,5 @@ public interface IStripePaymentService
         string customerEmail,
         string description,
         Dictionary<string, string> metadata,
-        string cardNumber,
-        string expiryMonth,
-        string expiryYear,
-        string cvc);
+        string paymentMethodId);
 }

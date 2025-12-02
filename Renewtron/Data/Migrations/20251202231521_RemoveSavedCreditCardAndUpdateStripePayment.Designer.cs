@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Renewtron.Data;
 
@@ -11,9 +12,11 @@ using Renewtron.Data;
 namespace Renewtron.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251202231521_RemoveSavedCreditCardAndUpdateStripePayment")]
+    partial class RemoveSavedCreditCardAndUpdateStripePayment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -275,7 +278,7 @@ namespace Renewtron.Data.Migrations
                     b.HasIndex("SearchResultId")
                         .IsUnique();
 
-                    b.ToTable("RenewalRequests", (string)null);
+                    b.ToTable("RenewalRequests");
                 });
 
             modelBuilder.Entity("Renewtron.Data.SearchLog", b =>
@@ -321,7 +324,7 @@ namespace Renewtron.Data.Migrations
 
                     b.HasIndex("SearchedAt");
 
-                    b.ToTable("SearchLogs", (string)null);
+                    b.ToTable("SearchLogs");
                 });
 
             modelBuilder.Entity("Renewtron.Data.SearchResult", b =>
@@ -352,7 +355,7 @@ namespace Renewtron.Data.Migrations
 
                     b.HasIndex("SearchLogId");
 
-                    b.ToTable("SearchResults", (string)null);
+                    b.ToTable("SearchResults");
                 });
 
             modelBuilder.Entity("Renewtron.Data.StripePayment", b =>
@@ -397,7 +400,7 @@ namespace Renewtron.Data.Migrations
                     b.HasIndex("RenewalRequestId")
                         .IsUnique();
 
-                    b.ToTable("StripePayments", (string)null);
+                    b.ToTable("StripePayments");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

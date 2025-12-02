@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +9,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SearchLog> SearchLogs { get; set; }
     public DbSet<SearchResult> SearchResults { get; set; }
     public DbSet<RenewalRequest> RenewalRequests { get; set; }
-    public DbSet<SavedCreditCard> SavedCreditCards { get; set; }
     public DbSet<StripePayment> StripePayments { get; set; }
 
 
@@ -73,24 +72,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.PaymentStatus).IsRequired();
             entity.HasIndex(e => e.RenewalRequestId).IsUnique();
             entity.HasIndex(e => e.PaymentIntentId);
-            entity.HasIndex(e => e.CustomerCreditCardId);
-
-            entity.HasOne(e => e.CustomerCreditCard)
-                .WithMany()
-                .HasForeignKey(e => e.CustomerCreditCardId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        modelBuilder.Entity<SavedCreditCard>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.CardholderName).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.CardNumberLast4).IsRequired().HasMaxLength(4);
-            entity.Property(e => e.CardBrand).HasMaxLength(50);
-            entity.Property(e => e.EncryptedCardNumber).IsRequired();
-            entity.Property(e => e.EncryptedCvc).IsRequired();
-            entity.HasIndex(e => e.IpAddress);
-            entity.HasIndex(e => e.CreatedAt);
         });
     }
 }

@@ -20,29 +20,10 @@ public class StripePaymentService : IStripePaymentService
         string customerEmail,
         string description,
         Dictionary<string, string> metadata,
-        string cardNumber,
-        string expiryMonth,
-        string expiryYear,
-        string cvc)
+        string paymentMethodId)
     {
         try
         {
-            // Create a PaymentMethod with card details
-            var paymentMethodService = new PaymentMethodService();
-            var paymentMethodOptions = new PaymentMethodCreateOptions
-            {
-                Type = "card",
-                Card = new PaymentMethodCardOptions
-                {
-                    Number = cardNumber,
-                    ExpMonth = long.Parse(expiryMonth),
-                    ExpYear = long.Parse(expiryYear),
-                    Cvc = cvc,
-                },
-            };
-            var paymentMethod = await paymentMethodService.CreateAsync(paymentMethodOptions);
-
-            // Create and confirm PaymentIntent in one call
             var options = new PaymentIntentCreateOptions
             {
                 Amount = (long)(amount * 100), // Stripe expects amount in cents
@@ -50,8 +31,13 @@ public class StripePaymentService : IStripePaymentService
                 Description = description,
                 ReceiptEmail = customerEmail,
                 Metadata = metadata,
-                PaymentMethod = paymentMethod.Id,
+                PaymentMethod = paymentMethodId,
                 Confirm = true,
+                AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
+                {
+                    Enabled = true,
+                    AllowRedirects = "never",
+                },
             };
 
             var service = new PaymentIntentService();

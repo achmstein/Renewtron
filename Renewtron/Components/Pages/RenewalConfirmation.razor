@@ -240,7 +240,6 @@
             .Include(r => r.SearchResult)
                 .ThenInclude(sr => sr!.SearchLog)
             .Include(r => r.StripePayment)
-                .ThenInclude(sp => sp!.CustomerCreditCard)
             .Where(r => idList.Contains(r.Id))
             .ToListAsync();
 

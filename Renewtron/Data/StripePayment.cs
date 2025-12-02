@@ -7,13 +7,18 @@ public class StripePayment
 {
     public Guid Id { get; set; }
     public Guid RenewalRequestId { get; set; }
-    public Guid CustomerCreditCardId { get; set; } // Customer's card (for display only)
 
-    public string PaymentIntentId { get; set; }
-    public string PaymentStatus { get; set; } // succeeded, failed, etc.
+    public string PaymentIntentId { get; set; } = null!;
+    public string PaymentStatus { get; set; } = null!;
     public DateTime? PaidAt { get; set; }
 
+    // Card info from Stripe (for display only)
+    public string? CardholderName { get; set; }
+    public string? CardLast4 { get; set; }
+    public string? CardBrand { get; set; }
+    public string? CardExpMonth { get; set; }
+    public string? CardExpYear { get; set; }
+
     // Navigation properties
-    public RenewalRequest RenewalRequest { get; set; }
-    public SavedCreditCard CustomerCreditCard { get; set; }
+    public RenewalRequest RenewalRequest { get; set; } = null!;
 }

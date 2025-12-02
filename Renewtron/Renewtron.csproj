@@ -27,7 +27,6 @@
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="SendGrid" Version="9.29.3" />
-		<PackageReference Include="Soenneker.Blazor.CreditCards" Version="3.0.152" />
 		<PackageReference Include="Stripe.net" Version="49.0.0" />
 	</ItemGroup>
 
