@@ -48,6 +48,63 @@
             }
             else
             {
+                <!-- Lead Information (if linked) -->
+                @if (lead != null)
+                {
+                    <div class="mb-6 overflow-hidden rounded-lg bg-white shadow">
+                        <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                            <div class="flex items-center justify-between">
+                                <h2 class="text-lg font-medium text-gray-900">Lead Information</h2>
+                                <a href="/admin/leads/@lead.Id" class="text-sm font-medium text-blue-600 hover:text-blue-500">View Lead →</a>
+                            </div>
+                        </div>
+                        <div class="px-6 py-5">
+                            <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Name</dt>
+                                    <dd class="mt-1 text-sm font-semibold text-gray-900">@lead.FullName</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Email</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">
+                                        <a href="mailto:@lead.Email" class="text-blue-600 hover:text-blue-500">@lead.Email</a>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Mobile</dt>
+                                    <dd class="mt-1 text-sm text-gray-900">@lead.MobileNumber</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Outcome</dt>
+                                    <dd class="mt-1">
+                                        @switch (lead.Outcome)
+                                        {
+                                            case LeadOutcome.RenewalCompleted:
+                                                <span class="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Converted</span>
+                                                break;
+                                            case LeadOutcome.RenewalAvailable:
+                                                <span class="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">Available</span>
+                                                break;
+                                            case LeadOutcome.NotDueForRenewal:
+                                                <span class="inline-flex rounded-full bg-amber-100 px-2 text-xs font-semibold leading-5 text-amber-800">Not Due</span>
+                                                break;
+                                            case LeadOutcome.RenewalInProgress:
+                                                <span class="inline-flex rounded-full bg-purple-100 px-2 text-xs font-semibold leading-5 text-purple-800">In Progress</span>
+                                                break;
+                                            case LeadOutcome.NoBusinessNames:
+                                                <span class="inline-flex rounded-full bg-gray-100 px-2 text-xs font-semibold leading-5 text-gray-800">No Names</span>
+                                                break;
+                                            default:
+                                                <span class="inline-flex rounded-full bg-gray-100 px-2 text-xs font-semibold leading-5 text-gray-600">Pending</span>
+                                                break;
+                                        }
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+                }
+
                 <!-- Search Info Card -->
                 <div class="mb-6 overflow-hidden rounded-lg bg-white shadow">
                     <div class="border-b border-gray-200 bg-gray-50 px-6 py-4">
@@ -57,7 +114,7 @@
                         <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">ABN</dt>
-                                <dd class="mt-1 text-sm font-semibold text-gray-900">@searchLog.Abn</dd>
+                                <dd class="mt-1 text-sm font-semibold text-gray-900">@FormatAbn(searchLog.Abn)</dd>
                             </div>
                             <div>
                                 <dt class="text-sm font-medium text-gray-500">Searched At</dt>
@@ -200,6 +257,7 @@
     public Guid Id { get; set; }
 
     private SearchLog? searchLog;
+    private Lead? lead;
     private bool isLoading = true;
 
     protected override async Task OnInitializedAsync()
@@ -216,7 +274,21 @@
                 .ThenInclude(r => r.RenewalRequest)
             .FirstOrDefaultAsync(s => s.Id == Id);
 
+        // Load linked lead if exists
+        if (searchLog != null)
+        {
+            lead = await DbContext.Leads
+                .FirstOrDefaultAsync(l => l.SearchLogId == Id);
+        }
+
         isLoading = false;
     }
 
+    private string FormatAbn(string abn)
+    {
+        var clean = abn.Replace(" ", "");
+        if (clean.Length == 11)
+            return $"{clean[..2]} {clean[2..5]} {clean[5..8]} {clean[8..]}";
+        return abn;
+    }
 }

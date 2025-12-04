@@ -69,6 +69,10 @@ builder.Services.AddOptions<OntraportSettings>()
 // Payment and Email services
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
+
+// Lead service
+builder.Services.AddScoped<ILeadService, LeadService>();
 
 // Settings management service
 builder.Services.AddScoped<ISettingsService, SettingsService>();

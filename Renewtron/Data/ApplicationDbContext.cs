@@ -10,6 +10,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SearchResult> SearchResults { get; set; }
     public DbSet<RenewalRequest> RenewalRequests { get; set; }
     public DbSet<StripePayment> StripePayments { get; set; }
+    public DbSet<Lead> Leads { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -72,6 +73,33 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.PaymentStatus).IsRequired();
             entity.HasIndex(e => e.RenewalRequestId).IsUnique();
             entity.HasIndex(e => e.PaymentIntentId);
+        });
+
+        modelBuilder.Entity<Lead>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.FullName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.MobileNumber).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+            entity.Property(e => e.UserAgent).HasMaxLength(500);
+            entity.Property(e => e.OutcomeMessage).HasMaxLength(500);
+
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.Abn);
+            entity.HasIndex(e => e.Email);
+            entity.HasIndex(e => e.Outcome);
+
+            entity.HasOne(e => e.SearchLog)
+                .WithMany()
+                .HasForeignKey(e => e.SearchLogId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasMany(e => e.RenewalRequests)
+                .WithOne(r => r.Lead)
+                .HasForeignKey(r => r.LeadId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

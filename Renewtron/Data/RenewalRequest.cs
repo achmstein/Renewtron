@@ -6,6 +6,9 @@ public class RenewalRequest
     public Guid SearchResultId { get; set; }
     public DateTime InitiatedAt { get; set; }
 
+    // Link to Lead (for new flow)
+    public Guid? LeadId { get; set; }
+
     // Renewal details
     public int RenewalYears { get; set; }
     public string? Email { get; set; }
@@ -27,4 +30,5 @@ public class RenewalRequest
     // Navigation properties
     public SearchResult SearchResult { get; set; }
     public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments
+    public Lead? Lead { get; set; }
 }
