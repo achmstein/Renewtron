@@ -14,6 +14,15 @@
 </head>
 
 <body class="h-full">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9MR4YX6FLV"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-9MR4YX6FLV');
+    </script>
+
     <Routes @rendermode="PageRenderMode" />
     <script src="https://js.stripe.com/v3/"></script>
     <script src="js/stripe-interop.js"></script>
