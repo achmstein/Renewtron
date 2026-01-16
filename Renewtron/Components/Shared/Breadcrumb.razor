@@ -1,0 +1,34 @@
+@inject NavigationManager NavigationManager
+
+<nav class="mx-auto max-w-7xl px-6 pt-10 pb-6">
+    <ol class="flex items-center gap-2 text-sm text-gray-500">
+        <li>
+            <a href="/" class="hover:text-brand">Home</a>
+        </li>
+        @foreach (var item in Items)
+        {
+            <li class="flex items-center gap-2">
+                <span class="text-gray-400">›</span>
+                @if (item.Href != null)
+                {
+                    <a href="@item.Href" class="hover:text-brand">@item.Label</a>
+                }
+                else
+                {
+                    <span class="text-gray-900">@item.Label</span>
+                }
+            </li>
+        }
+    </ol>
+</nav>
+
+@code {
+    [Parameter]
+    public List<BreadcrumbItem> Items { get; set; } = new();
+
+    public class BreadcrumbItem
+    {
+        public string Label { get; set; } = "";
+        public string? Href { get; set; }
+    }
+}

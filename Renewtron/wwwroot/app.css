@@ -11,6 +11,106 @@
 @theme {
     --font-sans: InterVariable, sans-serif;
     --font-sans--font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+
+    /* Custom color palette */
+    --color-brand: #0052A4;
+    --color-brand-dark: #003D7A;
+    --color-brand-light: #E8F1FA;
+    --color-page-bg: #F7F9FC;
+    --color-nav-text: #4A5568;
+}
+
+/* Custom component styles for exact design match */
+.gov-banner {
+    background: #003D7A;
+    padding: 8px 0;
+}
+
+.site-header {
+    background: #FFFFFF;
+    border-bottom: 3px solid #0052A4;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.nav-link-active {
+    background: #0052A4;
+    color: #FFFFFF;
+}
+
+.nav-link-inactive {
+    color: #4A5568;
+}
+
+.nav-link-inactive:hover {
+    background: #E8F1FA;
+    color: #0052A4;
+}
+
+.brand-text {
+    color: #0052A4;
+}
+
+.phone-link {
+    color: #0052A4;
+}
+
+.phone-link:hover {
+    color: #003D7A;
+}
+
+.page-header-gradient {
+    background: linear-gradient(135deg, #0052A4 0%, #003D7A 100%);
+}
+
+.info-alert-box {
+    background: #E8F1FA;
+    border-left: 4px solid #0052A4;
+}
+
+.btn-primary {
+    background: #0052A4;
+    color: #FFFFFF;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #003D7A;
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.text-brand {
+    color: #0052A4;
+}
+
+.bg-brand {
+    background: #0052A4;
+}
+
+.bg-brand-dark {
+    background: #003D7A;
+}
+
+.bg-brand-light {
+    background: #E8F1FA;
+}
+
+.border-brand {
+    border-color: #0052A4;
+}
+
+.ring-brand {
+    --tw-ring-color: #0052A4;
+}
+
+.accent-brand {
+    accent-color: #0052A4;
+}
+
+.focus-ring-brand:focus {
+    --tw-ring-color: #0052A4;
 }
 
 .valid.modified:not([type=checkbox]) {

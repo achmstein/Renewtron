@@ -43,7 +43,7 @@
         @if (isLoading)
         {
             <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                <svg class="mx-auto h-12 w-12 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
@@ -55,7 +55,7 @@
             <div class="text-center py-12">
                 <h3 class="text-lg font-semibold text-gray-900">No business names selected</h3>
                 <p class="mt-2 text-sm text-gray-600">Please go back and select the business names you want to renew.</p>
-                <a href="/start" class="mt-4 inline-block text-blue-600 hover:text-blue-500">Start over</a>
+                <a href="/start" class="mt-4 inline-block text-brand hover:text-blue-500">Start over</a>
             </div>
         }
         else if (isProcessing)
@@ -64,7 +64,7 @@
             <div class="mx-auto max-w-sm pt-10 lg:pt-20">
                 <div class="text-center">
                     <div class="mx-auto mb-8 flex h-16 w-16 items-center justify-center">
-                        <svg class="h-16 w-16 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                        <svg class="h-16 w-16 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -75,14 +75,14 @@
 
                     <div class="mt-8">
                         <div class="flex items-center justify-center gap-2 text-sm text-gray-600">
-                            <div class="h-2 w-2 animate-pulse rounded-full bg-blue-600"></div>
+                            <div class="h-2 w-2 animate-pulse rounded-full bg-brand"></div>
                             <span>@processedCount of @searchResults.Count processed</span>
                         </div>
                     </div>
 
                     <div class="mt-4">
                         <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                            <div class="h-full rounded-full bg-blue-600 transition-all duration-500"
+                            <div class="h-full rounded-full bg-brand transition-all duration-500"
                                  style="width: @(searchResults.Count > 0 ? (processedCount * 100 / searchResults.Count) : 0)%"></div>
                         </div>
                     </div>
@@ -162,7 +162,7 @@
                                            @bind="cardHolder"
                                            required
                                            placeholder="Name as it appears on card"
-                                           class="mt-1 block w-full rounded-md border-0 py-2.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm" />
+                                           class="mt-1 block w-full rounded-md border-0 py-2.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-brand sm:text-sm" />
                                 </div>
 
                                 @if (!string.IsNullOrEmpty(errorMessage))
@@ -182,7 +182,7 @@
                                 <!-- Submit Button -->
                                 <button type="submit"
                                         disabled="@(!IsFormValid() || isSubmitting)"
-                                        class="w-full flex justify-center items-center rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                        class="w-full flex justify-center items-center rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                                     @if (isSubmitting)
                                     {
                                         <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">

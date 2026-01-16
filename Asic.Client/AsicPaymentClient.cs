@@ -35,19 +35,16 @@ public class AsicPaymentClient : IAsicPaymentClient
             var initialData = PaymentStepData.Create(paymentUrl, sessionId, cardDetails);
 
             // Railway-oriented pipeline: each step only executes if the previous step succeeded
+            // After SubmitDeviceInfo, we handle the methodurl.psp-solutions.com orchestrator flow
+            // which redirects to the RSA 3DS challenge.
             return await InitializeSessionStepAsync(initialData)
                 .ThenAsync("Load Tokenization Form", LoadTokenizationFormStepAsync)
                 .ThenAsync("Get Card Information", GetCardInformationStepAsync)
                 .ThenAsync("Prepare 3DS", PrepareThreeDSStepAsync)
-                .ThenAsync("Submit Initial Payment", SubmitInitialPaymentStepAsync)
                 .ThenAsync("Submit Tokenization", SubmitTokenizationStepAsync)
                 .ThenAsync("Submit Device Information", SubmitDeviceInformationStepAsync)
-                .ThenAsync("Get 3DS Iframe", Get3DSIframeStepAsync)
-                .ThenAsync("Extract 3DS Form Data", Extract3DSFormDataStepAsync)
-                .ThenAsync("Submit To CardinalCommerce", SubmitToCardinalCommerceStepAsync)
-                .ThenAsync("Process 3DS Callback", Process3DSCallbackStepAsync)
-                .ThenAsync("Check 3DS Challenge", Check3DSChallengeStepAsync)
-                .ThenAsync("Handle 3DS Challenge", Handle3DSChallengeStepAsync)
+                .ThenAsync("Handle 3DS Method Orchestrator", Handle3DSMethodOrchestratorStepAsync)
+                .ThenAsync("Submit 3DS Challenge", Submit3DSChallengeStepAsync)
                 .ThenAsync("Submit OTP", SubmitOtpStepAsync)
                 .ThenAsync("Close Payment Window", ClosePaymentWindowStepAsync)
                 .ToPaymentResultAsync(data =>
@@ -240,50 +237,15 @@ public class AsicPaymentClient : IAsicPaymentClient
             var content = await response.Content.ReadAsStringAsync();
             var json = JsonNode.Parse(content).AsObject();
 
-            data.ThreeDSServerTransactionId = json["threeDSServerTransactionId"].ToString();
+            data.ThreeDSServerTransactionId = json["threeDSServerTransactionId"]?.ToString();
+            data.ThreeDSMethodUrl = json["methodUrl"]?.ToString();
+            data.ThreeDSMessageVersion = json["version"]?.ToString() ?? "2.2.0";
 
             return StepResult<PaymentStepData>.Success(data);
         }
         catch (Exception ex)
         {
             return StepResult<PaymentStepData>.Failure(ex.Message, "Prepare 3DS");
-        }
-    }
-
-    private async Task<StepResult<PaymentStepData>> SubmitInitialPaymentStepAsync(PaymentStepData data)
-    {
-        try
-        {
-            var formData = new StringBuilder();
-            formData.Append("org.apache.myfaces.trinidad.faces.FORM=frmASICPayment&");
-            formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-            formData.Append($"javax.faces.ViewState={data.ViewState}&");
-            formData.Append("Adf-Page-Id=3&");
-            formData.Append("event=r1%3A0%3AsubmitBtn&");
-            formData.Append("event.r1:0:submitBtn=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
-            formData.Append("oracle.adf.view.rich.PROCESS=r1%2Cr1%3A0%3AsubmitBtn");
-
-            var request = new HttpRequestMessage(HttpMethod.Post,
-                $"https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=3");
-
-            request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
-            request.Headers.Add("Adf-Rich-Message", "true");
-            request.Headers.Add("Adf-Ads-Page-Id", "5");
-            request.Headers.Add("Origin", "https://regpayment.asic.gov.au");
-            request.Headers.Add("Referer", "https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx");
-
-            var response = await _http.SendAsync(request);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return StepResult<PaymentStepData>.Failure("Failed", "Submit Initial Payment");
-            }
-
-            return StepResult<PaymentStepData>.Success(data);
-        }
-        catch (Exception ex)
-        {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Submit Initial Payment");
         }
     }
 
@@ -297,15 +259,17 @@ public class AsicPaymentClient : IAsicPaymentClient
             var formData = new StringBuilder();
             formData.Append("isTemporary=false&");
             formData.Append($"brand={data.BrandName}&");
+            formData.Append("hasMethodUrlSucceeded=true&");
+            formData.Append($"threeDSServerTransactionId={data.ThreeDSServerTransactionId}&");
             formData.Append($"cardnumber={Regex.Replace(data.CardDetails.CardNumber, ".{4}", "$0 ").TrimEnd()}&");
             formData.Append("browserColorDepth=24&");
             formData.Append("browserJavaEnabled=false&");
             formData.Append("browserLanguage=en-US&");
             formData.Append("browserScreenHeight=1080&");
             formData.Append("browserScreenWidth=1920&");
-            formData.Append("browserTimeZone=-180&");
+            formData.Append("browserTimeZone=-120&");
             formData.Append("cobadging=&");
-            formData.Append("cobadding-indicator=default&");
+            formData.Append("cobadging-indicator=default&");
             formData.Append($"selected-brand-for-groupcards={data.BrandName}&");
             formData.Append($"cardholdername={data.CardDetails.CardholderName.Replace(" ", "+")}&");
             formData.Append($"cardexpirationmonth={data.CardDetails.ExpiryMonth}&");
@@ -434,266 +398,106 @@ public class AsicPaymentClient : IAsicPaymentClient
         }
     }
 
-    private async Task<StepResult<PaymentStepData>> Get3DSIframeStepAsync(PaymentStepData data)
+    private async Task<StepResult<PaymentStepData>> Handle3DSMethodOrchestratorStepAsync(PaymentStepData data)
     {
         try
         {
+            // ThreeDSRedirectUrl now points to payment.anzworldline-solutions.com.au/v1/redirect/handlerequest/{guid}
+            // This returns an HTML page with auto-submit form to Cardinal Commerce
+
+            // Step 1: GET the redirect handler page
             var request = new HttpRequestMessage(HttpMethod.Get, data.ThreeDSRedirectUrl);
             request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
             request.Headers.Add("Sec-Fetch-Site", "cross-site");
             request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Dest", "iframe");
+            request.Headers.Add("Sec-Fetch-Dest", "document");
             request.Headers.Add("Referer", "https://regpayment.asic.gov.au/");
 
             var response = await _http.SendAsync(request);
             var content = await response.Content.ReadAsStringAsync();
 
+            if (!response.IsSuccessStatusCode)
+                return StepResult<PaymentStepData>.Failure($"HTTP {response.StatusCode}", "Handle 3DS Method Orchestrator");
+
+            // Step 2: Parse the auto-submit form that redirects to Cardinal Commerce
             var doc = await _htmlParser.ParseDocumentAsync(content);
-            var iframeSrc = doc.QuerySelector("iframe")?.GetAttribute("src");
+            var form = doc.QuerySelector("form#redirect") ?? doc.QuerySelector("form");
 
-            if (string.IsNullOrWhiteSpace(iframeSrc))
-                return StepResult<PaymentStepData>.Failure("Could not find 3DS iframe URL", "Get 3DS Iframe");
+            if (form == null)
+                return StepResult<PaymentStepData>.Failure("Could not find redirect form", "Handle 3DS Method Orchestrator");
 
-            data.ThreeDSIframeUrl = HttpUtility.HtmlDecode(iframeSrc);
-            return StepResult<PaymentStepData>.Success(data);
-        }
-        catch (Exception ex)
-        {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Get 3DS Iframe");
-        }
-    }
+            var formAction = form.GetAttribute("action");
+            var creq = form.QuerySelector("[name='creq']")?.GetAttribute("value");
+            var threeDSSessionData = form.QuerySelector("[name='threeDSSessionData']")?.GetAttribute("value");
 
-    private async Task<StepResult<PaymentStepData>> Extract3DSFormDataStepAsync(PaymentStepData data)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, data.ThreeDSIframeUrl);
-            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-            request.Headers.Add("Sec-Fetch-Site", "same-origin");
-            request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Dest", "iframe");
-            request.Headers.Add("Referer", data.ThreeDSRedirectUrl);
+            if (string.IsNullOrWhiteSpace(formAction) || string.IsNullOrWhiteSpace(creq))
+                return StepResult<PaymentStepData>.Failure("Could not extract Cardinal Commerce form data", "Handle 3DS Method Orchestrator");
 
-            var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
-
-            var doc = await _htmlParser.ParseDocumentAsync(content);
-            var form = doc.QuerySelector("form");
-            var formAction = form?.GetAttribute("action");
-            var threeDSMethodData = form?.QuerySelector("[name='threeDSMethodData']")?.GetAttribute("value");
-
-            if (string.IsNullOrWhiteSpace(formAction) || string.IsNullOrWhiteSpace(threeDSMethodData))
-                return StepResult<PaymentStepData>.Failure("Could not extract 3DS form data", "Extract 3DS Form Data");
-
-            data.ThreeDSFormAction = HttpUtility.HtmlDecode(formAction);
-            data.ThreeDSMethodData = threeDSMethodData;
-
-            return StepResult<PaymentStepData>.Success(data);
-        }
-        catch (Exception ex)
-        {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Extract 3DS Form Data");
-        }
-    }
-
-    private async Task<StepResult<PaymentStepData>> SubmitToCardinalCommerceStepAsync(PaymentStepData data)
-    {
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, data.ThreeDSFormAction)
-            {
-                Content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    { "threeDSMethodData", data.ThreeDSMethodData }
-                })
-            };
-
-            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-            request.Headers.Add("Origin", new Uri(data.ThreeDSIframeUrl).GetLeftPart(UriPartial.Authority));
-            request.Headers.Add("Sec-Fetch-Site", "cross-site");
-            request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Dest", "iframe");
-            request.Headers.Add("Referer", data.ThreeDSIframeUrl);
-
-            var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
-
-            var doc = await _htmlParser.ParseDocumentAsync(content);
-            var callbackUrl = doc?.QuerySelector("#notificationUrl")?.GetAttribute("value");
-            var callbackData = doc?.QuerySelector("#base64payload")?.GetAttribute("value");
-
-            // If no callback, 3DS is complete (frictionless flow)
-            if (string.IsNullOrWhiteSpace(callbackUrl))
-            {
-                data.ThreeDSComplete = true;
-                return StepResult<PaymentStepData>.Success(data);
-            }
-
-            data.ThreeDSCallbackUrl = callbackUrl;
-            data.ThreeDSCallbackData = callbackData;
-
-            return StepResult<PaymentStepData>.Success(data);
-        }
-        catch (Exception ex)
-        {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Submit To CardinalCommerce");
-        }
-    }
-
-    private async Task<StepResult<PaymentStepData>> Process3DSCallbackStepAsync(PaymentStepData data)
-    {
-        // Skip if 3DS already complete (frictionless flow)
-        if (data.ThreeDSComplete)
-            return StepResult<PaymentStepData>.Success(data);
-
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, data.ThreeDSCallbackUrl)
-            {
-                Content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    { "threeDSMethodData", data.ThreeDSCallbackData }
-                })
-            };
-
-            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-            request.Headers.Add("Origin", "https://geoissuer.cardinalcommerce.com");
-            request.Headers.Add("Sec-Fetch-Site", "cross-site");
-            request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Dest", "iframe");
-            request.Headers.Add("Referer", "https://geoissuer.cardinalcommerce.com/");
-
-            var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
-
-            var doc = await _htmlParser.ParseDocumentAsync(content);
-            var script = doc.Scripts.FirstOrDefault(s => s.TextContent.Contains("window.open"));
-            var resultUrl = Regex.Match(script?.TextContent ?? "", @"window\.open\(['""]([^'""]+)['""]").Groups[1].Value;
-
-            if (string.IsNullOrWhiteSpace(resultUrl))
-                return StepResult<PaymentStepData>.Failure("Could not find result redirect URL", "Process 3DS Callback");
-
-            data.ThreeDSResultUrl = resultUrl;
-
-            return StepResult<PaymentStepData>.Success(data);
-        }
-        catch (Exception ex)
-        {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Process 3DS Callback");
-        }
-    }
-
-    private async Task<StepResult<PaymentStepData>> Check3DSChallengeStepAsync(PaymentStepData data)
-    {
-        // Skip if 3DS already complete (frictionless flow)
-        if (data.ThreeDSComplete)
-            return StepResult<PaymentStepData>.Success(data);
-
-        try
-        {
-            var request = new HttpRequestMessage(HttpMethod.Get, data.ThreeDSResultUrl);
-            request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
-            request.Headers.Add("Sec-Fetch-Site", "same-origin");
-            request.Headers.Add("Sec-Fetch-Mode", "navigate");
-            request.Headers.Add("Sec-Fetch-Dest", "iframe");
-            request.Headers.Add("Referer", data.ThreeDSCallbackUrl);
-
-            var response = await _http.SendAsync(request);
-            var content = await response.Content.ReadAsStringAsync();
-
-            if(content.Contains("Frictionless Redirection"))
-            {
-                data.ThreeDSComplete = true;
-                return StepResult<PaymentStepData>.Success(data);
-            }
-
-            if(!content.Contains("Challenge Redirection"))
-            {
-                return StepResult<PaymentStepData>.Failure("Unexpected 3DS result page content", "Check 3DS Challenge");
-            }
-
-            var doc = await _htmlParser.ParseDocumentAsync(content);
-            var challengeForm = doc.QuerySelector("form");
-
-            var challengeUrl = HttpUtility.HtmlDecode(challengeForm.GetAttribute("action"));
-            var threeDSSessionData = challengeForm.QuerySelector("[name='threeDSSessionData']")?.GetAttribute("value");
-            var creq = challengeForm.QuerySelector("[name='creq']")?.GetAttribute("value");
-
-            if (string.IsNullOrWhiteSpace(challengeUrl) || string.IsNullOrWhiteSpace(threeDSSessionData) || string.IsNullOrWhiteSpace(creq))
-                return StepResult<PaymentStepData>.Failure("Could not extract challenge form data", "Check 3DS Challenge");
-
-            data.ThreeDSChallengeUrl = challengeUrl;
-            data.ThreeDSSessionData = threeDSSessionData;
+            data.ThreeDSChallengeUrl = HttpUtility.HtmlDecode(formAction);
             data.ThreeDSCReq = creq;
+            data.ThreeDSSessionData = threeDSSessionData;
+
+            // Extract oid and tid from Cardinal Commerce URL
+            // Format: https://authentication.cardinalcommerce.com/ThreeDSecure/V2_1_0/CReq?oid={oid}&tid={tid}
+            var challengeUri = new Uri(data.ThreeDSChallengeUrl);
+            var queryParams = HttpUtility.ParseQueryString(challengeUri.Query);
+            data.CardinalOid = queryParams["oid"];
+            data.CardinalTid = queryParams["tid"];
+            data.ThreeDSIssuerId = data.CardinalOid; // Use oid as issuer ID for Cardinal
 
             return StepResult<PaymentStepData>.Success(data);
         }
         catch (Exception ex)
         {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Check 3DS Challenge");
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Handle 3DS Method Orchestrator");
         }
     }
 
-    private async Task<StepResult<PaymentStepData>> Handle3DSChallengeStepAsync(PaymentStepData data)
+    private async Task<StepResult<PaymentStepData>> Submit3DSChallengeStepAsync(PaymentStepData data)
     {
-        // Skip if no challenge needed
-        if (data.ThreeDSComplete)
-            return StepResult<PaymentStepData>.Success(data);
-
         try
         {
+            // POST to Cardinal Commerce CReq endpoint
             var request = new HttpRequestMessage(HttpMethod.Post, data.ThreeDSChallengeUrl)
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    { "threeDSMethodData", data.ThreeDSSessionData },
-                    { "creq", data.ThreeDSCReq }
+                    { "creq", data.ThreeDSCReq },
+                    { "threeDSSessionData", data.ThreeDSSessionData ?? "" }
                 })
             };
 
             request.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
-            request.Headers.Add("Origin", "https://methodurl.psp-solutions.com");
-            request.Headers.Add("Referer", "https://methodurl.psp-solutions.com/");
-            request.Headers.Add("DNT", "1");
+            request.Headers.Add("Origin", "https://payment.anzworldline-solutions.com.au");
+            request.Headers.Add("Referer", "https://payment.anzworldline-solutions.com.au/");
             request.Headers.Add("Upgrade-Insecure-Requests", "1");
             request.Headers.Add("Sec-Fetch-Site", "cross-site");
             request.Headers.Add("Sec-Fetch-Mode", "navigate");
             request.Headers.Add("Sec-Fetch-Dest", "iframe");
+            request.Headers.Add("Sec-Fetch-Storage-Access", "none");
 
             var response = await _http.SendAsync(request);
             var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
-                return StepResult<PaymentStepData>.Failure($"Challenge submission failed: {response.StatusCode}", "Handle 3DS Challenge");
+                return StepResult<PaymentStepData>.Failure($"Challenge submission failed: {response.StatusCode}", "Submit 3DS Challenge");
 
-            // Check if OTP is required
-            if (content.Contains("Your One-time Passcode has been sent"))
-            {
-                var doc = await _htmlParser.ParseDocumentAsync(content);
-                var issuerId = doc.QuerySelector("#IssuerId")?.GetAttribute("value");
-                var transactionId = doc.QuerySelector("#TransactionId")?.GetAttribute("value");
+            // Store the response for OTP extraction
+            data.ThreeDSChallengeResponseContent = content;
 
-                if (string.IsNullOrWhiteSpace(issuerId) || string.IsNullOrWhiteSpace(transactionId))
-                    return StepResult<PaymentStepData>.Failure("Could not extract OTP challenge data", "Handle 3DS Challenge");
+            // Cardinal Commerce uses acsTransID from the creq JWT (tid parameter)
+            data.ThreeDSAcsTransId = data.CardinalTid;
+            data.CardinalLanguageCode = "en-us";
 
-                data.ThreeDSIssuerId = issuerId;
-                data.ThreeDSTransactionId = transactionId;
-                data.ThreeDSRequiresOtp = true;
-
-                // Store the challenge response content for later OTP submission
-                data.ThreeDSChallengeResponseContent = content;
-            }
-            else
-            {
-                // No OTP required, challenge completed
-                data.ThreeDSComplete = true;
-            }
+            // Cardinal Commerce always requires OTP challenge for this flow
+            // The HTML page loads JS that renders the OTP input form
+            data.ThreeDSRequiresOtp = true;
 
             return StepResult<PaymentStepData>.Success(data);
         }
         catch (Exception ex)
         {
-            return StepResult<PaymentStepData>.Failure(ex.Message, "Handle 3DS Challenge");
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Submit 3DS Challenge");
         }
     }
 
@@ -705,6 +509,88 @@ public class AsicPaymentClient : IAsicPaymentClient
 
         try
         {
+            const string cardinalBaseUrl = "https://authentication.cardinalcommerce.com";
+
+            // Step 1: Choose credential (select SMS OTP option)
+            var chooseCredentialUrl = $"{cardinalBaseUrl}/Api/2_1_0/NextStep/ChooseCredential";
+            var chooseCredentialData = new Dictionary<string, string>
+            {
+                ["CredentialId"] = "a",
+                ["TransactionId"] = data.CardinalTid,
+                ["ChoiceTimeout"] = "",
+                ["IssuerId"] = data.CardinalOid,
+                ["ChoiceType"] = "Grouped",
+                ["X-Requested-With"] = "XMLHttpRequest",
+                ["X-HTTP-Method-Override"] = "FORM"
+            };
+
+            var chooseRequest = new HttpRequestMessage(HttpMethod.Post, chooseCredentialUrl)
+            {
+                Content = new FormUrlEncodedContent(chooseCredentialData)
+            };
+            chooseRequest.Headers.Add("Accept", "*/*");
+            chooseRequest.Headers.Add("Origin", cardinalBaseUrl);
+            chooseRequest.Headers.Add("Referer", data.ThreeDSChallengeUrl);
+            chooseRequest.Headers.Add("X-Requested-With", "XMLHttpRequest");
+
+            var chooseResponse = await _http.SendAsync(chooseRequest);
+            var chooseContent = await chooseResponse.Content.ReadAsStringAsync();
+
+            if (!chooseResponse.IsSuccessStatusCode)
+                return StepResult<PaymentStepData>.Failure($"ChooseCredential failed: {chooseResponse.StatusCode}", "Submit OTP");
+
+            // Parse response to get next step info
+            var chooseJson = JsonNode.Parse(chooseContent)?.AsObject();
+            var nextStep = chooseJson?["NextStep"]?.ToString();
+
+            if (nextStep != "VALIDATE")
+                return StepResult<PaymentStepData>.Failure($"Unexpected NextStep: {nextStep}", "Submit OTP");
+
+            // Step 2: Navigate to VALIDATE page to trigger OTP send
+            var validatePageUrl = $"{cardinalBaseUrl}/2_1_0/VALIDATE/{data.CardinalOid}";
+            var validatePageData = new Dictionary<string, string>
+            {
+                ["TransactionId"] = data.CardinalTid,
+                ["GroupId"] = "",
+                ["Type"] = "",
+                ["LanguageCode"] = "en-us",
+                ["CardBrand"] = data.BrandName ?? "Visa",
+                ["Content.TemplateName"] = "Choice_OneUpOneDown_GroupedList_FullWidth",
+                ["Content.WorkflowScreenName"] = "choice",
+                ["ChoiceType"] = "Grouped",
+                ["IssuerId"] = data.CardinalOid
+            };
+
+            var validatePageRequest = new HttpRequestMessage(HttpMethod.Post, validatePageUrl)
+            {
+                Content = new FormUrlEncodedContent(validatePageData)
+            };
+            validatePageRequest.Headers.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            validatePageRequest.Headers.Add("Origin", cardinalBaseUrl);
+            validatePageRequest.Headers.Add("Referer", data.ThreeDSChallengeUrl);
+
+            var validatePageResponse = await _http.SendAsync(validatePageRequest);
+            var validatePageContent = await validatePageResponse.Content.ReadAsStringAsync();
+
+            if (!validatePageResponse.IsSuccessStatusCode)
+                return StepResult<PaymentStepData>.Failure($"Validate page failed: {validatePageResponse.StatusCode}", "Submit OTP");
+
+            // Extract StepupRequestId from the validate page response
+            var stepupRequestIdMatch = Regex.Match(validatePageContent, @"StepupRequestId[""']?\s*[:=]\s*[""']([^""']+)[""']",
+                RegexOptions.IgnoreCase);
+            if (stepupRequestIdMatch.Success)
+            {
+                data.CardinalStepupRequestId = stepupRequestIdMatch.Groups[1].Value;
+            }
+
+            // Also try to extract from hidden input
+            if (string.IsNullOrEmpty(data.CardinalStepupRequestId))
+            {
+                var doc = await _htmlParser.ParseDocumentAsync(validatePageContent);
+                data.CardinalStepupRequestId = doc.QuerySelector("input[name='StepupRequestId']")?.GetAttribute("value");
+            }
+
+            // Step 3: Wait for OTP from SMS provider
             string otp;
             try
             {
@@ -712,88 +598,61 @@ public class AsicPaymentClient : IAsicPaymentClient
             }
             catch (Exception ex)
             {
-                return StepResult<PaymentStepData>.Failure(
-                    $"Failed to retrieve OTP: {ex.Message}",
-                    "Submit OTP");
+                return StepResult<PaymentStepData>.Failure($"Failed to retrieve OTP: {ex.Message}", "Submit OTP");
             }
 
-            var postData = new Dictionary<string, string>
+            // Step 4: Submit OTP via ValidateCredential API
+            var validateCredentialUrl = $"{cardinalBaseUrl}/Api/2_1_0/NextStep/ValidateCredential";
+            var validateCredentialData = new Dictionary<string, string>
             {
+                ["TransactionId"] = data.CardinalTid,
+                ["StepupRequestId"] = data.CardinalStepupRequestId ?? "",
+                ["ValidateTimeout"] = "",
+                ["IssuerId"] = data.CardinalOid,
+                ["ValidateReloadEnabled"] = "True",
+                ["VisaBehavioralAnalyticsEnabled"] = "False",
                 ["LanguageCode"] = "en-us",
                 ["LanguageShortCode"] = "en",
                 ["CredentialValidationMessage"] = "Please re-enter your code",
                 ["Credential.Value"] = otp,
                 ["Credential.Id"] = "a",
-                ["TransactionId"] = data.ThreeDSTransactionId,
-                ["ValidateTimeout"] = "",
-                ["IssuerId"] = data.ThreeDSIssuerId,
-                ["OtpResendTimeout"] = "0",
-                ["ValidateReloadEnabled"] = "True",
                 ["X-Requested-With"] = "XMLHttpRequest",
                 ["X-HTTP-Method-Override"] = "FORM"
             };
 
-            var validateUrl = "https://authentication.cardinalcommerce.com/Api/2_1_0/NextStep/ValidateCredential";
-            var validateRequest = new HttpRequestMessage(HttpMethod.Post, validateUrl)
+            var validateRequest = new HttpRequestMessage(HttpMethod.Post, validateCredentialUrl)
             {
-                Content = new FormUrlEncodedContent(postData)
+                Content = new FormUrlEncodedContent(validateCredentialData)
             };
-
-            validateRequest.Headers.Referrer = new Uri(data.ThreeDSChallengeUrl);
+            validateRequest.Headers.Add("Accept", "*/*");
+            validateRequest.Headers.Add("Origin", cardinalBaseUrl);
+            validateRequest.Headers.Add("Referer", validatePageUrl);
+            validateRequest.Headers.Add("X-Requested-With", "XMLHttpRequest");
 
             var validateResponse = await _http.SendAsync(validateRequest);
-            var validateJson = await validateResponse.Content.ReadAsStringAsync();
+            var validateContent = await validateResponse.Content.ReadAsStringAsync();
 
             if (!validateResponse.IsSuccessStatusCode)
-                return StepResult<PaymentStepData>.Failure($"OTP validation failed: {validateJson}", "Submit OTP");
+                return StepResult<PaymentStepData>.Failure($"ValidateCredential failed: {validateResponse.StatusCode}", "Submit OTP");
 
-            using var jsonDoc = JsonDocument.Parse(validateJson);
-            var nextStep = jsonDoc.RootElement.GetProperty("NextStep").GetString();
+            // Check response for success or error
+            var validateJson = JsonNode.Parse(validateContent)?.AsObject();
+            var message = validateJson?["Message"]?.AsObject();
+            var messageContent = message?["Content"]?.ToString();
 
-            if (!string.Equals(nextStep, "TERM", StringComparison.OrdinalIgnoreCase))
-                return StepResult<PaymentStepData>.Failure($"Unexpected next step: {nextStep}", "Submit OTP");
-
-            //  Submit TERM step
-            var termData = new Dictionary<string, string>
+            if (messageContent?.Contains("re-enter your code", StringComparison.OrdinalIgnoreCase) == true ||
+                messageContent?.Contains("incorrect", StringComparison.OrdinalIgnoreCase) == true)
             {
-                ["TransactionId"] = data.ThreeDSTransactionId,
-                ["IssuerId"] = data.ThreeDSIssuerId
-            };
+                return StepResult<PaymentStepData>.Failure("Invalid OTP code", "Submit OTP");
+            }
 
-            var termUrl = "https://authentication.cardinalcommerce.com/api/2_1_0/nextstep/term";
-            var termRequest = new HttpRequestMessage(HttpMethod.Post, termUrl)
+            // Check if we need to follow up with final result
+            var responseNextStep = validateJson?["NextStep"]?.ToString();
+            if (responseNextStep == "COMPLETE" || responseNextStep == "RESULT")
             {
-                Content = new FormUrlEncodedContent(termData)
-            };
-            termRequest.Headers.Add("X-Requested-With", "XMLHttpRequest");
-            termRequest.Headers.Add("Origin", "https://authentication.cardinalcommerce.com");
-            termRequest.Headers.Referrer = new Uri(data.ThreeDSChallengeUrl);
-
-            var termResponse = await _http.SendAsync(termRequest);
-            var termJson = await termResponse.Content.ReadAsStringAsync();
-
-            if (!termResponse.IsSuccessStatusCode)
-                return StepResult<PaymentStepData>.Failure($"TERM step failed: {termJson}", "Submit OTP");
-
-            using var termDoc = JsonDocument.Parse(termJson);
-            var payload = termDoc.RootElement.GetProperty("Payload");
-
-            var cres = payload.GetProperty("CRes").GetString();
-            var notificationUrl = payload.GetProperty("NotificationUrl").GetString();
-
-            // Send CRes back to ACS Notification URL
-            var finalResponse = await _http.PostAsync(notificationUrl,
-                new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["cres"] = cres,
-                    ["threeDSSessionData"] = data.ThreeDSSessionData,
-                }));
-
-            if (!finalResponse.IsSuccessStatusCode)
-                return StepResult<PaymentStepData>.Failure($"Failed to send CRes: {finalResponse.StatusCode}", "Submit OTP");
-
-            data.ThreeDSComplete = true;
-            data.ThreeDSRequiresOtp = false;
+                data.ThreeDSComplete = true;
+                data.ThreeDSRequiresOtp = false;
+            }
 
             return StepResult<PaymentStepData>.Success(data);
         }

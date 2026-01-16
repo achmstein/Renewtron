@@ -1,7 +1,7 @@
 @* Wizard Progress Component - Shows current step in a multi-step wizard *@
 
-<nav aria-label="Progress" class="mb-8">
-    <ol role="list" class="flex items-center justify-center">
+<nav aria-label="Progress" class="wizard-progress mb-8">
+    <ol role="list" class="wizard-steps">
         @for (int i = 0; i < Steps.Count; i++)
         {
             var step = Steps[i];
@@ -9,50 +9,146 @@
             var isCompleted = stepNumber < CurrentStep;
             var isCurrent = stepNumber == CurrentStep;
             var isClickable = isCompleted && AllowNavigation;
+            var isLastStep = i == Steps.Count - 1;
 
-            <li class="@(i < Steps.Count - 1 ? "flex-1" : "") relative @(i > 0 ? "pl-4 sm:pl-8" : "")">
-                @if (i > 0)
-                {
-                    <!-- Connector line -->
-                    <div class="absolute left-0 top-4 -ml-px h-0.5 w-full @(isCompleted ? "bg-blue-600" : "bg-gray-200")" aria-hidden="true"></div>
-                }
-
-                <div class="group relative flex items-start @(isClickable ? "cursor-pointer" : "")" @onclick="() => HandleStepClick(stepNumber)">
-                    <span class="flex h-9 items-center" aria-hidden="true">
-                        @if (isCompleted)
-                        {
-                            <!-- Completed step -->
-                            <span class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 @(isClickable ? "group-hover:bg-blue-800" : "")">
-                                <svg class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
-                                </svg>
-                            </span>
-                        }
-                        else if (isCurrent)
-                        {
-                            <!-- Current step -->
-                            <span class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-blue-600 bg-white">
-                                <span class="h-2.5 w-2.5 rounded-full bg-blue-600"></span>
-                            </span>
-                        }
-                        else
-                        {
-                            <!-- Upcoming step -->
-                            <span class="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-gray-300 bg-white">
-                                <span class="h-2.5 w-2.5 rounded-full bg-transparent"></span>
-                            </span>
-                        }
-                    </span>
-                    <span class="ml-3 flex min-w-0 flex-col">
-                        <span class="text-xs font-medium @(isCurrent ? "text-blue-600" : isCompleted ? "text-gray-900" : "text-gray-500")">
-                            @step.Label
+            <li class="wizard-step @(isLastStep ? "" : "wizard-step-with-line")">
+                <!-- Step circle and label -->
+                <div class="wizard-step-content @(isClickable ? "cursor-pointer" : "")" @onclick="() => HandleStepClick(stepNumber)">
+                    @if (isCompleted)
+                    {
+                        <!-- Completed step -->
+                        <span class="wizard-circle wizard-circle-completed">
+                            <svg class="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                            </svg>
                         </span>
+                    }
+                    else if (isCurrent)
+                    {
+                        <!-- Current step -->
+                        <span class="wizard-circle wizard-circle-current">
+                            <span class="wizard-circle-dot"></span>
+                        </span>
+                    }
+                    else
+                    {
+                        <!-- Upcoming step -->
+                        <span class="wizard-circle wizard-circle-upcoming">
+                        </span>
+                    }
+                    <span class="wizard-label @(isCurrent ? "wizard-label-current" : isCompleted ? "wizard-label-completed" : "wizard-label-upcoming")">
+                        @step.Label
                     </span>
                 </div>
+
+                <!-- Connector line (not on last step) -->
+                @if (!isLastStep)
+                {
+                    <div class="wizard-line @(isCompleted ? "wizard-line-completed" : "wizard-line-upcoming")"></div>
+                }
             </li>
         }
     </ol>
 </nav>
+
+<style>
+    .wizard-progress {
+        width: 100%;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .wizard-steps {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .wizard-step {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .wizard-step-with-line {
+        flex: 1;
+    }
+
+    .wizard-step-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .wizard-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .wizard-circle-completed {
+        background: #0052A4;
+    }
+
+    .wizard-circle-current {
+        background: #FFFFFF;
+        border: 2px solid #0052A4;
+    }
+
+    .wizard-circle-upcoming {
+        background: #FFFFFF;
+        border: 2px solid #D1D5DB;
+    }
+
+    .wizard-circle-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #0052A4;
+    }
+
+    .wizard-label {
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .wizard-label-current {
+        color: #0052A4;
+    }
+
+    .wizard-label-completed {
+        color: #111827;
+    }
+
+    .wizard-label-upcoming {
+        color: #6B7280;
+    }
+
+    .wizard-line {
+        flex: 1;
+        height: 2px;
+        margin: 0 8px;
+        margin-top: -24px; /* Align with circle center */
+    }
+
+    .wizard-line-completed {
+        background: #0052A4;
+    }
+
+    .wizard-line-upcoming {
+        background: #D1D5DB;
+    }
+</style>
 
 @code {
     [Parameter]

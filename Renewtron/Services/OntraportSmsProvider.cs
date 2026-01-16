@@ -138,7 +138,8 @@ public class OntraportSmsProvider : ISmsProvider
         // Check for common OTP patterns
         var patterns = new[]
         {
-            @"code\s+(?:is|required|:)\s+\d{4,8}",
+            @"code\b.*?\bis\s+\d{4,8}",  // "code...is XXXXXX"
+            @"code\s*(?:is|:)\s*\d{4,8}", // "code is XXXXXX" or "code: XXXXXX"
             @"\b\d{6}\b", // 6-digit codes
             @"\b\d{4}\b", // 4-digit codes
             @"\b\d{8}\b"  // 8-digit codes
@@ -153,10 +154,10 @@ public class OntraportSmsProvider : ISmsProvider
         if (string.IsNullOrWhiteSpace(smsText))
             return string.Empty;
 
-        // Pattern 1: "code is XXXXXX" or "code required...is XXXXXX"
+        // Pattern 1: "code...is XXXXXX" (handles "secret code to complete...is 209679")
         var pattern1 = Regex.Match(
             smsText,
-            @"code\s+(?:is|required[^:]*is|:)\s+(\d{4,8})",
+            @"code\b.*?\bis\s+(\d{4,8})",
             RegexOptions.IgnoreCase);
 
         if (pattern1.Success)
@@ -164,18 +165,29 @@ public class OntraportSmsProvider : ISmsProvider
             return pattern1.Groups[1].Value;
         }
 
-        // Pattern 2: Look for standalone 6-8 digit numbers (most common OTP length)
-        var pattern2 = Regex.Match(smsText, @"\b(\d{6,8})\b");
+        // Pattern 2: "code is XXXXXX" or "code: XXXXXX"
+        var pattern2 = Regex.Match(
+            smsText,
+            @"code\s*(?:is|:)\s*(\d{4,8})",
+            RegexOptions.IgnoreCase);
+
         if (pattern2.Success)
         {
             return pattern2.Groups[1].Value;
         }
 
-        // Pattern 3: Look for 4-digit codes (less common but possible)
-        var pattern3 = Regex.Match(smsText, @"\b(\d{4})\b");
+        // Pattern 3: Look for standalone 6-8 digit numbers (most common OTP length)
+        var pattern3 = Regex.Match(smsText, @"\b(\d{6,8})\b");
         if (pattern3.Success)
         {
             return pattern3.Groups[1].Value;
+        }
+
+        // Pattern 4: Look for 4-digit codes (less common but possible)
+        var pattern4 = Regex.Match(smsText, @"\b(\d{4})\b");
+        if (pattern4.Success)
+        {
+            return pattern4.Groups[1].Value;
         }
 
         return string.Empty;

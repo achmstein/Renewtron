@@ -44,6 +44,23 @@ public class PaymentStepData
     public string ThreeDSTransactionId { get; set; }
     public bool ThreeDSRequiresOtp { get; set; }
 
+    // SecureSuite 3DS Method data
+    public string ThreeDSMethodUrl { get; set; }
+    public string ThreeDSMethodNotificationUrl { get; set; }
+
+    // RSA 3DS data (NAB) - Legacy
+    public string ThreeDSAcsTransId { get; set; }
+    public string ThreeDSMessageVersion { get; set; }
+    public string ThreeDSChallengeWindowSize { get; set; }
+
+    // Cardinal Commerce 3DS data (New)
+    public string CardinalOid { get; set; }
+    public string CardinalTid { get; set; }
+    public string CardinalStepupRequestId { get; set; }
+    public string CardinalCredentialId { get; set; }
+    public string CardinalGroupId { get; set; }
+    public string CardinalLanguageCode { get; set; }
+
     public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
     {
         return new PaymentStepData

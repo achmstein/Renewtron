@@ -59,7 +59,7 @@
                             <input type="checkbox"
                                    checked="@AreAllSelected()"
                                    @onchange="ToggleSelectAll"
-                                   class="h-4 w-4 rounded border-gray-300 accent-blue-600 focus:ring-blue-600" />
+                                   class="h-4 w-4 rounded border-gray-300 accent-brand focus:ring-brand" />
                             <span class="text-sm font-medium text-gray-700">Select all</span>
                         </label>
                         @if (selectedIds.Any())
@@ -72,7 +72,7 @@
                     <div class="space-y-3 mb-8">
                         @foreach (var business in businessNames)
                         {
-                            <div class="overflow-hidden rounded-lg bg-white shadow ring-1 @(IsSelected(business.Id) ? "ring-blue-500 ring-2" : "ring-gray-200") cursor-pointer transition-all hover:shadow-md"
+                            <div class="overflow-hidden rounded-lg bg-white shadow ring-1 @(IsSelected(business.Id) ? "ring-brand ring-2" : "ring-gray-200") cursor-pointer transition-all hover:shadow-md"
                                  @onclick="() => ToggleSelection(business.Id)">
                                 <div class="px-5 py-4">
                                     <div class="flex items-start gap-4">
@@ -81,7 +81,7 @@
                                                    checked="@IsSelected(business.Id)"
                                                    @onclick:stopPropagation="true"
                                                    @onchange="() => ToggleSelection(business.Id)"
-                                                   class="h-5 w-5 rounded border-gray-300 accent-blue-600 focus:ring-blue-600 cursor-pointer" />
+                                                   class="h-5 w-5 rounded border-gray-300 accent-brand focus:ring-brand cursor-pointer" />
                                         </div>
                                         <div class="flex-1 min-w-0">
                                             <h3 class="text-base font-semibold text-gray-900 truncate">@business.BusinessName</h3>
@@ -100,7 +100,7 @@
                     <div class="rounded-lg bg-white shadow ring-1 ring-gray-200 p-5 mb-6">
                         <h3 class="text-sm font-semibold text-gray-900 mb-4">Select renewal period</h3>
                         <div class="grid grid-cols-2 gap-4">
-                            <label class="relative flex cursor-pointer rounded-lg border @(renewalYears == 1 ? "border-blue-600 ring-2 ring-blue-600" : "border-gray-200") bg-white p-4 shadow-sm focus:outline-none hover:border-gray-300 transition-all">
+                            <label class="relative flex cursor-pointer rounded-lg border @(renewalYears == 1 ? "border-brand ring-2 ring-brand" : "border-gray-200") bg-white p-4 shadow-sm focus:outline-none hover:border-gray-300 transition-all">
                                 <input type="radio"
                                        name="renewal-period"
                                        value="1"
@@ -114,13 +114,13 @@
                                 </div>
                                 @if (renewalYears == 1)
                                 {
-                                    <svg class="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                                    <svg class="h-5 w-5 text-brand" viewBox="0 0 20 20" fill="currentColor">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
                                     </svg>
                                 }
                             </label>
 
-                            <label class="relative flex cursor-pointer rounded-lg border @(renewalYears == 3 ? "border-blue-600 ring-2 ring-blue-600" : "border-gray-200") bg-white p-4 shadow-sm focus:outline-none hover:border-gray-300 transition-all">
+                            <label class="relative flex cursor-pointer rounded-lg border @(renewalYears == 3 ? "border-brand ring-2 ring-brand" : "border-gray-200") bg-white p-4 shadow-sm focus:outline-none hover:border-gray-300 transition-all">
                                 <input type="radio"
                                        name="renewal-period"
                                        value="3"
@@ -137,7 +137,7 @@
                                 </div>
                                 @if (renewalYears == 3)
                                 {
-                                    <svg class="h-5 w-5 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                                    <svg class="h-5 w-5 text-brand" viewBox="0 0 20 20" fill="currentColor">
                                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
                                     </svg>
                                 }
@@ -166,7 +166,7 @@
                     <!-- Proceed Button -->
                     <button @onclick="ProceedToPayment"
                             disabled="@(!selectedIds.Any())"
-                            class="w-full flex justify-center items-center rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 transition-colors">
+                            class="w-full flex justify-center items-center rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand transition-colors">
                         Proceed to Payment
                         <svg class="ml-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -193,7 +193,7 @@
                         <h3 class="mt-4 text-lg font-semibold text-gray-900">No business names found</h3>
                         <p class="mt-2 text-sm text-gray-600">We couldn't find any business names to renew.</p>
                         <div class="mt-6">
-                            <button @onclick="GoToStart" class="inline-flex items-center rounded-md bg-blue-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
+                            <button @onclick="GoToStart" class="inline-flex items-center rounded-md bg-brand px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark">
                                 Try another ABN
                             </button>
                         </div>
@@ -205,7 +205,7 @@
         {
             <!-- Loading -->
             <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
+                <svg class="mx-auto h-12 w-12 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
