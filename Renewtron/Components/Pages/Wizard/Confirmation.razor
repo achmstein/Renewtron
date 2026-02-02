@@ -1,4 +1,5 @@
 @page "/confirmation/{LeadId:guid}"
+@implements IDisposable
 
 @using Renewtron.Data
 @using Renewtron.Services
@@ -244,14 +245,55 @@
     private Lead? lead;
     private List<RenewalRequest> renewalRequests = new();
     private bool isLoading = true;
+    private Timer? _pollingTimer;
+    private List<Guid>? _renewalIds;
 
-    private bool allCompleted => renewalRequests.All(r => r.Status == RenewalStatus.Completed);
+    private bool allCompleted => renewalRequests.All(r => r.Status == RenewalStatus.Completed || r.Status == RenewalStatus.Failed);
     private int completedCount => renewalRequests.Count(r => r.Status == RenewalStatus.Completed);
     private decimal totalAmount => renewalRequests.Sum(r => r.Amount);
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+        StartPollingIfNeeded();
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        if (!allCompleted && renewalRequests.Any())
+        {
+            _pollingTimer = new Timer(async _ => await PollForUpdates(), null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+        }
+    }
+
+    private async Task PollForUpdates()
+    {
+        if (_renewalIds == null || !_renewalIds.Any())
+            return;
+
+        try
+        {
+            var updatedRequests = await DbContext.RenewalRequests
+                .Include(r => r.SearchResult)
+                    .ThenInclude(sr => sr!.SearchLog)
+                .Include(r => r.StripePayment)
+                .Where(r => _renewalIds.Contains(r.Id))
+                .ToListAsync();
+
+            renewalRequests = updatedRequests;
+
+            await InvokeAsync(StateHasChanged);
+
+            if (allCompleted)
+            {
+                _pollingTimer?.Dispose();
+                _pollingTimer = null;
+            }
+        }
+        catch
+        {
+            // Ignore polling errors - will retry on next interval
+        }
     }
 
     private async Task LoadData()
@@ -268,7 +310,7 @@
 
         if (!string.IsNullOrEmpty(Ids))
         {
-            var idList = Ids.Split(',')
+            _renewalIds = Ids.Split(',')
                 .Where(s => Guid.TryParse(s, out _))
                 .Select(Guid.Parse)
                 .ToList();
@@ -277,7 +319,7 @@
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr!.SearchLog)
                 .Include(r => r.StripePayment)
-                .Where(r => idList.Contains(r.Id))
+                .Where(r => _renewalIds.Contains(r.Id))
                 .ToListAsync();
         }
 
@@ -287,5 +329,10 @@
     private async Task PrintReceipt()
     {
         await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    public void Dispose()
+    {
+        _pollingTimer?.Dispose();
     }
 }
