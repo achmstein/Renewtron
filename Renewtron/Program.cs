@@ -46,8 +46,8 @@ builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 // Encryption service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
-builder.Services.AddOptions<StripeSettings>()
-    .BindConfiguration("Stripe")
+builder.Services.AddOptions<AirwallexSettings>()
+    .BindConfiguration("Airwallex")
     .ValidateDataAnnotations();
 
 builder.Services.AddOptions<SendGridSettings>()
@@ -67,9 +67,12 @@ builder.Services.AddOptions<OntraportSettings>()
     .ValidateDataAnnotations();
 
 // Payment and Email services
-builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
+builder.Services.AddHttpClient<IAirwallexPaymentService, AirwallexPaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
+
+// Business name fallback service (data.gov.au)
+builder.Services.AddHttpClient<IBusinessNameFallbackService, DataGovBusinessNameService>();
 
 // Lead service
 builder.Services.AddScoped<ILeadService, LeadService>();

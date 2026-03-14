@@ -29,6 +29,6 @@ public class RenewalRequest
 
     // Navigation properties
     public SearchResult SearchResult { get; set; }
-    public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments
+    public AirwallexPayment? AirwallexPayment { get; set; }
     public Lead? Lead { get; set; }
 }

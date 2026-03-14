@@ -276,7 +276,7 @@
             var updatedRequests = await DbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr!.SearchLog)
-                .Include(r => r.StripePayment)
+                .Include(r => r.AirwallexPayment)
                 .Where(r => _renewalIds.Contains(r.Id))
                 .ToListAsync();
 
@@ -318,7 +318,7 @@
             renewalRequests = await DbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr!.SearchLog)
-                .Include(r => r.StripePayment)
+                .Include(r => r.AirwallexPayment)
                 .Where(r => _renewalIds.Contains(r.Id))
                 .ToListAsync();
         }

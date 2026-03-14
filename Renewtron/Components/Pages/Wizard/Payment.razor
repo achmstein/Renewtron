@@ -12,9 +12,9 @@
 @inject ApplicationDbContext DbContext
 @inject NavigationManager Navigation
 @inject ILeadService LeadService
-@inject IStripePaymentService StripePaymentService
+@inject IAirwallexPaymentService AirwallexPaymentService
 @inject IOptionsSnapshot<PricingSettings> PricingSettings
-@inject IOptionsSnapshot<StripeSettings> StripeSettings
+@inject IOptionsSnapshot<AirwallexSettings> AirwallexSettings
 @inject IBackgroundJobClient BackgroundJobClient
 @inject IJSRuntime JSRuntime
 
@@ -106,7 +106,7 @@
                         Complete your payment
                     </h1>
                     <p class="mt-2 text-sm text-gray-600">
-                        Secure payment powered by Stripe
+                        Secure payment powered by Airwallex
                     </p>
                 </div>
 
@@ -147,7 +147,7 @@
                     <div class="lg:col-span-3 order-1 lg:order-2">
                         <div class="rounded-lg bg-white shadow ring-1 ring-gray-200 p-6">
                             <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
-                                <!-- Stripe Card Element -->
+                                <!-- Airwallex Card Element -->
                                 <div class="mb-4">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
                                     <div id="card-element" class="mt-1 block w-full rounded-md border-0 py-3 px-3 shadow-sm ring-1 ring-inset ring-gray-300 bg-white"></div>
@@ -205,7 +205,7 @@
                                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                                     </svg>
-                                    <span>Secure payment via Stripe</span>
+                                    <span>Secure payment via Airwallex</span>
                                 </div>
                             </form>
                         </div>
@@ -245,9 +245,13 @@
     private bool isLoading = true;
     private bool isSubmitting = false;
     private bool isProcessing = false;
-    private bool stripeInitialized = false;
+    private bool airwallexInitialized = false;
     private string processingStatus = "Processing payment...";
     private int processedCount = 0;
+
+    // Airwallex payment intent details
+    private string? paymentIntentId;
+    private string? clientSecret;
 
     private List<WizardProgress.WizardStep> wizardSteps = new()
     {
@@ -266,9 +270,9 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && searchResults.Any() && !stripeInitialized)
+        if (firstRender && searchResults.Any() && !airwallexInitialized)
         {
-            await InitializeStripe();
+            await InitializeAirwallex();
         }
     }
 
@@ -306,13 +310,39 @@
         isLoading = false;
     }
 
-    private async Task InitializeStripe()
+    private async Task InitializeAirwallex()
     {
         try
         {
-            var publishableKey = StripeSettings.Value.PublishableKey;
-            await JSRuntime.InvokeVoidAsync("stripeInterop.initialize", publishableKey);
-            stripeInitialized = true;
+            // Create payment intent on the backend
+            var totalAmount = GetTotalPrice();
+            var merchantOrderId = $"lead-{LeadId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            var businessNames = string.Join(", ", searchResults.Select(r => r.BusinessName));
+            var metadata = new Dictionary<string, string>
+            {
+                { "renewal_count", searchResults.Count.ToString() },
+                { "business_names", businessNames.Length > 500 ? businessNames.Substring(0, 500) : businessNames },
+                { "renewal_years", renewalYears.ToString() },
+                { "lead_id", LeadId.ToString() }
+            };
+
+            var (success, intentId, secret, error) = await AirwallexPaymentService.CreatePaymentIntentAsync(
+                totalAmount, merchantOrderId, metadata);
+
+            if (!success)
+            {
+                errorMessage = $"Failed to initialize payment: {error}";
+                StateHasChanged();
+                return;
+            }
+
+            paymentIntentId = intentId;
+            clientSecret = secret;
+
+            // Initialize Airwallex card element on the frontend
+            var env = AirwallexSettings.Value.JsEnvironment;
+            await JSRuntime.InvokeVoidAsync("airwallexInterop.initialize", env, intentId, secret);
+            airwallexInitialized = true;
         }
         catch (Exception ex)
         {
@@ -355,9 +385,9 @@
 
         try
         {
-            // Step 1: Create PaymentMethod using Stripe.js
-            var result = await JSRuntime.InvokeAsync<StripePaymentMethodResult>(
-                "stripeInterop.createPaymentMethod", cardHolder);
+            // Step 1: Confirm payment using Airwallex card element
+            var result = await JSRuntime.InvokeAsync<AirwallexPaymentResult>(
+                "airwallexInterop.confirmPayment", cardHolder);
 
             if (!result.Success)
             {
@@ -373,35 +403,8 @@
             StateHasChanged();
 
             var pricePerRenewal = GetPricePerItem();
-            var totalAmount = GetTotalPrice();
 
-            // Step 2: Process payment with Stripe
-            var businessNames = string.Join(", ", searchResults.Select(r => r.BusinessName));
-            var metadata = new Dictionary<string, string>
-            {
-                { "renewal_count", searchResults.Count.ToString() },
-                { "business_names", businessNames.Length > 500 ? businessNames.Substring(0, 500) : businessNames },
-                { "renewal_years", renewalYears.ToString() },
-                { "lead_id", LeadId.ToString() }
-            };
-
-            var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.ConfirmPaymentAsync(
-                totalAmount,
-                lead!.Email,
-                $"Business Name Renewal - {searchResults.Count} renewal(s)",
-                metadata,
-                result.PaymentMethodId!);
-
-            if (!paymentSuccess)
-            {
-                errorMessage = $"Payment failed: {paymentError}";
-                isProcessing = false;
-                isSubmitting = false;
-                StateHasChanged();
-                return;
-            }
-
-            // Step 3: Create renewal requests
+            // Step 2: Create renewal requests
             processingStatus = "Creating renewal requests...";
             StateHasChanged();
 
@@ -421,7 +424,7 @@
                     renewalRequest.Email = lead.Email;
                     renewalRequest.MobileNumber = lead.MobileNumber;
                     renewalRequest.DateOfBirth = lead.DateOfBirth;
-                    renewalRequest.PaymentType = PaymentType.Stripe;
+                    renewalRequest.PaymentType = PaymentType.Airwallex;
                     renewalRequest.Amount = pricePerRenewal;
                     renewalRequest.ErrorMessage = null;
                     renewalRequest.FailedAtStep = null;
@@ -430,9 +433,9 @@
                     renewalRequest.TransactionReference = null;
                     renewalRequest.HostedTokenizationId = null;
 
-                    if (renewalRequest.StripePayment != null)
+                    if (renewalRequest.AirwallexPayment != null)
                     {
-                        DbContext.StripePayments.Remove(renewalRequest.StripePayment);
+                        DbContext.AirwallexPayments.Remove(renewalRequest.AirwallexPayment);
                     }
                 }
                 else
@@ -447,7 +450,7 @@
                         Email = lead.Email,
                         MobileNumber = lead.MobileNumber,
                         DateOfBirth = lead.DateOfBirth,
-                        PaymentType = PaymentType.Stripe,
+                        PaymentType = PaymentType.Airwallex,
                         Amount = pricePerRenewal,
                         Status = RenewalStatus.Pending
                     };
@@ -456,12 +459,12 @@
 
                 await DbContext.SaveChangesAsync();
 
-                var stripePayment = new StripePayment
+                var airwallexPayment = new AirwallexPayment
                 {
                     Id = Guid.NewGuid(),
                     RenewalRequestId = renewalRequest.Id,
-                    PaymentIntentId = paymentIntentId!,
-                    PaymentStatus = "succeeded",
+                    PaymentIntentId = result.PaymentIntentId!,
+                    PaymentStatus = "SUCCEEDED",
                     PaidAt = DateTime.UtcNow,
                     CardholderName = cardHolder,
                     CardLast4 = result.CardLast4,
@@ -470,7 +473,7 @@
                     CardExpYear = result.CardExpYear
                 };
 
-                DbContext.StripePayments.Add(stripePayment);
+                DbContext.AirwallexPayments.Add(airwallexPayment);
                 await DbContext.SaveChangesAsync();
 
                 renewalRequestIds.Add(renewalRequest.Id);
@@ -478,10 +481,10 @@
                 StateHasChanged();
             }
 
-            // Step 4: Mark lead as converted
+            // Step 3: Mark lead as converted
             await LeadService.MarkConvertedAsync(LeadId);
 
-            // Step 5: Queue background jobs
+            // Step 4: Queue background jobs
             processingStatus = "Scheduling renewal processing...";
             StateHasChanged();
 
@@ -491,7 +494,7 @@
                     service.ProcessRenewalAsync(renewalRequestId));
             }
 
-            // Step 6: Redirect to confirmation
+            // Step 5: Redirect to confirmation
             var idsParam = string.Join(",", renewalRequestIds);
             Navigation.NavigateTo($"/confirmation/{LeadId}?ids={idsParam}");
         }
@@ -506,11 +509,11 @@
 
     public async ValueTask DisposeAsync()
     {
-        if (stripeInitialized)
+        if (airwallexInitialized)
         {
             try
             {
-                await JSRuntime.InvokeVoidAsync("stripeInterop.destroy");
+                await JSRuntime.InvokeVoidAsync("airwallexInterop.destroy");
             }
             catch
             {
@@ -519,10 +522,10 @@
         }
     }
 
-    private class StripePaymentMethodResult
+    private class AirwallexPaymentResult
     {
         public bool Success { get; set; }
-        public string? PaymentMethodId { get; set; }
+        public string? PaymentIntentId { get; set; }
         public string? CardBrand { get; set; }
         public string? CardLast4 { get; set; }
         public string? CardExpMonth { get; set; }
