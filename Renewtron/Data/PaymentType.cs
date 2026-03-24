@@ -6,9 +6,9 @@ namespace Renewtron.Data;
 public enum PaymentType
 {
     /// <summary>
-    /// Payment processed through Airwallex
+    /// Payment processed through Stripe
     /// </summary>
-    Airwallex = 0,
+    Stripe = 0,
 
     /// <summary>
     /// External payment (cash, check, wire transfer, etc.)
