@@ -1,8 +1,9 @@
-@page "/payment/{LeadId:guid}"
+@page "/embed/payment/{LeadId:guid}"
+@layout EmptyLayout
 
 <PageTitle>Payment - Renewtron</PageTitle>
 
-<PaymentContent RoutePrefix="" LeadId="@LeadId" Ids="@Ids" Years="@Years" />
+<PaymentContent RoutePrefix="/embed" LeadId="@LeadId" Ids="@Ids" Years="@Years" />
 
 @code {
     [Parameter]

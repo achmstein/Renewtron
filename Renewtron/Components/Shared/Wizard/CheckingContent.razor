@@ -1,0 +1,370 @@
+@using Asic.Client.Abstractions
+@using Asic.Client.Models
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
+@using Renewtron.Services
+@using Renewtron.Data
+
+@inject NavigationManager Navigation
+@inject ILeadService LeadService
+@inject ILeadEmailService LeadEmailService
+@inject IAsicRenewalClient AsicRenewalClient
+@inject ApplicationDbContext DbContext
+@inject IMemoryCache MemoryCache
+
+<div class="relative isolate overflow-auto flex-1">
+    <!-- Background Pattern -->
+    <svg class="absolute inset-0 -z-10 h-full w-full stroke-gray-200 [mask-image:radial-gradient(100%_100%_at_top_right,white,transparent)]" aria-hidden="true">
+        <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M.5 40V.5H40" fill="none" />
+            </pattern>
+        </defs>
+        <rect width="100%" height="100%" stroke-width="0" fill="url(#grid)" />
+    </svg>
+
+    <div class="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
+        <!-- Wizard Progress -->
+        <WizardProgress CurrentStep="3" Steps="@wizardSteps" AllowNavigation="false" />
+
+        @if (lead != null)
+        {
+            <!-- User Details Summary -->
+            <div class="mx-auto max-w-md">
+                <UserDetailsSummary Abn="@lead.Abn"
+                                    FullName="@lead.FullName"
+                                    Email="@lead.Email"
+                                    MobileNumber="@lead.MobileNumber"
+                                    DateOfBirth="@lead.DateOfBirth" />
+            </div>
+        }
+
+        <!-- Loading State -->
+        <div class="mx-auto max-w-sm pt-6">
+            <div class="text-center">
+                <!-- Spinner -->
+                <div class="mx-auto mb-8 flex h-20 w-20 items-center justify-center">
+                    <svg class="h-20 w-20 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+
+                <h2 class="text-xl font-semibold text-gray-900">Checking your renewal status</h2>
+                <p class="mt-2 text-sm text-gray-600">This typically takes 20-25 seconds. Please don't close this page.</p>
+
+                <!-- Status Message -->
+                <div class="mt-8">
+                    <div class="flex items-center justify-center gap-2 text-sm text-gray-600">
+                        <div class="h-2 w-2 animate-pulse rounded-full bg-brand"></div>
+                        <span>@loadingMessage</span>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="mt-4">
+                    <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div class="h-full rounded-full bg-brand transition-all duration-500" style="width: @(progress)%"></div>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="mt-8 rounded-md bg-red-50 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-red-800">@errorMessage</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <button @onclick="RetrySearch" class="text-sm font-medium text-brand hover:text-blue-500">
+                            Try again
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string RoutePrefix { get; set; } = "";
+
+    [Parameter]
+    public Guid LeadId { get; set; }
+
+    private Lead? lead;
+    private string loadingMessage = "Connecting to ASIC database...";
+    private int progress = 0;
+    private string errorMessage = "";
+    private Timer? loadingTimer;
+    private Timer? progressTimer;
+    private bool hasStartedSearch = false;
+
+    private readonly string[] loadingMessages = new[]
+    {
+        "Connecting to ASIC database...",
+        "Verifying your ABN...",
+        "Retrieving business names...",
+        "Processing registration details...",
+        "Finalizing results..."
+    };
+
+    private List<WizardProgress.WizardStep> wizardSteps = new()
+    {
+        new() { Label = "ABN" },
+        new() { Label = "Details" },
+        new() { Label = "Check" },
+        new() { Label = "Select" },
+        new() { Label = "Pay" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        lead = await LeadService.GetLeadAsync(LeadId);
+
+        if (lead == null)
+        {
+            Navigation.NavigateTo($"{RoutePrefix}/start");
+            return;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && lead != null && !hasStartedSearch)
+        {
+            hasStartedSearch = true;
+            await PerformSearch();
+        }
+    }
+
+    private async Task RetrySearch()
+    {
+        errorMessage = "";
+        progress = 0;
+        await PerformSearch();
+    }
+
+    private async Task PerformSearch()
+    {
+        var messageIndex = 0;
+
+        loadingTimer = new Timer(_ =>
+        {
+            messageIndex = (messageIndex + 1) % loadingMessages.Length;
+            loadingMessage = loadingMessages[messageIndex];
+            InvokeAsync(StateHasChanged);
+        }, null, 0, 4000);
+
+        progressTimer = new Timer(_ =>
+        {
+            if (progress < 95)
+            {
+                progress += 5;
+                InvokeAsync(StateHasChanged);
+            }
+        }, null, 0, 1000);
+
+        try
+        {
+            var cleanAbn = lead!.Abn.Replace(" ", "");
+            var cacheKey = $"abn_search_{cleanAbn}";
+
+            // Try to get from cache first
+            BusinessNamesResult searchResult;
+            if (!MemoryCache.TryGetValue(cacheKey, out searchResult!))
+            {
+                searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
+
+                // Cache the result for 15 minutes
+                var cacheOptions = new MemoryCacheEntryOptions()
+                    .SetAbsoluteExpiration(TimeSpan.FromMinutes(15));
+
+                MemoryCache.Set(cacheKey, searchResult, cacheOptions);
+            }
+
+            progress = 100;
+            await InvokeAsync(StateHasChanged);
+
+            // Handle the result
+            if (!searchResult.Success)
+            {
+                // Log the failed search
+                var failedSearchLog = new SearchLog
+                {
+                    Id = Guid.NewGuid(),
+                    Abn = cleanAbn,
+                    SearchedAt = DateTime.UtcNow,
+                    IpAddress = lead.IpAddress,
+                    UserAgent = lead.UserAgent,
+                    SessionId = lead.SessionId,
+                    Success = false,
+                    InitiatedBy = SearchInitiator.Customer,
+                    ErrorMessage = searchResult.ErrorMessage ?? "Search failed",
+                    ResultsCount = 0
+                };
+
+                DbContext.SearchLogs.Add(failedSearchLog);
+                await DbContext.SaveChangesAsync();
+
+                // Link search log to lead
+                await LeadService.LinkSearchLogAsync(lead.Id, failedSearchLog.Id);
+
+                // Determine the outcome based on error message
+                var errorMsg = searchResult.ErrorMessage ?? "";
+                LeadOutcome outcome;
+                string? outcomeMessage = errorMsg;
+
+                if (errorMsg.Contains("already in progress", StringComparison.OrdinalIgnoreCase))
+                {
+                    outcome = LeadOutcome.RenewalInProgress;
+                }
+                else if (errorMsg.Contains("not due for renewal", StringComparison.OrdinalIgnoreCase))
+                {
+                    outcome = LeadOutcome.NotDueForRenewal;
+                }
+                else if (errorMsg.Contains("No business names", StringComparison.OrdinalIgnoreCase) ||
+                         (searchResult.BusinessNames == null || searchResult.BusinessNames.Count == 0))
+                {
+                    outcome = LeadOutcome.NoBusinessNames;
+                }
+                else
+                {
+                    outcome = LeadOutcome.NoBusinessNames;
+                }
+
+                await LeadService.UpdateLeadOutcomeAsync(lead.Id, outcome, outcomeMessage);
+
+                // Send appropriate email
+                try
+                {
+                    var updatedLead = await LeadService.GetLeadAsync(lead.Id);
+                    if (updatedLead != null)
+                    {
+                        switch (outcome)
+                        {
+                            case LeadOutcome.NotDueForRenewal:
+                                await LeadEmailService.SendNotDueForRenewalEmailAsync(updatedLead);
+                                break;
+                            case LeadOutcome.RenewalInProgress:
+                                await LeadEmailService.SendRenewalInProgressEmailAsync(updatedLead);
+                                break;
+                            case LeadOutcome.NoBusinessNames:
+                                await LeadEmailService.SendNoBusinessNamesEmailAsync(updatedLead);
+                                break;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Don't fail the flow if email fails
+                }
+
+                // Navigate to not available page
+                Navigation.NavigateTo($"{RoutePrefix}/not-available/{lead.Id}");
+                return;
+            }
+
+            // Check if no business names found
+            if (searchResult.BusinessNames == null || searchResult.BusinessNames.Count == 0)
+            {
+                var noResultsLog = new SearchLog
+                {
+                    Id = Guid.NewGuid(),
+                    Abn = cleanAbn,
+                    SearchedAt = DateTime.UtcNow,
+                    IpAddress = lead.IpAddress,
+                    UserAgent = lead.UserAgent,
+                    SessionId = lead.SessionId,
+                    Success = true,
+                    InitiatedBy = SearchInitiator.Customer,
+                    ResultsCount = 0
+                };
+
+                DbContext.SearchLogs.Add(noResultsLog);
+                await DbContext.SaveChangesAsync();
+
+                await LeadService.LinkSearchLogAsync(lead.Id, noResultsLog.Id);
+                await LeadService.UpdateLeadOutcomeAsync(lead.Id, LeadOutcome.NoBusinessNames, "No business names found for this ABN");
+
+                // Send email
+                try
+                {
+                    var updatedLead = await LeadService.GetLeadAsync(lead.Id);
+                    if (updatedLead != null)
+                    {
+                        await LeadEmailService.SendNoBusinessNamesEmailAsync(updatedLead);
+                    }
+                }
+                catch { }
+
+                Navigation.NavigateTo($"{RoutePrefix}/not-available/{lead.Id}");
+                return;
+            }
+
+            // Success - Create search log and results
+            var searchLog = new SearchLog
+            {
+                Id = Guid.NewGuid(),
+                Abn = cleanAbn,
+                SearchedAt = DateTime.UtcNow,
+                IpAddress = lead.IpAddress,
+                UserAgent = lead.UserAgent,
+                SessionId = lead.SessionId,
+                Success = true,
+                InitiatedBy = SearchInitiator.Customer,
+                ResultsCount = searchResult.BusinessNames.Count
+            };
+
+            DbContext.SearchLogs.Add(searchLog);
+            await DbContext.SaveChangesAsync();
+
+            // Save each business name result
+            foreach (var business in searchResult.BusinessNames)
+            {
+                var searchResultEntity = new SearchResult
+                {
+                    Id = Guid.NewGuid(),
+                    SearchLogId = searchLog.Id,
+                    BusinessName = business.Name,
+                    AccountNumber = business.AccountNumber,
+                    RegistrationDate = business.RegistrationDate
+                };
+
+                DbContext.SearchResults.Add(searchResultEntity);
+            }
+            await DbContext.SaveChangesAsync();
+
+            // Link to lead and update outcome
+            await LeadService.LinkSearchLogAsync(lead.Id, searchLog.Id);
+            await LeadService.UpdateLeadOutcomeAsync(lead.Id, LeadOutcome.RenewalAvailable);
+
+            // Navigate to select names page
+            Navigation.NavigateTo($"{RoutePrefix}/select-names/{lead.Id}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred while checking your renewal status. Please try again.";
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            loadingTimer?.Dispose();
+            progressTimer?.Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        loadingTimer?.Dispose();
+        progressTimer?.Dispose();
+    }
+}

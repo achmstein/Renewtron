@@ -1,8 +1,9 @@
-@page "/select-names/{LeadId:guid}"
+@page "/embed/select-names/{LeadId:guid}"
+@layout EmptyLayout
 
 <PageTitle>Select Business Names - Renewtron</PageTitle>
 
-<SelectNamesContent RoutePrefix="" LeadId="@LeadId" />
+<SelectNamesContent RoutePrefix="/embed" LeadId="@LeadId" />
 
 @code {
     [Parameter]

@@ -1,8 +1,9 @@
-@page "/confirmation/{LeadId:guid}"
+@page "/embed/confirmation/{LeadId:guid}"
+@layout EmptyLayout
 
 <PageTitle>Renewal Confirmation - Renewtron</PageTitle>
 
-<ConfirmationContent RoutePrefix="" LeadId="@LeadId" Ids="@Ids" />
+<ConfirmationContent RoutePrefix="/embed" LeadId="@LeadId" Ids="@Ids" />
 
 @code {
     [Parameter]

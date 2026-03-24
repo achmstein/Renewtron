@@ -1,8 +1,9 @@
-@page "/details"
+@page "/embed/details"
+@layout EmptyLayout
 
 <PageTitle>Your Details - Renewtron</PageTitle>
 
-<DetailsContent RoutePrefix="" Abn="@Abn" />
+<DetailsContent RoutePrefix="/embed" Abn="@Abn" />
 
 @code {
     [SupplyParameterFromQuery]

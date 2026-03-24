@@ -1,0 +1,11 @@
+@page "/embed/not-available/{LeadId:guid}"
+@layout EmptyLayout
+
+<PageTitle>Renewal Status - Renewtron</PageTitle>
+
+<NotAvailableContent RoutePrefix="/embed" LeadId="@LeadId" />
+
+@code {
+    [Parameter]
+    public Guid LeadId { get; set; }
+}

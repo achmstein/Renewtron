@@ -1,8 +1,9 @@
-@page "/checking/{LeadId:guid}"
+@page "/embed/checking/{LeadId:guid}"
+@layout EmptyLayout
 
 <PageTitle>Checking Renewal Status - Renewtron</PageTitle>
 
-<CheckingContent RoutePrefix="" LeadId="@LeadId" />
+<CheckingContent RoutePrefix="/embed" LeadId="@LeadId" />
 
 @code {
     [Parameter]

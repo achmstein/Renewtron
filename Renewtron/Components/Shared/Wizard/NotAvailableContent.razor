@@ -1,0 +1,301 @@
+@using Renewtron.Services
+@using Renewtron.Data
+
+@inject NavigationManager Navigation
+@inject ILeadService LeadService
+
+<div class="relative isolate overflow-auto flex-1">
+    <!-- Background Pattern -->
+    <svg class="absolute inset-0 -z-10 h-full w-full stroke-gray-200 [mask-image:radial-gradient(100%_100%_at_top_right,white,transparent)]" aria-hidden="true">
+        <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M.5 40V.5H40" fill="none" />
+            </pattern>
+        </defs>
+        <rect width="100%" height="100%" stroke-width="0" fill="url(#grid)" />
+    </svg>
+
+    <div class="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
+        @if (lead != null)
+        {
+            <!-- User Details Summary -->
+            <div class="mx-auto max-w-lg">
+                <UserDetailsSummary Abn="@lead.Abn"
+                                    FullName="@lead.FullName"
+                                    Email="@lead.Email"
+                                    MobileNumber="@lead.MobileNumber"
+                                    DateOfBirth="@lead.DateOfBirth" />
+            </div>
+
+            <!-- Status Card -->
+            <div class="mx-auto max-w-lg">
+                <div class="rounded-xl bg-white shadow-lg ring-1 ring-gray-200 overflow-hidden">
+                    <!-- Header based on outcome -->
+                    @if (lead.Outcome == LeadOutcome.NotDueForRenewal)
+                    {
+                        <div class="bg-amber-50 px-6 py-4 border-b border-amber-100">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-8 w-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-lg font-semibold text-amber-800">Not Due for Renewal Yet</h3>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (lead.Outcome == LeadOutcome.RenewalInProgress)
+                    {
+                        <div class="bg-blue-50 px-6 py-4 border-b border-blue-100">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-lg font-semibold text-blue-800">Renewal Already in Progress</h3>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="bg-gray-50 px-6 py-4 border-b border-gray-100">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-lg font-semibold text-gray-800">No Business Names Found</h3>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Content -->
+                    <div class="px-6 py-6">
+                        @if (lead.Outcome == LeadOutcome.NotDueForRenewal)
+                        {
+                            <p class="text-gray-600">
+                                Your business name registration is not currently due for renewal. Business names in Australia need to be renewed every 1 or 3 years.
+                            </p>
+                            <div class="mt-4 rounded-lg bg-gray-50 p-4">
+                                <h4 class="text-sm font-medium text-gray-900">What this means:</h4>
+                                <ul class="mt-2 text-sm text-gray-600 space-y-1">
+                                    <li class="flex items-start">
+                                        <svg class="h-5 w-5 text-green-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Your business name is currently active
+                                    </li>
+                                    <li class="flex items-start">
+                                        <svg class="h-5 w-5 text-green-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        No action is required at this time
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+                        else if (lead.Outcome == LeadOutcome.RenewalInProgress)
+                        {
+                            <p class="text-gray-600">
+                                A renewal for this ABN is already being processed. This could be because you or someone else has recently initiated a renewal.
+                            </p>
+                            <div class="mt-4 rounded-lg bg-gray-50 p-4">
+                                <h4 class="text-sm font-medium text-gray-900">What to do:</h4>
+                                <ul class="mt-2 text-sm text-gray-600 space-y-1">
+                                    <li class="flex items-start">
+                                        <svg class="h-5 w-5 text-blue-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Wait for the current renewal to complete
+                                    </li>
+                                    <li class="flex items-start">
+                                        <svg class="h-5 w-5 text-blue-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                                        </svg>
+                                        Check your email for confirmation
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-gray-600">
+                                We couldn't find any business names registered under this ABN. This could mean the ABN doesn't have any business names registered, or there may be an issue with the ABN number.
+                            </p>
+                            <div class="mt-4 rounded-lg bg-gray-50 p-4">
+                                <h4 class="text-sm font-medium text-gray-900">Possible reasons:</h4>
+                                <ul class="mt-2 text-sm text-gray-600 space-y-1">
+                                    <li class="flex items-start">
+                                        <span class="mr-2">&#8226;</span>
+                                        The ABN doesn't have a registered business name
+                                    </li>
+                                    <li class="flex items-start">
+                                        <span class="mr-2">&#8226;</span>
+                                        The business name has been cancelled or deregistered
+                                    </li>
+                                    <li class="flex items-start">
+                                        <span class="mr-2">&#8226;</span>
+                                        There may be a typo in the ABN
+                                    </li>
+                                </ul>
+                            </div>
+                        }
+
+                        <!-- Reminder Opt-in -->
+                        @if (lead.Outcome == LeadOutcome.NotDueForRenewal && !reminderSaved)
+                        {
+                            <div class="mt-6 rounded-lg bg-blue-50 p-4">
+                                <div class="flex items-start">
+                                    <div class="flex h-5 items-center">
+                                        <input id="reminder"
+                                               type="checkbox"
+                                               @bind="reminderOptIn"
+                                               class="h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand" />
+                                    </div>
+                                    <div class="ml-3">
+                                        <label for="reminder" class="text-sm font-medium text-blue-800">
+                                            Remind me when it's time to renew
+                                        </label>
+                                        <p class="text-xs text-brand mt-1">
+                                            We'll send you an email when your business name is due for renewal.
+                                        </p>
+                                    </div>
+                                </div>
+                                @if (reminderOptIn)
+                                {
+                                    <div class="mt-3">
+                                        <button @onclick="SaveReminder"
+                                                disabled="@savingReminder"
+                                                class="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark disabled:opacity-50">
+                                            @(savingReminder ? "Saving..." : "Save Reminder Preference")
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (reminderSaved)
+                        {
+                            <div class="mt-6 rounded-lg bg-green-50 p-4">
+                                <div class="flex items-center">
+                                    <svg class="h-5 w-5 text-green-400 mr-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span class="text-sm font-medium text-green-800">
+                                        We'll email you at @lead.Email when your renewal is due.
+                                    </span>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- We've captured your details -->
+                        <div class="mt-6 p-4 border border-gray-200 rounded-lg">
+                            <div class="flex items-start">
+                                <svg class="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-900">Your details have been saved</h4>
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        We've recorded your contact information. If you have any questions, we'll be able to assist you.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <a href="https://asic.gov.au/for-business/registering-a-business-name/"
+                               target="_blank"
+                               class="flex-1 text-center rounded-md bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                                Register a new business name
+                            </a>
+                            <button @onclick="StartOver"
+                                    class="flex-1 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark">
+                                Try a different ABN
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Section -->
+                <div class="mt-8 text-center">
+                    <p class="text-sm text-gray-500">
+                        Need help? Contact us at
+                        <a href="mailto:businessnames@applyforanabn.com.au" class="font-medium text-brand hover:text-brand-dark">
+                            businessnames@applyforanabn.com.au
+                        </a>
+                    </p>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Loading state -->
+            <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string RoutePrefix { get; set; } = "";
+
+    [Parameter]
+    public Guid LeadId { get; set; }
+
+    private Lead? lead;
+    private bool reminderOptIn = false;
+    private bool reminderSaved = false;
+    private bool savingReminder = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        lead = await LeadService.GetLeadAsync(LeadId);
+
+        if (lead == null)
+        {
+            Navigation.NavigateTo($"{RoutePrefix}/start");
+            return;
+        }
+
+        // Check if reminder was already saved
+        reminderSaved = lead.ReminderOptIn;
+        reminderOptIn = lead.ReminderOptIn;
+    }
+
+    private async Task SaveReminder()
+    {
+        savingReminder = true;
+
+        try
+        {
+            await LeadService.UpdateReminderOptInAsync(LeadId, reminderOptIn);
+            reminderSaved = true;
+        }
+        finally
+        {
+            savingReminder = false;
+        }
+    }
+
+    private void StartOver()
+    {
+        Navigation.NavigateTo($"{RoutePrefix}/start");
+    }
+}

@@ -1,0 +1,531 @@
+@using Renewtron.Abstractions
+@using Renewtron.Data
+@using Renewtron.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Options
+@using Renewtron.Settings
+@using Hangfire
+@using Microsoft.JSInterop
+
+@inject ApplicationDbContext DbContext
+@inject NavigationManager Navigation
+@inject ILeadService LeadService
+@inject IStripePaymentService StripePaymentService
+@inject IOptionsSnapshot<PricingSettings> PricingSettings
+@inject IOptionsSnapshot<StripeSettings> StripeSettings
+@inject IBackgroundJobClient BackgroundJobClient
+@inject IJSRuntime JSRuntime
+
+@implements IAsyncDisposable
+
+<div class="relative isolate overflow-auto flex-1">
+    <!-- Background Pattern -->
+    <svg class="absolute inset-0 -z-10 h-full w-full stroke-gray-200 [mask-image:radial-gradient(100%_100%_at_top_right,white,transparent)]" aria-hidden="true">
+        <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M.5 40V.5H40" fill="none" />
+            </pattern>
+        </defs>
+        <rect width="100%" height="100%" stroke-width="0" fill="url(#grid)" />
+    </svg>
+
+    <div class="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
+        @if (!isProcessing)
+        {
+            <!-- Wizard Progress -->
+            <WizardProgress CurrentStep="5" Steps="@wizardSteps" AllowNavigation="true" OnStepClick="HandleStepClick" />
+        }
+
+        @if (isLoading)
+        {
+            <div class="text-center py-12">
+                <svg class="mx-auto h-12 w-12 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="mt-4 text-sm text-gray-600">Loading...</p>
+            </div>
+        }
+        else if (lead == null || !searchResults.Any())
+        {
+            <div class="text-center py-12">
+                <h3 class="text-lg font-semibold text-gray-900">No business names selected</h3>
+                <p class="mt-2 text-sm text-gray-600">Please go back and select the business names you want to renew.</p>
+                <a href="@(RoutePrefix)/start" class="mt-4 inline-block text-brand hover:text-blue-500">Start over</a>
+            </div>
+        }
+        else if (isProcessing)
+        {
+            <!-- Processing State -->
+            <div class="mx-auto max-w-sm pt-10 lg:pt-20">
+                <div class="text-center">
+                    <div class="mx-auto mb-8 flex h-16 w-16 items-center justify-center">
+                        <svg class="h-16 w-16 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+
+                    <h2 class="text-lg font-semibold text-gray-900">@processingStatus</h2>
+                    <p class="mt-2 text-sm text-gray-600">Please do not close this page.</p>
+
+                    <div class="mt-8">
+                        <div class="flex items-center justify-center gap-2 text-sm text-gray-600">
+                            <div class="h-2 w-2 animate-pulse rounded-full bg-brand"></div>
+                            <span>@processedCount of @searchResults.Count processed</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                            <div class="h-full rounded-full bg-brand transition-all duration-500"
+                                 style="width: @(searchResults.Count > 0 ? (processedCount * 100 / searchResults.Count) : 0)%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- User Details Summary -->
+            <div class="mx-auto max-w-2xl">
+                <UserDetailsSummary Abn="@lead.Abn"
+                                    FullName="@lead.FullName"
+                                    Email="@lead.Email"
+                                    MobileNumber="@lead.MobileNumber"
+                                    DateOfBirth="@lead.DateOfBirth" />
+            </div>
+
+            <div class="mx-auto max-w-2xl">
+                <div class="text-center mb-8">
+                    <h1 class="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+                        Complete your payment
+                    </h1>
+                    <p class="mt-2 text-sm text-gray-600">
+                        Secure payment powered by Stripe
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                    <!-- Order Summary (Left) -->
+                    <div class="lg:col-span-2 order-2 lg:order-1">
+                        <div class="rounded-lg bg-gray-50 border border-gray-200 p-5 sticky top-6">
+                            <h3 class="text-sm font-semibold text-gray-900 mb-4">Order Summary</h3>
+
+                            <!-- Business Names List -->
+                            <div class="space-y-3 mb-4">
+                                @foreach (var result in searchResults)
+                                {
+                                    <div class="flex justify-between items-start text-sm">
+                                        <div class="flex-1 min-w-0 pr-2">
+                                            <p class="font-medium text-gray-900 truncate">@result.BusinessName</p>
+                                            <p class="text-xs text-gray-500">@renewalYears year@(renewalYears > 1 ? "s" : "")</p>
+                                        </div>
+                                        <span class="text-gray-700 flex-shrink-0">$@GetPricePerItem().ToString("F2")</span>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="border-t border-gray-200 pt-4 space-y-2">
+                                <div class="flex justify-between text-sm text-gray-600">
+                                    <span>Subtotal (@searchResults.Count item@(searchResults.Count > 1 ? "s" : ""))</span>
+                                    <span>$@GetTotalPrice().ToString("F2")</span>
+                                </div>
+                                <div class="flex justify-between font-semibold text-gray-900">
+                                    <span>Total</span>
+                                    <span>$@GetTotalPrice().ToString("F2") AUD</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Form (Right) -->
+                    <div class="lg:col-span-3 order-1 lg:order-2">
+                        <div class="rounded-lg bg-white shadow ring-1 ring-gray-200 p-6">
+                            <form @onsubmit="HandleSubmit" @onsubmit:preventDefault>
+                                <!-- Stripe Card Element -->
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+                                    <div id="card-element" class="mt-1 block w-full rounded-md border-0 py-3 px-3 shadow-sm ring-1 ring-inset ring-gray-300 bg-white"></div>
+                                    <div id="card-errors" class="mt-1 text-sm text-red-600"></div>
+                                </div>
+
+                                <!-- Cardholder Name -->
+                                <div class="mb-6">
+                                    <label for="cardHolder" class="block text-sm font-medium text-gray-700">Name on Card</label>
+                                    <input id="cardHolder"
+                                           type="text"
+                                           @bind="cardHolder"
+                                           required
+                                           placeholder="Name as it appears on card"
+                                           class="mt-1 block w-full rounded-md border-0 py-2.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-brand sm:text-sm" />
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(errorMessage))
+                                {
+                                    <div class="mb-4 rounded-md bg-red-50 p-4">
+                                        <div class="flex">
+                                            <svg class="h-5 w-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                                            </svg>
+                                            <div class="ml-3">
+                                                <p class="text-sm text-red-800">@errorMessage</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Submit Button -->
+                                <button type="submit"
+                                        disabled="@(!IsFormValid() || isSubmitting)"
+                                        class="w-full flex justify-center items-center rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                    @if (isSubmitting)
+                                    {
+                                        <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>Processing...</span>
+                                    }
+                                    else
+                                    {
+                                        <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                        </svg>
+                                        <span>Pay $@GetTotalPrice().ToString("F2")</span>
+                                    }
+                                </button>
+
+                                <!-- Security Badge -->
+                                <div class="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                                    </svg>
+                                    <span>Secure payment via Stripe</span>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Back Link -->
+                        <div class="text-center mt-4">
+                            <button type="button" @onclick="GoBack" class="text-sm font-medium text-gray-600 hover:text-gray-500">
+                                <svg class="inline-block mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                                </svg>
+                                Back to selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string RoutePrefix { get; set; } = "";
+
+    [Parameter]
+    public Guid LeadId { get; set; }
+
+    [Parameter]
+    public string? Ids { get; set; }
+
+    [Parameter]
+    public int? Years { get; set; }
+
+    private Lead? lead;
+    private List<SearchResult> searchResults = new();
+    private int renewalYears = 1;
+    private string cardHolder = "";
+    private string errorMessage = "";
+
+    private bool isLoading = true;
+    private bool isSubmitting = false;
+    private bool isProcessing = false;
+    private bool stripeInitialized = false;
+    private string processingStatus = "Processing payment...";
+    private int processedCount = 0;
+
+    private List<WizardProgress.WizardStep> wizardSteps = new()
+    {
+        new() { Label = "ABN" },
+        new() { Label = "Details" },
+        new() { Label = "Check" },
+        new() { Label = "Select" },
+        new() { Label = "Pay" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        renewalYears = Years ?? 1;
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && searchResults.Any() && !stripeInitialized)
+        {
+            await InitializeStripe();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        lead = await LeadService.GetLeadWithSearchResultsAsync(LeadId);
+
+        if (lead == null)
+        {
+            Navigation.NavigateTo($"{RoutePrefix}/start");
+            return;
+        }
+
+        // Pre-fill cardholder name
+        cardHolder = lead.FullName;
+
+        // Parse selected IDs
+        if (!string.IsNullOrEmpty(Ids))
+        {
+            var idList = Ids.Split(',')
+                .Where(s => Guid.TryParse(s, out _))
+                .Select(Guid.Parse)
+                .ToList();
+
+            if (lead.SearchLog?.Results != null)
+            {
+                searchResults = lead.SearchLog.Results
+                    .Where(r => idList.Contains(r.Id))
+                    .ToList();
+            }
+        }
+
+        isLoading = false;
+    }
+
+    private async Task InitializeStripe()
+    {
+        try
+        {
+            var publishableKey = StripeSettings.Value.PublishableKey;
+            await JSRuntime.InvokeVoidAsync("stripeInterop.initialize", publishableKey);
+            stripeInitialized = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to initialize payment form: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private decimal GetPricePerItem() => PricingSettings.Value.GetCustomerPrice(renewalYears);
+    private decimal GetTotalPrice() => GetPricePerItem() * searchResults.Count;
+
+    private bool IsFormValid() => !string.IsNullOrWhiteSpace(cardHolder) && searchResults.Any();
+
+    private void HandleStepClick(int step)
+    {
+        switch (step)
+        {
+            case 1:
+                Navigation.NavigateTo($"{RoutePrefix}/start");
+                break;
+            case 2:
+                Navigation.NavigateTo($"{RoutePrefix}/details?abn={lead?.Abn}");
+                break;
+            case 4:
+                GoBack();
+                break;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo($"{RoutePrefix}/select-names/{LeadId}");
+    }
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = "";
+        isSubmitting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Create PaymentMethod using Stripe.js
+            var result = await JSRuntime.InvokeAsync<StripePaymentMethodResult>(
+                "stripeInterop.createPaymentMethod", cardHolder);
+
+            if (!result.Success)
+            {
+                errorMessage = result.Error ?? "Failed to process card details";
+                isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+
+            isProcessing = true;
+            processedCount = 0;
+            processingStatus = "Processing payment...";
+            StateHasChanged();
+
+            var pricePerRenewal = GetPricePerItem();
+            var totalAmount = GetTotalPrice();
+
+            // Step 2: Process payment with Stripe
+            var businessNames = string.Join(", ", searchResults.Select(r => r.BusinessName));
+            var metadata = new Dictionary<string, string>
+            {
+                { "renewal_count", searchResults.Count.ToString() },
+                { "business_names", businessNames.Length > 500 ? businessNames.Substring(0, 500) : businessNames },
+                { "renewal_years", renewalYears.ToString() },
+                { "lead_id", LeadId.ToString() }
+            };
+
+            var (paymentSuccess, paymentIntentId, paymentError) = await StripePaymentService.ConfirmPaymentAsync(
+                totalAmount,
+                lead!.Email,
+                $"Business Name Renewal - {searchResults.Count} renewal(s)",
+                metadata,
+                result.PaymentMethodId!);
+
+            if (!paymentSuccess)
+            {
+                errorMessage = $"Payment failed: {paymentError}";
+                isProcessing = false;
+                isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Step 3: Create renewal requests
+            processingStatus = "Creating renewal requests...";
+            StateHasChanged();
+
+            var renewalRequestIds = new List<Guid>();
+
+            foreach (var searchResult in searchResults)
+            {
+                processedCount++;
+
+                var renewalRequest = await DbContext.RenewalRequests
+                    .FirstOrDefaultAsync(r => r.SearchResultId == searchResult.Id);
+
+                if (renewalRequest != null)
+                {
+                    renewalRequest.LeadId = LeadId;
+                    renewalRequest.RenewalYears = renewalYears;
+                    renewalRequest.Email = lead.Email;
+                    renewalRequest.MobileNumber = lead.MobileNumber;
+                    renewalRequest.DateOfBirth = lead.DateOfBirth;
+                    renewalRequest.PaymentType = PaymentType.Stripe;
+                    renewalRequest.Amount = pricePerRenewal;
+                    renewalRequest.ErrorMessage = null;
+                    renewalRequest.FailedAtStep = null;
+                    renewalRequest.Status = RenewalStatus.Pending;
+                    renewalRequest.CompletedAt = null;
+                    renewalRequest.TransactionReference = null;
+                    renewalRequest.HostedTokenizationId = null;
+
+                    if (renewalRequest.StripePayment != null)
+                    {
+                        DbContext.StripePayments.Remove(renewalRequest.StripePayment);
+                    }
+                }
+                else
+                {
+                    renewalRequest = new RenewalRequest
+                    {
+                        Id = Guid.NewGuid(),
+                        SearchResultId = searchResult.Id,
+                        LeadId = LeadId,
+                        InitiatedAt = DateTime.UtcNow,
+                        RenewalYears = renewalYears,
+                        Email = lead.Email,
+                        MobileNumber = lead.MobileNumber,
+                        DateOfBirth = lead.DateOfBirth,
+                        PaymentType = PaymentType.Stripe,
+                        Amount = pricePerRenewal,
+                        Status = RenewalStatus.Pending
+                    };
+                    DbContext.RenewalRequests.Add(renewalRequest);
+                }
+
+                await DbContext.SaveChangesAsync();
+
+                var stripePayment = new StripePayment
+                {
+                    Id = Guid.NewGuid(),
+                    RenewalRequestId = renewalRequest.Id,
+                    PaymentIntentId = paymentIntentId!,
+                    PaymentStatus = "succeeded",
+                    PaidAt = DateTime.UtcNow,
+                    CardholderName = cardHolder,
+                    CardLast4 = result.CardLast4,
+                    CardBrand = result.CardBrand,
+                    CardExpMonth = result.CardExpMonth,
+                    CardExpYear = result.CardExpYear
+                };
+
+                DbContext.StripePayments.Add(stripePayment);
+                await DbContext.SaveChangesAsync();
+
+                renewalRequestIds.Add(renewalRequest.Id);
+
+                StateHasChanged();
+            }
+
+            // Step 4: Mark lead as converted
+            await LeadService.MarkConvertedAsync(LeadId);
+
+            // Step 5: Queue background jobs
+            processingStatus = "Scheduling renewal processing...";
+            StateHasChanged();
+
+            foreach (var renewalRequestId in renewalRequestIds)
+            {
+                BackgroundJobClient.Enqueue<IRenewalProcessingService>(service =>
+                    service.ProcessRenewalAsync(renewalRequestId));
+            }
+
+            // Step 6: Redirect to confirmation
+            var idsParam = string.Join(",", renewalRequestIds);
+            Navigation.NavigateTo($"{RoutePrefix}/confirmation/{LeadId}?ids={idsParam}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+            isProcessing = false;
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (stripeInitialized)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("stripeInterop.destroy");
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+
+    private class StripePaymentMethodResult
+    {
+        public bool Success { get; set; }
+        public string? PaymentMethodId { get; set; }
+        public string? CardBrand { get; set; }
+        public string? CardLast4 { get; set; }
+        public string? CardExpMonth { get; set; }
+        public string? CardExpYear { get; set; }
+        public string? Error { get; set; }
+    }
+}
