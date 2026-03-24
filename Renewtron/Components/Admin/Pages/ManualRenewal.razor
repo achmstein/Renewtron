@@ -11,10 +11,12 @@
 
 @inject ApplicationDbContext DbContext
 @inject IAsicRenewalClient RenewalClient
+@inject IBusinessNameFallbackService FallbackService
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IBackgroundJobClient BackgroundJobClient
 @inject IMemoryCache MemoryCache
+@inject IConfiguration Configuration
 @inject IOptionsSnapshot<PricingSettings> PricingSettings
 
 <PageTitle>Manual Renewal - Renewtron</PageTitle>
@@ -258,8 +260,27 @@
             Asic.Client.Models.BusinessNamesResult result;
             if (!MemoryCache.TryGetValue(cacheKey, out result))
             {
-                // Not in cache, perform search using ASIC Renewal Service
-                result = await RenewalClient.SearchByAbnAsync(searchAbn);
+                var forceAsicFallback = Configuration.GetValue<bool>("Asic:ForceFallback");
+
+                if (forceAsicFallback)
+                {
+                    result = await FallbackService.SearchByAbnAsync(searchAbn);
+                }
+                else
+                {
+                    // Not in cache, perform search using ASIC Renewal Service
+                    result = await RenewalClient.SearchByAbnAsync(searchAbn);
+
+                    // If ASIC search failed, try data.gov.au fallback
+                    if (!result.Success)
+                    {
+                        var fallbackResult = await FallbackService.SearchByAbnAsync(searchAbn);
+                        if (fallbackResult.Success)
+                        {
+                            result = fallbackResult;
+                        }
+                    }
+                }
 
                 // Cache the result for 15 minutes
                 var cacheOptions = new MemoryCacheEntryOptions()

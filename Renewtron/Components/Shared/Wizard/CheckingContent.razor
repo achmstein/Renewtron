@@ -2,6 +2,7 @@
 @using Asic.Client.Models
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Caching.Memory
+@using Renewtron.Abstractions
 @using Renewtron.Services
 @using Renewtron.Data
 
@@ -9,8 +10,10 @@
 @inject ILeadService LeadService
 @inject ILeadEmailService LeadEmailService
 @inject IAsicRenewalClient AsicRenewalClient
+@inject IBusinessNameFallbackService FallbackService
 @inject ApplicationDbContext DbContext
 @inject IMemoryCache MemoryCache
+@inject IConfiguration Configuration
 
 <div class="relative isolate overflow-auto flex-1">
     <!-- Background Pattern -->
@@ -182,7 +185,27 @@
             BusinessNamesResult searchResult;
             if (!MemoryCache.TryGetValue(cacheKey, out searchResult!))
             {
-                searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
+                var forceAsicFallback = Configuration.GetValue<bool>("Asic:ForceFallback");
+
+                if (forceAsicFallback)
+                {
+                    // Skip ASIC and go straight to data.gov.au fallback
+                    searchResult = await FallbackService.SearchByAbnAsync(cleanAbn);
+                }
+                else
+                {
+                    searchResult = await AsicRenewalClient.SearchByAbnAsync(cleanAbn);
+
+                    // If ASIC search failed, try data.gov.au fallback
+                    if (!searchResult.Success)
+                    {
+                        var fallbackResult = await FallbackService.SearchByAbnAsync(cleanAbn);
+                        if (fallbackResult.Success)
+                        {
+                            searchResult = fallbackResult;
+                        }
+                    }
+                }
 
                 // Cache the result for 15 minutes
                 var cacheOptions = new MemoryCacheEntryOptions()
