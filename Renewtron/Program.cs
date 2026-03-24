@@ -71,6 +71,9 @@ builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 
+// Business name fallback service (data.gov.au)
+builder.Services.AddHttpClient<IBusinessNameFallbackService, DataGovBusinessNameService>();
+
 // Lead service
 builder.Services.AddScoped<ILeadService, LeadService>();
 
