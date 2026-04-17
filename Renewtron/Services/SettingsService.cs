@@ -9,7 +9,7 @@ namespace Renewtron.Services;
 public class SettingsService : ISettingsService
 {
     private readonly IOptions<SendGridSettings> _sendGridSettings;
-    private readonly IOptions<AirwallexSettings> _airwallexSettings;
+    private readonly IOptions<StripeSettings> _stripeSettings;
     private readonly IOptions<PricingSettings> _pricingSettings;
     private readonly IOptions<AsicSettings> _asicSettings;
     private readonly IOptions<OntraportSettings> _ontraportSettings;
@@ -17,14 +17,14 @@ public class SettingsService : ISettingsService
 
     public SettingsService(
         IOptions<SendGridSettings> sendGridSettings,
-        IOptions<AirwallexSettings> airwallexSettings,
+        IOptions<StripeSettings> stripeSettings,
         IOptions<PricingSettings> pricingSettings,
         IOptions<AsicSettings> asicSettings,
         IOptions<OntraportSettings> ontraportSettings,
         IWebHostEnvironment environment)
     {
         _sendGridSettings = sendGridSettings;
-        _airwallexSettings = airwallexSettings;
+        _stripeSettings = stripeSettings;
         _pricingSettings = pricingSettings;
         _asicSettings = asicSettings;
         _ontraportSettings = ontraportSettings;
@@ -36,9 +36,9 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_sendGridSettings.Value);
     }
 
-    public Task<AirwallexSettings> GetAirwallexSettingsAsync()
+    public Task<StripeSettings> GetStripeSettingsAsync()
     {
-        return Task.FromResult(_airwallexSettings.Value);
+        return Task.FromResult(_stripeSettings.Value);
     }
 
     public Task<PricingSettings> GetPricingSettingsAsync()
@@ -61,9 +61,9 @@ public class SettingsService : ISettingsService
         await UpdateSettingsSectionAsync("SendGrid", settings);
     }
 
-    public async Task UpdateAirwallexSettingsAsync(AirwallexSettings settings)
+    public async Task UpdateStripeSettingsAsync(StripeSettings settings)
     {
-        await UpdateSettingsSectionAsync("Airwallex", settings);
+        await UpdateSettingsSectionAsync("Stripe", settings);
     }
 
     public async Task UpdatePricingSettingsAsync(PricingSettings settings)

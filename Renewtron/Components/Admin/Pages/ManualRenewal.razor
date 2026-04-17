@@ -268,6 +268,7 @@
                 }
                 else
                 {
+                    // Not in cache, perform search using ASIC Renewal Service
                     result = await RenewalClient.SearchByAbnAsync(searchAbn);
 
                     // If ASIC search failed, try data.gov.au fallback

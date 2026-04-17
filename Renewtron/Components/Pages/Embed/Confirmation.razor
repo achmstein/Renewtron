@@ -1,0 +1,14 @@
+@page "/embed/confirmation/{LeadId:guid}"
+@layout EmptyLayout
+
+<PageTitle>Renewal Confirmation - Renewtron</PageTitle>
+
+<ConfirmationContent RoutePrefix="/embed" LeadId="@LeadId" Ids="@Ids" />
+
+@code {
+    [Parameter]
+    public Guid LeadId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "ids")]
+    public string? Ids { get; set; }
+}

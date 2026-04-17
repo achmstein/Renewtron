@@ -1,0 +1,11 @@
+@page "/embed/details"
+@layout EmptyLayout
+
+<PageTitle>Your Details - Renewtron</PageTitle>
+
+<DetailsContent RoutePrefix="/embed" Abn="@Abn" />
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Abn { get; set; }
+}

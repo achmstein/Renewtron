@@ -9,7 +9,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SearchLog> SearchLogs { get; set; }
     public DbSet<SearchResult> SearchResults { get; set; }
     public DbSet<RenewalRequest> RenewalRequests { get; set; }
-    public DbSet<AirwallexPayment> AirwallexPayments { get; set; }
+    public DbSet<StripePayment> StripePayments { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<OntraportSale> OntraportSales { get; set; }
 
@@ -61,15 +61,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasForeignKey<RenewalRequest>(e => e.SearchResultId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.AirwallexPayment)
+            entity.HasOne(e => e.StripePayment)
                 .WithOne(sp => sp.RenewalRequest)
-                .HasForeignKey<AirwallexPayment>(sp => sp.RenewalRequestId)
+                .HasForeignKey<StripePayment>(sp => sp.RenewalRequestId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<AirwallexPayment>(entity =>
+        modelBuilder.Entity<StripePayment>(entity =>
         {
-            entity.ToTable("StripePayments"); // Keep existing table name for backward compatibility
             entity.HasKey(e => e.Id);
             entity.Property(e => e.PaymentIntentId).IsRequired();
             entity.Property(e => e.PaymentStatus).IsRequired();

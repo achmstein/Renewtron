@@ -321,7 +321,7 @@
                                         </svg>
                                         View Details
                                     </a>
-                                    @if (renewal.Status == RenewalStatus.Failed && ((renewal.PaymentType == PaymentType.Airwallex && renewal.AirwallexPayment?.PaymentStatus == "SUCCEEDED")
+                                    @if (renewal.Status == RenewalStatus.Failed && ((renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded")
                                                                 || renewal.PaymentType == PaymentType.External))
                                     {
                                         <button @onclick="() => RetryRenewal(renewal.Id)"
@@ -424,7 +424,7 @@
                                             <a href="/admin/renewals/@renewal.Id" class="inline-flex items-center text-blue-600 hover:text-blue-900">
                                                 View
                                             </a>
-                                            @if (renewal.Status == RenewalStatus.Failed && ((renewal.PaymentType == PaymentType.Airwallex && renewal.AirwallexPayment?.PaymentStatus == "SUCCEEDED")
+                                            @if (renewal.Status == RenewalStatus.Failed && ((renewal.PaymentType == PaymentType.Stripe && renewal.StripePayment?.PaymentStatus == "succeeded")
                                                                                 || renewal.PaymentType == PaymentType.External))
                                             {
                                                 <button @onclick="() => RetryRenewal(renewal.Id)" disabled="@isRetrying" class="inline-flex items-center text-blue-600 hover:text-blue-900 disabled:opacity-50">
@@ -578,7 +578,7 @@
             var query = DbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr.SearchLog)
-                .Include(r => r.AirwallexPayment)
+                .Include(r => r.StripePayment)
                 .AsQueryable();
 
             // Apply filters
@@ -730,7 +730,7 @@
         {
             // Validate the renewal request before enqueuing
             var renewal = await DbContext.RenewalRequests
-                .Include(r => r.AirwallexPayment)
+                .Include(r => r.StripePayment)
                 .FirstOrDefaultAsync(r => r.Id == renewalId);
 
             if (renewal == null)
@@ -745,9 +745,9 @@
                 return;
             }
 
-            // Check if payment was successful (only for Airwallex payments)
-            if (renewal.PaymentType == PaymentType.Airwallex &&
-                (renewal.AirwallexPayment == null || renewal.AirwallexPayment.PaymentStatus != "SUCCEEDED"))
+            // Check if payment was successful (only for Stripe payments)
+            if (renewal.PaymentType == PaymentType.Stripe &&
+                (renewal.StripePayment == null || renewal.StripePayment.PaymentStatus != "succeeded"))
             {
                 errorMessage = "Cannot retry: Payment was not successful. Customer needs to retry payment.";
                 return;

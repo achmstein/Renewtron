@@ -46,8 +46,8 @@ builder.Services.AddScoped<ApplicationDbContextInitialiser>();
 // Encryption service
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 
-builder.Services.AddOptions<AirwallexSettings>()
-    .BindConfiguration("Airwallex")
+builder.Services.AddOptions<StripeSettings>()
+    .BindConfiguration("Stripe")
     .ValidateDataAnnotations();
 
 builder.Services.AddOptions<SendGridSettings>()
@@ -67,7 +67,7 @@ builder.Services.AddOptions<OntraportSettings>()
     .ValidateDataAnnotations();
 
 // Payment and Email services
-builder.Services.AddHttpClient<IAirwallexPaymentService, AirwallexPaymentService>();
+builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 

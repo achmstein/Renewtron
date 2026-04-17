@@ -56,9 +56,9 @@
                                 class="@(activeTab == Tab.SendGrid ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
                             SendGrid
                         </button>
-                        <button @onclick="() => activeTab = Tab.Airwallex"
-                                class="@(activeTab == Tab.Airwallex ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
-                            Airwallex
+                        <button @onclick="() => activeTab = Tab.Stripe"
+                                class="@(activeTab == Tab.Stripe ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
+                            Stripe
                         </button>
                         <button @onclick="() => activeTab = Tab.Pricing"
                                 class="@(activeTab == Tab.Pricing ? "border-blue-500 text-blue-600" : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700") whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium">
@@ -105,31 +105,24 @@
                     </div>
                 </div>
             }
-            else if (activeTab == Tab.Airwallex)
+            else if (activeTab == Tab.Stripe)
             {
                 <div class="overflow-hidden rounded-lg bg-white shadow">
                     <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Airwallex Payment Settings</h3>
-                        <EditForm Model="@airwallexSettings" OnValidSubmit="SaveAirwallexSettings">
+                        <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Stripe Payment Settings</h3>
+                        <EditForm Model="@stripeSettings" OnValidSubmit="SaveStripeSettings">
                             <div class="space-y-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">Client ID</label>
-                                    <InputText @bind-Value="airwallexSettings.ClientId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                                    <label class="block text-sm font-medium text-gray-700">Secret Key</label>
+                                    <InputText @bind-Value="stripeSettings.SecretKey" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" type="password" />
                                 </div>
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700">API Key</label>
-                                    <InputText @bind-Value="airwallexSettings.ApiKey" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" type="password" />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Environment</label>
-                                    <InputSelect @bind-Value="airwallexSettings.Environment" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border">
-                                        <option value="demo">Demo</option>
-                                        <option value="prod">Production</option>
-                                    </InputSelect>
+                                    <label class="block text-sm font-medium text-gray-700">Publishable Key</label>
+                                    <InputText @bind-Value="stripeSettings.PublishableKey" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
                                 </div>
                                 <div>
                                     <button type="submit" class="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
-                                        Save Airwallex Settings
+                                        Save Stripe Settings
                                     </button>
                                 </div>
                             </div>
@@ -253,12 +246,12 @@
     </main>
 
 @code {
-    private enum Tab { SendGrid, Airwallex, Pricing, Asic, Ontraport }
+    private enum Tab { SendGrid, Stripe, Pricing, Asic, Ontraport }
 
     private Tab activeTab = Tab.SendGrid;
 
     private SendGridSettings sendGridSettings = new();
-    private AirwallexSettings airwallexSettings = new();
+    private StripeSettings stripeSettings = new();
     private PricingSettings pricingSettings = new();
     private AsicSettings asicSettings = new();
     private OntraportSettings ontraportSettings = new();
@@ -274,7 +267,7 @@
     private async Task LoadSettings()
     {
         sendGridSettings = await SettingsService.GetSendGridSettingsAsync();
-        airwallexSettings = await SettingsService.GetAirwallexSettingsAsync();
+        stripeSettings = await SettingsService.GetStripeSettingsAsync();
         pricingSettings = await SettingsService.GetPricingSettingsAsync();
         asicSettings = await SettingsService.GetAsicSettingsAsync();
         ontraportSettings = await SettingsService.GetOntraportSettingsAsync();
@@ -295,17 +288,17 @@
         }
     }
 
-    private async Task SaveAirwallexSettings()
+    private async Task SaveStripeSettings()
     {
         try
         {
-            await SettingsService.UpdateAirwallexSettingsAsync(airwallexSettings);
-            successMessage = "Airwallex settings saved successfully!";
+            await SettingsService.UpdateStripeSettingsAsync(stripeSettings);
+            successMessage = "Stripe settings saved successfully!";
             errorMessage = "";
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error saving Airwallex settings: {ex.Message}";
+            errorMessage = $"Error saving Stripe settings: {ex.Message}";
             successMessage = "";
         }
     }

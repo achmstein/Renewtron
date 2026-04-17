@@ -45,7 +45,7 @@ public class RenewalProcessingService : IRenewalProcessingService
             var renewalRequest = await _dbContext.RenewalRequests
                 .Include(r => r.SearchResult)
                     .ThenInclude(sr => sr.SearchLog)
-                .Include(r => r.AirwallexPayment)
+                .Include(r => r.StripePayment)
                 .FirstOrDefaultAsync(r => r.Id == renewalRequestId);
 
             if (renewalRequest == null)
@@ -65,9 +65,9 @@ public class RenewalProcessingService : IRenewalProcessingService
             renewalRequest.Status = RenewalStatus.Processing;
             await _dbContext.SaveChangesAsync();
 
-            // Verify payment was successful (either Airwallex or external payment)
-            if (renewalRequest.PaymentType == PaymentType.Airwallex &&
-                (renewalRequest.AirwallexPayment == null || renewalRequest.AirwallexPayment.PaymentStatus != "SUCCEEDED"))
+            // Verify payment was successful (either Stripe or external payment)
+            if (renewalRequest.PaymentType == PaymentType.Stripe &&
+                (renewalRequest.StripePayment == null || renewalRequest.StripePayment.PaymentStatus != "succeeded"))
             {
                 _logger.LogError("Renewal request {RenewalRequestId} does not have successful payment", renewalRequestId);
                 return;
