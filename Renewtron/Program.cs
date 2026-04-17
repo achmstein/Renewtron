@@ -83,6 +83,9 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 // Background job processing service
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 
+// Ontraport sales sync service
+builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
+
 // Add Hangfire services for background job processing
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -150,6 +153,19 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = new[] { new HangfireAuthorizationFilter() }
 });
+
+// Schedule daily Ontraport sales sync and renewal processing
+RecurringJob.AddOrUpdate<IOntraportSalesService>(
+    "ontraport-sales-sync",
+    service => service.SyncSalesAsync(),
+    "0 6 * * *", // Daily at 6 AM
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+RecurringJob.AddOrUpdate<IOntraportSalesService>(
+    "ontraport-process-renewals",
+    service => service.ProcessEligibleRenewalsAsync(),
+    "0 7 * * *", // Daily at 7 AM (after sync)
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

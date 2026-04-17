@@ -15,6 +15,9 @@ public class RenewalRequest
     public string? MobileNumber { get; set; }
     public DateOnly? DateOfBirth { get; set; }
 
+    // Source tracking
+    public RenewalSource Source { get; set; } = RenewalSource.Renewtron;
+
     // Payment
     public PaymentType PaymentType { get; set; }
     public decimal Amount { get; set; } // Amount paid by customer

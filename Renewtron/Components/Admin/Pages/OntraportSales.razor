@@ -1,0 +1,253 @@
+@page "/admin/ontraport"
+
+@using Renewtron.Data
+@using Renewtron.Abstractions
+@using Microsoft.EntityFrameworkCore
+@using Hangfire
+
+@inject ApplicationDbContext DbContext
+@inject IOntraportSalesService OntraportSalesService
+@inject IBackgroundJobClient BackgroundJobClient
+
+<PageTitle>Ontraport Sales - Renewtron</PageTitle>
+
+<header class="relative bg-white shadow-sm">
+    <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <h1 class="text-lg/6 font-semibold text-gray-900">Ontraport Sales</h1>
+    </div>
+</header>
+
+<main>
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="mb-4 rounded-md bg-green-50 p-4">
+                <div class="flex">
+                    <div class="shrink-0">
+                        <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-green-800">@successMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="mb-4 rounded-md bg-red-50 p-4">
+                <div class="flex">
+                    <div class="shrink-0">
+                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-red-800">@errorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Total Synced</p>
+                <p class="text-2xl font-bold text-gray-900">@totalCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Waiting (>30 days)</p>
+                <p class="text-2xl font-bold text-yellow-600">@waitingCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Queued</p>
+                <p class="text-2xl font-bold text-blue-600">@queuedCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Completed</p>
+                <p class="text-2xl font-bold text-green-600">@completedCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Failed</p>
+                <p class="text-2xl font-bold text-red-600">@failedCount</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="mb-6 flex gap-3">
+            <button @onclick="SyncNow" disabled="@isSyncing"
+                class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50">
+                @if (isSyncing)
+                {
+                    <svg class="mr-2 h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Syncing...</span>
+                }
+                else
+                {
+                    <span>Sync Now</span>
+                }
+            </button>
+            <button @onclick="ProcessEligible"
+                class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                Process Eligible Renewals
+            </button>
+        </div>
+
+        <!-- Sales Table -->
+        <div class="rounded-lg bg-white shadow overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-base font-semibold text-gray-900">Ontraport Sales</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business Name</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ABN</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Renewal Due</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Days</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Term</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Synced</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        @if (sales.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">
+                                    No Ontraport sales synced yet. Click "Sync Now" to fetch sales.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var sale in sales)
+                        {
+                            var daysUntilDue = sale.RenewalDueDate.HasValue
+                                ? (int)(sale.RenewalDueDate.Value - DateTime.UtcNow).TotalDays
+                                : (int?)null;
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900">@sale.BusinessName</td>
+                                <td class="px-4 py-3 text-sm text-gray-500 font-mono">@sale.Abn</td>
+                                <td class="px-4 py-3 text-sm text-gray-500">
+                                    <div>@sale.ContactName</div>
+                                    <div class="text-xs text-gray-400">@sale.Email</div>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500">
+                                    @(sale.RenewalDueDate?.ToString("dd MMM yyyy") ?? "Unknown")
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    @if (daysUntilDue.HasValue)
+                                    {
+                                        var colorClass = daysUntilDue.Value <= 0 ? "text-red-600 font-bold"
+                                            : daysUntilDue.Value <= 30 ? "text-green-600 font-semibold"
+                                            : "text-gray-500";
+                                        <span class="@colorClass">@daysUntilDue days</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500">@sale.RenewalYears yr</td>
+                                <td class="px-4 py-3 text-sm text-gray-500">$@sale.AmountPaid.ToString("N2")</td>
+                                <td class="px-4 py-3 text-sm">
+                                    @switch (sale.Status)
+                                    {
+                                        case OntraportSaleStatus.Synced:
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">Synced</span>
+                                            break;
+                                        case OntraportSaleStatus.WaitingForRenewalWindow:
+                                            <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">Waiting</span>
+                                            break;
+                                        case OntraportSaleStatus.RenewalQueued:
+                                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">Queued</span>
+                                            break;
+                                        case OntraportSaleStatus.RenewalCompleted:
+                                            <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Completed</span>
+                                            break;
+                                        case OntraportSaleStatus.RenewalFailed:
+                                            <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800" title="@sale.ErrorMessage">Failed</span>
+                                            break;
+                                        case OntraportSaleStatus.NotDueForRenewal:
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">Not Due</span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-400">@sale.SyncedAt.ToString("dd/MM HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+
+@code {
+    private List<OntraportSale> sales = [];
+    private string? successMessage;
+    private string? errorMessage;
+    private bool isSyncing;
+
+    // Summary counts
+    private int totalCount;
+    private int waitingCount;
+    private int queuedCount;
+    private int completedCount;
+    private int failedCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        sales = await DbContext.OntraportSales
+            .OrderByDescending(s => s.SyncedAt)
+            .ToListAsync();
+
+        totalCount = sales.Count;
+        waitingCount = sales.Count(s => s.Status == OntraportSaleStatus.WaitingForRenewalWindow);
+        queuedCount = sales.Count(s => s.Status == OntraportSaleStatus.RenewalQueued);
+        completedCount = sales.Count(s => s.Status == OntraportSaleStatus.RenewalCompleted);
+        failedCount = sales.Count(s => s.Status == OntraportSaleStatus.RenewalFailed);
+    }
+
+    private async Task SyncNow()
+    {
+        isSyncing = true;
+        successMessage = null;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var synced = await OntraportSalesService.SyncSalesAsync();
+            successMessage = $"Synced {synced.Count} new sales from Ontraport.";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Sync failed: {ex.Message}";
+        }
+        finally
+        {
+            isSyncing = false;
+        }
+    }
+
+    private Task ProcessEligible()
+    {
+        successMessage = null;
+        errorMessage = null;
+
+        BackgroundJobClient.Enqueue<IOntraportSalesService>(service => service.ProcessEligibleRenewalsAsync());
+        successMessage = "Processing job queued. Eligible renewals will be processed in the background. Refresh to see results.";
+
+        return Task.CompletedTask;
+    }
+}

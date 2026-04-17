@@ -15,6 +15,7 @@ public class RenewalProcessingService : IRenewalProcessingService
     private readonly IAsicRenewalClient _renewalClient;
     private readonly IEmailService _emailService;
     private readonly IOptions<AsicSettings> _asicSettings;
+    private readonly IOntraportSalesService _ontraportSalesService;
     private readonly ILogger<RenewalProcessingService> _logger;
 
     public RenewalProcessingService(
@@ -22,12 +23,14 @@ public class RenewalProcessingService : IRenewalProcessingService
         IAsicRenewalClient renewalClient,
         IEmailService emailService,
         IOptions<AsicSettings> asicSettings,
+        IOntraportSalesService ontraportSalesService,
         ILogger<RenewalProcessingService> logger)
     {
         _dbContext = dbContext;
         _renewalClient = renewalClient;
         _emailService = emailService;
         _asicSettings = asicSettings;
+        _ontraportSalesService = ontraportSalesService;
         _logger = logger;
     }
 
@@ -103,6 +106,33 @@ public class RenewalProcessingService : IRenewalProcessingService
             renewalRequest.FailedAtStep = result.IsSuccess ? null : result.FailedAtStep;
 
             await _dbContext.SaveChangesAsync();
+
+            // Update OntraportSale status if this renewal came from Ontraport
+            if (renewalRequest.Source == RenewalSource.Ontraport)
+            {
+                try
+                {
+                    var ontraportSale = await _dbContext.OntraportSales
+                        .FirstOrDefaultAsync(s => s.RenewalRequestId == renewalRequestId);
+                    if (ontraportSale != null)
+                    {
+                        ontraportSale.Status = result.IsSuccess
+                            ? OntraportSaleStatus.RenewalCompleted
+                            : OntraportSaleStatus.RenewalFailed;
+                        ontraportSale.ProcessedAt = DateTime.UtcNow;
+                        ontraportSale.ErrorMessage = result.IsSuccess ? null : result.Message;
+                        await _dbContext.SaveChangesAsync();
+
+                        // Sync status back to Ontraport contact
+                        await _ontraportSalesService.UpdateOntraportContactStatusAsync(
+                            ontraportSale.OntraportContactId, result.IsSuccess, result.TransactionReference);
+                    }
+                }
+                catch (Exception opEx)
+                {
+                    _logger.LogError(opEx, "Failed to update Ontraport sale status for renewal {RenewalRequestId}", renewalRequestId);
+                }
+            }
 
             if (result.IsSuccess)
             {

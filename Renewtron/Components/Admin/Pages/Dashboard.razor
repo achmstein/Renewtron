@@ -102,6 +102,51 @@
                 </a>
             </div>
 
+            <!-- Sales Comparison (This Month) -->
+            <div class="mt-8">
+                <h2 class="text-base font-semibold leading-6 text-gray-900 mb-4">Sales Comparison (This Month)</h2>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class="overflow-hidden rounded-lg bg-white shadow">
+                        <div class="px-4 py-5">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4 w-0 flex-1">
+                                    <dt class="truncate text-sm font-medium text-gray-500">Renewtron Direct</dt>
+                                    <dd class="mt-1 text-2xl font-semibold text-gray-900">@stats.RenewtronDirectCount sales</dd>
+                                    <dd class="text-sm text-gray-500">$@stats.RenewtronDirectRevenue.ToString("N2") revenue</dd>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="/admin/ontraport" class="overflow-hidden rounded-lg bg-white shadow hover:shadow-lg transition-shadow cursor-pointer">
+                        <div class="px-4 py-5">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z" />
+                                    </svg>
+                                </div>
+                                <div class="ml-4 w-0 flex-1">
+                                    <dt class="truncate text-sm font-medium text-gray-500">Ontraport</dt>
+                                    <dd class="mt-1 text-2xl font-semibold text-gray-900">@stats.OntraportCount sales</dd>
+                                    <dd class="text-sm text-gray-500">$@stats.OntraportRevenue.ToString("N2") revenue</dd>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-4 py-2">
+                            <div class="text-sm">
+                                <span class="font-medium text-purple-600 hover:text-purple-500">View Ontraport sales →</span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
             <!-- Quick Actions -->
             <div class="mt-8">
                 <h2 class="text-base font-semibold leading-6 text-gray-900">Quick Actions</h2>
@@ -265,6 +310,21 @@
         stats.ConvertedLeads = await DbContext.Leads.CountAsync(l => l.Outcome == LeadOutcome.RenewalCompleted);
         stats.NotDueLeads = await DbContext.Leads.CountAsync(l => l.Outcome == LeadOutcome.NotDueForRenewal);
 
+        // Load sales comparison (this month)
+        var startOfMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+
+        var renewtronDirect = await DbContext.RenewalRequests
+            .Where(r => r.Source == RenewalSource.Renewtron && r.InitiatedAt >= startOfMonth)
+            .ToListAsync();
+        stats.RenewtronDirectCount = renewtronDirect.Count;
+        stats.RenewtronDirectRevenue = renewtronDirect.Sum(r => r.Amount);
+
+        var ontraportSales = await DbContext.RenewalRequests
+            .Where(r => r.Source == RenewalSource.Ontraport && r.InitiatedAt >= startOfMonth)
+            .ToListAsync();
+        stats.OntraportCount = ontraportSales.Count;
+        stats.OntraportRevenue = ontraportSales.Sum(r => r.Amount);
+
         // Load recent searches
         recentSearches = await DbContext.SearchLogs
             .OrderByDescending(s => s.SearchedAt)
@@ -288,5 +348,9 @@
         public int TotalLeads { get; set; }
         public int ConvertedLeads { get; set; }
         public int NotDueLeads { get; set; }
+        public int RenewtronDirectCount { get; set; }
+        public decimal RenewtronDirectRevenue { get; set; }
+        public int OntraportCount { get; set; }
+        public decimal OntraportRevenue { get; set; }
     }
 }

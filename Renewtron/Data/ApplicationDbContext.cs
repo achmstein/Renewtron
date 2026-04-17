@@ -11,6 +11,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<RenewalRequest> RenewalRequests { get; set; }
     public DbSet<AirwallexPayment> AirwallexPayments { get; set; }
     public DbSet<Lead> Leads { get; set; }
+    public DbSet<OntraportSale> OntraportSales { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -100,6 +101,32 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasMany(e => e.RenewalRequests)
                 .WithOne(r => r.Lead)
                 .HasForeignKey(r => r.LeadId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<OntraportSale>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.OntraportContactId).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.OntraportTransactionId).HasMaxLength(20);
+            entity.Property(e => e.ContactName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Email).HasMaxLength(200);
+            entity.Property(e => e.MobileNumber).HasMaxLength(20);
+            entity.Property(e => e.DateOfBirth).HasMaxLength(20);
+            entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.BusinessNameOwner).HasMaxLength(200);
+            entity.Property(e => e.AmountPaid).HasPrecision(18, 2);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+
+            entity.HasIndex(e => e.OntraportContactId);
+            entity.HasIndex(e => e.Abn);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.RenewalDueDate);
+
+            entity.HasOne(e => e.RenewalRequest)
+                .WithMany()
+                .HasForeignKey(e => e.RenewalRequestId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }
