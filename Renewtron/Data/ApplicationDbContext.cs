@@ -12,6 +12,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StripePayment> StripePayments { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<OntraportSale> OntraportSales { get; set; }
+    public DbSet<BulkRenewalUpload> BulkRenewalUploads { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -119,6 +120,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
 
             entity.HasIndex(e => e.OntraportContactId);
+            entity.HasIndex(e => e.Abn);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.RenewalDueDate);
+
+            entity.HasOne(e => e.RenewalRequest)
+                .WithMany()
+                .HasForeignKey(e => e.RenewalRequestId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BulkRenewalUpload>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.OwnerName).HasMaxLength(200);
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+            entity.Property(e => e.SourceFile).HasMaxLength(260);
+
             entity.HasIndex(e => e.Abn);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.RenewalDueDate);

@@ -146,15 +146,15 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append("event=tmpt%3Aregion%3A0%3Aform%3AnextButt&");
         formData.Append("event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var pageContent = await response.Content.ReadAsStringAsync();
@@ -228,17 +228,17 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"bngrp={encodedRadioButtonId}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("oracle.adf.view.rich.DELTAS=%7Btmpt%3Awaitpopup%3D%7B_shown%3D%7D%7D&");
         formData.Append($"event={encodedRadioButtonId}&");
         formData.Append($"event.{radioButtonId}=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append($"oracle.adf.view.rich.PROCESS={encodedRadioButtonId}");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -263,16 +263,16 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"bngrp={data.SelectedBusinessNameId}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("event=tmpt%3Aregion%3A1%3Aform%3AnextBut&");
         formData.Append("event.tmpt:region:1:form:nextBut=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A1%3Aform%3AnextBut");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
 
@@ -324,16 +324,16 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"tmpt:region:2:form:selRen={periodValue}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("event=tmpt%3Aregion%3A2%3Aform%3AselRen&");
         formData.Append("event.tmpt:region:2:form:selRen=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A2%3Aform%3AselRen");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -364,16 +364,16 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"tmpt:region:2:form:selRen={data.PeriodValue}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("event=tmpt%3Aregion%3A2%3Aform%3AnextButt&");
         formData.Append("event.tmpt:region:2:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A2%3Aform%3AnextButt");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -403,16 +403,16 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append("auth=tmpt%3Aregion%3A3%3Aauth2&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("event=tmpt%3Aregion%3A3%3Aauth2&");
         formData.Append("event.tmpt:region:3:auth2=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A3%3Aauth2");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -441,16 +441,16 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append("auth=tmpt%3Aregion%3A3%3Aauth2&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("event=tmpt%3Aregion%3A3%3AnextButt&");
         formData.Append("event.tmpt:region:3:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append("oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A3%3AnextButt");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -480,7 +480,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"tmpt:region:{regionIndex}:form:emIn2={encodedEmail}&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("oracle.adf.view.rich.RENDER=tmpt%3Aregion&");
         formData.Append("oracle.adf.view.rich.DELTAS=%7Btmpt%3Awaitpopup%3D%7B_shown%3D%7D%7D&");
@@ -488,10 +488,10 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"event.tmpt:region:{regionIndex}:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A{regionIndex}%3Aform%3AnextButt");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -522,17 +522,17 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"plopt=tmpt%3Aregion%3A{regionIndex}%3Abpay&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append($"event=tmpt%3Aregion%3A{regionIndex}%3ApayLater%2Ctmpt%3Aregion%3A{regionIndex}%3ApayNow&");
         formData.Append($"event.tmpt:region:{regionIndex}:payLater=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append($"event.tmpt:region:{regionIndex}:payNow=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A{regionIndex}%3ApayLater%2Ctmpt%3Aregion%3A{regionIndex}%3ApayNow");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -559,17 +559,17 @@ public class AsicRenewalClient : IAsicRenewalClient
         formData.Append($"popt=tmpt%3Aregion%3A{regionIndex}%3ApayNow&");
         formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
         formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
-        formData.Append("Adf-Page-Id=0&");
+        formData.Append("Adf-Page-Id=1&");
         formData.Append($"javax.faces.ViewState={data.ViewState}&");
         formData.Append("oracle.adf.view.rich.RENDER=tmpt%3Aregion&");
         formData.Append($"event=tmpt%3Aregion%3A{regionIndex}%3AnextButt&");
         formData.Append($"event.tmpt:region:{regionIndex}:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
         formData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A{regionIndex}%3AnextButt");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=0");
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
         request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
         request.Headers.Add("Adf-Rich-Message", "true");
-        request.Headers.Add("Adf-Ads-Page-Id", "1");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
 
         var response = await _http.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
@@ -609,7 +609,8 @@ public class AsicRenewalClient : IAsicRenewalClient
             data.TransactionReference,
             data.HostedTokenizationId,
             data.AdfWindowId,
-            data.ViewState);
+            data.ViewState,
+            data.PageContent);
 
         if (!completeResult.Success)
         {
@@ -621,10 +622,13 @@ public class AsicRenewalClient : IAsicRenewalClient
         return StepResult<RenewalStepData>.Success(data);
     }
 
-    private async Task<PaymentResult> CompletePaymentActionAsync(string sessionId, string hostedTokenizationId, string adfWindowId, string viewState)
+    private async Task<PaymentResult> CompletePaymentActionAsync(string sessionId, string hostedTokenizationId, string adfWindowId, string viewState, string pageContent)
     {
         try
         {
+            // Find the region that hosts payNowPopup on the current page (ASIC increments region indexes between pages)
+            var regionIndex = ExtractPayNowRegionIndex(pageContent);
+
             // POST the payment success action back to the renewal page
             var paymentSuccessRequest = new HttpRequestMessage(HttpMethod.Post,
                 $"public/faces/renewal?Adf-Window-Id={adfWindowId}&Adf-Page-Id=1");
@@ -634,19 +638,19 @@ public class AsicRenewalClient : IAsicRenewalClient
             paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle=&");
             paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
             paymentSuccessData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
-            paymentSuccessData.Append($"popt=tmpt%3Aregion%3A3%3ApayNow&");
+            paymentSuccessData.Append($"popt=tmpt%3Aregion%3A{regionIndex}%3ApayNow&");
             paymentSuccessData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
             paymentSuccessData.Append($"Adf-Window-Id={adfWindowId}&");
-            paymentSuccessData.Append("Adf-Page-Id=0&");
+            paymentSuccessData.Append("Adf-Page-Id=1&");
             paymentSuccessData.Append($"javax.faces.ViewState={viewState}&");
-            paymentSuccessData.Append($"oracle.adf.view.rich.DELTAS=%7Btmpt%3Aregion%3A3%3ApayNowPopup%3D%7B_shown%3D%7D%2Ctmpt%3Aregion%3A3%3ApayNowInline%3D%7Bsource%3D%7D%7D&");
-            paymentSuccessData.Append($"event=tmpt%3Aregion%3A3%3ApayNowPopup&");
-            paymentSuccessData.Append($"event.tmpt:region:3:payNowPopup=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22_custom%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22sessionId%22%3E%3Cs%3E{sessionId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22SST%22%3E%3Cs%3E{hostedTokenizationId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22immediate%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EpaymentSuccessAction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
-            paymentSuccessData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A3%3ApayNowPopup");
+            paymentSuccessData.Append($"oracle.adf.view.rich.DELTAS=%7Btmpt%3Aregion%3A{regionIndex}%3ApayNowPopup%3D%7B_shown%3D%7D%2Ctmpt%3Aregion%3A{regionIndex}%3ApayNowInline%3D%7Bsource%3D%7D%7D&");
+            paymentSuccessData.Append($"event=tmpt%3Aregion%3A{regionIndex}%3ApayNowPopup&");
+            paymentSuccessData.Append($"event.tmpt:region:{regionIndex}:payNowPopup=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22_custom%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22sessionId%22%3E%3Cs%3E{sessionId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22SST%22%3E%3Cs%3E{hostedTokenizationId}%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22immediate%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EpaymentSuccessAction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+            paymentSuccessData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A{regionIndex}%3ApayNowPopup");
 
             paymentSuccessRequest.Content = new StringContent(paymentSuccessData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
             paymentSuccessRequest.Headers.Add("Adf-Rich-Message", "true");
-            paymentSuccessRequest.Headers.Add("Adf-Ads-Page-Id", "1");
+            paymentSuccessRequest.Headers.Add("Adf-Ads-Page-Id", "2");
 
             var finalResponse = await _http.SendAsync(paymentSuccessRequest);
             var finalContent = await finalResponse.Content.ReadAsStringAsync();
@@ -654,6 +658,13 @@ public class AsicRenewalClient : IAsicRenewalClient
             // Check for success: button should say "Next" and be disabled
             var nextButtonMatch = Regex.Match(finalContent, @"<button[^>]*disabled[^>]*>Next</button>", RegexOptions.IgnoreCase);
             if (nextButtonMatch.Success)
+            {
+                return PaymentResult.Succeeded(hostedTokenizationId);
+            }
+
+            // Check for success: renewal advanced to the Confirm step (stepOn on a step containing "Confirm")
+            if (Regex.IsMatch(finalContent, @"class=""[^""]*stepOn[^""]*""[^>]*>[^<]*Confirm", RegexOptions.IgnoreCase) ||
+                finalContent.Contains("paymentSuccessRedirect"))
             {
                 return PaymentResult.Succeeded(hostedTokenizationId);
             }
@@ -787,6 +798,24 @@ public class AsicRenewalClient : IAsicRenewalClient
         // Look for patterns like: tmpt:region:N:form:componentId or tmpt:region:N:componentId
         var match = Regex.Match(content, @"tmpt:region:(\d+):[^:]*");
         return match.Success ? match.Groups[1].Value : "0";
+    }
+
+    private string ExtractPayNowRegionIndex(string content)
+    {
+        // The payNowPopup/payNow region index changes per page (ASIC ADF increments regions between transitions).
+        // Prefer the exact region hosting payNowPopup, fall back to payNow, else default.
+        if (string.IsNullOrEmpty(content))
+            return "3";
+
+        var popupMatch = Regex.Match(content, @"tmpt:region:(\d+):payNowPopup");
+        if (popupMatch.Success)
+            return popupMatch.Groups[1].Value;
+
+        var payNowMatch = Regex.Match(content, @"tmpt:region:(\d+):payNow\b");
+        if (payNowMatch.Success)
+            return payNowMatch.Groups[1].Value;
+
+        return "3";
     }
 
     private string GetUserFriendlyErrorMessage(string content)

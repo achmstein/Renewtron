@@ -44,6 +44,10 @@ public class PaymentStepData
     public string ThreeDSTransactionId { get; set; }
     public bool ThreeDSRequiresOtp { get; set; }
 
+    // 3DS provider dispatch: "Cardinal" (authentication.cardinalcommerce.com) or "Rsa" (rsa3dsauth.co.uk)
+    public string ThreeDSProvider { get; set; }
+    public string RsaIssuer { get; set; }
+
     // SecureSuite 3DS Method data
     public string ThreeDSMethodUrl { get; set; }
     public string ThreeDSMethodNotificationUrl { get; set; }

@@ -97,12 +97,12 @@ public class OntraportSalesService : IOntraportSalesService
                     var spentStr = contact.GetValueOrDefault("spent", "0");
                     var amountPaid = decimal.TryParse(spentStr, out var spent) ? spent : 0;
 
-                    // Determine status
+                    // Determine status: eligible when strictly under 30 days (i.e. <= 29)
                     var status = OntraportSaleStatus.Synced;
                     if (renewalDueDate.HasValue)
                     {
                         var daysUntilDue = (renewalDueDate.Value - DateTime.UtcNow).TotalDays;
-                        status = daysUntilDue <= 30
+                        status = daysUntilDue <= 29
                             ? OntraportSaleStatus.Synced
                             : OntraportSaleStatus.WaitingForRenewalWindow;
                     }
@@ -165,9 +165,9 @@ public class OntraportSalesService : IOntraportSalesService
         {
             var daysUntilDue = (sale.RenewalDueDate!.Value - now).TotalDays;
 
-            if (daysUntilDue > 30)
+            if (daysUntilDue > 29)
             {
-                // Not yet in the renewal window
+                // Not yet in the renewal window (David wants strictly under 30 days)
                 if (sale.Status != OntraportSaleStatus.WaitingForRenewalWindow)
                 {
                     sale.Status = OntraportSaleStatus.WaitingForRenewalWindow;

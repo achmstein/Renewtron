@@ -1,0 +1,253 @@
+@page "/admin/bulk-renewals"
+
+@using Renewtron.Data
+@using Renewtron.Abstractions
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Forms
+@using Hangfire
+
+@inject ApplicationDbContext DbContext
+@inject IBulkRenewalService BulkRenewalService
+@inject IBackgroundJobClient BackgroundJobClient
+
+<PageTitle>Bulk Renewals - Renewtron</PageTitle>
+
+<header class="relative bg-white shadow-sm">
+    <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <h1 class="text-lg/6 font-semibold text-gray-900">Bulk Renewals</h1>
+    </div>
+</header>
+
+<main>
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        @if (!string.IsNullOrEmpty(successMessage))
+        {
+            <div class="mb-4 rounded-md bg-green-50 p-4">
+                <p class="text-sm font-medium text-green-800">@successMessage</p>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="mb-4 rounded-md bg-red-50 p-4">
+                <p class="text-sm font-medium text-red-800">@errorMessage</p>
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Total Uploaded</p>
+                <p class="text-2xl font-bold text-gray-900">@totalCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Waiting (>29 days)</p>
+                <p class="text-2xl font-bold text-yellow-600">@waitingCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Queued</p>
+                <p class="text-2xl font-bold text-blue-600">@queuedCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Completed</p>
+                <p class="text-2xl font-bold text-green-600">@completedCount</p>
+            </div>
+            <div class="rounded-lg bg-white p-4 shadow">
+                <p class="text-sm text-gray-500">Failed</p>
+                <p class="text-2xl font-bold text-red-600">@failedCount</p>
+            </div>
+        </div>
+
+        <!-- Upload panel -->
+        <div class="mb-6 rounded-lg bg-white p-6 shadow">
+            <h2 class="text-base font-semibold text-gray-900">Upload Excel File</h2>
+            <p class="mt-1 text-sm text-gray-500">
+                Expected columns: <code>Registered Business Name</code>, <code>Business Name ABN Unique</code>,
+                <code>Date Business Name Renewal Due</code>, <code>Name</code>, <code>Renewal Term</code>.
+                Duplicates (same ABN already in Bulk or Ontraport) are skipped. Renewals auto-fire when the due date is within 29 days.
+            </p>
+            <div class="mt-4 flex items-center gap-3">
+                <InputFile OnChange="HandleFileSelected"
+                           accept=".xlsx"
+                           class="block w-full text-sm text-gray-700 file:mr-4 file:rounded-md file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-500" />
+                @if (isUploading)
+                {
+                    <span class="text-sm text-gray-500">Uploading...</span>
+                }
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="mb-6 flex gap-3">
+            <button @onclick="ProcessEligible"
+                class="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500">
+                Process Eligible Renewals
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="rounded-lg bg-white shadow overflow-hidden">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 class="text-base font-semibold text-gray-900">Uploaded Renewals</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Business Name</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ABN</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Renewal Due</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Days</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Term</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Uploaded</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        @if (uploads.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="9" class="px-4 py-8 text-center text-sm text-gray-500">
+                                    No bulk renewals uploaded yet. Drop an .xlsx file above to start.
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var upload in uploads)
+                        {
+                            var daysUntilDue = upload.RenewalDueDate.HasValue
+                                ? (int)(upload.RenewalDueDate.Value - DateTime.UtcNow).TotalDays
+                                : (int?)null;
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900">@upload.BusinessName</td>
+                                <td class="px-4 py-3 text-sm text-gray-500 font-mono">@upload.Abn</td>
+                                <td class="px-4 py-3 text-sm text-gray-500">@upload.OwnerName</td>
+                                <td class="px-4 py-3 text-sm text-gray-500">
+                                    @(upload.RenewalDueDate?.ToString("dd MMM yyyy") ?? "Unknown")
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    @if (daysUntilDue.HasValue)
+                                    {
+                                        var colorClass = daysUntilDue.Value <= 0 ? "text-red-600 font-bold"
+                                            : daysUntilDue.Value <= 29 ? "text-green-600 font-semibold"
+                                            : "text-gray-500";
+                                        <span class="@colorClass">@daysUntilDue days</span>
+                                    }
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-500">@upload.RenewalYears yr</td>
+                                <td class="px-4 py-3 text-sm text-gray-500">$@upload.Amount.ToString("N2")</td>
+                                <td class="px-4 py-3 text-sm">
+                                    @switch (upload.Status)
+                                    {
+                                        case BulkRenewalStatus.WaitingForRenewalWindow:
+                                            <span class="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">Waiting</span>
+                                            break;
+                                        case BulkRenewalStatus.RenewalQueued:
+                                            <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">Queued</span>
+                                            break;
+                                        case BulkRenewalStatus.RenewalCompleted:
+                                            <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Completed</span>
+                                            break;
+                                        case BulkRenewalStatus.RenewalFailed:
+                                            <span class="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800" title="@upload.ErrorMessage">Failed</span>
+                                            break;
+                                        case BulkRenewalStatus.NotDueForRenewal:
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">Not Due</span>
+                                            break;
+                                        case BulkRenewalStatus.Skipped:
+                                            <span class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-500">Skipped</span>
+                                            break;
+                                    }
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-400">@upload.UploadedAt.ToString("dd/MM HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+
+@code {
+    private List<BulkRenewalUpload> uploads = [];
+    private string? successMessage;
+    private string? errorMessage;
+    private bool isUploading;
+
+    private int totalCount;
+    private int waitingCount;
+    private int queuedCount;
+    private int completedCount;
+    private int failedCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        uploads = await DbContext.BulkRenewalUploads
+            .OrderByDescending(u => u.UploadedAt)
+            .ToListAsync();
+
+        totalCount = uploads.Count;
+        waitingCount = uploads.Count(u => u.Status == BulkRenewalStatus.WaitingForRenewalWindow);
+        queuedCount = uploads.Count(u => u.Status == BulkRenewalStatus.RenewalQueued);
+        completedCount = uploads.Count(u => u.Status == BulkRenewalStatus.RenewalCompleted);
+        failedCount = uploads.Count(u => u.Status == BulkRenewalStatus.RenewalFailed);
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        successMessage = null;
+        errorMessage = null;
+        isUploading = true;
+        StateHasChanged();
+
+        try
+        {
+            var file = e.File;
+            if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "Only .xlsx files are supported.";
+                return;
+            }
+
+            // Copy to seekable memory stream (OpenXML needs seek)
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(ms);
+            ms.Position = 0;
+
+            var result = await BulkRenewalService.UploadAsync(ms, file.Name);
+            successMessage = $"Processed {result.TotalRows} rows: {result.ImportedCount} imported, " +
+                             $"{result.SkippedDuplicates} duplicates skipped, {result.SkippedInvalid} invalid.";
+
+            if (result.Errors.Count > 0)
+                successMessage += " First errors: " + string.Join("; ", result.Errors.Take(3));
+
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private Task ProcessEligible()
+    {
+        successMessage = null;
+        errorMessage = null;
+
+        BackgroundJobClient.Enqueue<IBulkRenewalService>(service => service.ProcessEligibleRenewalsAsync());
+        successMessage = "Processing job queued. Eligible renewals will be processed in the background. Refresh to see results.";
+
+        return Task.CompletedTask;
+    }
+}

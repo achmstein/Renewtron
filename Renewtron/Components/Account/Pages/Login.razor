@@ -70,12 +70,9 @@
                 <div class="flex items-center justify-between">
                     <div class="flex gap-3">
                         <div class="flex h-6 shrink-0 items-center">
-                            <input id="remember-me"
-                                   name="Input.RememberMe"
-                                   type="checkbox"
-                                   value="true"
-                                   checked="@Input.RememberMe"
-                                   class="size-4 rounded-sm border border-gray-300 bg-white accent-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" />
+                            <InputCheckbox id="remember-me"
+                                           @bind-Value="Input.RememberMe"
+                                           class="size-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500" />
                         </div>
                         <label for="remember-me" class="block text-sm/6 text-gray-900">Remember me</label>
                     </div>

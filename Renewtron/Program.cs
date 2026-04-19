@@ -86,6 +86,9 @@ builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>(
 // Ontraport sales sync service
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 
+// Bulk renewal upload service
+builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
+
 // Add Hangfire services for background job processing
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -128,6 +131,14 @@ builder.Services.AddAsic(builder.Configuration, services =>
 
 var app = builder.Build();
 
+// Apply EF migrations before anything else touches the database (Hangfire storage, recurring job registration, etc.)
+using (var scope = app.Services.CreateScope())
+{
+    var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextInitialiser>();
+    await initialiser.InitialiseAsync();
+    await initialiser.SeedAsync();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -167,17 +178,16 @@ RecurringJob.AddOrUpdate<IOntraportSalesService>(
     "0 7 * * *", // Daily at 7 AM (after sync)
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
+RecurringJob.AddOrUpdate<IBulkRenewalService>(
+    "bulk-renewal-process",
+    service => service.ProcessEligibleRenewalsAsync(),
+    "30 7 * * *", // Daily at 7:30 AM (after Ontraport)
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
-
-using var scope = app.Services.CreateScope();
-
-var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextInitialiser>();
-
-await initialiser.InitialiseAsync();
-await initialiser.SeedAsync();
 
 app.Run();

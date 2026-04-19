@@ -390,6 +390,22 @@ public class AsicPaymentClient : IAsicPaymentClient
 
             data.ThreeDSRedirectUrl = HttpUtility.HtmlDecode(redirectUrlMatch.Groups[1].Value);
 
+            // Frictionless 3DS: the issuer skipped the challenge and the gateway jumped straight
+            // to asicconnect.asic.gov.au/public/paymentSuccess.jsp (or paymentFailure.jsp).
+            // Short-circuit the OTP/challenge pipeline — payment has already been authorised/declined.
+            if (data.ThreeDSRedirectUrl.Contains("/paymentSuccess.jsp", StringComparison.OrdinalIgnoreCase))
+            {
+                data.ThreeDSComplete = true;
+                data.ThreeDSRequiresOtp = false;
+                data.ThreeDSProvider = "Frictionless";
+                return StepResult<PaymentStepData>.Success(data);
+            }
+
+            if (data.ThreeDSRedirectUrl.Contains("/paymentFailure.jsp", StringComparison.OrdinalIgnoreCase))
+            {
+                return StepResult<PaymentStepData>.Failure("Payment was declined by the issuer", "Submit Device Information");
+            }
+
             return StepResult<PaymentStepData>.Success(data);
         }
         catch (Exception ex)
@@ -400,6 +416,10 @@ public class AsicPaymentClient : IAsicPaymentClient
 
     private async Task<StepResult<PaymentStepData>> Handle3DSMethodOrchestratorStepAsync(PaymentStepData data)
     {
+        // Frictionless path: no orchestrator/challenge to handle
+        if (data.ThreeDSComplete)
+            return StepResult<PaymentStepData>.Success(data);
+
         try
         {
             // ThreeDSRedirectUrl now points to payment.anzworldline-solutions.com.au/v1/redirect/handlerequest/{guid}
@@ -437,13 +457,26 @@ public class AsicPaymentClient : IAsicPaymentClient
             data.ThreeDSCReq = creq;
             data.ThreeDSSessionData = threeDSSessionData;
 
-            // Extract oid and tid from Cardinal Commerce URL
-            // Format: https://authentication.cardinalcommerce.com/ThreeDSecure/V2_1_0/CReq?oid={oid}&tid={tid}
             var challengeUri = new Uri(data.ThreeDSChallengeUrl);
             var queryParams = HttpUtility.ParseQueryString(challengeUri.Query);
-            data.CardinalOid = queryParams["oid"];
-            data.CardinalTid = queryParams["tid"];
-            data.ThreeDSIssuerId = data.CardinalOid; // Use oid as issuer ID for Cardinal
+
+            if (challengeUri.Host.Contains("rsa3dsauth", StringComparison.OrdinalIgnoreCase))
+            {
+                // RSA 3DS (e.g. NAB / ANZ Worldline)
+                // Format: https://www.rsa3dsauth.co.uk/3ds2/cReqWebBased?issuer=<issuer>
+                data.ThreeDSProvider = "Rsa";
+                data.RsaIssuer = queryParams["issuer"];
+                data.ThreeDSIssuerId = data.RsaIssuer;
+            }
+            else
+            {
+                // Cardinal Commerce (default)
+                // Format: https://authentication.cardinalcommerce.com/ThreeDSecure/V2_1_0/CReq?oid={oid}&tid={tid}
+                data.ThreeDSProvider = "Cardinal";
+                data.CardinalOid = queryParams["oid"];
+                data.CardinalTid = queryParams["tid"];
+                data.ThreeDSIssuerId = data.CardinalOid;
+            }
 
             return StepResult<PaymentStepData>.Success(data);
         }
@@ -455,6 +488,10 @@ public class AsicPaymentClient : IAsicPaymentClient
 
     private async Task<StepResult<PaymentStepData>> Submit3DSChallengeStepAsync(PaymentStepData data)
     {
+        // Frictionless path: no challenge to submit
+        if (data.ThreeDSComplete)
+            return StepResult<PaymentStepData>.Success(data);
+
         try
         {
             // POST to Cardinal Commerce CReq endpoint
@@ -484,14 +521,14 @@ public class AsicPaymentClient : IAsicPaymentClient
 
             // Store the response for OTP extraction
             data.ThreeDSChallengeResponseContent = content;
-
-            // Cardinal Commerce uses acsTransID from the creq JWT (tid parameter)
-            data.ThreeDSAcsTransId = data.CardinalTid;
-            data.CardinalLanguageCode = "en-us";
-
-            // Cardinal Commerce always requires OTP challenge for this flow
-            // The HTML page loads JS that renders the OTP input form
             data.ThreeDSRequiresOtp = true;
+
+            if (data.ThreeDSProvider == "Cardinal")
+            {
+                // Cardinal Commerce uses acsTransID from the creq JWT (tid parameter)
+                data.ThreeDSAcsTransId = data.CardinalTid;
+                data.CardinalLanguageCode = "en-us";
+            }
 
             return StepResult<PaymentStepData>.Success(data);
         }
@@ -506,6 +543,9 @@ public class AsicPaymentClient : IAsicPaymentClient
         // Skip if OTP not required
         if (!data.ThreeDSRequiresOtp)
             return StepResult<PaymentStepData>.Success(data);
+
+        if (data.ThreeDSProvider == "Rsa")
+            return await SubmitRsaOtpStepAsync(data);
 
         try
         {
@@ -653,6 +693,126 @@ public class AsicPaymentClient : IAsicPaymentClient
                 data.ThreeDSComplete = true;
                 data.ThreeDSRequiresOtp = false;
             }
+
+            return StepResult<PaymentStepData>.Success(data);
+        }
+        catch (Exception ex)
+        {
+            return StepResult<PaymentStepData>.Failure(ex.Message, "Submit OTP");
+        }
+    }
+
+    private async Task<StepResult<PaymentStepData>> SubmitRsaOtpStepAsync(PaymentStepData data)
+    {
+        try
+        {
+            // Step 1: Parse the OTP entry form (<form id="mainForm">) that was returned by the cReqWebBased POST
+            var challengeDoc = await _htmlParser.ParseDocumentAsync(data.ThreeDSChallengeResponseContent ?? "");
+            var mainForm = challengeDoc.QuerySelector("form#mainForm") ?? challengeDoc.QuerySelector("form");
+
+            if (mainForm == null)
+                return StepResult<PaymentStepData>.Failure("Could not find RSA OTP entry form", "Submit OTP");
+
+            var challengeWindowSize = mainForm.QuerySelector("input[name='challengeWindowSize']")?.GetAttribute("value") ?? "01";
+            var threeDSServerTransID = mainForm.QuerySelector("input[name='threeDSServerTransID']")?.GetAttribute("value");
+            var messageVersion = mainForm.QuerySelector("input[name='messageVersion']")?.GetAttribute("value") ?? data.ThreeDSMessageVersion ?? "2.2.0";
+            var acsTransID = mainForm.QuerySelector("input[name='acsTransID']")?.GetAttribute("value");
+            var submitAction = HttpUtility.HtmlDecode(mainForm.GetAttribute("action") ?? "");
+
+            if (string.IsNullOrWhiteSpace(submitAction) || string.IsNullOrWhiteSpace(threeDSServerTransID) || string.IsNullOrWhiteSpace(acsTransID))
+                return StepResult<PaymentStepData>.Failure("RSA form missing required fields", "Submit OTP");
+
+            data.ThreeDSAcsTransId = acsTransID;
+            data.ThreeDSTransactionId = threeDSServerTransID;
+            data.ThreeDSMessageVersion = messageVersion;
+            data.ThreeDSChallengeWindowSize = challengeWindowSize;
+
+            // Resolve submit action to absolute URL (action may be relative or absolute)
+            var submitUri = Uri.IsWellFormedUriString(submitAction, UriKind.Absolute)
+                ? new Uri(submitAction)
+                : new Uri(new Uri(data.ThreeDSChallengeUrl), submitAction);
+
+            // Step 2: Wait for OTP from SMS provider
+            string otp;
+            try
+            {
+                otp = await _smsProvider.GetOtpAsync();
+            }
+            catch (Exception ex)
+            {
+                return StepResult<PaymentStepData>.Failure($"Failed to retrieve OTP: {ex.Message}", "Submit OTP");
+            }
+
+            // Step 3: POST OTP to challengeSubmit
+            var submitRequest = new HttpRequestMessage(HttpMethod.Post, submitUri)
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["challengeWindowSize"] = challengeWindowSize,
+                    ["threeDSServerTransID"] = threeDSServerTransID,
+                    ["messageVersion"] = messageVersion,
+                    ["acsTransID"] = acsTransID,
+                    ["dataEntry"] = otp
+                })
+            };
+            submitRequest.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+            submitRequest.Headers.TryAddWithoutValidation("Origin", $"{submitUri.Scheme}://{submitUri.Host}");
+            submitRequest.Headers.TryAddWithoutValidation("Referer", data.ThreeDSChallengeUrl);
+            submitRequest.Headers.TryAddWithoutValidation("Upgrade-Insecure-Requests", "1");
+            submitRequest.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
+            submitRequest.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate");
+            submitRequest.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "iframe");
+
+            var submitResponse = await _http.SendAsync(submitRequest);
+            var submitContent = await submitResponse.Content.ReadAsStringAsync();
+
+            if (!submitResponse.IsSuccessStatusCode)
+                return StepResult<PaymentStepData>.Failure($"RSA challengeSubmit failed: {submitResponse.StatusCode}", "Submit OTP");
+
+            // If the server returned the same OTP form again, the code was rejected
+            if (submitContent.Contains("challengeSubmit", StringComparison.OrdinalIgnoreCase) &&
+                submitContent.Contains("dataEntry", StringComparison.OrdinalIgnoreCase) &&
+                !submitContent.Contains("cres_submit", StringComparison.OrdinalIgnoreCase) &&
+                !submitContent.Contains("name=\"cres\"", StringComparison.OrdinalIgnoreCase))
+            {
+                return StepResult<PaymentStepData>.Failure("Invalid OTP code", "Submit OTP");
+            }
+
+            // Step 4: Parse the returned <form id="cres_submit"> and auto-POST cres+threeDSSessionData back to ANZ Worldline
+            var cresDoc = await _htmlParser.ParseDocumentAsync(submitContent);
+            var cresForm = cresDoc.QuerySelector("form#cres_submit") ?? cresDoc.QuerySelector("form");
+
+            if (cresForm == null)
+                return StepResult<PaymentStepData>.Failure("Could not find cres_submit form after OTP", "Submit OTP");
+
+            var cresAction = HttpUtility.HtmlDecode(cresForm.GetAttribute("action") ?? "");
+            var cresValue = cresForm.QuerySelector("input[name='cres']")?.GetAttribute("value");
+            var cresSessionData = cresForm.QuerySelector("input[name='threeDSSessionData']")?.GetAttribute("value");
+
+            if (string.IsNullOrWhiteSpace(cresAction) || string.IsNullOrWhiteSpace(cresValue))
+                return StepResult<PaymentStepData>.Failure("cres form missing required fields", "Submit OTP");
+
+            var cresUri = Uri.IsWellFormedUriString(cresAction, UriKind.Absolute)
+                ? new Uri(cresAction)
+                : new Uri(submitUri, cresAction);
+
+            var finalForm = new Dictionary<string, string> { ["cres"] = cresValue };
+            if (!string.IsNullOrWhiteSpace(cresSessionData))
+                finalForm["threeDSSessionData"] = cresSessionData;
+
+            var finalRequest = new HttpRequestMessage(HttpMethod.Post, cresUri) { Content = new FormUrlEncodedContent(finalForm) };
+            finalRequest.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            finalRequest.Headers.TryAddWithoutValidation("Origin", $"{submitUri.Scheme}://{submitUri.Host}");
+            finalRequest.Headers.TryAddWithoutValidation("Referer", submitUri.ToString());
+            finalRequest.Headers.TryAddWithoutValidation("Upgrade-Insecure-Requests", "1");
+
+            var finalResponse = await _http.SendAsync(finalRequest);
+
+            if (!finalResponse.IsSuccessStatusCode && finalResponse.StatusCode != HttpStatusCode.Found && finalResponse.StatusCode != HttpStatusCode.Redirect)
+                return StepResult<PaymentStepData>.Failure($"cres submission failed: {finalResponse.StatusCode}", "Submit OTP");
+
+            data.ThreeDSComplete = true;
+            data.ThreeDSRequiresOtp = false;
 
             return StepResult<PaymentStepData>.Success(data);
         }
