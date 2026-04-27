@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="Renewtron.AppHost/Renewtron.AppHost.csproj" />
+  <Project Path="Renewtron.Server/Renewtron.Server.csproj" />
+  <Project Path="Renewtron.ServiceDefaults/Renewtron.ServiceDefaults.csproj" />
+  <Project Path="Asic.Client/Asic.Client.csproj" />
+  <Project Path="frontend/frontend.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>

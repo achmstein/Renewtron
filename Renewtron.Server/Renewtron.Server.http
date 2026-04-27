@@ -1,0 +1,11 @@
+@Server_HostAddress = http://localhost:5481
+
+GET {{Server_HostAddress}}/health
+Accept: application/json
+
+###
+
+GET {{Server_HostAddress}}/api/me
+Accept: application/json
+
+###

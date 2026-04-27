@@ -1,0 +1,37 @@
+{
+    email admin@applyforanabn.au
+    acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+businessnames.applyforanabn.au {
+    # API + Identity endpoints
+    handle /api/* {
+        reverse_proxy renewtron-server:8080 {
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    # Hangfire dashboard (admin-only, gated server-side)
+    handle /hangfire* {
+        reverse_proxy renewtron-server:8080 {
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Host {host}
+        }
+    }
+
+    # Health probes
+    handle /health* {
+        reverse_proxy renewtron-server:8080
+    }
+    handle /alive* {
+        reverse_proxy renewtron-server:8080
+    }
+
+    # Everything else → static React (with SPA fallback inside nginx)
+    handle {
+        reverse_proxy renewtron-web:80
+    }
+
+    encode gzip zstd
+}
