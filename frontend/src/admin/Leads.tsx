@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import AdminPage from './AdminPage'
 
 type Item = {
   id: string
@@ -59,32 +60,28 @@ export default function Leads() {
   const reminderCount = data?.reminderCount ?? 0
   const leads = data?.items ?? []
 
-  return (
-    <>
-      <header className="relative bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg/6 font-semibold text-gray-900">Leads</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span><span className="font-medium text-gray-900">{totalCount}</span> total</span>
-              <span className="text-gray-300">|</span>
-              <span className="text-green-600"><span className="font-medium">{convertedCount}</span> converted</span>
-              <span className="text-gray-300">|</span>
-              <span className="text-amber-600"><span className="font-medium">{notDueCount}</span> not due</span>
-              <span className="text-gray-300">|</span>
-              <span className="text-blue-600"><span className="font-medium">{reminderCount}</span> reminders</span>
-            </div>
-          </div>
-        </div>
-      </header>
+  const headerActions = (
+    <div className="hidden md:flex items-baseline gap-5 bureau-mono text-[11px]" style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+      <span><strong style={{ color: 'var(--ink)' }}>{totalCount}</strong> <span style={{ color: 'var(--ledger)' }}>total</span></span>
+      <span style={{ color: 'var(--hairline-deep)' }}>|</span>
+      <span><strong style={{ color: 'var(--verdict)' }}>{convertedCount}</strong> <span style={{ color: 'var(--ledger)' }}>conv.</span></span>
+      <span style={{ color: 'var(--hairline-deep)' }}>|</span>
+      <span><strong style={{ color: 'var(--caution)' }}>{notDueCount}</strong> <span style={{ color: 'var(--ledger)' }}>not due</span></span>
+      <span style={{ color: 'var(--hairline-deep)' }}>|</span>
+      <span><strong style={{ color: 'var(--info)' }}>{reminderCount}</strong> <span style={{ color: 'var(--ledger)' }}>rem.</span></span>
+    </div>
+  )
 
-      <main>
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* Filters */}
-          <div className="mb-6 flex flex-wrap items-end gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Outcome</label>
-              <select value={outcomeFilter} onChange={(e) => setOutcomeFilter(e.target.value)} className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+  return (
+    <AdminPage title="Leads" subtitle="Customer enquiries entered into the registry — track, convert, follow up." classification="Pipeline" actions={headerActions}>
+      <div className="space-y-6">
+        {/* Filter row */}
+        <div className="bureau-card p-4">
+          <div className="bureau-label mb-3">Filter</div>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="min-w-[180px]">
+              <label className="bureau-label mb-1.5 block">Outcome</label>
+              <select value={outcomeFilter} onChange={(e) => setOutcomeFilter(e.target.value)} className="bureau-select">
                 <option value="">All Outcomes</option>
                 <option value="RenewalCompleted">Converted</option>
                 <option value="RenewalAvailable">Available</option>
@@ -94,83 +91,91 @@ export default function Leads() {
                 <option value="Pending">Pending</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reminder</label>
-              <select value={reminderFilter} onChange={(e) => setReminderFilter(e.target.value)} className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+            <div className="min-w-[160px]">
+              <label className="bureau-label mb-1.5 block">Reminder</label>
+              <select value={reminderFilter} onChange={(e) => setReminderFilter(e.target.value)} className="bureau-select">
                 <option value="">All</option>
                 <option value="true">Opted In</option>
                 <option value="false">Not Opted In</option>
               </select>
             </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+            <div className="flex-1 min-w-[220px]">
+              <label className="bureau-label mb-1.5 block">Search</label>
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="ABN, name, or email..."
-                className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                placeholder="ABN, name, or email…"
+                className="bureau-input"
               />
             </div>
           </div>
+        </div>
 
-          {/* Leads Table */}
-          <div className="overflow-hidden rounded-lg bg-white shadow">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+        {/* Leads Table */}
+        <div className="bureau-card">
+          <div className="overflow-x-auto">
+            <table className="bureau-table">
+              <thead>
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Lead</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ABN</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Outcome</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Reminder</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Created</th>
-                  <th scope="col" className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
+                  <th>Lead</th>
+                  <th>ABN</th>
+                  <th>Outcome</th>
+                  <th>Reminder</th>
+                  <th>Created</th>
+                  <th></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
+              <tbody>
                 {!leads.length ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-500">No leads found</td>
+                    <td colSpan={6} className="bureau-meta py-12 text-center">No leads on file.</td>
                   </tr>
                 ) : leads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-sm font-medium text-gray-600">{getInitials(lead.fullName)}</span>
-                          </div>
+                  <tr key={lead.id}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex h-9 w-9 shrink-0 items-center justify-center bureau-mono text-[11px] font-semibold uppercase"
+                          style={{
+                            background: 'var(--paper-deep)',
+                            border: '1px solid var(--hairline-deep)',
+                            color: 'var(--ink)',
+                            letterSpacing: '0.04em',
+                          }}
+                        >
+                          {getInitials(lead.fullName)}
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{lead.fullName}</div>
-                          <div className="text-sm text-gray-500">{lead.email}</div>
-                          <div className="text-xs text-gray-400">{lead.mobileNumber}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium" style={{ color: 'var(--ink)' }}>{lead.fullName}</div>
+                          <div className="bureau-mono truncate text-[11.5px]" style={{ color: 'var(--ledger)' }}>{lead.email}</div>
+                          <div className="bureau-mono text-[11px]" style={{ color: 'var(--ledger-soft)' }}>{lead.mobileNumber}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 font-mono">{formatAbn(lead.abn)}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="bureau-mono whitespace-nowrap text-[12.5px]" style={{ color: 'var(--ink)' }}>{formatAbn(lead.abn)}</td>
+                    <td className="whitespace-nowrap">
                       <OutcomeBadge outcome={lead.outcome} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap">
                       {lead.reminderOptIn ? (
-                        <span className="inline-flex items-center text-green-600">
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                          </svg>
-                        </span>
+                        <span style={{ color: 'var(--verdict)' }}>● Opted in</span>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span style={{ color: 'var(--ledger-soft)' }}>—</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div>{fmtDate(lead.createdAt)}</div>
-                      <div className="text-xs text-gray-400">{fmtTime(lead.createdAt)}</div>
+                    <td className="whitespace-nowrap">
+                      <div style={{ color: 'var(--ink)' }}>{fmtDate(lead.createdAt)}</div>
+                      <div className="bureau-mono text-[11px]" style={{ color: 'var(--ledger)' }}>{fmtTime(lead.createdAt)}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Link to={`/admin/leads/${lead.id}`} className="text-blue-600 hover:text-blue-900">View</Link>
+                    <td className="whitespace-nowrap text-right">
+                      <Link
+                        to={`/admin/leads/${lead.id}`}
+                        className="bureau-mono text-[11px] uppercase tracking-wider"
+                        style={{ color: 'var(--stamp)', borderBottom: '1px solid var(--stamp)', paddingBottom: 1 }}
+                      >
+                        Open
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -178,24 +183,24 @@ export default function Leads() {
             </table>
           </div>
         </div>
-      </main>
-    </>
+      </div>
+    </AdminPage>
   )
 }
 
 function OutcomeBadge({ outcome }: { outcome: string }) {
   switch (outcome) {
     case 'RenewalCompleted':
-      return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Converted</span>
+      return <span className="bureau-stamp bureau-stamp-ok">Converted</span>
     case 'RenewalAvailable':
-      return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">Available</span>
+      return <span className="bureau-stamp bureau-stamp-info">Available</span>
     case 'NotDueForRenewal':
-      return <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">Not Due</span>
+      return <span className="bureau-stamp bureau-stamp-warn">Not Due</span>
     case 'RenewalInProgress':
-      return <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">In Progress</span>
+      return <span className="bureau-stamp bureau-stamp-info">In Progress</span>
     case 'NoBusinessNames':
-      return <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">No Names</span>
+      return <span className="bureau-stamp bureau-stamp-neutral">No Names</span>
     default:
-      return <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">Pending</span>
+      return <span className="bureau-stamp bureau-stamp-neutral">Pending</span>
   }
 }

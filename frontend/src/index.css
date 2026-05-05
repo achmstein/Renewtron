@@ -22,6 +22,459 @@
     }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   THE REGISTRY — admin-only bureau aesthetic
+   Scoped to .bureau so the public ASIC wizard keeps its gov look.
+   ══════════════════════════════════════════════════════════════ */
+
+.bureau {
+    --paper:        #F4EFE6;
+    --paper-deep:   #ECE6D8;
+    --card:         #FCFAF5;
+    --ink:          #1B1812;
+    --ink-soft:     #3A342A;
+    --ledger:       #8C7B5E;
+    --ledger-soft:  #B0A082;
+    --hairline:     #D9CFB8;
+    --hairline-deep:#C4B898;
+    --stamp:        #B0341E;
+    --stamp-deep:   #862916;
+    --stamp-tint:   #F2DAD3;
+    --verdict:      #3D7A4A;
+    --verdict-tint: #DCEAD9;
+    --caution:      #9C6F2A;
+    --caution-tint: #F1E2C2;
+    --info:         #2C5470;
+    --info-tint:    #D6E2EC;
+
+    --font-display: 'Fraunces', 'Iowan Old Style', 'Times New Roman', serif;
+    --font-sans:    'Geist', 'Inter', system-ui, sans-serif;
+    --font-mono:    'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    position: relative;
+    isolation: isolate;
+}
+
+/* Subtle archival paper grain — pseudo-element so it doesn't interfere with content */
+.bureau::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        radial-gradient(rgba(27, 24, 18, 0.025) 1px, transparent 1px),
+        radial-gradient(rgba(27, 24, 18, 0.018) 1px, transparent 1px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 1px 2px;
+    opacity: 0.7;
+}
+
+.bureau > * { position: relative; z-index: 1; }
+
+/* ───── Typography ───── */
+
+.bureau-display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    font-feature-settings: 'ss01' on, 'ss02' on;
+}
+
+.bureau-mono {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum' on, 'zero' on;
+}
+
+.bureau-meta {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ledger);
+    font-weight: 500;
+}
+
+.bureau-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ledger);
+    font-weight: 500;
+}
+
+/* ───── Masthead ───── */
+
+.bureau-masthead {
+    background: var(--card);
+    border-bottom: 1px solid var(--hairline-deep);
+    box-shadow: 0 1px 0 rgba(27, 24, 18, 0.04);
+}
+
+.bureau-wordmark {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    line-height: 1;
+    font-feature-settings: 'ss01' on;
+}
+
+.bureau-wordmark-stamp {
+    color: var(--stamp);
+    font-weight: 800;
+}
+
+.bureau-wordmark-sub {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ledger);
+    margin-top: 2px;
+    line-height: 1;
+}
+
+/* Numbered nav links — "01 · DASHBOARD" filing-system feel */
+.bureau-nav-link {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ledger);
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: color 120ms ease, border-color 120ms ease;
+    white-space: nowrap;
+}
+.bureau-nav-link:hover { color: var(--ink); }
+.bureau-nav-link[data-active="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--stamp);
+}
+.bureau-nav-num {
+    font-size: 10px;
+    color: var(--ledger-soft);
+    font-weight: 400;
+}
+.bureau-nav-link[data-active="true"] .bureau-nav-num {
+    color: var(--stamp);
+    font-weight: 600;
+}
+
+/* ───── Dossier header (page-level metadata strip) ───── */
+
+.bureau-dossier {
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 0;
+    position: relative;
+    padding: 22px 28px 18px;
+    box-shadow:
+        0 1px 0 var(--hairline) inset,
+        0 0 0 4px var(--paper-deep);
+}
+
+.bureau-dossier::before {
+    content: '';
+    position: absolute;
+    top: -4px; left: -4px; right: -4px; bottom: -4px;
+    border: 1px solid var(--hairline);
+    pointer-events: none;
+}
+
+.bureau-dossier-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.05;
+    letter-spacing: -0.018em;
+    color: var(--ink);
+    font-feature-settings: 'ss01' on;
+}
+
+.bureau-dossier-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--hairline-deep);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ledger);
+}
+.bureau-dossier-meta > * + *::before {
+    content: '·';
+    margin: 0 10px;
+    color: var(--ledger-soft);
+}
+.bureau-dossier-meta strong {
+    color: var(--ink);
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+/* ───── Cards / Panels ───── */
+
+.bureau-card {
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    box-shadow: 0 1px 0 rgba(27, 24, 18, 0.03);
+    transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+.bureau-card:hover {
+    border-color: var(--hairline-deep);
+}
+
+.bureau-ledger {
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    position: relative;
+    padding: 24px;
+}
+.bureau-ledger::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 32px;
+    height: 1px;
+    background: var(--stamp);
+}
+.bureau-ledger-num {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 44px;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: 'ss01' on, 'tnum' on;
+}
+
+/* ───── Stamped status pills ───── */
+
+.bureau-stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1.5px solid currentColor;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    line-height: 1.3;
+    background: rgba(255, 255, 255, 0.5);
+    transform: rotate(-0.6deg);
+    transform-origin: left center;
+}
+.bureau-stamp::before {
+    content: '';
+    width: 5px; height: 5px;
+    background: currentColor;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.bureau-stamp-ok {
+    color: var(--verdict);
+    background: var(--verdict-tint);
+    border-color: var(--verdict);
+}
+.bureau-stamp-fail {
+    color: var(--stamp);
+    background: var(--stamp-tint);
+    border-color: var(--stamp);
+}
+.bureau-stamp-warn {
+    color: var(--caution);
+    background: var(--caution-tint);
+    border-color: var(--caution);
+}
+.bureau-stamp-info {
+    color: var(--info);
+    background: var(--info-tint);
+    border-color: var(--info);
+}
+.bureau-stamp-neutral {
+    color: var(--ink-soft);
+    background: var(--paper-deep);
+    border-color: var(--ledger-soft);
+}
+
+/* ───── Ledger tables ───── */
+
+.bureau-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+}
+.bureau-table thead th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ledger);
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1.5px solid var(--ink);
+    background: var(--card);
+}
+.bureau-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 13.5px;
+    color: var(--ink);
+    vertical-align: middle;
+}
+.bureau-table tbody tr:hover td {
+    background: var(--paper-deep);
+}
+.bureau-table tbody tr:last-child td {
+    border-bottom: 1.5px solid var(--ink);
+}
+
+/* ───── Buttons ───── */
+
+.bureau-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--hairline-deep);
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+    line-height: 1.4;
+}
+.bureau-btn:hover:not(:disabled) {
+    background: var(--paper-deep);
+    border-color: var(--ink-soft);
+}
+.bureau-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bureau-btn-primary {
+    color: var(--paper);
+    background: var(--ink);
+    border-color: var(--ink);
+}
+.bureau-btn-primary:hover:not(:disabled) {
+    background: var(--stamp);
+    border-color: var(--stamp);
+    color: var(--paper);
+}
+
+.bureau-btn-stamp {
+    color: var(--stamp);
+    border-color: var(--stamp);
+    background: var(--stamp-tint);
+}
+.bureau-btn-stamp:hover:not(:disabled) {
+    background: var(--stamp);
+    color: var(--paper);
+}
+
+.bureau-btn-active {
+    color: var(--paper);
+    background: var(--ink);
+    border-color: var(--ink);
+}
+
+/* ───── Form controls ───── */
+
+.bureau-input,
+.bureau-select {
+    width: 100%;
+    padding: 8px 12px;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--hairline-deep);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.bureau-input::placeholder { color: var(--ledger-soft); }
+.bureau-input:focus,
+.bureau-select:focus {
+    outline: none;
+    border-color: var(--ink);
+    box-shadow: 0 0 0 3px var(--paper-deep);
+}
+
+/* ───── Decorative ───── */
+
+.bureau-rule { border-top: 1px solid var(--hairline-deep); }
+.bureau-rule-stamp { border-top: 2px solid var(--stamp); }
+.bureau-rule-dashed { border-top: 1px dashed var(--hairline-deep); }
+
+.bureau-link {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--stamp);
+    transition: background 120ms ease;
+    padding: 0 1px;
+}
+.bureau-link:hover {
+    background: var(--stamp-tint);
+}
+
+/* Filter chip — old "label tag" feel */
+.bureau-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--paper-deep);
+    border: 1px solid var(--hairline-deep);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+}
+
+/* Page-load reveal */
+@keyframes bureau-reveal {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.bureau-reveal {
+    animation: bureau-reveal 380ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+.bureau-reveal-1 { animation-delay: 60ms; }
+.bureau-reveal-2 { animation-delay: 120ms; }
+.bureau-reveal-3 { animation-delay: 180ms; }
+.bureau-reveal-4 { animation-delay: 240ms; }
+.bureau-reveal-5 { animation-delay: 300ms; }
+
+/* Spinning refresh glyph */
+@keyframes bureau-spin { to { transform: rotate(360deg); } }
+.bureau-spin { animation: bureau-spin 800ms linear infinite; }
+
 @theme {
     --font-sans: 'Inter', system-ui, sans-serif;
     --color-brand: #0052A4;
