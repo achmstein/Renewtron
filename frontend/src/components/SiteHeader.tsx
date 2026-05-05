@@ -39,13 +39,6 @@ export default function SiteHeader() {
             </a>
           </nav>
 
-          <a href="tel:1300123456" className="hidden md:flex items-center gap-2 phone-link font-semibold text-[15px] pl-4 ml-4 border-l border-gray-300 whitespace-nowrap shrink-0">
-            <svg className="w-[18px] h-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
-            </svg>
-            1300 123 456
-          </a>
-
           <div className="md:hidden">
             <button
               type="button"
@@ -81,14 +74,6 @@ export default function SiteHeader() {
               </a>
               <a href="https://applyforanabn.com.au/contact-us/" className="nav-link-inactive block rounded-md px-3 py-2 text-base font-medium">
                 Contact Us
-              </a>
-            </div>
-            <div className="border-t border-gray-200 px-5 py-4">
-              <a href="tel:1300123456" className="flex items-center gap-2 phone-link font-semibold">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
-                </svg>
-                1300 123 456
               </a>
             </div>
           </div>
