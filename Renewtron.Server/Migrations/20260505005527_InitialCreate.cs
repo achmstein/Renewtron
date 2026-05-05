@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Renewtron.Data.Migrations
+namespace Renewtron.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -23,27 +23,6 @@ namespace Renewtron.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Roles", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "SavedCreditCards",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    CardholderName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    CardNumberLast4 = table.Column<string>(type: "nvarchar(4)", maxLength: 4, nullable: false),
-                    CardBrand = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
-                    ExpiryMonth = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    ExpiryYear = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    EncryptedCardNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    EncryptedCvc = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    IpAddress = table.Column<string>(type: "nvarchar(450)", nullable: true),
-                    SessionId = table.Column<string>(type: "nvarchar(max)", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SavedCreditCards", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -110,6 +89,39 @@ namespace Renewtron.Data.Migrations
                         principalTable: "Roles",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Leads",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Abn = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    MobileNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    DateOfBirth = table.Column<DateOnly>(type: "date", nullable: false),
+                    Tfn = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IpAddress = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    UserAgent = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    SessionId = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Outcome = table.Column<int>(type: "int", nullable: false),
+                    OutcomeMessage = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    ReminderOptIn = table.Column<bool>(type: "bit", nullable: false),
+                    ConvertedToRenewal = table.Column<bool>(type: "bit", nullable: false),
+                    ConvertedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SearchLogId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Leads", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Leads_SearchLogs_SearchLogId",
+                        column: x => x.SearchLogId,
+                        principalTable: "SearchLogs",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -225,20 +237,35 @@ namespace Renewtron.Data.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SearchResultId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     InitiatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LeadId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     RenewalYears = table.Column<int>(type: "int", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    MobileNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DateOfBirth = table.Column<DateOnly>(type: "date", nullable: true),
+                    Tfn = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Source = table.Column<int>(type: "int", nullable: false),
                     PaymentType = table.Column<int>(type: "int", nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
                     Status = table.Column<int>(type: "int", nullable: false),
                     CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     TransactionReference = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     HostedTokenizationId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     ErrorMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    FailedAtStep = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                    FailedAtStep = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AtoOnboardingJobId = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AtoOnboardingStatus = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AtoOnboardingResultJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    AtoOnboardingCompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_RenewalRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RenewalRequests_Leads_LeadId",
+                        column: x => x.LeadId,
+                        principalTable: "Leads",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_RenewalRequests_SearchResults_SearchResultId",
                         column: x => x.SearchResultId,
@@ -248,15 +275,82 @@ namespace Renewtron.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "BulkRenewalUploads",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    BusinessName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Abn = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    OwnerName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    RenewalDueDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RenewalYears = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    UploadedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ProcessedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    SourceFile = table.Column<string>(type: "nvarchar(260)", maxLength: 260, nullable: true),
+                    RenewalRequestId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_BulkRenewalUploads", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_BulkRenewalUploads_RenewalRequests_RenewalRequestId",
+                        column: x => x.RenewalRequestId,
+                        principalTable: "RenewalRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "OntraportSales",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OntraportContactId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    OntraportTransactionId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ContactName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    MobileNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    DateOfBirth = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    BusinessName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Abn = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    BusinessNameOwner = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    RenewalDueDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RenewalYears = table.Column<int>(type: "int", nullable: false),
+                    AmountPaid = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    SyncedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ProcessedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ErrorMessage = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    RenewalRequestId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_OntraportSales", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_OntraportSales_RenewalRequests_RenewalRequestId",
+                        column: x => x.RenewalRequestId,
+                        principalTable: "RenewalRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "StripePayments",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     RenewalRequestId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    CustomerCreditCardId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     PaymentIntentId = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     PaymentStatus = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PaidAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    PaidAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CardholderName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CardLast4 = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CardBrand = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CardExpMonth = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CardExpYear = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -267,18 +361,87 @@ namespace Renewtron.Data.Migrations
                         principalTable: "RenewalRequests",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_StripePayments_SavedCreditCards_CustomerCreditCardId",
-                        column: x => x.CustomerCreditCardId,
-                        principalTable: "SavedCreditCards",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BulkRenewalUploads_Abn",
+                table: "BulkRenewalUploads",
+                column: "Abn");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BulkRenewalUploads_RenewalDueDate",
+                table: "BulkRenewalUploads",
+                column: "RenewalDueDate");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BulkRenewalUploads_RenewalRequestId",
+                table: "BulkRenewalUploads",
+                column: "RenewalRequestId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BulkRenewalUploads_Status",
+                table: "BulkRenewalUploads",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Leads_Abn",
+                table: "Leads",
+                column: "Abn");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Leads_CreatedAt",
+                table: "Leads",
+                column: "CreatedAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Leads_Email",
+                table: "Leads",
+                column: "Email");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Leads_Outcome",
+                table: "Leads",
+                column: "Outcome");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Leads_SearchLogId",
+                table: "Leads",
+                column: "SearchLogId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OntraportSales_Abn",
+                table: "OntraportSales",
+                column: "Abn");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OntraportSales_OntraportContactId",
+                table: "OntraportSales",
+                column: "OntraportContactId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OntraportSales_RenewalDueDate",
+                table: "OntraportSales",
+                column: "RenewalDueDate");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OntraportSales_RenewalRequestId",
+                table: "OntraportSales",
+                column: "RenewalRequestId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OntraportSales_Status",
+                table: "OntraportSales",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_InitiatedAt",
                 table: "RenewalRequests",
                 column: "InitiatedAt");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RenewalRequests_LeadId",
+                table: "RenewalRequests",
+                column: "LeadId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RenewalRequests_SearchResultId",
@@ -299,16 +462,6 @@ namespace Renewtron.Data.Migrations
                 filter: "[NormalizedName] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_SavedCreditCards_CreatedAt",
-                table: "SavedCreditCards",
-                column: "CreatedAt");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SavedCreditCards_IpAddress",
-                table: "SavedCreditCards",
-                column: "IpAddress");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_SearchLogs_Abn",
                 table: "SearchLogs",
                 column: "Abn");
@@ -322,11 +475,6 @@ namespace Renewtron.Data.Migrations
                 name: "IX_SearchResults_SearchLogId",
                 table: "SearchResults",
                 column: "SearchLogId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_StripePayments_CustomerCreditCardId",
-                table: "StripePayments",
-                column: "CustomerCreditCardId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_StripePayments_PaymentIntentId",
@@ -371,6 +519,12 @@ namespace Renewtron.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "BulkRenewalUploads");
+
+            migrationBuilder.DropTable(
+                name: "OntraportSales");
+
+            migrationBuilder.DropTable(
                 name: "RoleClaims");
 
             migrationBuilder.DropTable(
@@ -392,13 +546,13 @@ namespace Renewtron.Data.Migrations
                 name: "RenewalRequests");
 
             migrationBuilder.DropTable(
-                name: "SavedCreditCards");
-
-            migrationBuilder.DropTable(
                 name: "Roles");
 
             migrationBuilder.DropTable(
                 name: "Users");
+
+            migrationBuilder.DropTable(
+                name: "Leads");
 
             migrationBuilder.DropTable(
                 name: "SearchResults");
