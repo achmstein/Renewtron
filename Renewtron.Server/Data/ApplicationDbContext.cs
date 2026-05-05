@@ -57,6 +57,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.SearchResultId).IsUnique();
             entity.HasIndex(e => e.InitiatedAt);
 
+            // Match the stored snapshot's decimal(18,2) so EF doesn't flag PendingModelChanges.
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+
             entity.HasOne(e => e.SearchResult)
                 .WithOne(s => s.RenewalRequest)
                 .HasForeignKey<RenewalRequest>(e => e.SearchResultId)
