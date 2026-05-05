@@ -4,6 +4,7 @@ builder.AddDockerComposeEnvironment("renewtron")
     .WithDashboard(dashboard => dashboard.WithHostPort(18889));
 
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
+var atoApiUrl = builder.AddParameter("ato-api-url");
 
 var sql = builder.AddSqlServer("sql", password: sqlPassword)
     .WithDataVolume("renewtron-sql-data")
@@ -15,6 +16,7 @@ var renewtronDb = sql.AddDatabase("RenewtronDb");
 var server = builder.AddProject<Projects.Renewtron_Server>("renewtron-server")
     .WithReference(renewtronDb)
     .WaitFor(sql)
+    .WithEnvironment("AtoApi__Url", atoApiUrl)
     .WithHttpHealthCheck("/health")
     .PublishAsDockerFile()
     .PublishAsDockerComposeService((_, service) =>

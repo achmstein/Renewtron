@@ -17,6 +17,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
     steps:
@@ -37,9 +40,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Restore (with GitHub Packages auth)
+        run: dotnet restore Renewtron.Server/Renewtron.Server.csproj
+
       - name: Build & push Renewtron.Server
         run: |
           dotnet publish Renewtron.Server/Renewtron.Server.csproj \
+            --no-restore \
             -c Release \
             /t:PublishContainer \
             /p:ContainerRegistry=${{ env.REGISTRY }} \
@@ -72,6 +79,12 @@ jobs:
     name: Generate docker-compose
     runs-on: ubuntu-latest
     needs: build-and-push
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,6 +105,7 @@ jobs:
           RENEWTRON_WEB_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/renewtron-web:${{ needs.build-and-push.outputs.image_tag }}
           CADDY_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/renewtron-caddy:${{ needs.build-and-push.outputs.image_tag }}
           SQL_PASSWORD=${{ secrets.SQL_PASSWORD }}
+          ATO_API_URL=${{ vars.ATO_API_URL }}
           EOF
 
       - uses: actions/upload-artifact@v4

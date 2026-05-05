@@ -83,6 +83,18 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
+builder.Services.AddScoped<IAtoOnboardingService, AtoOnboardingService>();
+
+var atoApiUrl = builder.Configuration["AtoApi:Url"];
+if (string.IsNullOrWhiteSpace(atoApiUrl))
+{
+    throw new InvalidOperationException("AtoApi:Url not configured (set ATO_API_URL in the deploy environment).");
+}
+
+builder.Services.AddGrpcClient<Ato.Api.Contracts.AtoApi.AtoApiClient>(o =>
+{
+    o.Address = new Uri(atoApiUrl);
+});
 
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
