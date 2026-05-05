@@ -13,6 +13,7 @@ public class SettingsService : ISettingsService
     private readonly IOptions<PricingSettings> _pricingSettings;
     private readonly IOptions<AsicSettings> _asicSettings;
     private readonly IOptions<OntraportSettings> _ontraportSettings;
+    private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
     private readonly IWebHostEnvironment _environment;
 
     public SettingsService(
@@ -21,6 +22,7 @@ public class SettingsService : ISettingsService
         IOptions<PricingSettings> pricingSettings,
         IOptions<AsicSettings> asicSettings,
         IOptions<OntraportSettings> ontraportSettings,
+        IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
         IWebHostEnvironment environment)
     {
         _sendGridSettings = sendGridSettings;
@@ -28,6 +30,7 @@ public class SettingsService : ISettingsService
         _pricingSettings = pricingSettings;
         _asicSettings = asicSettings;
         _ontraportSettings = ontraportSettings;
+        _atoAgentSettings = atoAgentSettings;
         _environment = environment;
     }
 
@@ -56,6 +59,11 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_ontraportSettings.Value);
     }
 
+    public Task<AtoAgentSettings> GetAtoAgentSettingsAsync()
+    {
+        return Task.FromResult(_atoAgentSettings.CurrentValue);
+    }
+
     public async Task UpdateSendGridSettingsAsync(SendGridSettings settings)
     {
         await UpdateSettingsSectionAsync("SendGrid", settings);
@@ -79,6 +87,11 @@ public class SettingsService : ISettingsService
     public async Task UpdateOntraportSettingsAsync(OntraportSettings settings)
     {
         await UpdateSettingsSectionAsync("Ontraport", settings);
+    }
+
+    public async Task UpdateAtoAgentSettingsAsync(AtoAgentSettings settings)
+    {
+        await UpdateSettingsSectionAsync("AtoAgent", settings);
     }
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)

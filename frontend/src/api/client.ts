@@ -106,7 +106,14 @@ export const api = {
       pricing: { oneYearFee: number; threeYearFee: number }
       asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }
       ontraport: { apiAppId: string; apiKey: string; conversationId: string }
+      atoAgent: { defaultAgentAbn: string; defaultAgentName: string }
     }>('/api/admin/settings'),
+    atoAgents: () => apiFetch<{
+      authenticated: boolean
+      phase: string
+      agents: Array<{ abn: string; name: string }>
+      selectedAgentAbn?: string | null
+    }>('/api/admin/settings/ato-agents'),
     searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
@@ -290,6 +297,7 @@ export const api = {
     updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: { apiAppId: string; apiKey: string; conversationId: string }) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
+    updateAtoAgent: (body: { defaultAgentAbn: string; defaultAgentName: string }) => apiFetch<void>('/api/admin/settings/ato-agent', { method: 'PUT', body: JSON.stringify(body) }),
 
     atoOnboarding: (params: { status?: string; search?: string; take?: number } = {}) => {
       const qs = new URLSearchParams()

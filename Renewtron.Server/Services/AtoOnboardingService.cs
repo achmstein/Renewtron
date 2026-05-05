@@ -2,8 +2,10 @@ using Ato.Api.Contracts;
 using Google.Protobuf.WellKnownTypes;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Data;
+using Renewtron.Settings;
 
 namespace Renewtron.Services;
 
@@ -15,17 +17,20 @@ public class AtoOnboardingService : IAtoOnboardingService
     private readonly ApplicationDbContext _db;
     private readonly AtoApi.AtoApiClient _ato;
     private readonly IBackgroundJobClient _jobs;
+    private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
     private readonly ILogger<AtoOnboardingService> _logger;
 
     public AtoOnboardingService(
         ApplicationDbContext db,
         AtoApi.AtoApiClient ato,
         IBackgroundJobClient jobs,
+        IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
         ILogger<AtoOnboardingService> logger)
     {
         _db = db;
         _ato = ato;
         _jobs = jobs;
+        _atoAgentSettings = atoAgentSettings;
         _logger = logger;
     }
 
@@ -64,12 +69,24 @@ public class AtoOnboardingService : IAtoOnboardingService
         var dob = renewal.DateOfBirth.Value;
         var dobUtc = new DateTime(dob.Year, dob.Month, dob.Day, 0, 0, 0, DateTimeKind.Utc);
 
+        var defaultAgentAbn = _atoAgentSettings.CurrentValue.DefaultAgentAbn;
+        if (string.IsNullOrWhiteSpace(defaultAgentAbn))
+        {
+            renewal.AtoOnboardingStatus = "Failed";
+            renewal.AtoOnboardingResultJson = """{"error":"No default ATO agent configured. Set one in Settings → ATO Agent before onboarding."}""";
+            renewal.AtoOnboardingCompletedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            _logger.LogWarning("ATO onboarding aborted for renewal {RenewalRequestId}: no default ATO agent configured", renewalRequestId);
+            return;
+        }
+
         var request = new EnqueueBusinessNameOnboardingRequest
         {
             IdempotencyKey = renewalRequestId.ToString("N"),
             Tfn = renewal.Tfn,
             DateOfBirth = Timestamp.FromDateTime(dobUtc),
             Abn = renewal.SearchResult?.SearchLog?.Abn ?? "",
+            AgentAbn = defaultAgentAbn,
         };
 
         try

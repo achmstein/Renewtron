@@ -9,10 +9,12 @@ public interface ISettingsService
     Task<PricingSettings> GetPricingSettingsAsync();
     Task<AsicSettings> GetAsicSettingsAsync();
     Task<OntraportSettings> GetOntraportSettingsAsync();
+    Task<AtoAgentSettings> GetAtoAgentSettingsAsync();
 
     Task UpdateSendGridSettingsAsync(SendGridSettings settings);
     Task UpdateStripeSettingsAsync(StripeSettings settings);
     Task UpdatePricingSettingsAsync(PricingSettings settings);
     Task UpdateAsicSettingsAsync(AsicSettings settings);
     Task UpdateOntraportSettingsAsync(OntraportSettings settings);
+    Task UpdateAtoAgentSettingsAsync(AtoAgentSettings settings);
 }

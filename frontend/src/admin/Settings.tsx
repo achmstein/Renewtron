@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import AdminPage from './AdminPage'
-import { Banner, Section } from './_shared'
 
-type Tab = 'SendGrid' | 'Stripe' | 'Pricing' | 'Asic' | 'Ontraport'
+type Tab = 'SendGrid' | 'Stripe' | 'Pricing' | 'Asic' | 'Ontraport' | 'AtoAgent'
 
-const tabs: { key: Tab; label: string; kicker: string }[] = [
-  { key: 'SendGrid',  label: 'SendGrid',  kicker: '01' },
-  { key: 'Stripe',    label: 'Stripe',    kicker: '02' },
-  { key: 'Pricing',   label: 'Pricing',   kicker: '03' },
-  { key: 'Asic',      label: 'ASIC',      kicker: '04' },
-  { key: 'Ontraport', label: 'Ontraport', kicker: '05' },
-]
+const tabClass = (active: boolean) =>
+  `${active ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'} whitespace-nowrap border-b-2 px-1 py-4 text-sm font-medium`
+
+const inputCls = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border'
 
 type Settings = Awaited<ReturnType<typeof api.admin.settings>>
 
@@ -21,11 +16,17 @@ export default function Settings() {
   const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
+  // Form state mirrors the original separate models
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
   const [asic, setAsic] = useState({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '' })
   const [ontraport, setOntraport] = useState({ apiAppId: '', apiKey: '', conversationId: '' })
+  const [atoAgent, setAtoAgent] = useState({ defaultAgentAbn: '', defaultAgentName: '' })
+
+  // Live ATO session — populates the agent dropdown
+  const [agentList, setAgentList] = useState<Array<{ abn: string; name: string }>>([])
+  const [agentSession, setAgentSession] = useState<{ authenticated: boolean; phase: string; loaded: boolean; error?: string }>({ authenticated: false, phase: '', loaded: false })
 
   const load = async () => {
     const r = await api.admin.settings()
@@ -35,16 +36,31 @@ export default function Settings() {
     setPricing(r.pricing)
     setAsic(r.asic)
     setOntraport(r.ontraport)
+    setAtoAgent(r.atoAgent)
   }
   useEffect(() => { void load() }, [])
+
+  const loadAgents = async () => {
+    setAgentSession(s => ({ ...s, loaded: false, error: undefined }))
+    try {
+      const r = await api.admin.atoAgents()
+      setAgentList(r.agents)
+      setAgentSession({ authenticated: r.authenticated, phase: r.phase, loaded: true })
+    } catch (e) {
+      setAgentSession({ authenticated: false, phase: '', loaded: true, error: e instanceof Error ? e.message : 'Failed to load agents' })
+    }
+  }
+  useEffect(() => {
+    if (activeTab === 'AtoAgent' && !agentSession.loaded) void loadAgents()
+  }, [activeTab])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = (label: string, action: () => Promise<void>) => async () => {
     setSuccessMessage(''); setErrorMessage('')
     try {
       await action()
-      setSuccessMessage(`${label} settings saved.`)
+      setSuccessMessage(`${label} settings saved successfully!`)
     } catch (e) {
-      setErrorMessage(`Error saving ${label}: ${e instanceof Error ? e.message : 'unknown'}`)
+      setErrorMessage(`Error saving ${label} settings: ${e instanceof Error ? e.message : 'unknown'}`)
     }
   }
 
@@ -53,165 +69,297 @@ export default function Settings() {
   const onPricing = (e: React.FormEvent) => { e.preventDefault(); void flash('Pricing', () => api.admin.updatePricing(pricing))() }
   const onAsic = (e: React.FormEvent) => { e.preventDefault(); void flash('ASIC', () => api.admin.updateAsic(asic))() }
   const onOntraport = (e: React.FormEvent) => { e.preventDefault(); void flash('Ontraport', () => api.admin.updateOntraport(ontraport))() }
+  const onAtoAgent = (e: React.FormEvent) => { e.preventDefault(); void flash('ATO Agent', () => api.admin.updateAtoAgent(atoAgent))() }
 
   return (
-    <AdminPage title="Settings" subtitle="Configure integrations, pricing, and credentials." classification="Configuration">
-      <div className="space-y-6">
-        {successMessage ? <Banner kind="ok" message={successMessage} /> : null}
-        {errorMessage ? <Banner kind="fail" message={errorMessage} /> : null}
-
-        {/* Bureau-style tabs */}
-        <div className="border-b-2 border-[var(--ink)]">
-          <nav className="flex flex-wrap gap-x-7">
-            {tabs.map((t) => {
-              const active = activeTab === t.key
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key)}
-                  className="bureau-nav-link"
-                  data-active={active}
-                >
-                  <span className="bureau-nav-num">{t.kicker}</span>
-                  <span>{t.label}</span>
-                </button>
-              )
-            })}
-          </nav>
+    <>
+      <header className="relative bg-white shadow-sm">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <h1 className="text-lg/6 font-semibold text-gray-900">Settings</h1>
+          <p className="mt-1 text-sm text-gray-500">Configure SendGrid, Stripe, ASIC credentials, pricing, and Ontraport integration.</p>
         </div>
+      </header>
 
-        {!data ? null : (
-          <>
-            {activeTab === 'SendGrid' ? (
-              <Section kicker="01" title="SendGrid Email">
-                <form onSubmit={onSendGrid} className="space-y-4">
-                  <Field label="API Key">
-                    <input type="password" className="bureau-input" value={sg.apiKey} onChange={(e) => setSg({ ...sg, apiKey: e.target.value })} />
-                  </Field>
-                  <Field label="From Email">
-                    <input type="email" className="bureau-input" value={sg.fromEmail} onChange={(e) => setSg({ ...sg, fromEmail: e.target.value })} />
-                  </Field>
-                  <Field label="From Name">
-                    <input className="bureau-input" value={sg.fromName} onChange={(e) => setSg({ ...sg, fromName: e.target.value })} />
-                  </Field>
-                  <SubmitRow label="Save SendGrid" />
-                </form>
-              </Section>
-            ) : null}
+      <main>
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {successMessage ? (
+            <div className="mb-4 rounded-md bg-green-50 p-4">
+              <div className="flex">
+                <div className="shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3"><p className="text-sm font-medium text-green-800">{successMessage}</p></div>
+              </div>
+            </div>
+          ) : null}
+          {errorMessage ? (
+            <div className="mb-4 rounded-md bg-red-50 p-4">
+              <div className="flex">
+                <div className="shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3"><p className="text-sm font-medium text-red-800">{errorMessage}</p></div>
+              </div>
+            </div>
+          ) : null}
 
-            {activeTab === 'Stripe' ? (
-              <Section kicker="02" title="Stripe Payments">
-                <form onSubmit={onStripe} className="space-y-4">
-                  <Field label="Secret Key">
-                    <input type="password" className="bureau-input" value={stripe.secretKey} onChange={(e) => setStripe({ ...stripe, secretKey: e.target.value })} />
-                  </Field>
-                  <Field label="Publishable Key">
-                    <input className="bureau-input" value={stripe.publishableKey} onChange={(e) => setStripe({ ...stripe, publishableKey: e.target.value })} />
-                  </Field>
-                  <SubmitRow label="Save Stripe" />
-                </form>
-              </Section>
-            ) : null}
+          {/* Tabs */}
+          <div className="mb-6">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8">
+                <button onClick={() => setActiveTab('SendGrid')} className={tabClass(activeTab === 'SendGrid')}>SendGrid</button>
+                <button onClick={() => setActiveTab('Stripe')} className={tabClass(activeTab === 'Stripe')}>Stripe</button>
+                <button onClick={() => setActiveTab('Pricing')} className={tabClass(activeTab === 'Pricing')}>Pricing</button>
+                <button onClick={() => setActiveTab('Asic')} className={tabClass(activeTab === 'Asic')}>ASIC Settings</button>
+                <button onClick={() => setActiveTab('Ontraport')} className={tabClass(activeTab === 'Ontraport')}>Ontraport</button>
+                <button onClick={() => setActiveTab('AtoAgent')} className={tabClass(activeTab === 'AtoAgent')}>ATO Agent</button>
+              </nav>
+            </div>
+          </div>
 
-            {activeTab === 'Pricing' ? (
-              <Section kicker="03" title="Renewal Pricing">
-                <p className="bureau-meta mb-5" style={{ textTransform: 'none', fontSize: 12 }}>
-                  Prices charged to customers for business name renewals.
-                </p>
-                <form onSubmit={onPricing} className="space-y-4">
-                  <Field label="1 Year Renewal · AUD" hint="Total price charged for a 1 year renewal.">
-                    <PriceInput value={pricing.oneYearFee} onChange={(v) => setPricing({ ...pricing, oneYearFee: v })} />
-                  </Field>
-                  <Field label="3 Year Renewal · AUD" hint="Total price charged for a 3 year renewal.">
-                    <PriceInput value={pricing.threeYearFee} onChange={(v) => setPricing({ ...pricing, threeYearFee: v })} />
-                  </Field>
-                  <SubmitRow label="Save Pricing" />
-                </form>
-              </Section>
-            ) : null}
-
-            {activeTab === 'Asic' ? (
-              <Section kicker="04" title="ASIC Settings">
-                <form onSubmit={onAsic} className="space-y-4">
-                  <Field label="Email" hint="Used for ASIC renewal applications.">
-                    <input type="email" className="bureau-input" value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
-                  </Field>
-                  <Field label="Card Number">
-                    <input className="bureau-input bureau-mono" value={asic.cardNumber} onChange={(e) => setAsic({ ...asic, cardNumber: e.target.value })} />
-                  </Field>
-                  <Field label="Cardholder Name">
-                    <input className="bureau-input" value={asic.cardholderName} onChange={(e) => setAsic({ ...asic, cardholderName: e.target.value })} />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Expiry Month">
-                      <input className="bureau-input bureau-mono" value={asic.expiryMonth} onChange={(e) => setAsic({ ...asic, expiryMonth: e.target.value })} placeholder="MM" />
-                    </Field>
-                    <Field label="Expiry Year">
-                      <input className="bureau-input bureau-mono" value={asic.expiryYear} onChange={(e) => setAsic({ ...asic, expiryYear: e.target.value })} placeholder="YYYY" />
-                    </Field>
+          {!data ? null : (
+            <>
+              {activeTab === 'SendGrid' ? (
+                <div className="overflow-hidden rounded-lg bg-white shadow">
+                  <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">SendGrid Email Settings</h3>
+                    <form onSubmit={onSendGrid}>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">API Key</label>
+                          <input className={inputCls} value={sg.apiKey} onChange={(e) => setSg({ ...sg, apiKey: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">From Email</label>
+                          <input className={inputCls} value={sg.fromEmail} onChange={(e) => setSg({ ...sg, fromEmail: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">From Name</label>
+                          <input className={inputCls} value={sg.fromName} onChange={(e) => setSg({ ...sg, fromName: e.target.value })} />
+                        </div>
+                        <div>
+                          <button type="submit" className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                            Save SendGrid Settings
+                          </button>
+                        </div>
+                      </div>
+                    </form>
                   </div>
-                  <Field label="CVC">
-                    <input type="password" className="bureau-input bureau-mono" value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} />
-                  </Field>
-                  <SubmitRow label="Save ASIC" />
-                </form>
-              </Section>
-            ) : null}
+                </div>
+              ) : null}
 
-            {activeTab === 'Ontraport' ? (
-              <Section kicker="05" title="Ontraport Integration">
-                <form onSubmit={onOntraport} className="space-y-4">
-                  <Field label="API App ID">
-                    <input className="bureau-input bureau-mono" value={ontraport.apiAppId} onChange={(e) => setOntraport({ ...ontraport, apiAppId: e.target.value })} />
-                  </Field>
-                  <Field label="API Key">
-                    <input type="password" className="bureau-input bureau-mono" value={ontraport.apiKey} onChange={(e) => setOntraport({ ...ontraport, apiKey: e.target.value })} />
-                  </Field>
-                  <Field label="Conversation ID" hint="Ontraport conversation ID for retrieving SMS messages.">
-                    <input className="bureau-input bureau-mono" value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
-                  </Field>
-                  <SubmitRow label="Save Ontraport" />
-                </form>
-              </Section>
-            ) : null}
-          </>
-        )}
-      </div>
-    </AdminPage>
-  )
-}
+              {activeTab === 'Stripe' ? (
+                <div className="overflow-hidden rounded-lg bg-white shadow">
+                  <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Stripe Payment Settings</h3>
+                    <form onSubmit={onStripe}>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Secret Key</label>
+                          <input type="password" className={inputCls} value={stripe.secretKey} onChange={(e) => setStripe({ ...stripe, secretKey: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Publishable Key</label>
+                          <input className={inputCls} value={stripe.publishableKey} onChange={(e) => setStripe({ ...stripe, publishableKey: e.target.value })} />
+                        </div>
+                        <div>
+                          <button type="submit" className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                            Save Stripe Settings
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <div>
-      <label className="bureau-label mb-1.5 block">{label}</label>
-      {children}
-      {hint ? <p className="bureau-meta mt-1.5" style={{ textTransform: 'none', fontSize: 11 }}>{hint}</p> : null}
-    </div>
-  )
-}
+              {activeTab === 'Pricing' ? (
+                <div className="overflow-hidden rounded-lg bg-white shadow">
+                  <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Renewal Pricing</h3>
+                    <p className="text-sm text-gray-500 mb-4">Set the prices customers will pay for business name renewals</p>
+                    <form onSubmit={onPricing}>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">1 Year Renewal Price</label>
+                          <div className="relative mt-1 rounded-md shadow-sm">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                              <span className="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" step="0.01" value={pricing.oneYearFee} onChange={(e) => setPricing({ ...pricing, oneYearFee: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">Total price charged to customer for 1 year renewal</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">3 Year Renewal Price</label>
+                          <div className="relative mt-1 rounded-md shadow-sm">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                              <span className="text-gray-500 sm:text-sm">$</span>
+                            </div>
+                            <input type="number" step="0.01" value={pricing.threeYearFee} onChange={(e) => setPricing({ ...pricing, threeYearFee: Number(e.target.value) })} className="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2 border" />
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">Total price charged to customer for 3 year renewal</p>
+                        </div>
+                        <div>
+                          <button type="submit" className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                            Save Pricing Settings
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
 
-function SubmitRow({ label }: { label: string }) {
-  return (
-    <div className="border-t border-[var(--hairline)] pt-4">
-      <button type="submit" className="bureau-btn bureau-btn-primary">
-        ✓ {label}
-      </button>
-    </div>
-  )
-}
+              {activeTab === 'Asic' ? (
+                <div className="overflow-hidden rounded-lg bg-white shadow">
+                  <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">ASIC Settings</h3>
+                    <form onSubmit={onAsic}>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Email</label>
+                          <input type="email" className={inputCls} value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
+                          <p className="mt-1 text-xs text-gray-500">Email address used for ASIC renewal applications</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Card Number</label>
+                          <input className={inputCls} value={asic.cardNumber} onChange={(e) => setAsic({ ...asic, cardNumber: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Cardholder Name</label>
+                          <input className={inputCls} value={asic.cardholderName} onChange={(e) => setAsic({ ...asic, cardholderName: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Expiry Month</label>
+                            <input className={inputCls} value={asic.expiryMonth} onChange={(e) => setAsic({ ...asic, expiryMonth: e.target.value })} />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Expiry Year</label>
+                            <input className={inputCls} value={asic.expiryYear} onChange={(e) => setAsic({ ...asic, expiryYear: e.target.value })} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">CVC</label>
+                          <input type="password" className={inputCls} value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} />
+                        </div>
+                        <div>
+                          <button type="submit" className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                            Save ASIC Settings
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
 
-function PriceInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="relative">
-      <span className="bureau-mono pointer-events-none absolute inset-y-0 left-3 flex items-center text-[13px]" style={{ color: 'var(--ledger)' }}>$</span>
-      <input
-        type="number"
-        step="0.01"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="bureau-input pl-6"
-      />
-    </div>
+              {activeTab === 'Ontraport' ? (
+                <div className="overflow-hidden rounded-lg bg-white shadow">
+                  <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Ontraport Settings</h3>
+                    <form onSubmit={onOntraport}>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">API App ID</label>
+                          <input className={inputCls} value={ontraport.apiAppId} onChange={(e) => setOntraport({ ...ontraport, apiAppId: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">API Key</label>
+                          <input className={inputCls} value={ontraport.apiKey} onChange={(e) => setOntraport({ ...ontraport, apiKey: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Conversation ID</label>
+                          <input className={inputCls} value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
+                          <p className="mt-1 text-xs text-gray-500">The Ontraport conversation ID for retrieving SMS messages</p>
+                        </div>
+                        <div>
+                          <button type="submit" className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                            Save Ontraport Settings
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
+
+              {activeTab === 'AtoAgent' ? (
+                <div className="overflow-hidden rounded-lg bg-white shadow">
+                  <div className="px-4 py-5 sm:p-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Default ATO Agent</h3>
+                    <p className="mt-1 mb-5 text-sm text-gray-500">
+                      All business-name onboarding jobs are filed under this tax agent. The dropdown below
+                      lists agents the live myID session is registered against.
+                    </p>
+
+                    <form onSubmit={onAtoAgent}>
+                      <div className="space-y-5">
+                        {!agentSession.loaded ? (
+                          <p className="text-sm text-gray-500">Loading agents from the ATO session…</p>
+                        ) : agentSession.error ? (
+                          <div className="rounded-md bg-red-50 p-3">
+                            <p className="text-sm text-red-800">{agentSession.error}</p>
+                            <button type="button" onClick={() => void loadAgents()} className="mt-2 text-sm font-medium text-red-700 underline hover:text-red-900">Retry</button>
+                          </div>
+                        ) : !agentSession.authenticated ? (
+                          <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                            <div className="font-medium">Ato.Api session is not authenticated ({agentSession.phase || 'unknown'}).</div>
+                            <div className="mt-1">Sign in to myID via the Ato.Api host first, then come back to pick a default agent.</div>
+                            <button type="button" onClick={() => void loadAgents()} className="mt-2 text-sm font-medium text-amber-700 underline hover:text-amber-900">Refresh</button>
+                          </div>
+                        ) : (
+                          <>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700">Default Agent</label>
+                              <select
+                                className={inputCls}
+                                value={atoAgent.defaultAgentAbn}
+                                onChange={(e) => {
+                                  const abn = e.target.value
+                                  const found = agentList.find(a => a.abn === abn)
+                                  setAtoAgent({ defaultAgentAbn: abn, defaultAgentName: found?.name ?? '' })
+                                }}
+                              >
+                                <option value="">— Select an agent —</option>
+                                {agentList.map(a => (
+                                  <option key={a.abn} value={a.abn}>{a.name} · {a.abn}</option>
+                                ))}
+                              </select>
+                              <div className="mt-2 flex items-center justify-between">
+                                <p className="text-xs text-gray-500">{agentList.length} agent(s) available in this session.</p>
+                                <button type="button" onClick={() => void loadAgents()} className="text-xs font-medium text-blue-600 hover:text-blue-700">Refresh list</button>
+                              </div>
+                            </div>
+
+                            {atoAgent.defaultAgentAbn ? (
+                              <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                                <div><span className="font-medium text-gray-700">Selected:</span> {atoAgent.defaultAgentName}</div>
+                                <div className="font-mono">ABN {atoAgent.defaultAgentAbn}</div>
+                              </div>
+                            ) : null}
+
+                            <div>
+                              <button type="submit" disabled={!atoAgent.defaultAgentAbn} className="inline-flex justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                                Save ATO Agent
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      </main>
+    </>
   )
 }

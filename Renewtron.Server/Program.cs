@@ -73,6 +73,7 @@ builder.Services.AddOptions<SendGridSettings>().BindConfiguration("SendGrid").Va
 builder.Services.AddOptions<AsicSettings>().BindConfiguration("Asic").ValidateDataAnnotations();
 builder.Services.AddOptions<PricingSettings>().BindConfiguration("Pricing").ValidateDataAnnotations();
 builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").ValidateDataAnnotations();
+builder.Services.AddOptions<AtoAgentSettings>().BindConfiguration("AtoAgent");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();

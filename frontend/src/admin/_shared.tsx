@@ -1,155 +1,51 @@
 import { type ReactNode } from 'react'
 
 export function Pager({ total, skip, take, onPrev, onNext, label }: { total: number; skip: number; take: number; onPrev: () => void; onNext: () => void; label: string }) {
-  const from = total === 0 ? 0 : skip + 1
-  const to = Math.min(skip + take, total)
   return (
-    <div className="mt-4 flex items-center justify-between gap-3 px-1">
-      <span className="bureau-meta">
-        {total === 0 ? `0 ${label}` : `${from}–${to} of ${total} ${label}`}
-      </span>
+    <div className="flex items-center justify-between gap-2 mt-4 text-sm text-gray-500">
+      <span>{total} {label}</span>
       <div className="flex gap-2">
-        <button onClick={onPrev} disabled={skip === 0} className="bureau-btn">← Prev</button>
-        <button onClick={onNext} disabled={skip + take >= total} className="bureau-btn">Next →</button>
+        <button onClick={onPrev} disabled={skip === 0} className="rounded-md bg-white px-3 py-1.5 ring-1 ring-inset ring-gray-300 shadow-xs disabled:opacity-40 hover:bg-gray-50 text-gray-700 font-medium">Previous</button>
+        <button onClick={onNext} disabled={skip + take >= total} className="rounded-md bg-white px-3 py-1.5 ring-1 ring-inset ring-gray-300 shadow-xs disabled:opacity-40 hover:bg-gray-50 text-gray-700 font-medium">Next</button>
       </div>
     </div>
   )
 }
 
-const stampClassFor = (status: string): string => {
-  switch (status) {
-    case 'Completed':
-    case 'OK':
-    case 'RenewalCompleted':
-      return 'bureau-stamp bureau-stamp-ok'
-    case 'Failed':
-    case 'RenewalFailed':
-      return 'bureau-stamp bureau-stamp-fail'
-    case 'Pending':
-    case 'Processing':
-    case 'InProgress':
-    case 'Synced':
-    case 'RenewalQueued':
-      return 'bureau-stamp bureau-stamp-info'
-    case 'NotDueForRenewal':
-    case 'WaitingForRenewalWindow':
-    case 'AwaitingAuth':
-      return 'bureau-stamp bureau-stamp-warn'
-    case 'Skipped':
-    case 'NoBusinessNames':
-      return 'bureau-stamp bureau-stamp-neutral'
-    default:
-      return 'bureau-stamp bureau-stamp-neutral'
-  }
-}
-
 export function StatusPill({ status }: { status: string }) {
-  // Insert space before each capital so "RenewalCompleted" → "Renewal Completed"
-  const display = status.replace(/([a-z])([A-Z])/g, '$1 $2')
-  return <span className={stampClassFor(status)}>{display}</span>
+  const cls = (() => {
+    switch (status) {
+      case 'Completed':
+      case 'OK':
+      case 'RenewalCompleted':
+        return 'bg-green-50 text-green-700 ring-green-600/20'
+      case 'Failed':
+      case 'RenewalFailed':
+        return 'bg-red-50 text-red-700 ring-red-600/20'
+      case 'Pending':
+      case 'Processing':
+      case 'Synced':
+        return 'bg-blue-50 text-blue-700 ring-blue-600/20'
+      case 'NotDueForRenewal':
+      case 'WaitingForRenewalWindow':
+        return 'bg-amber-50 text-amber-700 ring-amber-600/20'
+      default:
+        return 'bg-gray-50 text-gray-700 ring-gray-300'
+    }
+  })()
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${cls}`}>{status}</span>
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`bureau-card ${className}`}>{children}</div>
+  return <div className={`overflow-hidden rounded-lg bg-white shadow ${className}`}>{children}</div>
 }
 
 export function Table({ children }: { children: ReactNode }) {
   return (
-    <div className="bureau-card">
+    <div className="overflow-hidden rounded-lg bg-white shadow ring-1 ring-black/5">
       <div className="overflow-x-auto">
-        <table className="bureau-table">{children}</table>
+        <table className="min-w-full divide-y divide-gray-200 text-sm">{children}</table>
       </div>
     </div>
   )
 }
-
-/* ─────────────────────────────────────────────
-   Higher-level bureau primitives reused across
-   list and detail pages.
-   ───────────────────────────────────────────── */
-
-export function Banner({ kind, message }: { kind: 'ok' | 'fail' | 'info'; message: string }) {
-  const cls = kind === 'ok'
-    ? 'bureau-stamp-ok'
-    : kind === 'fail'
-      ? 'bureau-stamp-fail'
-      : 'bureau-stamp-info'
-  const verb = kind === 'ok' ? 'Verdict' : kind === 'fail' ? 'Incident' : 'Notice'
-  return (
-    <div className={`bureau-card flex items-start gap-4 px-4 py-3 ${cls}`} style={{ borderLeftWidth: 3 }}>
-      <span className="bureau-stamp" style={{ background: 'transparent', border: '1.5px solid currentColor', flexShrink: 0 }}>
-        {verb}
-      </span>
-      <p className="text-[13px] leading-snug" style={{ color: 'var(--ink)' }}>{message}</p>
-    </div>
-  )
-}
-
-export function Section({ title, kicker, actions, children, dense = false }: {
-  title: string
-  kicker?: string
-  actions?: ReactNode
-  children: ReactNode
-  dense?: boolean
-}) {
-  return (
-    <div className="bureau-card">
-      <div
-        className="flex items-center justify-between gap-3 border-b-2 border-[var(--ink)] px-5 py-3"
-        style={{ background: 'var(--paper-deep)' }}
-      >
-        <div className="flex items-baseline gap-3 min-w-0">
-          {kicker ? (
-            <span className="bureau-mono text-[10px] shrink-0" style={{ color: 'var(--ledger-soft)', letterSpacing: '0.1em' }}>{kicker}</span>
-          ) : null}
-          <h3 className="bureau-display text-[15px] font-semibold tracking-tight truncate" style={{ color: 'var(--ink)' }}>{title}</h3>
-        </div>
-        {actions ? <div className="shrink-0 flex items-center gap-2">{actions}</div> : null}
-      </div>
-      <div className={dense ? '' : 'p-5'}>{children}</div>
-    </div>
-  )
-}
-
-export function DefList({ children }: { children: ReactNode }) {
-  return <dl className="grid grid-cols-1 gap-y-3 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-4">{children}</dl>
-}
-
-export function DefRow({ label, children, mono = false, full = false }: { label: string; children: ReactNode; mono?: boolean; full?: boolean }) {
-  return (
-    <div className={full ? 'sm:col-span-2' : ''}>
-      <dt className="bureau-label" style={{ marginBottom: 4 }}>{label}</dt>
-      <dd className={`text-[13px] ${mono ? 'bureau-mono' : ''}`} style={{ color: 'var(--ink)', wordBreak: mono ? 'break-all' : undefined }}>
-        {children}
-      </dd>
-    </div>
-  )
-}
-
-export function StatTile({ label, value, tone = 'ink', kicker }: {
-  label: string
-  value: string | number
-  tone?: 'ink' | 'verdict' | 'caution' | 'info' | 'stamp' | 'ledger'
-  kicker?: string
-}) {
-  const colorMap: Record<string, string> = {
-    ink: 'var(--ink)',
-    verdict: 'var(--verdict)',
-    caution: 'var(--caution)',
-    info: 'var(--info)',
-    stamp: 'var(--stamp)',
-    ledger: 'var(--ledger)',
-  }
-  return (
-    <div className="bureau-ledger" style={{ background: 'var(--card)' }}>
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="bureau-label">{label}</div>
-        {kicker ? <span className="bureau-mono text-[10px]" style={{ color: 'var(--ledger-soft)' }}>{kicker}</span> : null}
-      </div>
-      <div className="bureau-ledger-num mt-3" style={{ color: colorMap[tone] ?? 'var(--ink)' }}>
-        {value}
-      </div>
-    </div>
-  )
-}
-
