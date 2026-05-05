@@ -91,7 +91,7 @@ jobs:
 
       - name: Write .env
         run: |
-          cat > publish/.env <<EOF
+          cat > publish/.env <<'EOF'
           RENEWTRON_SERVER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/renewtron-server:${{ needs.build-and-push.outputs.image_tag }}
           RENEWTRON_WEB_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/renewtron-web:${{ needs.build-and-push.outputs.image_tag }}
           SQL_PASSWORD=${{ secrets.SQL_PASSWORD }}
