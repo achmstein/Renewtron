@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import AdminPage from './AdminPage'
+import { Banner, DefList, DefRow, Section, StatusPill } from './_shared'
 
 type Detail = Awaited<ReturnType<typeof api.admin.renewal>>
 
@@ -15,17 +17,6 @@ function fmtDob(s: string) {
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   return `${dd}/${mm}/${d.getFullYear()}`
-}
-
-function StatusBadge({ status, big = false }: { status: string; big?: boolean }) {
-  const cls = big ? 'inline-flex rounded-full px-3 py-1 text-sm font-semibold leading-5' : 'inline-flex rounded-full px-2 text-xs font-semibold leading-5'
-  switch (status) {
-    case 'Completed': return <span className={`${cls} bg-green-100 text-green-800`}>Completed</span>
-    case 'Processing': return <span className={`${cls} bg-blue-100 text-blue-800`}>Processing</span>
-    case 'Pending': return <span className={`${cls} bg-yellow-100 text-yellow-800`}>Pending</span>
-    case 'Failed': return <span className={`${cls} bg-red-100 text-red-800`}>Failed</span>
-    default: return <span className={`${cls} bg-gray-100 text-gray-700`}>{status}</span>
-  }
 }
 
 export default function RenewalDetails() {
@@ -79,253 +70,128 @@ export default function RenewalDetails() {
     }
   }
 
-  const canRetry = data?.status === 'Failed' && ((data.paymentType === 'Stripe' && data.stripePayment?.paymentStatus === 'succeeded') || data.paymentType === 'External')
+  const back = <Link to="/admin/renewals" className="bureau-btn">← Back to Renewals</Link>
+
+  if (isLoading) {
+    return (
+      <AdminPage title="Renewal Dossier" classification="Renewals" actions={back}>
+        <div className="bureau-meta animate-pulse">Loading renewal…</div>
+      </AdminPage>
+    )
+  }
+
+  if (notFound || !data) {
+    return (
+      <AdminPage title="Renewal Not Found" classification="Renewals" actions={back}>
+        <div className="bureau-card p-6">
+          <p className="text-[14px]" style={{ color: 'var(--ink)' }}>The renewal request you're looking for doesn't exist.</p>
+        </div>
+      </AdminPage>
+    )
+  }
+
+  const canRetry = data.status === 'Failed' && ((data.paymentType === 'Stripe' && data.stripePayment?.paymentStatus === 'succeeded') || data.paymentType === 'External')
 
   return (
-    <>
-      <header className="relative bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg/6 font-semibold text-gray-900">Renewal Request Details</h1>
-            <Link to="/admin/renewals" className="text-sm text-gray-600 hover:text-gray-900">← Back to Renewals</Link>
+    <AdminPage
+      title={data.businessName}
+      subtitle={`ABN ${data.abn}`}
+      caseId={`RNW-${data.id.slice(0, 8).toUpperCase()}`}
+      classification="Renewals · Dossier"
+      actions={back}
+    >
+      <div className="space-y-6">
+        {successMessage ? <Banner kind="ok" message={successMessage} /> : null}
+        {errorMessage ? <Banner kind="fail" message={errorMessage} /> : null}
+
+        {/* Status strip */}
+        <div className="bureau-card flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <div className="bureau-label" style={{ marginBottom: 3 }}>Verdict</div>
+            <StatusPill status={data.status} />
+          </div>
+          <div className="text-right">
+            <div className="bureau-label" style={{ marginBottom: 3 }}>Amount</div>
+            <div className="bureau-display text-[22px] font-semibold" style={{ color: 'var(--ink)' }}>${data.amount.toFixed(2)}</div>
           </div>
         </div>
-      </header>
 
-      <main>
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {isLoading ? (
-            <div className="text-center py-12">
-              <svg className="mx-auto h-12 w-12 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p className="mt-4 text-sm text-gray-600">Loading...</p>
-            </div>
-          ) : notFound || !data ? (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-semibold text-gray-900">Renewal Request Not Found</h3>
-              <p className="mt-2 text-sm text-gray-600">The renewal request you're looking for doesn't exist.</p>
-            </div>
-          ) : (
-            <>
-              {successMessage ? (
-                <div className="mb-4 rounded-md bg-green-50 p-4">
-                  <div className="flex">
-                    <div className="shrink-0">
-                      <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3"><p className="text-sm font-medium text-green-800">{successMessage}</p></div>
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Section kicker="A" title="Renewal Information">
+            <DefList>
+              <DefRow label="Request ID" mono full>{data.id}</DefRow>
+              <DefRow label="Initiated">{fmtDateTime(data.initiatedAt)}</DefRow>
+              <DefRow label="Initiated By">
+                <span style={{ color: data.initiatedByLabel === 'Admin' ? 'var(--stamp)' : 'var(--ink)' }}>{data.initiatedByLabel}</span>
+              </DefRow>
+              {data.completedAt ? <DefRow label="Completed">{fmtDateTime(data.completedAt)}</DefRow> : null}
+              <DefRow label="Period">{data.renewalYears} year{data.renewalYears > 1 ? 's' : ''}</DefRow>
+              <DefRow label="Customer Email">{data.email ?? '—'}</DefRow>
+              <DefRow label="Mobile">{data.mobileNumber ?? '—'}</DefRow>
+              <DefRow label="Date of Birth">{data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'}</DefRow>
+              <DefRow label="IP Address" mono>{data.ipAddress ?? '—'}</DefRow>
+            </DefList>
+          </Section>
+
+          <Section kicker="B" title="Payment Information">
+            <DefList>
+              <DefRow label="Payment Type">
+                <StatusPill status={data.paymentType === 'External' ? 'Synced' : 'Processing'} />
+              </DefRow>
+              <DefRow label="Amount">
+                <span className="bureau-mono text-[14px] font-medium" style={{ color: 'var(--ink)' }}>${data.amount.toFixed(2)}</span>
+              </DefRow>
+              {data.stripePayment ? (
+                <>
+                  <DefRow label="Stripe Intent" mono full>{data.stripePayment.paymentIntentId}</DefRow>
+                  <DefRow label="Stripe Status">
+                    <StatusPill status={data.stripePayment.paymentStatus === 'succeeded' ? 'Completed' : 'Failed'} />
+                  </DefRow>
+                  {data.stripePayment.paidAt ? (
+                    <DefRow label="Paid At">{fmtDateTime(data.stripePayment.paidAt)}</DefRow>
+                  ) : null}
+                </>
               ) : null}
-              {errorMessage ? (
-                <div className="mb-4 rounded-md bg-red-50 p-4">
-                  <div className="flex">
-                    <div className="shrink-0">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3"><p className="text-sm font-medium text-red-800">{errorMessage}</p></div>
-                  </div>
-                </div>
+            </DefList>
+          </Section>
+
+          <Section kicker="C" title="ASIC Transaction">
+            <DefList>
+              <DefRow label="Transaction Reference" mono full>{data.transactionReference ?? '—'}</DefRow>
+              <DefRow label="Tokenization ID" mono full>{data.hostedTokenizationId ?? '—'}</DefRow>
+              {data.errorMessage ? (
+                <DefRow label="Error Message" full>
+                  <span style={{ color: 'var(--stamp)' }}>{data.errorMessage}</span>
+                </DefRow>
               ) : null}
-
-              <div className="mb-6 overflow-hidden rounded-lg bg-white shadow">
-                <div className="px-6 py-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900">{data.businessName}</h2>
-                      <p className="mt-1 text-sm text-gray-500">ABN: {data.abn}</p>
-                    </div>
-                    <div className="text-right"><StatusBadge status={data.status} big /></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div className="overflow-hidden rounded-lg bg-white shadow">
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-                    <h3 className="text-base font-semibold text-gray-900">Renewal Information</h3>
-                  </div>
-                  <div className="px-6 py-4">
-                    <dl className="space-y-4">
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Request ID</dt>
-                        <dd className="mt-1 text-sm text-gray-900 font-mono break-all">{data.id}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Initiated At</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{fmtDateTime(data.initiatedAt)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Initiated By</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{data.initiatedByLabel}</dd>
-                      </div>
-                      {data.completedAt ? (
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Completed At</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{fmtDateTime(data.completedAt)}</dd>
-                        </div>
-                      ) : null}
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Renewal Period</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{data.renewalYears} year{data.renewalYears > 1 ? 's' : ''}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Customer Email</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{data.email ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Mobile Number</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{data.mobileNumber ?? 'N/A'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Date of Birth</dt>
-                        <dd className="mt-1 text-sm text-gray-900">{data.dateOfBirth ? fmtDob(data.dateOfBirth) : 'N/A'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">IP Address</dt>
-                        <dd className="mt-1 text-sm text-gray-900 font-mono"><span>{data.ipAddress ?? '—'}</span></dd>
-                      </div>
-                    </dl>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-lg bg-white shadow">
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-                    <h3 className="text-base font-semibold text-gray-900">Payment Information</h3>
-                  </div>
-                  <div className="px-6 py-4">
-                    <dl className="space-y-4">
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Payment Type</dt>
-                        <dd className="mt-1">
-                          {data.paymentType === 'External'
-                            ? <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">External Payment</span>
-                            : <span className="inline-flex rounded-full bg-purple-100 px-2 text-xs font-semibold leading-5 text-purple-800">Stripe Payment</span>}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Amount</dt>
-                        <dd className="mt-1 text-lg font-semibold text-gray-900">${data.amount.toFixed(2)}</dd>
-                      </div>
-                      {data.stripePayment ? (
-                        <>
-                          <div>
-                            <dt className="text-sm font-medium text-gray-500">Stripe Payment Intent</dt>
-                            <dd className="mt-1 text-sm text-gray-900 font-mono break-all">{data.stripePayment.paymentIntentId}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-sm font-medium text-gray-500">Stripe Payment Status</dt>
-                            <dd className="mt-1">
-                              {data.stripePayment.paymentStatus === 'succeeded'
-                                ? <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Succeeded</span>
-                                : <span className="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">{data.stripePayment.paymentStatus}</span>}
-                            </dd>
-                          </div>
-                          {data.stripePayment.paidAt ? (
-                            <div>
-                              <dt className="text-sm font-medium text-gray-500">Paid At</dt>
-                              <dd className="mt-1 text-sm text-gray-900">{fmtDateTime(data.stripePayment.paidAt)}</dd>
-                            </div>
-                          ) : null}
-                        </>
-                      ) : null}
-                    </dl>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-lg bg-white shadow">
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-                    <h3 className="text-base font-semibold text-gray-900">ASIC Transaction Details</h3>
-                  </div>
-                  <div className="px-6 py-4">
-                    <dl className="space-y-4">
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Transaction Reference</dt>
-                        <dd className="mt-1 text-sm text-gray-900 font-mono">{data.transactionReference ?? 'N/A'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-sm font-medium text-gray-500">Hosted Tokenization ID</dt>
-                        <dd className="mt-1 text-sm text-gray-900 font-mono break-all">{data.hostedTokenizationId ?? 'N/A'}</dd>
-                      </div>
-                      {data.errorMessage ? (
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Error Message</dt>
-                          <dd className="mt-1 text-sm text-red-600">{data.errorMessage}</dd>
-                        </div>
-                      ) : null}
-                      {data.failedAtStep ? (
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Failed At Step</dt>
-                          <dd className="mt-1">
-                            <span className="inline-flex items-center rounded-md bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800">{data.failedAtStep}</span>
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                  </div>
-                </div>
-
-                {data.stripePayment?.cardLast4 ? (
-                  <div className="overflow-hidden rounded-lg bg-white shadow">
-                    <div className="border-b border-gray-200 bg-gray-50 px-6 py-3">
-                      <h3 className="text-base font-semibold text-gray-900">Customer Credit Card</h3>
-                    </div>
-                    <div className="px-6 py-4">
-                      <dl className="space-y-4">
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Cardholder Name</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{data.stripePayment.cardholderName ?? '—'}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Card Number</dt>
-                          <dd className="mt-1 text-sm text-gray-900 font-mono">**** **** **** {data.stripePayment.cardLast4}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Card Brand</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{data.stripePayment.cardBrand ?? '—'}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-sm font-medium text-gray-500">Expiry</dt>
-                          <dd className="mt-1 text-sm text-gray-900">{data.stripePayment.cardExpMonth}/{data.stripePayment.cardExpYear}</dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              {canRetry ? (
-                <div className="mt-6 flex justify-end">
-                  <button onClick={retry} disabled={isRetrying} className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                    {isRetrying ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Retrying...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                        </svg>
-                        <span>Retry Renewal</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+              {data.failedAtStep ? (
+                <DefRow label="Failed At Step">
+                  <span className="bureau-stamp bureau-stamp-fail">{data.failedAtStep}</span>
+                </DefRow>
               ) : null}
-            </>
-          )}
+            </DefList>
+          </Section>
+
+          {data.stripePayment?.cardLast4 ? (
+            <Section kicker="D" title="Customer Card on File">
+              <DefList>
+                <DefRow label="Cardholder">{data.stripePayment.cardholderName ?? '—'}</DefRow>
+                <DefRow label="Card Number" mono>**** **** **** {data.stripePayment.cardLast4}</DefRow>
+                <DefRow label="Brand">{data.stripePayment.cardBrand ?? '—'}</DefRow>
+                <DefRow label="Expiry">{data.stripePayment.cardExpMonth}/{data.stripePayment.cardExpYear}</DefRow>
+              </DefList>
+            </Section>
+          ) : null}
         </div>
-      </main>
-    </>
+
+        {canRetry ? (
+          <div className="flex justify-end border-t-2 border-[var(--ink)] pt-5">
+            <button onClick={retry} disabled={isRetrying} className="bureau-btn bureau-btn-primary">
+              {isRetrying ? <><span className="bureau-spin inline-block">↻</span> Retrying</> : '↻ Retry Renewal'}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </AdminPage>
   )
 }
