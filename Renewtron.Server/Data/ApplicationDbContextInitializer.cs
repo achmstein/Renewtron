@@ -46,12 +46,28 @@ public class ApplicationDbContextInitialiser
 
     public async Task TrySeedAsync()
     {
-        // Default users
-        var administrator = new AppUser { UserName = "admin@renewtron.com.au" };
+        const string email = "admin@renewtron.com.au";
+        const string password = "Administrator1!";
 
-        if (_userManager.Users.All(u => u.UserName != administrator.UserName))
+        var existing = await _userManager.FindByNameAsync(email);
+        if (existing is null)
         {
-            await _userManager.CreateAsync(administrator, "Administrator1!");
+            var administrator = new AppUser
+            {
+                UserName = email,
+                Email = email,
+                EmailConfirmed = true,
+            };
+            await _userManager.CreateAsync(administrator, password);
+        }
+        else if (string.IsNullOrEmpty(existing.Email))
+        {
+            // Patch users seeded by the previous initialiser, which set UserName only.
+            // Without an Email, Identity's /api/login (FindByEmailAsync) returns null
+            // and the operator can't sign in.
+            existing.Email = email;
+            existing.EmailConfirmed = true;
+            await _userManager.UpdateAsync(existing);
         }
     }
 }
