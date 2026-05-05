@@ -15,6 +15,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Writable overrides layer for runtime-mutable settings (e.g. AtoAgent default).
+// Lives outside the immutable container image so the SettingsService can persist
+// admin changes; reloadOnChange flushes IOptionsMonitor consumers automatically.
+var overridesPath = builder.Configuration["Storage:OverridesPath"]
+    ?? Path.Combine(builder.Environment.ContentRootPath, "settings.overrides.json");
+builder.Configuration.AddJsonFile(overridesPath, optional: true, reloadOnChange: true);
+
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddCarter();

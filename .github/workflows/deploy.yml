@@ -130,6 +130,10 @@ jobs:
               sudo usermod -aG docker ubuntu
             fi
             mkdir -p ${{ env.REMOTE_DIR }}
+            # Writable mount for SettingsService overrides. UID 1654 is the .NET
+            # nonroot user inside the published renewtron-server image.
+            mkdir -p ${{ env.REMOTE_DIR }}/data
+            sudo chown -R 1654:1654 ${{ env.REMOTE_DIR }}/data
           EOF
 
       - name: Copy compose files

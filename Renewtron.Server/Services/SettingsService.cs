@@ -14,7 +14,7 @@ public class SettingsService : ISettingsService
     private readonly IOptions<AsicSettings> _asicSettings;
     private readonly IOptions<OntraportSettings> _ontraportSettings;
     private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
-    private readonly IWebHostEnvironment _environment;
+    private readonly string _overridesPath;
 
     public SettingsService(
         IOptions<SendGridSettings> sendGridSettings,
@@ -23,6 +23,7 @@ public class SettingsService : ISettingsService
         IOptions<AsicSettings> asicSettings,
         IOptions<OntraportSettings> ontraportSettings,
         IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
+        IConfiguration configuration,
         IWebHostEnvironment environment)
     {
         _sendGridSettings = sendGridSettings;
@@ -31,7 +32,10 @@ public class SettingsService : ISettingsService
         _asicSettings = asicSettings;
         _ontraportSettings = ontraportSettings;
         _atoAgentSettings = atoAgentSettings;
-        _environment = environment;
+
+        // Match Program.cs: writable overrides file lives outside the image.
+        _overridesPath = configuration["Storage:OverridesPath"]
+            ?? Path.Combine(environment.ContentRootPath, "settings.overrides.json");
     }
 
     public Task<SendGridSettings> GetSendGridSettingsAsync()
@@ -96,37 +100,33 @@ public class SettingsService : ISettingsService
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)
     {
-        var appSettingsPath = Path.Combine(_environment.ContentRootPath, "appsettings.json");
-
-        // Read the existing JSON
-        var json = await File.ReadAllTextAsync(appSettingsPath);
-
-        // Parse as JsonNode for manipulation
-        var jsonNode = JsonNode.Parse(json);
-
-        if (jsonNode is JsonObject root)
+        // Load existing overrides if present, else start empty. We never touch
+        // appsettings.json — it ships inside the read-only container image.
+        JsonObject root;
+        if (File.Exists(_overridesPath))
         {
-            // Serialize the settings object to JSON with proper options
-            var serializerOptions = new JsonSerializerOptions
-            {
-                WriteIndented = false // We'll handle indentation at the root level
-            };
-
-            var settingsJson = JsonSerializer.Serialize(settings, serializerOptions);
-
-            // Parse the settings JSON and add to root
-            var settingsNode = JsonNode.Parse(settingsJson);
-            root[sectionName] = settingsNode;
-
-            // Write back with proper formatting using JsonSerializer
-            var writeOptions = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            };
-
-            var updatedJson = JsonSerializer.Serialize(root, writeOptions);
-            await File.WriteAllTextAsync(appSettingsPath, updatedJson);
+            var existing = await File.ReadAllTextAsync(_overridesPath);
+            root = (JsonNode.Parse(existing) as JsonObject) ?? new JsonObject();
         }
+        else
+        {
+            root = new JsonObject();
+            var dir = Path.GetDirectoryName(_overridesPath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+        }
+
+        var settingsJson = JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        {
+            WriteIndented = false
+        });
+        root[sectionName] = JsonNode.Parse(settingsJson);
+
+        var writeOptions = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        await File.WriteAllTextAsync(_overridesPath, JsonSerializer.Serialize(root, writeOptions));
     }
 }

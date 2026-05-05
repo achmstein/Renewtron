@@ -1,4 +1,5 @@
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
+using Aspire.Hosting.Docker.Resources.ServiceNodes;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -27,12 +28,22 @@ var server = builder.AddProject<Projects.Renewtron_Server>("renewtron-server")
     .WithReference(renewtronDb)
     .WaitFor(sql)
     .WithEnvironment("AtoApi__Url", atoApiUrl)
+    // Writable settings overrides land here. The volume is bind-mounted so admin
+    // edits to AtoAgent etc. survive container/image churn.
+    .WithEnvironment("Storage__OverridesPath", "/data/settings.overrides.json")
     .WithHttpHealthCheck("/health")
     .PublishAsDockerFile()
     .PublishAsDockerComposeService((_, service) =>
     {
         service.Restart = "unless-stopped";
         service.Ports.Clear(); // no host port — nginx in renewtron-web proxies internally
+        service.Volumes.Add(new Volume
+        {
+            Name = "renewtron-data",
+            Type = "bind",
+            Source = "./data",
+            Target = "/data"
+        });
     });
 
 if (builder.ExecutionContext.IsRunMode)
