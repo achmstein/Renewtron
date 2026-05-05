@@ -3,7 +3,7 @@ using Aspire.Hosting.Docker.Resources.ComposeNodes;
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddDockerComposeEnvironment("renewtron-compose")
-    .WithDashboard(dashboard => dashboard.WithHostPort(18889))
+    .WithDashboard(dashboard => dashboard.WithHostPort(18886))
     .ConfigureComposeFile(compose =>
     {
         compose.AddNetwork(new Network
