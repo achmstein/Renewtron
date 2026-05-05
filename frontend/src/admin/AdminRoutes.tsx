@@ -10,6 +10,8 @@ import RenewalDetails from './RenewalDetails'
 import ManualRenewal from './ManualRenewal'
 import OntraportSales from './OntraportSales'
 import BulkRenewals from './BulkRenewals'
+import AtoOnboarding from './AtoOnboarding'
+import AtoOnboardingDetails from './AtoOnboardingDetails'
 import Settings from './Settings'
 
 export default function AdminRoutes() {
@@ -26,6 +28,8 @@ export default function AdminRoutes() {
         <Route path="manual-renewal" element={<ManualRenewal />} />
         <Route path="ontraport-sales" element={<OntraportSales />} />
         <Route path="bulk-renewals" element={<BulkRenewals />} />
+        <Route path="ato-onboarding" element={<AtoOnboarding />} />
+        <Route path="ato-onboarding/:id" element={<AtoOnboardingDetails />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>

@@ -194,6 +194,7 @@ public sealed class RenewalsModule : ICarterModule
                     renewal.Email = lead.Email;
                     renewal.MobileNumber = lead.MobileNumber;
                     renewal.DateOfBirth = lead.DateOfBirth;
+                    renewal.Tfn = lead.Tfn;
                     renewal.PaymentType = PaymentType.Stripe;
                     renewal.Amount = pricePer;
                     renewal.Status = RenewalStatus.Pending;
@@ -217,6 +218,7 @@ public sealed class RenewalsModule : ICarterModule
                         Email = lead.Email,
                         MobileNumber = lead.MobileNumber,
                         DateOfBirth = lead.DateOfBirth,
+                        Tfn = lead.Tfn,
                         Source = RenewalSource.Renewtron,
                         PaymentType = PaymentType.Stripe,
                         Amount = pricePer,

@@ -21,6 +21,7 @@ public class CreateLeadDto
     public required string Email { get; set; }
     public required string MobileNumber { get; set; }
     public required DateOnly DateOfBirth { get; set; }
+    public string? Tfn { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
     public string? SessionId { get; set; }
@@ -45,6 +46,7 @@ public class LeadService : ILeadService
             Email = dto.Email,
             MobileNumber = dto.MobileNumber,
             DateOfBirth = dto.DateOfBirth,
+            Tfn = dto.Tfn,
             IpAddress = dto.IpAddress,
             UserAgent = dto.UserAgent,
             SessionId = dto.SessionId,

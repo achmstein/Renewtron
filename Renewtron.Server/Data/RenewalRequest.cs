@@ -14,6 +14,7 @@ public class RenewalRequest
     public string? Email { get; set; }
     public string? MobileNumber { get; set; }
     public DateOnly? DateOfBirth { get; set; }
+    public string? Tfn { get; set; }
 
     // Source tracking
     public RenewalSource Source { get; set; } = RenewalSource.Renewtron;
@@ -29,6 +30,12 @@ public class RenewalRequest
     public string? HostedTokenizationId { get; set; }
     public string? ErrorMessage { get; set; }
     public string? FailedAtStep { get; set; }
+
+    // ATO onboarding (populated after successful renewal for individuals with TFN)
+    public string? AtoOnboardingJobId { get; set; }
+    public string? AtoOnboardingStatus { get; set; }
+    public string? AtoOnboardingResultJson { get; set; }
+    public DateTime? AtoOnboardingCompletedAt { get; set; }
 
     // Navigation properties
     public SearchResult SearchResult { get; set; }

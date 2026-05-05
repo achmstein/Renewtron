@@ -13,12 +13,20 @@ namespace Renewtron.Modules;
 
 public sealed class LeadsModule : ICarterModule
 {
+    private static string? NormalizeTfn(string? tfn)
+    {
+        if (string.IsNullOrWhiteSpace(tfn)) return null;
+        var digits = new string(tfn.Where(char.IsDigit).ToArray());
+        return string.IsNullOrEmpty(digits) ? null : digits;
+    }
+
     public record CreateLeadRequest(
         string Abn,
         string FullName,
         string Email,
         string? MobileNumber,
         DateOnly DateOfBirth,
+        string? Tfn,
         Guid? SearchLogId);
 
     public void AddRoutes(IEndpointRouteBuilder app)
@@ -45,6 +53,7 @@ public sealed class LeadsModule : ICarterModule
                 Email = request.Email,
                 MobileNumber = request.MobileNumber ?? string.Empty,
                 DateOfBirth = request.DateOfBirth,
+                Tfn = NormalizeTfn(request.Tfn),
                 IpAddress = ip,
                 UserAgent = ua,
                 SessionId = httpContext.TraceIdentifier,

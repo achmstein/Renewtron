@@ -15,6 +15,7 @@ public class Lead
     public string Email { get; set; } = string.Empty;
     public string MobileNumber { get; set; } = string.Empty;
     public DateOnly DateOfBirth { get; set; }
+    public string? Tfn { get; set; }
 
     // Tracking
     public DateTime CreatedAt { get; set; }

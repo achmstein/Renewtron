@@ -11,6 +11,7 @@ const navItems: NavItem[] = [
   { to: '/admin/leads', label: 'Leads' },
   { to: '/admin/ontraport-sales', label: 'Ontraport' },
   { to: '/admin/bulk-renewals', label: 'Bulk Renewals' },
+  { to: '/admin/ato-onboarding', label: 'ATO Onboarding' },
   { to: '/admin/manual-renewal', label: 'Manual Renewal' },
   { to: '/admin/settings', label: 'Settings' },
 ]

@@ -90,7 +90,7 @@ export const api = {
   logout: () => apiFetch<void>('/api/logout', { method: 'POST' }),
 
   pricing: () => apiFetch<PricingResponse>('/api/pricing'),
-  createLead: (input: { abn: string; fullName: string; email: string; mobileNumber: string; dateOfBirth: string }) =>
+  createLead: (input: { abn: string; fullName: string; email: string; mobileNumber: string; dateOfBirth: string; tfn?: string }) =>
     apiFetch<{ leadId: string }>('/api/leads', { method: 'POST', body: JSON.stringify(input) }),
   getLead: (id: string) => apiFetch<LeadDto>(`/api/leads/${id}`),
   checkLead: (id: string) => apiFetch<CheckResponse>(`/api/leads/${id}/check`, { method: 'POST' }),
@@ -290,5 +290,51 @@ export const api = {
     updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: { apiAppId: string; apiKey: string; conversationId: string }) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
+
+    atoOnboarding: (params: { status?: string; search?: string; take?: number } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set('status', params.status)
+      if (params.search) qs.set('search', params.search)
+      if (params.take) qs.set('take', String(params.take))
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<{
+        totalCount: number
+        pendingCount: number
+        completedCount: number
+        failedCount: number
+        items: Array<{
+          renewalRequestId: string
+          leadId?: string | null
+          fullName?: string | null
+          email?: string | null
+          abn: string
+          businessName: string
+          initiatedAt: string
+          completedAt?: string | null
+          renewalStatus: string
+          atoJobId: string
+          atoStatus?: string | null
+          atoCompletedAt?: string | null
+        }>
+      }>(`/api/admin/ato-onboarding${suffix}`)
+    },
+    atoOnboardingDetail: (renewalId: string) => apiFetch<{
+      renewalRequestId: string
+      leadId?: string | null
+      fullName?: string | null
+      email?: string | null
+      mobileNumber?: string | null
+      dateOfBirth?: string | null
+      tfn?: string | null
+      abn?: string | null
+      businessName?: string | null
+      initiatedAt: string
+      completedAt?: string | null
+      renewalStatus: string
+      atoJobId: string
+      atoStatus?: string | null
+      atoCompletedAt?: string | null
+      atoResultJson?: string | null
+    }>(`/api/admin/ato-onboarding/${renewalId}`),
   },
 }
