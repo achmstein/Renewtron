@@ -57,7 +57,7 @@ else
             service.Restart = "unless-stopped";
             service.Ports.Clear();
             service.Networks.Add("caddy");
-            service.Labels["caddy"] = "businessnames.applyforanabn.au, www.businessnames.applyforanabn.au";
+            service.Labels["caddy"] = "businessnames.applyforanabn.au";
             service.Labels["caddy.reverse_proxy"] = "{{upstreams 80}}";
         });
 }
