@@ -209,8 +209,12 @@ public class OntraportConversationResponse
     [JsonPropertyName("data")]
     public ConversationData? Data { get; set; }
 
+    // Ontraport sends account_id as a JSON string ("12345"), not a number, so binding
+    // it to `int` blew up the whole deserializer mid-conversation-fetch and failed
+    // every renewal at "Process Payment". Match the rest of this file's ID fields
+    // (UserId, ContactId, etc.) which are all string?.
     [JsonPropertyName("account_id")]
-    public int AccountId { get; set; }
+    public string? AccountId { get; set; }
 }
 
 public class ConversationData
