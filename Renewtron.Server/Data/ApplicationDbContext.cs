@@ -13,6 +13,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Lead> Leads { get; set; }
     public DbSet<OntraportSale> OntraportSales { get; set; }
     public DbSet<BulkRenewalUpload> BulkRenewalUploads { get; set; }
+    public DbSet<OutboundMessage> OutboundMessages { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -151,6 +152,25 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(e => e.RenewalRequestId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<OutboundMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Template).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Subject).HasMaxLength(300);
+            entity.Property(e => e.Recipient).IsRequired().HasMaxLength(300);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+
+            entity.HasIndex(e => e.LeadId);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.BatchId);
+            entity.HasIndex(e => e.Status);
+
+            entity.HasOne(e => e.Lead)
+                .WithMany()
+                .HasForeignKey(e => e.LeadId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -81,6 +81,7 @@ builder.Services.AddOptions<AsicSettings>().BindConfiguration("Asic").ValidateDa
 builder.Services.AddOptions<PricingSettings>().BindConfiguration("Pricing").ValidateDataAnnotations();
 builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").ValidateDataAnnotations();
 builder.Services.AddOptions<AtoAgentSettings>().BindConfiguration("AtoAgent");
+builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -92,6 +93,7 @@ builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>(
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
 builder.Services.AddScoped<IAtoOnboardingService, AtoOnboardingService>();
+builder.Services.AddScoped<IWinBackService, WinBackService>();
 
 var atoApiUrl = builder.Configuration["AtoApi:Url"];
 if (string.IsNullOrWhiteSpace(atoApiUrl))

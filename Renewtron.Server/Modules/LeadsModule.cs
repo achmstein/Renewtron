@@ -229,14 +229,12 @@ public sealed class LeadsModule : ICarterModule
             string? outcome = null,
             string? reminder = null,
             string? search = null,
+            DateTime? dateFrom = null,
+            DateTime? dateTo = null,
+            string? hasRenewal = null,
             int take = 100) =>
         {
             take = Math.Clamp(take, 1, 500);
-
-            var totalCount = await db.Leads.CountAsync();
-            var convertedCount = await db.Leads.CountAsync(l => l.Outcome == LeadOutcome.RenewalCompleted);
-            var notDueCount = await db.Leads.CountAsync(l => l.Outcome == LeadOutcome.NotDueForRenewal);
-            var reminderCount = await db.Leads.CountAsync(l => l.ReminderOptIn);
 
             IQueryable<Lead> query = db.Leads.AsNoTracking();
             if (!string.IsNullOrEmpty(outcome) && Enum.TryParse<LeadOutcome>(outcome, out var oc))
@@ -254,6 +252,19 @@ public sealed class LeadsModule : ICarterModule
                     l.FullName.ToLower().Contains(term) ||
                     l.Email.ToLower().Contains(term));
             }
+            if (dateFrom.HasValue)
+                query = query.Where(l => l.CreatedAt >= dateFrom.Value.ToUniversalTime());
+            if (dateTo.HasValue)
+            {
+                var until = dateTo.Value.Date.AddDays(1).ToUniversalTime();
+                query = query.Where(l => l.CreatedAt < until);
+            }
+            if (hasRenewal == "true")
+                query = query.Where(l => l.RenewalRequests.Any());
+            else if (hasRenewal == "false")
+                query = query.Where(l => !l.RenewalRequests.Any());
+
+            var totalCount = await query.CountAsync();
 
             var items = await query
                 .OrderByDescending(l => l.CreatedAt)
@@ -269,16 +280,125 @@ public sealed class LeadsModule : ICarterModule
                     outcome = l.Outcome.ToString(),
                     reminderOptIn = l.ReminderOptIn,
                     convertedToRenewal = l.ConvertedToRenewal,
+                    convertedAt = l.ConvertedAt,
+                    searchLog = l.SearchLog == null ? null : new
+                    {
+                        id = l.SearchLog.Id,
+                        searchedAt = l.SearchLog.SearchedAt,
+                        success = l.SearchLog.Success,
+                        resultsCount = l.SearchLog.ResultsCount,
+                    },
+                    firstBusinessName = l.SearchLog == null
+                        ? null
+                        : l.SearchLog.Results.OrderBy(r => r.Id).Select(r => r.BusinessName).FirstOrDefault(),
+                    renewal = l.RenewalRequests
+                        .OrderByDescending(r => r.InitiatedAt)
+                        .Select(r => new { id = r.Id, status = r.Status.ToString(), amount = r.Amount })
+                        .FirstOrDefault(),
                 })
                 .ToListAsync();
+
+            // ─────────── Stats block (computed against the same filter) ───────────
+            var now = DateTime.UtcNow;
+            var thirtyDaysAgo = now.AddDays(-30);
+            var fourteenDaysAgo = now.Date.AddDays(-13).ToUniversalTime();
+            var todayStart = now.Date.ToUniversalTime();
+            var yesterdayStart = todayStart.AddDays(-1);
+
+            var totalAllTime = await db.Leads.AsNoTracking().CountAsync();
+
+            var thirty = await query
+                .Where(l => l.CreatedAt >= thirtyDaysAgo)
+                .GroupBy(l => 1)
+                .Select(g => new
+                {
+                    Total = g.Count(),
+                    Converted = g.Count(l => l.Outcome == LeadOutcome.RenewalCompleted),
+                })
+                .FirstOrDefaultAsync();
+            var total30d = thirty?.Total ?? 0;
+            var converted30d = thirty?.Converted ?? 0;
+            var conversionRate30d = total30d > 0 ? Math.Round((decimal)converted30d * 100m / total30d, 1) : 0m;
+
+            // Avg time-to-renewal (Lead.CreatedAt → first Completed RenewalRequest.CompletedAt)
+            decimal? avgHoursToConvert = null;
+            var convertedSamples = await db.Leads.AsNoTracking()
+                .Where(l => l.Outcome == LeadOutcome.RenewalCompleted
+                    && l.CreatedAt >= thirtyDaysAgo
+                    && l.RenewalRequests.Any(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null))
+                .Select(l => new
+                {
+                    l.CreatedAt,
+                    CompletedAt = l.RenewalRequests
+                        .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null)
+                        .OrderBy(r => r.CompletedAt)
+                        .Select(r => r.CompletedAt!.Value)
+                        .FirstOrDefault(),
+                })
+                .Take(500)
+                .ToListAsync();
+            if (convertedSamples.Count > 0)
+            {
+                var totalHours = convertedSamples.Sum(s => (s.CompletedAt - s.CreatedAt).TotalHours);
+                avgHoursToConvert = (decimal)Math.Round(totalHours / convertedSamples.Count, 1);
+            }
+
+            var todayCount = await query.CountAsync(l => l.CreatedAt >= todayStart);
+            var yesterdayCount = await query.CountAsync(l => l.CreatedAt >= yesterdayStart && l.CreatedAt < todayStart);
+
+            decimal? deltaPct = null;
+            if (yesterdayCount > 0)
+                deltaPct = Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1);
+
+            var dailyRaw = await query
+                .Where(l => l.CreatedAt >= fourteenDaysAgo)
+                .GroupBy(l => new { l.CreatedAt.Year, l.CreatedAt.Month, l.CreatedAt.Day })
+                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Count() })
+                .ToListAsync();
+            var dailyMap = dailyRaw.ToDictionary(d => new DateOnly(d.Year, d.Month, d.Day), d => d.Count);
+            var daily14d = Enumerable.Range(0, 14).Select(i =>
+            {
+                var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
+                return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
+            }).ToList();
+
+            var outcomeBreakdownRaw = await query
+                .GroupBy(l => l.Outcome)
+                .Select(g => new { Outcome = g.Key, Count = g.Count() })
+                .ToListAsync();
+            var outcomeBreakdown = outcomeBreakdownRaw.ToDictionary(b => b.Outcome.ToString(), b => b.Count);
+
+            var winBackEligible = await query.CountAsync(l =>
+                l.Outcome == LeadOutcome.RenewalAvailable && !l.ConvertedToRenewal && l.Email != null && l.Email != "");
+
+            // Average basket — used to estimate $ recoverable from win-back eligible leads
+            var basketStats = await db.RenewalRequests.AsNoTracking()
+                .Where(r => r.Status == RenewalStatus.Completed && r.Amount > 0)
+                .GroupBy(r => 1)
+                .Select(g => new { Count = g.Count(), Sum = g.Sum(r => r.Amount) })
+                .FirstOrDefaultAsync();
+            var avgBasket = basketStats != null && basketStats.Count > 0 ? basketStats.Sum / basketStats.Count : 79m;
 
             return Results.Ok(new
             {
                 totalCount,
-                convertedCount,
-                notDueCount,
-                reminderCount,
                 items,
+                stats = new
+                {
+                    totalAllTime,
+                    total30d,
+                    converted30d,
+                    conversionRate30d,
+                    avgHoursToConvert,
+                    today = todayCount,
+                    yesterday = yesterdayCount,
+                    deltaPct,
+                    daily14d,
+                    outcomeBreakdown,
+                    winBackEligible,
+                    winBackRecoverableValue = winBackEligible * avgBasket,
+                    avgBasket,
+                },
             });
         });
 

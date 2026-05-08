@@ -61,6 +61,16 @@ export interface RenewalStatusItem {
   errorMessage?: string | null
 }
 
+export type ActivityKind = 'paid' | 'lead-warm' | 'ato-ok' | 'ato-fail'
+export interface ActivityItem {
+  kind: ActivityKind
+  at: string
+  label: string | null
+  detail: string | null
+  amount: number | null
+  source: string | null
+}
+
 export interface DashboardResponse {
   stats: {
     totalSearches: number
@@ -76,7 +86,18 @@ export interface DashboardResponse {
     renewtronDirectRevenue: number
     ontraportCount: number
     ontraportRevenue: number
+    avgBasket: number
+    abandonedAtPaymentCount: number
+    abandonedAtPaymentValue: number
+    ontraportPipelineCount: number
+    ontraportPipelineValue: number
+    failedRenewalCount: number
+    failedRenewalValue: number
+    stuckAtoCount: number
+    pastCustomersDueSoonCount: number
+    pastCustomersDueSoonValue: number
   }
+  activity: ActivityItem[]
   recentSearches: Array<{ id: string; abn: string; searchedAt: string; success: boolean; resultsCount: number }>
   recentRenewals: Array<{ id: string; businessName: string | null; initiatedAt: string; status: string }>
 }
@@ -107,6 +128,7 @@ export const api = {
       asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }
       ontraport: { apiAppId: string; apiKey: string; conversationId: string }
       atoAgent: { defaultAgentAbn: string; defaultAgentName: string }
+      winBack: { subject: string; bodyPlain: string; bodyHtml: string }
     }>('/api/admin/settings'),
     atoAgents: () => apiFetch<{
       authenticated: boolean
@@ -114,13 +136,14 @@ export const api = {
       agents: Array<{ abn: string; name: string }>
       selectedAgentAbn?: string | null
     }>('/api/admin/settings/ato-agents'),
-    searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
+    searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
       if (params.success) qs.set('success', params.success)
       if (params.initiatedBy) qs.set('initiatedBy', params.initiatedBy)
       if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
       if (params.dateTo) qs.set('dateTo', params.dateTo)
+      if (params.includeSystem) qs.set('includeSystem', 'true')
       if (params.page) qs.set('page', String(params.page))
       if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''
@@ -128,7 +151,34 @@ export const api = {
         totalCount: number
         page: number
         pageSize: number
-        items: Array<{ id: string; abn: string; sessionId?: string | null; searchedAt: string; success: boolean; errorMessage?: string | null; resultsCount: number; initiatedBy: string; ipAddress?: string | null; hasRenewal: boolean }>
+        items: Array<{
+          id: string
+          abn: string
+          sessionId?: string | null
+          searchedAt: string
+          success: boolean
+          errorMessage?: string | null
+          resultsCount: number
+          initiatedBy: string
+          ipAddress?: string | null
+          hasRenewal: boolean
+          firstBusinessName?: string | null
+          lead?: { id: string; fullName: string; email: string; outcome: string; converted: boolean } | null
+          renewal?: { id: string; amount: number; status: string } | null
+          repeatCount7d: number
+        }>
+        stats: {
+          totalAllTime: number
+          total30d: number
+          success30d: number
+          successRate30d: number
+          conversions30d: number
+          conversionRate30d: number
+          today: number
+          yesterday: number
+          deltaPct: number | null
+          daily14d: Array<{ date: string; count: number }>
+        }
       }>(`/api/admin/searches${suffix}`)
     },
     search: (id: string) => apiFetch<{
@@ -151,21 +201,63 @@ export const api = {
         renewalRequest?: { id: string; status: string; initiatedAt: string; renewalYears: number; amount: number } | null
       }>
     }>(`/api/admin/searches/${id}`),
-    leads: (params: { outcome?: string; reminder?: string; search?: string; take?: number } = {}) => {
+    leads: (params: { outcome?: string; reminder?: string; search?: string; dateFrom?: string; dateTo?: string; hasRenewal?: string; take?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.outcome) qs.set('outcome', params.outcome)
       if (params.reminder) qs.set('reminder', params.reminder)
       if (params.search) qs.set('search', params.search)
+      if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
+      if (params.dateTo) qs.set('dateTo', params.dateTo)
+      if (params.hasRenewal) qs.set('hasRenewal', params.hasRenewal)
       if (params.take) qs.set('take', String(params.take))
       const suffix = qs.toString() ? `?${qs}` : ''
       return apiFetch<{
         totalCount: number
-        convertedCount: number
-        notDueCount: number
-        reminderCount: number
-        items: Array<{ id: string; abn: string; fullName: string; email: string; mobileNumber: string; createdAt: string; outcome: string; reminderOptIn: boolean; convertedToRenewal: boolean }>
+        items: Array<{
+          id: string
+          abn: string
+          fullName: string
+          email: string
+          mobileNumber: string
+          createdAt: string
+          outcome: string
+          reminderOptIn: boolean
+          convertedToRenewal: boolean
+          convertedAt?: string | null
+          searchLog?: { id: string; searchedAt: string; success: boolean; resultsCount: number } | null
+          firstBusinessName?: string | null
+          renewal?: { id: string; status: string; amount: number } | null
+        }>
+        stats: {
+          totalAllTime: number
+          total30d: number
+          converted30d: number
+          conversionRate30d: number
+          avgHoursToConvert: number | null
+          today: number
+          yesterday: number
+          deltaPct: number | null
+          daily14d: Array<{ date: string; count: number }>
+          outcomeBreakdown: Record<string, number>
+          winBackEligible: number
+          winBackRecoverableValue: number
+          avgBasket: number
+        }
       }>(`/api/admin/leads${suffix}`)
     },
+    winBackPreview: (body: { outcome?: string; reminderOptIn?: boolean; search?: string; createdFrom?: string; createdTo?: string }) =>
+      apiFetch<{
+        recipientCount: number
+        recoverableValue: number
+        sampleNames: string[]
+        subject: string
+        bodyPreview: string
+        avgBasket: number
+      }>('/api/admin/win-back/preview', { method: 'POST', body: JSON.stringify(body) }),
+    winBackSend: (body: { outcome?: string; reminderOptIn?: boolean; search?: string; createdFrom?: string; createdTo?: string }) =>
+      apiFetch<{ enqueued: number; batchId: string }>('/api/admin/win-back/send', { method: 'POST', body: JSON.stringify(body) }),
+    updateWinBack: (body: { subject: string; bodyPlain: string; bodyHtml: string }) =>
+      apiFetch<void>('/api/admin/settings/win-back', { method: 'PUT', body: JSON.stringify(body) }),
     lead: (id: string) => apiFetch<{
       id: string
       abn: string
@@ -192,11 +284,13 @@ export const api = {
       } | null
       renewalRequests: Array<{ id: string; status: string; amount: number; renewalYears: number; initiatedAt: string; businessName?: string | null }>
     }>(`/api/admin/leads/${id}`),
-    renewals: (params: { abn?: string; status?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
+    renewals: (params: { abn?: string; status?: string; initiatedBy?: string; source?: string; failedAtStep?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
       if (params.status) qs.set('status', params.status)
       if (params.initiatedBy) qs.set('initiatedBy', params.initiatedBy)
+      if (params.source) qs.set('source', params.source)
+      if (params.failedAtStep) qs.set('failedAtStep', params.failedAtStep)
       if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
       if (params.dateTo) qs.set('dateTo', params.dateTo)
       if (params.page) qs.set('page', String(params.page))
@@ -219,11 +313,39 @@ export const api = {
           completedAt?: string | null
           email?: string
           errorMessage?: string | null
+          failedAtStep?: string | null
           transactionReference?: string | null
           initiatedByLabel: string
           stripePaymentSucceeded: boolean
+          cardBrand?: string | null
+          cardLast4?: string | null
+          lead?: { id: string; fullName: string; email: string } | null
+          atoStatus?: string | null
+          timeInStatusHours: number
         }>
+        stats: {
+          successRate30d: number
+          completed30d: number
+          total30d: number
+          avgCompletionMinutes: number | null
+          revenueMtd: number
+          pipelineValue: number
+          failedValue30d: number
+          today: number
+          yesterday: number
+          deltaPct: number | null
+          daily14d: Array<{ date: string; count: number }>
+          failedAtStepBreakdown: Array<{ step: string; count: number }>
+        }
       }>(`/api/admin/renewals${suffix}`)
+    },
+    retryRenewalsBulk: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
+      if (params.dateTo) qs.set('dateTo', params.dateTo)
+      if (params.source) qs.set('source', params.source)
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<{ retried: number; skipped: number }>(`/api/admin/renewals/retry-bulk${suffix}`, { method: 'POST' })
     },
     renewal: (id: string) => apiFetch<{
       id: string
@@ -274,7 +396,16 @@ export const api = {
       queuedCount: number
       completedCount: number
       failedCount: number
-      items: Array<{ id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null }>
+      items: Array<{ id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }>
+      stats: {
+        pipelineValueNext30d: number
+        lastSyncAt: string | null
+        nextSyncAt: string | null
+        today: number
+        yesterday: number
+        deltaPct: number | null
+        daily14d: Array<{ date: string; count: number }>
+      }
     }>('/api/admin/ontraport-sales'),
     syncOntraport: () => apiFetch<{ syncedCount: number; message: string }>('/api/admin/ontraport-sales/sync', { method: 'POST' }),
     processEligibleOntraport: () => apiFetch<{ jobId: string; message: string }>('/api/admin/ontraport-sales/process-eligible', { method: 'POST' }),
@@ -285,8 +416,18 @@ export const api = {
       completedCount: number
       failedCount: number
       items: Array<{ id: string; businessName: string; abn: string; ownerName?: string; renewalYears: number; amount: number; status: string; uploadedAt: string; renewalDueDate?: string | null; sourceFile?: string; errorMessage?: string | null }>
+      stats: {
+        pipelineValueNext30d: number
+        lastUploadAt: string | null
+        today: number
+        yesterday: number
+        deltaPct: number | null
+        daily14d: Array<{ date: string; count: number }>
+        byBatch: Array<{ sourceFile: string; total: number; completed: number; failed: number; pipelineValue: number; lastUploadAt: string }>
+      }
     }>('/api/admin/bulk-renewals'),
     processEligibleBulk: () => apiFetch<{ jobId: string; message: string }>('/api/admin/bulk-renewals/process-eligible', { method: 'POST' }),
+    retryFailedBulk: () => apiFetch<{ retried: number }>('/api/admin/bulk-renewals/retry-failed', { method: 'POST' }),
     uploadBulkRenewals: (file: File) => {
       const form = new FormData()
       form.append('file', file)
@@ -323,9 +464,25 @@ export const api = {
           atoJobId: string
           atoStatus?: string | null
           atoCompletedAt?: string | null
+          timeInFlightHours?: number | null
         }>
+        stats: {
+          successRate30d: number
+          completed30d: number
+          total30d: number
+          avgOnboardingMinutes: number | null
+          stuck24h: number
+          today: number
+          yesterday: number
+          deltaPct: number | null
+          daily14d: Array<{ date: string; count: number }>
+        }
       }>(`/api/admin/ato-onboarding${suffix}`)
     },
+    retryAtoOnboarding: (renewalId: string) =>
+      apiFetch<{ message: string }>(`/api/admin/ato-onboarding/${renewalId}/retry`, { method: 'POST' }),
+    retryAllFailedAtoOnboarding: () =>
+      apiFetch<{ retried: number }>('/api/admin/ato-onboarding/retry-all-failed', { method: 'POST' }),
     atoOnboardingDetail: (renewalId: string) => apiFetch<{
       renewalRequestId: string
       leadId?: string | null

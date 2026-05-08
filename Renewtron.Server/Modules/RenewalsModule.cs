@@ -303,6 +303,8 @@ public sealed class RenewalsModule : ICarterModule
             string? abn = null,
             string? status = null,
             string? initiatedBy = null,
+            string? source = null,
+            string? failedAtStep = null,
             DateTime? dateFrom = null,
             DateTime? dateTo = null,
             int page = 1,
@@ -313,7 +315,8 @@ public sealed class RenewalsModule : ICarterModule
 
             IQueryable<RenewalRequest> query = db.RenewalRequests.AsNoTracking()
                 .Include(r => r.SearchResult).ThenInclude(s => s.SearchLog)
-                .Include(r => r.StripePayment);
+                .Include(r => r.StripePayment)
+                .Include(r => r.Lead);
 
             if (!string.IsNullOrWhiteSpace(abn))
                 query = query.Where(r => r.SearchResult.SearchLog.Abn.Contains(abn));
@@ -321,6 +324,10 @@ public sealed class RenewalsModule : ICarterModule
                 query = query.Where(r => r.Status == st);
             if (!string.IsNullOrWhiteSpace(initiatedBy) && Enum.TryParse<SearchInitiator>(initiatedBy, true, out var ini))
                 query = query.Where(r => r.SearchResult.SearchLog.InitiatedBy == ini);
+            if (!string.IsNullOrWhiteSpace(source) && Enum.TryParse<RenewalSource>(source, true, out var src))
+                query = query.Where(r => r.Source == src);
+            if (!string.IsNullOrWhiteSpace(failedAtStep))
+                query = query.Where(r => r.FailedAtStep == failedAtStep);
             if (dateFrom.HasValue)
                 query = query.Where(r => r.InitiatedAt >= dateFrom.Value);
             if (dateTo.HasValue)
@@ -330,6 +337,7 @@ public sealed class RenewalsModule : ICarterModule
             }
 
             var totalCount = await query.CountAsync();
+            var now = DateTime.UtcNow;
 
             var rows = await query
                 .OrderByDescending(r => r.InitiatedAt)
@@ -349,13 +357,172 @@ public sealed class RenewalsModule : ICarterModule
                     completedAt = r.CompletedAt,
                     email = r.Email,
                     errorMessage = r.ErrorMessage,
+                    failedAtStep = r.FailedAtStep,
                     transactionReference = r.TransactionReference,
                     initiatedByLabel = r.SearchResult.SearchLog.InitiatedBy.ToString(),
                     stripePaymentSucceeded = r.StripePayment != null && r.StripePayment.PaymentStatus == "succeeded",
+                    cardBrand = r.StripePayment != null ? r.StripePayment.CardBrand : null,
+                    cardLast4 = r.StripePayment != null ? r.StripePayment.CardLast4 : null,
+                    lead = r.Lead == null ? null : new { id = r.Lead.Id, fullName = r.Lead.FullName, email = r.Lead.Email },
+                    atoStatus = r.AtoOnboardingStatus,
                 })
                 .ToListAsync();
 
-            return Results.Ok(new { totalCount, page, pageSize, items = rows });
+            // Compute time-in-status in code (TimeSpan ops aren't translatable in EF).
+            var items = rows.Select(r => new
+            {
+                r.id, r.abn, r.businessName, r.renewalYears, r.amount, r.status, r.source,
+                r.paymentType, r.initiatedAt, r.completedAt, r.email, r.errorMessage, r.failedAtStep,
+                r.transactionReference, r.initiatedByLabel, r.stripePaymentSucceeded,
+                r.cardBrand, r.cardLast4, r.lead, r.atoStatus,
+                timeInStatusHours = r.completedAt.HasValue
+                    ? Math.Round((r.completedAt.Value - r.initiatedAt).TotalHours, 1)
+                    : Math.Round((now - r.initiatedAt).TotalHours, 1),
+            }).ToList();
+
+            // ─────────── Stats block (computed against the same filter where sensible) ───────────
+            var thirtyDaysAgo = now.AddDays(-30);
+            var fourteenDaysAgo = now.Date.AddDays(-13).ToUniversalTime();
+            var todayStart = now.Date.ToUniversalTime();
+            var yesterdayStart = todayStart.AddDays(-1);
+            var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            var thirty = await query
+                .Where(r => r.InitiatedAt >= thirtyDaysAgo)
+                .GroupBy(r => 1)
+                .Select(g => new
+                {
+                    Total = g.Count(),
+                    Completed = g.Count(r => r.Status == RenewalStatus.Completed),
+                })
+                .FirstOrDefaultAsync();
+            var total30d = thirty?.Total ?? 0;
+            var completed30d = thirty?.Completed ?? 0;
+            var successRate30d = total30d > 0 ? Math.Round((decimal)completed30d * 100m / total30d, 1) : 0m;
+
+            // Avg completion minutes — filtered Completed renewals from last 30d (sample)
+            var completionSamples = await query
+                .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null && r.CompletedAt >= thirtyDaysAgo)
+                .Select(r => new { r.InitiatedAt, CompletedAt = r.CompletedAt!.Value })
+                .Take(500)
+                .ToListAsync();
+            decimal? avgCompletionMinutes = null;
+            if (completionSamples.Count > 0)
+            {
+                var totalMinutes = completionSamples.Sum(s => (s.CompletedAt - s.InitiatedAt).TotalMinutes);
+                avgCompletionMinutes = (decimal)Math.Round(totalMinutes / completionSamples.Count, 1);
+            }
+
+            // Revenue MTD (filtered, completed, this month)
+            var revenueMtd = await query
+                .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null && r.CompletedAt >= monthStart)
+                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
+
+            // Pipeline value (filtered, in-flight)
+            var pipelineValue = await query
+                .Where(r => r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)
+                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
+
+            // Failed value (filtered, last 30d)
+            var failedValue30d = await query
+                .Where(r => r.Status == RenewalStatus.Failed && r.InitiatedAt >= thirtyDaysAgo)
+                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
+
+            var todayCount = await query.CountAsync(r => r.InitiatedAt >= todayStart);
+            var yesterdayCount = await query.CountAsync(r => r.InitiatedAt >= yesterdayStart && r.InitiatedAt < todayStart);
+            decimal? deltaPct = null;
+            if (yesterdayCount > 0)
+                deltaPct = Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1);
+
+            var dailyRaw = await query
+                .Where(r => r.InitiatedAt >= fourteenDaysAgo)
+                .GroupBy(r => new { r.InitiatedAt.Year, r.InitiatedAt.Month, r.InitiatedAt.Day })
+                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Count() })
+                .ToListAsync();
+            var dailyMap = dailyRaw.ToDictionary(d => new DateOnly(d.Year, d.Month, d.Day), d => d.Count);
+            var daily14d = Enumerable.Range(0, 14).Select(i =>
+            {
+                var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
+                return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
+            }).ToList();
+
+            // Top failed-at-step values in last 30d (filter-respecting)
+            var failedSteps = await query
+                .Where(r => r.Status == RenewalStatus.Failed && r.InitiatedAt >= thirtyDaysAgo && r.FailedAtStep != null)
+                .GroupBy(r => r.FailedAtStep)
+                .Select(g => new { Step = g.Key, Count = g.Count() })
+                .OrderByDescending(g => g.Count)
+                .Take(3)
+                .ToListAsync();
+
+            return Results.Ok(new
+            {
+                totalCount,
+                page,
+                pageSize,
+                items,
+                stats = new
+                {
+                    successRate30d,
+                    completed30d,
+                    total30d,
+                    avgCompletionMinutes,
+                    revenueMtd,
+                    pipelineValue,
+                    failedValue30d,
+                    today = todayCount,
+                    yesterday = yesterdayCount,
+                    deltaPct,
+                    daily14d,
+                    failedAtStepBreakdown = failedSteps.Select(s => new { step = s.Step, count = s.Count }).ToList(),
+                },
+            });
+        });
+
+        admin.MapPost("/retry-bulk", async (
+            ApplicationDbContext db,
+            IBackgroundJobClient jobs,
+            DateTime? dateFrom = null,
+            DateTime? dateTo = null,
+            string? source = null) =>
+        {
+            IQueryable<RenewalRequest> q = db.RenewalRequests
+                .Include(r => r.StripePayment)
+                .Where(r => r.Status == RenewalStatus.Failed);
+
+            if (dateFrom.HasValue) q = q.Where(r => r.InitiatedAt >= dateFrom.Value);
+            if (dateTo.HasValue)
+            {
+                var dt = dateTo.Value.AddDays(1);
+                q = q.Where(r => r.InitiatedAt < dt);
+            }
+            if (!string.IsNullOrWhiteSpace(source) && Enum.TryParse<RenewalSource>(source, true, out var src))
+                q = q.Where(r => r.Source == src);
+
+            var candidates = await q.ToListAsync();
+            var retried = 0;
+            var skipped = 0;
+
+            foreach (var renewal in candidates)
+            {
+                // Same eligibility as per-row /retry: Stripe payments must have succeeded;
+                // External renewals are always eligible to retry the ASIC step.
+                if (renewal.PaymentType == PaymentType.Stripe &&
+                    (renewal.StripePayment is null || renewal.StripePayment.PaymentStatus != "succeeded"))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                renewal.Status = RenewalStatus.Pending;
+                renewal.ErrorMessage = null;
+                renewal.FailedAtStep = null;
+                jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
+                retried++;
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { retried, skipped });
         });
 
         admin.MapGet("/{id:guid}", async (Guid id, ApplicationDbContext db) =>

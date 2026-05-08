@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 
@@ -13,23 +14,104 @@
 
     body {
         margin: 0;
-        font-family: 'Inter', system-ui, sans-serif;
-        font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+        font-feature-settings: "cv11" on, "ss01" on, "cv02" on, "cv03" on, "cv04" on;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
         background: #F7F9FC;
         color: #111827;
+    }
+
+    code, pre, .font-mono {
+        font-feature-settings: "liga" off, "calt" off, "zero" on;
+    }
+
+    .tabular-nums {
+        font-variant-numeric: tabular-nums;
+    }
+
+    ::selection {
+        background: rgb(0 82 164 / 0.18);
+    }
+
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgb(228 228 231);
+        border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgb(212 212 216);
+    }
+
+    .scrollbar-dark::-webkit-scrollbar-thumb {
+        background: rgb(63 63 70);
+    }
+    .scrollbar-dark::-webkit-scrollbar-thumb:hover {
+        background: rgb(82 82 91);
     }
 }
 
 @theme {
-    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-display: 'Space Mono', 'JetBrains Mono', ui-monospace, monospace;
+
+    --text-xxs: 0.6875rem;
+    --text-xxs--line-height: 1rem;
+
+    /* Brand palette — matches the home/wizard primary (#0052A4 navy blue).
+       Used for admin accents: kickers, primary CTAs, links, sparklines, active states.
+       Status pills (success/failure) intentionally keep their semantic emerald/red/amber. */
+    --color-brand-50:  #EAF2FA;
+    --color-brand-100: #CFE1F3;
+    --color-brand-200: #A3C5E6;
+    --color-brand-300: #6FA1D2;
+    --color-brand-400: #3478BF;
+    --color-brand-500: #0052A4;
+    --color-brand-600: #00468C;
+    --color-brand-700: #003D7A;
+    --color-brand-800: #002A5C;
+    --color-brand-900: #001F44;
+
     --color-brand: #0052A4;
     --color-brand-dark: #003D7A;
     --color-brand-light: #E8F1FA;
     --color-page-bg: #F7F9FC;
     --color-nav-text: #4A5568;
 }
+
+/* ------------------------------------------------------------------ */
+/* Motion — fade-in on page load, pulse-ring for awaiting state        */
+/* ------------------------------------------------------------------ */
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+    animation: fade-in-up 240ms ease-out both;
+}
+
+@keyframes pulse-ring-brand {
+    0% { box-shadow: 0 0 0 0 rgba(0, 82, 164, 0.45); }
+    70% { box-shadow: 0 0 0 22px rgba(0, 82, 164, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 82, 164, 0); }
+}
+.pulse-ring {
+    animation: pulse-ring-brand 2.2s cubic-bezier(0.66, 0, 0, 1) infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar nav active edge bar — brand blue                           */
+/* ------------------------------------------------------------------ */
+.nav-link.active .nav-edge { opacity: 1; }
+.nav-link.active svg { color: rgb(111 161 210); }
 
 .gov-banner { background: #003D7A; padding: 8px 0; }
 

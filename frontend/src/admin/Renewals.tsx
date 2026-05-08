@@ -1,34 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { ErrorModal, FilterChip, FilterPopover, IconCards, IconFilter, IconRefresh, IconTable, Pagination, ViewToggle } from './_components'
+import { ErrorModal, FilterPopover, Pagination } from './_components'
+import { Chip, EmptyState, Field, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, Toast, ViewToggle, type Tone } from './_ui'
+import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 
-type Renewal = Awaited<ReturnType<typeof api.admin.renewals>>['items'][number]
+type RenewalsResponse = Awaited<ReturnType<typeof api.admin.renewals>>
+type Renewal = RenewalsResponse['items'][number]
+type Stats = RenewalsResponse['stats']
 
 type ViewMode = 'Table' | 'Cards'
 const PAGE_SIZE = 10
 
-function fmtDate(s: string) { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) }
-function fmtTime(s: string) { return new Date(s).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) }
 function fmtDateRange(s: string) { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) }
-
-function StatusBadge({ r, onError }: { r: Renewal; onError: (msg: string) => void }) {
-  if (r.status === 'Completed') return <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">Completed</span>
-  if (r.status === 'Processing') return <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">Processing</span>
-  if (r.status === 'Pending') return <span className="inline-flex rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-semibold text-yellow-800">Pending</span>
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800">Failed</span>
-      {r.errorMessage ? (
-        <button onClick={() => onError(r.errorMessage ?? '')} className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-red-100 text-red-600 hover:bg-red-200" title="View error details">
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-        </button>
-      ) : null}
-    </div>
-  )
-}
 
 function canRetry(r: Renewal) {
   return r.status === 'Failed' && ((r.paymentType === 'Stripe' && r.stripePaymentSucceeded) || r.paymentType === 'External')
@@ -37,12 +22,14 @@ function canRetry(r: Renewal) {
 export default function Renewals() {
   const [viewMode, setViewMode] = useState<ViewMode>('Table')
   const [page, setPage] = useState(1)
-  const [data, setData] = useState<{ totalCount: number; items: Renewal[] } | null>(null)
+  const [data, setData] = useState<RenewalsResponse | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const [filterAbn, setFilterAbn] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterInitiatedBy, setFilterInitiatedBy] = useState('')
+  const [filterSource, setFilterSource] = useState('')
+  const [filterFailedAtStep, setFilterFailedAtStep] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
 
@@ -50,13 +37,20 @@ export default function Renewals() {
   const [tempAbn, setTempAbn] = useState('')
   const [tempStatus, setTempStatus] = useState('')
   const [tempInitiatedBy, setTempInitiatedBy] = useState('')
+  const [tempSource, setTempSource] = useState('')
   const [tempDateFrom, setTempDateFrom] = useState('')
   const [tempDateTo, setTempDateTo] = useState('')
 
   const [retryingId, setRetryingId] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const [bulkRetryConfirm, setBulkRetryConfirm] = useState(false)
+  const [bulkRetrying, setBulkRetrying] = useState(false)
+  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
   const [errorModal, setErrorModal] = useState<string | null>(null)
+
+  const showToast = (tone: Tone, message: string) => {
+    setToast({ tone, message })
+    setTimeout(() => setToast(null), 4000)
+  }
 
   const load = useMemo(() => async () => {
     setIsRefreshing(true)
@@ -65,16 +59,18 @@ export default function Renewals() {
         abn: filterAbn || undefined,
         status: filterStatus || undefined,
         initiatedBy: filterInitiatedBy || undefined,
+        source: filterSource || undefined,
+        failedAtStep: filterFailedAtStep || undefined,
         dateFrom: filterDateFrom || undefined,
         dateTo: filterDateTo || undefined,
         page,
         pageSize: PAGE_SIZE,
       })
-      setData({ totalCount: r.totalCount, items: r.items })
+      setData(r)
     } finally {
       setIsRefreshing(false)
     }
-  }, [filterAbn, filterStatus, filterInitiatedBy, filterDateFrom, filterDateTo, page])
+  }, [filterAbn, filterStatus, filterInitiatedBy, filterSource, filterFailedAtStep, filterDateFrom, filterDateTo, page])
 
   useEffect(() => { void load() }, [load])
 
@@ -94,287 +90,502 @@ export default function Renewals() {
 
   const totalCount = data?.totalCount ?? 0
   const renewals = data?.items ?? []
+  const stats: Stats = data?.stats ?? defaultStats()
 
-  const activeFilterCount = [filterAbn, filterStatus, filterInitiatedBy, filterDateFrom, filterDateTo].filter(Boolean).length
+  const activeFilterCount = [filterAbn, filterStatus, filterInitiatedBy, filterSource, filterFailedAtStep, filterDateFrom, filterDateTo].filter(Boolean).length
   const hasActiveFilters = activeFilterCount > 0
 
   const openPopover = () => {
-    setTempAbn(filterAbn); setTempStatus(filterStatus); setTempInitiatedBy(filterInitiatedBy); setTempDateFrom(filterDateFrom); setTempDateTo(filterDateTo)
+    setTempAbn(filterAbn); setTempStatus(filterStatus); setTempInitiatedBy(filterInitiatedBy); setTempSource(filterSource); setTempDateFrom(filterDateFrom); setTempDateTo(filterDateTo)
     setShowPopover(true)
   }
   const applyAndClose = () => {
     setPage(1)
-    setFilterAbn(tempAbn); setFilterStatus(tempStatus); setFilterInitiatedBy(tempInitiatedBy); setFilterDateFrom(tempDateFrom); setFilterDateTo(tempDateTo)
+    setFilterAbn(tempAbn); setFilterStatus(tempStatus); setFilterInitiatedBy(tempInitiatedBy); setFilterSource(tempSource); setFilterDateFrom(tempDateFrom); setFilterDateTo(tempDateTo)
     setShowPopover(false)
   }
   const clearAndClose = () => {
     setPage(1)
-    setTempAbn(''); setTempStatus(''); setTempInitiatedBy(''); setTempDateFrom(''); setTempDateTo('')
-    setFilterAbn(''); setFilterStatus(''); setFilterInitiatedBy(''); setFilterDateFrom(''); setFilterDateTo('')
+    setTempAbn(''); setTempStatus(''); setTempInitiatedBy(''); setTempSource(''); setTempDateFrom(''); setTempDateTo('')
+    setFilterAbn(''); setFilterStatus(''); setFilterInitiatedBy(''); setFilterSource(''); setFilterDateFrom(''); setFilterDateTo('')
     setShowPopover(false)
   }
   const clearAll = () => {
     setPage(1)
-    setFilterAbn(''); setFilterStatus(''); setFilterInitiatedBy(''); setFilterDateFrom(''); setFilterDateTo('')
+    setFilterAbn(''); setFilterStatus(''); setFilterInitiatedBy(''); setFilterSource(''); setFilterFailedAtStep(''); setFilterDateFrom(''); setFilterDateTo('')
   }
 
-  const retry = async (id: string) => {
-    setRetryingId(id); setSuccessMessage(''); setErrorMessage('')
+  const retryOne = async (id: string) => {
+    setRetryingId(id)
     try {
       const r = await api.admin.retryRenewal(id)
-      setSuccessMessage(r.message)
+      showToast('emerald', r.message ?? 'Renewal queued for retry.')
       await load()
     } catch (e) {
-      setErrorMessage(e instanceof Error ? e.message : 'Retry failed')
+      showToast('red', e instanceof Error ? e.message : 'Retry failed')
     } finally {
       setRetryingId(null)
     }
   }
 
-  const isRetrying = retryingId !== null
+  const retryAllFailed = async () => {
+    setBulkRetrying(true)
+    try {
+      const r = await api.admin.retryRenewalsBulk({
+        dateFrom: filterDateFrom || undefined,
+        dateTo: filterDateTo || undefined,
+        source: filterSource || undefined,
+      })
+      showToast('emerald', `Queued ${r.retried} for retry${r.skipped > 0 ? ` (${r.skipped} skipped — Stripe payment didn't succeed)` : ''}.`)
+      setBulkRetryConfirm(false)
+      await load()
+    } catch (e) {
+      showToast('red', e instanceof Error ? e.message : 'Bulk retry failed')
+    } finally {
+      setBulkRetrying(false)
+    }
+  }
 
   return (
-    <>
-      <header className="relative bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <h1 className="text-lg/6 font-semibold text-gray-900">Renewal Requests</h1>
-          <p className="mt-1 text-sm text-gray-500">All renewal requests across origins — customer checkout, admin manual, Ontraport, and bulk uploads.</p>
-        </div>
-      </header>
-
-      <main>
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {successMessage ? (
-            <div className="mb-4 rounded-md bg-green-50 p-4">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3"><p className="text-sm font-medium text-green-800">{successMessage}</p></div>
-              </div>
-            </div>
-          ) : null}
-          {errorMessage ? (
-            <div className="mb-4 rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3"><p className="text-sm font-medium text-red-800">{errorMessage}</p></div>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Header */}
-          <div className="mb-6 rounded-lg bg-white shadow">
-            <div className="px-4 py-5 sm:px-6 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium leading-6 text-gray-900">All Renewal Requests</h3>
-                <p className="mt-1 text-sm text-gray-500">{totalCount} total renewals</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <ViewToggle<ViewMode> value={viewMode} onChange={setViewMode} options={[
-                  { value: 'Table', icon: <IconTable />, label: 'Table' },
-                  { value: 'Cards', icon: <IconCards />, label: 'Cards' },
-                ]} />
-
-                <div className="relative">
-                  <button onClick={() => (showPopover ? setShowPopover(false) : openPopover())} className={`${showPopover ? 'bg-gray-100' : 'bg-white'} inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50`}>
-                    <IconFilter />
-                    Filters {hasActiveFilters ? `(${activeFilterCount})` : ''}
-                  </button>
-                  <FilterPopover open={showPopover} onClose={() => setShowPopover(false)} title="Filter Renewals">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">ABN</label>
-                        <input type="text" value={tempAbn} onChange={(e) => setTempAbn(e.target.value)} placeholder="Search ABN" className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                        <select value={tempStatus} onChange={(e) => setTempStatus(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2">
-                          <option value="">All Statuses</option>
-                          <option value="Pending">Pending</option>
-                          <option value="Processing">Processing</option>
-                          <option value="Completed">Completed</option>
-                          <option value="Failed">Failed</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Initiated By</label>
-                        <select value={tempInitiatedBy} onChange={(e) => setTempInitiatedBy(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2">
-                          <option value="">All</option>
-                          <option value="Customer">Customer</option>
-                          <option value="Admin">Admin</option>
-                          <option value="System">System (Ontraport/Bulk)</option>
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">From Date</label>
-                          <input type="date" value={tempDateFrom} onChange={(e) => setTempDateFrom(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2" />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">To Date</label>
-                          <input type="date" value={tempDateTo} onChange={(e) => setTempDateTo(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm px-3 py-2" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      <button onClick={applyAndClose} className="flex-1 inline-flex justify-center items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">Apply</button>
-                      <button onClick={clearAndClose} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Clear</button>
-                    </div>
-                  </FilterPopover>
-                </div>
-
-                <button onClick={() => void load()} disabled={isRefreshing} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
-                  <IconRefresh spinning={isRefreshing} />
-                </button>
-              </div>
-            </div>
-
-            {hasActiveFilters ? (
-              <div className="px-4 pb-4 sm:px-6 flex flex-wrap gap-2">
-                {filterAbn ? <FilterChip label={`ABN: ${filterAbn}`} onRemove={() => { setPage(1); setFilterAbn('') }} /> : null}
-                {filterStatus ? <FilterChip label={`Status: ${filterStatus}`} onRemove={() => { setPage(1); setFilterStatus('') }} /> : null}
-                {filterInitiatedBy ? <FilterChip label={`Initiated By: ${filterInitiatedBy}`} onRemove={() => { setPage(1); setFilterInitiatedBy('') }} /> : null}
-                {filterDateFrom ? <FilterChip label={`From: ${fmtDateRange(filterDateFrom)}`} onRemove={() => { setPage(1); setFilterDateFrom('') }} /> : null}
-                {filterDateTo ? <FilterChip label={`To: ${fmtDateRange(filterDateTo)}`} onRemove={() => { setPage(1); setFilterDateTo('') }} /> : null}
-                <button onClick={clearAll} className="inline-flex items-center gap-x-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200">Clear all</button>
-              </div>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <PageHeader
+        kicker="OPS"
+        title="Renewal requests"
+        subtitle="All renewals across origins — customer checkout, admin, Ontraport, bulk."
+        right={
+          <>
+            {stats.failedValue30d > 0 ? (
+              <button
+                type="button"
+                onClick={() => setBulkRetryConfirm(true)}
+                className="inline-flex items-center gap-2 rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm transition"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                Retry all failed
+                <span className="ml-0.5 inline-flex items-center justify-center rounded bg-white/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{fmtMoney0(stats.failedValue30d)}</span>
+              </button>
             ) : null}
-          </div>
-
-          {viewMode === 'Cards' ? (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {renewals.map((r) => (
-                <div key={r.id} className={`overflow-hidden rounded-lg bg-white shadow hover:shadow-lg transition-shadow border-l-4 ${r.status === 'Completed' ? 'border-green-500' : r.status === 'Failed' ? 'border-red-500' : 'border-yellow-500'}`}>
-                  <div className="px-4 py-5 sm:p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-base font-semibold text-gray-900">{r.businessName}</h3>
-                        <p className="text-sm text-gray-500 mt-1">ABN: {r.abn}</p>
-                      </div>
-                      <div><StatusBadge r={r} onError={setErrorModal} /></div>
-                    </div>
-
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                      <div>
-                        <dt className="text-gray-500">Date &amp; Time</dt>
-                        <dd className="mt-1 font-medium text-gray-900">{fmtDate(r.initiatedAt)}</dd>
-                        <dd className="text-xs text-gray-500">{fmtTime(r.initiatedAt)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-gray-500">Amount</dt>
-                        <dd className="mt-1 font-medium text-gray-900">${r.amount.toFixed(2)}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-gray-500">Initiated By</dt>
-                        <dd className="mt-1 text-gray-900">{r.initiatedByLabel}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-gray-500">Renewal Period</dt>
-                        <dd className="mt-1 font-medium text-gray-900">{r.renewalYears} {r.renewalYears === 1 ? 'Year' : 'Years'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-gray-500">Email</dt>
-                        <dd className="mt-1 text-gray-900 truncate">{r.email ?? '—'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-gray-500">Transaction Reference</dt>
-                        <dd className="mt-1 font-mono text-xs text-gray-900">{r.transactionReference ?? 'N/A'}</dd>
-                      </div>
-                    </dl>
-
-                    <div className="mt-4 flex items-center justify-end gap-2 pt-4 border-t border-gray-200">
-                      <Link to={`/admin/renewals/${r.id}`} className="inline-flex items-center rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
-                        <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        View Details
-                      </Link>
-                      {canRetry(r) ? (
-                        <button onClick={() => retry(r.id)} disabled={isRetrying} className="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                          {retryingId === r.id ? (
-                            <>
-                              <svg className="animate-spin h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              <span>Retrying...</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                              </svg>
-                              <span>Retry</span>
-                            </>
-                          )}
-                        </button>
-                      ) : null}
-                    </div>
+            <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
+            <div className="relative">
+              <button
+                onClick={() => (showPopover ? setShowPopover(false) : openPopover())}
+                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset transition ${
+                  hasActiveFilters
+                    ? 'bg-brand-50 text-brand-800 ring-brand-200 hover:bg-brand-100'
+                    : 'bg-white text-zinc-700 ring-zinc-300 hover:bg-zinc-50'
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+                </svg>
+                Filters
+                {hasActiveFilters ? <span className="ml-0.5 inline-flex items-center justify-center rounded bg-brand-600 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{activeFilterCount}</span> : null}
+              </button>
+              <FilterPopover open={showPopover} onClose={() => setShowPopover(false)} title="Filter renewals">
+                <div className="space-y-3">
+                  <Field label="ABN">
+                    <input type="text" value={tempAbn} onChange={(e) => setTempAbn(e.target.value)} placeholder="11 digits" className="block w-full rounded-md border-zinc-300 text-sm font-mono tabular-nums shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2" />
+                  </Field>
+                  <Field label="Status">
+                    <select value={tempStatus} onChange={(e) => setTempStatus(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2">
+                      <option value="">All</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Processing">Processing</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Failed">Failed</option>
+                    </select>
+                  </Field>
+                  <Field label="Source">
+                    <select value={tempSource} onChange={(e) => setTempSource(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2">
+                      <option value="">All sources</option>
+                      <option value="Renewtron">Renewtron direct</option>
+                      <option value="Ontraport">Ontraport</option>
+                      <option value="BulkUpload">Bulk upload</option>
+                    </select>
+                  </Field>
+                  <Field label="Initiated by">
+                    <select value={tempInitiatedBy} onChange={(e) => setTempInitiatedBy(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2">
+                      <option value="">All</option>
+                      <option value="Customer">Customer</option>
+                      <option value="Admin">Admin</option>
+                      <option value="System">System</option>
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="From">
+                      <input type="date" value={tempDateFrom} onChange={(e) => setTempDateFrom(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm font-mono tabular-nums shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2" />
+                    </Field>
+                    <Field label="To">
+                      <input type="date" value={tempDateTo} onChange={(e) => setTempDateTo(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm font-mono tabular-nums shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2" />
+                    </Field>
                   </div>
                 </div>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={applyAndClose} className="flex-1 inline-flex justify-center items-center rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition">Apply</button>
+                  <button onClick={clearAndClose} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 transition">Clear</button>
+                </div>
+              </FilterPopover>
+            </div>
+            <RefreshButton onClick={() => void load()} busy={isRefreshing} />
+          </>
+        }
+      />
+
+      <StatsStrip stats={stats} />
+
+      {/* Top failure reasons */}
+      {stats.failedAtStepBreakdown.length > 0 ? (
+        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">FAILURE REASONS · 30D</div>
+              <div className="text-sm text-zinc-500">Click a reason to filter the list.</div>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {stats.failedAtStepBreakdown.map((s) => (
+              <button
+                key={s.step}
+                onClick={() => { setPage(1); setFilterFailedAtStep(filterFailedAtStep === s.step ? '' : s.step); setFilterStatus('Failed') }}
+                className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ring-1 ring-inset transition ${
+                  filterFailedAtStep === s.step
+                    ? 'bg-red-50 text-red-800 ring-red-200'
+                    : 'bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50'
+                }`}
+              >
+                <span className="font-mono">{s.step}</span>
+                <span className="font-mono tabular-nums text-zinc-500">{s.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Active filter chips */}
+      {hasActiveFilters ? (
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          {filterAbn ? <Chip label={`ABN ${filterAbn}`} onRemove={() => { setPage(1); setFilterAbn('') }} /> : null}
+          {filterStatus ? <Chip label={`Status ${filterStatus}`} onRemove={() => { setPage(1); setFilterStatus('') }} /> : null}
+          {filterSource ? <Chip label={`Source ${filterSource}`} onRemove={() => { setPage(1); setFilterSource('') }} /> : null}
+          {filterFailedAtStep ? <Chip label={`Failed at ${filterFailedAtStep}`} onRemove={() => { setPage(1); setFilterFailedAtStep('') }} /> : null}
+          {filterInitiatedBy ? <Chip label={`By ${filterInitiatedBy}`} onRemove={() => { setPage(1); setFilterInitiatedBy('') }} /> : null}
+          {filterDateFrom ? <Chip label={`From ${fmtDateRange(filterDateFrom)}`} onRemove={() => { setPage(1); setFilterDateFrom('') }} /> : null}
+          {filterDateTo ? <Chip label={`To ${fmtDateRange(filterDateTo)}`} onRemove={() => { setPage(1); setFilterDateTo('') }} /> : null}
+          <button onClick={clearAll} className="text-xs font-medium text-zinc-600 hover:text-zinc-900 px-2">Clear all</button>
+        </div>
+      ) : null}
+
+      <div className="mt-6">
+        {viewMode === 'Cards' ? (
+          renewals.length === 0 ? (
+            <EmptyState title="No renewals match the current filters." />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {renewals.map((r) => (
+                <RenewalCard key={r.id} r={r} onError={setErrorModal} onRetry={retryOne} retrying={retryingId === r.id} />
               ))}
             </div>
-          ) : (
-            <div className="overflow-hidden rounded-lg bg-white shadow">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Business/ABN</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Period</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Initiated By</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {renewals.map((r) => (
-                    <tr key={r.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{r.businessName}</div>
-                        <div className="text-sm text-gray-500">ABN: {r.abn}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4">
-                        <StatusBadge r={r} onError={setErrorModal} />
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">${r.amount.toFixed(2)}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{r.renewalYears} {r.renewalYears === 1 ? 'Year' : 'Years'}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
-                        {r.initiatedByLabel === 'Admin' ? <span className="text-blue-600 font-medium">Admin</span> : <span className="text-gray-900">Customer</span>}
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-500">
-                        <div>{fmtDate(r.initiatedAt)}</div>
-                        <div className="text-xs">{fmtTime(r.initiatedAt)}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Link to={`/admin/renewals/${r.id}`} className="inline-flex items-center text-blue-600 hover:text-blue-900">View</Link>
-                          {canRetry(r) ? (
-                            <button onClick={() => retry(r.id)} disabled={isRetrying} className="inline-flex items-center text-blue-600 hover:text-blue-900 disabled:opacity-50">Retry</button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          )
+        ) : (
+          <RenewalsTable renewals={renewals} onError={setErrorModal} onRetry={retryOne} retryingId={retryingId} />
+        )}
 
-          <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
+        <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
+      </div>
 
-          <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Renewal Error Details" />
+      {bulkRetryConfirm ? (
+        <BulkRetryModal
+          stats={stats}
+          dateFrom={filterDateFrom}
+          dateTo={filterDateTo}
+          source={filterSource}
+          busy={bulkRetrying}
+          onClose={() => setBulkRetryConfirm(false)}
+          onConfirm={retryAllFailed}
+        />
+      ) : null}
+
+      {toast ? (
+        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
+      ) : null}
+
+      <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Renewal error details" />
+    </div>
+  )
+}
+
+function defaultStats(): Stats {
+  return {
+    successRate30d: 0, completed30d: 0, total30d: 0, avgCompletionMinutes: null,
+    revenueMtd: 0, pipelineValue: 0, failedValue30d: 0,
+    today: 0, yesterday: 0, deltaPct: null, daily14d: [], failedAtStepBreakdown: [],
+  }
+}
+
+function StatsStrip({ stats }: { stats: Stats }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <StatTile
+        kicker="30D"
+        label="Success rate"
+        value={`${stats.successRate30d}%`}
+        sub={`${stats.completed30d.toLocaleString()} of ${stats.total30d.toLocaleString()}`}
+        tone={stats.successRate30d >= 90 ? 'emerald' : stats.successRate30d >= 70 ? 'amber' : 'red'}
+      />
+      <StatTile
+        kicker="MTD"
+        label="Revenue"
+        value={fmtMoney0(stats.revenueMtd)}
+        sub={stats.avgCompletionMinutes != null ? `avg ${durationShort(Number(stats.avgCompletionMinutes) / 60)} to complete` : '—'}
+        tone="emerald"
+      />
+      <StatTile
+        kicker="$ AT RISK"
+        label="Pipeline + failed"
+        value={fmtMoney0(stats.pipelineValue + stats.failedValue30d)}
+        sub={`${fmtMoney0(stats.pipelineValue)} in flight · ${fmtMoney0(stats.failedValue30d)} failed`}
+        tone={stats.failedValue30d > 0 ? 'amber' : 'zinc'}
+      />
+      <SparklineTile
+        kicker="14D"
+        label="Today"
+        value={stats.today.toLocaleString()}
+        sub={`${stats.yesterday.toLocaleString()} yesterday`}
+        deltaPct={stats.deltaPct}
+        data={stats.daily14d.map((d) => d.count)}
+      />
+    </div>
+  )
+}
+
+/* ─────── Table view ─────── */
+
+function RenewalsTable({ renewals, onError, onRetry, retryingId }: {
+  renewals: Renewal[]
+  onError: (m: string) => void
+  onRetry: (id: string) => void
+  retryingId: string | null
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="bg-zinc-50/80 backdrop-blur">
+            <tr>
+              <Th>Business · ABN · Customer</Th>
+              <Th>Status</Th>
+              <Th className="text-right">Amount</Th>
+              <Th>Years</Th>
+              <Th>Source · Payment</Th>
+              <Th>Time in status</Th>
+              <Th>ATO</Th>
+              <Th><span className="sr-only">Actions</span></Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-100">
+            {renewals.length === 0 ? (
+              <tr><td colSpan={8} className="px-4 py-12"><EmptyState title="No renewals match the current filters." /></td></tr>
+            ) : renewals.map((r) => (
+              <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
+                <td className="px-4 py-3 align-top">
+                  <div className="text-sm font-medium text-zinc-900 truncate max-w-[18rem]">{r.businessName}</div>
+                  <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+                  {r.lead ? (
+                    <Link to={`/admin/leads/${r.lead.id}`} className="block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate max-w-[18rem]">{r.lead.fullName} · {r.lead.email}</Link>
+                  ) : (
+                    <div className="text-xxs font-mono text-zinc-400">{r.email ?? 'no lead'}</div>
+                  )}
+                </td>
+                <td className="px-4 py-3 align-top"><StatusCell r={r} onError={onError} /></td>
+                <td className="px-4 py-3 align-top text-right text-sm font-mono tabular-nums text-zinc-900">{fmtMoney2(r.amount)}</td>
+                <td className="px-4 py-3 align-top text-sm tabular-nums text-zinc-700">{r.renewalYears}</td>
+                <td className="px-4 py-3 align-top">
+                  <SourcePill source={r.source} />
+                  <div className="mt-1"><PaymentPill r={r} /></div>
+                </td>
+                <td className="px-4 py-3 align-top">
+                  <TimeInStatus r={r} />
+                </td>
+                <td className="px-4 py-3 align-top">
+                  {r.atoStatus ? <AtoStatusPill status={r.atoStatus} /> : <span className="text-xxs font-mono text-zinc-400">—</span>}
+                </td>
+                <td className="px-4 py-3 align-top text-right">
+                  <div className="flex items-center justify-end gap-3">
+                    {canRetry(r) ? (
+                      <button onClick={() => onRetry(r.id)} disabled={retryingId === r.id} className="text-sm font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50">
+                        {retryingId === r.id ? 'Retrying…' : 'Retry'}
+                      </button>
+                    ) : null}
+                    <Link to={`/admin/renewals/${r.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800">View →</Link>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/* ─────── Cards view ─────── */
+
+function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (m: string) => void; onRetry: (id: string) => void; retrying: boolean }) {
+  return (
+    <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 hover:ring-brand-200 hover:shadow-md transition-all">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
+          <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+          {r.lead ? <div className="text-xxs font-mono text-zinc-400 mt-0.5 truncate">{r.lead.fullName} · {r.lead.email}</div> : null}
         </div>
-      </main>
-    </>
+        <StatusCell r={r} onError={onError} />
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        <Cell label="Amount" value={<span className="font-mono tabular-nums">{fmtMoney2(r.amount)}</span>} />
+        <Cell label="Years" value={<span className="font-mono tabular-nums">{r.renewalYears}</span>} />
+        <Cell label="Source" value={<SourcePill source={r.source} />} />
+        <Cell label="Payment" value={<PaymentPill r={r} />} />
+        <Cell label="Time in status" value={<TimeInStatus r={r} />} />
+        <Cell label="Initiated" value={<span className="text-xs font-mono text-zinc-500">{fmtDate(r.initiatedAt)} · {fmtTime(r.initiatedAt)}</span>} />
+      </dl>
+      <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-end gap-3">
+        {canRetry(r) ? (
+          <button onClick={() => onRetry(r.id)} disabled={retrying} className="inline-flex items-center rounded-md bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100 disabled:opacity-50 transition">
+            {retrying ? 'Retrying…' : 'Retry'}
+          </button>
+        ) : null}
+        <Link to={`/admin/renewals/${r.id}`} className="inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">View details →</Link>
+      </div>
+    </div>
+  )
+}
+
+function Cell({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
+      <dd className="mt-1 text-sm text-zinc-900">{value}</dd>
+    </div>
+  )
+}
+
+/* ─────── Cell components ─────── */
+
+function StatusCell({ r, onError }: { r: Renewal; onError: (m: string) => void }) {
+  const pill = (() => {
+    switch (r.status) {
+      case 'Completed':  return <StatusPill tone="emerald">COMPLETED</StatusPill>
+      case 'Processing': return <StatusPill tone="indigo">PROCESSING</StatusPill>
+      case 'Pending':    return <StatusPill tone="amber">PENDING</StatusPill>
+      case 'Failed':     return <StatusPill tone="red">FAILED</StatusPill>
+    }
+  })()
+  return (
+    <div className="flex items-center gap-1.5">
+      {pill}
+      {r.status === 'Failed' && r.errorMessage ? (
+        <button onClick={() => onError(r.errorMessage ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100" title="View error">
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function SourcePill({ source }: { source: string }) {
+  switch (source) {
+    case 'Renewtron':  return <StatusPill tone="emerald">DIRECT</StatusPill>
+    case 'Ontraport':  return <StatusPill tone="indigo">ONTRAPORT</StatusPill>
+    case 'BulkUpload': return <StatusPill tone="zinc">BULK</StatusPill>
+    default:           return <StatusPill tone="zinc">{source.toUpperCase()}</StatusPill>
+  }
+}
+
+function PaymentPill({ r }: { r: Renewal }) {
+  if (r.paymentType === 'External') {
+    return <span className="text-xxs font-mono text-zinc-500">EXTERNAL</span>
+  }
+  if (!r.stripePaymentSucceeded) {
+    return <span className="text-xxs font-mono text-red-700">STRIPE/UNPAID</span>
+  }
+  const last4 = r.cardLast4 ? ` •••• ${r.cardLast4}` : ''
+  const brand = r.cardBrand ? ` ${r.cardBrand.toUpperCase()}` : ''
+  return <span className="text-xxs font-mono text-zinc-600">STRIPE{brand}{last4}</span>
+}
+
+function TimeInStatus({ r }: { r: Renewal }) {
+  const isInflight = r.status === 'Pending' || r.status === 'Processing'
+  const slow = isInflight && r.timeInStatusHours > 2
+  const cls = slow ? 'text-amber-700 font-medium' : 'text-zinc-700'
+  return (
+    <div>
+      <div className={`text-sm tabular-nums ${cls}`}>{durationShort(r.timeInStatusHours)}{isInflight ? ' in flight' : ''}</div>
+      {!isInflight && r.completedAt ? (
+        <div className="text-xxs font-mono text-zinc-400 tabular-nums">closed {fmtDate(r.completedAt)}</div>
+      ) : null}
+    </div>
+  )
+}
+
+function AtoStatusPill({ status }: { status: string }) {
+  switch (status) {
+    case 'Completed':    return <StatusPill tone="emerald">ATO/OK</StatusPill>
+    case 'Failed':       return <StatusPill tone="red">ATO/FAIL</StatusPill>
+    case 'AwaitingAuth': return <StatusPill tone="amber">ATO/AUTH</StatusPill>
+    case 'InProgress':   return <StatusPill tone="indigo">ATO/WIP</StatusPill>
+    case 'Pending':      return <StatusPill tone="amber">ATO/PEND.</StatusPill>
+    default:             return <StatusPill tone="zinc">{`ATO/${status.toUpperCase()}`}</StatusPill>
+  }
+}
+
+/* ─────── Bulk retry modal ─────── */
+
+function BulkRetryModal({ stats, dateFrom, dateTo, source, busy, onClose, onConfirm }: {
+  stats: Stats
+  dateFrom: string
+  dateTo: string
+  source: string
+  busy: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return createPortal(
+    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-zinc-950/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="px-6 py-5 border-b border-zinc-100">
+              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RETRY</div>
+              <h2 className="mt-0.5 text-lg font-semibold text-zinc-900 tracking-tight">Retry all failed renewals</h2>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <p className="text-sm text-zinc-700">
+                This will re-queue every <span className="font-medium">Failed</span> renewal in your current filter.
+                Stripe-paid renewals where the payment didn't succeed will be skipped automatically.
+              </p>
+              <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xs font-mono text-zinc-700 space-y-1">
+                <div>Failed (30d): <span className="text-zinc-900 tabular-nums">{fmtMoney0(stats.failedValue30d)}</span></div>
+                {dateFrom ? <div>From: <span className="text-zinc-900 tabular-nums">{dateFrom}</span></div> : null}
+                {dateTo ? <div>To: <span className="text-zinc-900 tabular-nums">{dateTo}</span></div> : null}
+                {source ? <div>Source: <span className="text-zinc-900">{source}</span></div> : null}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-zinc-100 flex items-center justify-end gap-2">
+              <button onClick={onClose} disabled={busy} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 transition disabled:opacity-50">Cancel</button>
+              <button onClick={onConfirm} disabled={busy} className="inline-flex items-center rounded-md bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition">
+                {busy ? 'Retrying…' : 'Retry all'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

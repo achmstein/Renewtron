@@ -27,7 +27,7 @@ function OutcomeBadge({ outcome }: { outcome: string }) {
     case 'RenewalCompleted':
       return <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Converted</span>
     case 'RenewalAvailable':
-      return <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">Available</span>
+      return <span className="inline-flex rounded-full bg-brand-100 px-2 text-xs font-semibold leading-5 text-brand-800">Available</span>
     case 'NotDueForRenewal':
       return <span className="inline-flex rounded-full bg-amber-100 px-2 text-xs font-semibold leading-5 text-amber-800">Not Due</span>
     case 'RenewalInProgress':
@@ -42,7 +42,7 @@ function OutcomeBadge({ outcome }: { outcome: string }) {
 function RenewalStatusBadge({ status }: { status: string }) {
   switch (status) {
     case 'Completed': return <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">Completed</span>
-    case 'Processing': return <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">Processing</span>
+    case 'Processing': return <span className="inline-flex rounded-full bg-brand-100 px-2 text-xs font-semibold leading-5 text-brand-800">Processing</span>
     case 'Pending': return <span className="inline-flex rounded-full bg-yellow-100 px-2 text-xs font-semibold leading-5 text-yellow-800">Pending</span>
     case 'Failed': return <span className="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">Failed</span>
     default: return <span className="inline-flex rounded-full bg-gray-100 px-2 text-xs font-semibold leading-5 text-gray-700">{status}</span>
@@ -79,7 +79,7 @@ export default function SearchDetails() {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin h-8 w-8 text-brand-600" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
@@ -103,7 +103,7 @@ export default function SearchDetails() {
                   <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-medium text-gray-900">Lead Information</h2>
-                      <Link to={`/admin/leads/${data.lead.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-500">View Lead →</Link>
+                      <Link to={`/admin/leads/${data.lead.id}`} className="text-sm font-medium text-brand-600 hover:text-brand-500">View Lead →</Link>
                     </div>
                   </div>
                   <div className="px-6 py-5">
@@ -114,7 +114,7 @@ export default function SearchDetails() {
                       </div>
                       <div>
                         <dt className="text-sm font-medium text-gray-500">Email</dt>
-                        <dd className="mt-1 text-sm text-gray-900"><a href={`mailto:${data.lead.email}`} className="text-blue-600 hover:text-blue-500">{data.lead.email}</a></dd>
+                        <dd className="mt-1 text-sm text-gray-900"><a href={`mailto:${data.lead.email}`} className="text-brand-600 hover:text-brand-500">{data.lead.email}</a></dd>
                       </div>
                       <div>
                         <dt className="text-sm font-medium text-gray-500">Mobile</dt>
@@ -219,7 +219,7 @@ export default function SearchDetails() {
                                         <span>${r.renewalRequest.amount.toFixed(2)}</span>
                                       </div>
                                     </div>
-                                    <Link to={`/admin/renewals/${r.renewalRequest.id}`} className="text-blue-600 hover:text-blue-900 text-xs font-medium">View Details →</Link>
+                                    <Link to={`/admin/renewals/${r.renewalRequest.id}`} className="text-brand-600 hover:text-brand-900 text-xs font-medium">View Details →</Link>
                                   </div>
                                 </div>
                               </div>

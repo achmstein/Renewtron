@@ -14,6 +14,7 @@ public class SettingsService : ISettingsService
     private readonly IOptions<AsicSettings> _asicSettings;
     private readonly IOptions<OntraportSettings> _ontraportSettings;
     private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
+    private readonly IOptionsMonitor<WinBackSettings> _winBackSettings;
     private readonly string _overridesPath;
 
     public SettingsService(
@@ -23,6 +24,7 @@ public class SettingsService : ISettingsService
         IOptions<AsicSettings> asicSettings,
         IOptions<OntraportSettings> ontraportSettings,
         IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
+        IOptionsMonitor<WinBackSettings> winBackSettings,
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
@@ -32,6 +34,7 @@ public class SettingsService : ISettingsService
         _asicSettings = asicSettings;
         _ontraportSettings = ontraportSettings;
         _atoAgentSettings = atoAgentSettings;
+        _winBackSettings = winBackSettings;
 
         // Match Program.cs: writable overrides file lives outside the image.
         _overridesPath = configuration["Storage:OverridesPath"]
@@ -68,6 +71,11 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_atoAgentSettings.CurrentValue);
     }
 
+    public Task<WinBackSettings> GetWinBackSettingsAsync()
+    {
+        return Task.FromResult(_winBackSettings.CurrentValue);
+    }
+
     public async Task UpdateSendGridSettingsAsync(SendGridSettings settings)
     {
         await UpdateSettingsSectionAsync("SendGrid", settings);
@@ -96,6 +104,11 @@ public class SettingsService : ISettingsService
     public async Task UpdateAtoAgentSettingsAsync(AtoAgentSettings settings)
     {
         await UpdateSettingsSectionAsync("AtoAgent", settings);
+    }
+
+    public async Task UpdateWinBackSettingsAsync(WinBackSettings settings)
+    {
+        await UpdateSettingsSectionAsync("WinBack", settings);
     }
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)

@@ -1,173 +1,254 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import { Chip, EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, Toast, type Tone } from './_ui'
+import { durationShort, fmtDate, fmtTime, relativeTime } from './_utils'
 
-type Row = Awaited<ReturnType<typeof api.admin.atoOnboarding>>['items'][number]
-
-function fmtDateTime(s: string | null | undefined) {
-  if (!s) return ''
-  const d = new Date(s)
-  return `${d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
-}
-
-function StatusBadge({ status }: { status?: string | null }) {
-  const cls = 'inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium'
-  switch (status) {
-    case 'Completed': return <span className={`${cls} bg-green-100 text-green-800`}>Completed</span>
-    case 'InProgress': return <span className={`${cls} bg-blue-100 text-blue-800`}>In Progress</span>
-    case 'Pending': return <span className={`${cls} bg-yellow-100 text-yellow-800`}>Pending</span>
-    case 'AwaitingAuth': return <span className={`${cls} bg-orange-100 text-orange-800`}>Awaiting Auth</span>
-    case 'Failed': return <span className={`${cls} bg-red-100 text-red-800`}>Failed</span>
-    default: return <span className={`${cls} bg-gray-100 text-gray-700`}>{status ?? '—'}</span>
-  }
-}
+type Response = Awaited<ReturnType<typeof api.admin.atoOnboarding>>
+type Stats = Response['stats']
 
 export default function AtoOnboarding() {
-  const [rows, setRows] = useState<Row[]>([])
-  const [stats, setStats] = useState({ totalCount: 0, pendingCount: 0, completedCount: 0, failedCount: 0 })
+  const [data, setData] = useState<Response | null>(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [retryingId, setRetryingId] = useState<string | null>(null)
+  const [bulkRetrying, setBulkRetrying] = useState(false)
+  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
 
-  async function load() {
-    setLoading(true)
+  const showToast = (tone: Tone, message: string) => {
+    setToast({ tone, message })
+    setTimeout(() => setToast(null), 4000)
+  }
+
+  const load = async () => {
+    setIsRefreshing(true)
     try {
-      const data = await api.admin.atoOnboarding({
+      setData(await api.admin.atoOnboarding({
         status: statusFilter || undefined,
         search: search || undefined,
         take: 200,
-      })
-      setRows(data.items)
-      setStats({
-        totalCount: data.totalCount,
-        pendingCount: data.pendingCount,
-        completedCount: data.completedCount,
-        failedCount: data.failedCount,
-      })
+      }))
     } finally {
-      setLoading(false)
+      setIsRefreshing(false)
     }
   }
 
-  useEffect(() => { load() }, [statusFilter])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load() }, [statusFilter])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll every 10s
   useEffect(() => {
-    const t = setInterval(load, 10000)
+    const t = setInterval(load, 10_000)
     return () => clearInterval(t)
   }, [statusFilter, search])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  const items = data?.items ?? []
+  const stats: Stats = data?.stats ?? defaultStats()
+  const failedCount = data?.failedCount ?? 0
+
+  const retryOne = async (id: string) => {
+    setRetryingId(id)
+    try {
+      const r = await api.admin.retryAtoOnboarding(id)
+      showToast('emerald', r.message ?? 'Re-enqueued.')
+      await load()
+    } catch (e) {
+      showToast('red', e instanceof Error ? e.message : 'Retry failed')
+    } finally {
+      setRetryingId(null)
+    }
+  }
+
+  const retryAllFailed = async () => {
+    setBulkRetrying(true)
+    try {
+      const r = await api.admin.retryAllFailedAtoOnboarding()
+      showToast('emerald', `Re-queued ${r.retried} failed onboardings.`)
+      await load()
+    } catch (e) {
+      showToast('red', e instanceof Error ? e.message : 'Bulk retry failed')
+    } finally {
+      setBulkRetrying(false)
+    }
+  }
+
   return (
-    <>
-      <header className="relative bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-lg/6 font-semibold text-gray-900">ATO Onboarding</h1>
-              <p className="mt-1 text-sm text-gray-500">Clients enqueued to the ATO portal after a successful renewal.</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main>
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* Summary cards */}
-          <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <SummaryCard label="Total" value={stats.totalCount} />
-            <SummaryCard label="In flight" value={stats.pendingCount} tone="amber" />
-            <SummaryCard label="Completed" value={stats.completedCount} tone="green" />
-            <SummaryCard label="Failed" value={stats.failedCount} tone="red" />
-          </div>
-
-          {/* Filters + table */}
-          <div className="overflow-hidden rounded-lg bg-white shadow">
-            <div className="px-4 py-3 sm:px-6 border-b border-gray-200 flex flex-wrap items-center gap-3">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-              >
-                <option value="">All statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="InProgress">In Progress</option>
-                <option value="AwaitingAuth">Awaiting Auth</option>
-                <option value="Completed">Completed</option>
-                <option value="Failed">Failed</option>
-              </select>
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') load() }}
-                placeholder="ABN, email, or job ID"
-                className="flex-1 min-w-[220px] rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
-              />
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <PageHeader
+        kicker="COMPLIANCE"
+        title="ATO onboarding"
+        subtitle="Clients enqueued to the ATO portal after a successful renewal."
+        right={
+          <>
+            {failedCount > 0 ? (
               <button
-                onClick={load}
-                className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                onClick={retryAllFailed}
+                disabled={bulkRetrying}
+                className="inline-flex items-center gap-2 rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm disabled:opacity-50 transition"
               >
-                Search
+                {bulkRetrying ? 'Retrying…' : `Retry ${failedCount} failed`}
               </button>
-              {loading ? <span className="text-xs text-gray-500">Loading…</span> : null}
-            </div>
+            ) : null}
+            <RefreshButton onClick={() => void load()} busy={isRefreshing} />
+          </>
+        }
+      />
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Business Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ABN</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Customer</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Renewed</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">ATO Completed</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Job ID</th>
-                    <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {rows.length === 0 && !loading ? (
-                    <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">No ATO onboarding records.</td></tr>
-                  ) : rows.map((r) => (
-                    <tr key={r.renewalRequestId} className="hover:bg-gray-50">
-                      <td className="whitespace-nowrap px-6 py-4"><StatusBadge status={r.atoStatus} /></td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{r.businessName}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-sm font-mono text-gray-700">{r.abn}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">
-                        <div>{r.fullName ?? '—'}</div>
-                        <div className="text-xs text-gray-500">{r.email}</div>
-                      </td>
-                      <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-500">{fmtDateTime(r.completedAt ?? r.initiatedAt)}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-xs text-gray-500">{fmtDateTime(r.atoCompletedAt)}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-xs font-mono text-gray-500">{r.atoJobId}</td>
-                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                        <Link to={`/admin/ato-onboarding/${r.renewalRequestId}`} className="text-blue-600 hover:text-blue-900">View</Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </main>
-    </>
-  )
-}
-
-function SummaryCard({ label, value, tone = 'default' }: { label: string; value: number; tone?: 'default' | 'green' | 'amber' | 'red' }) {
-  const valueColor =
-    tone === 'green' ? 'text-green-600' :
-    tone === 'amber' ? 'text-amber-600' :
-    tone === 'red'   ? 'text-red-600' :
-    'text-gray-900'
-  return (
-    <div className="overflow-hidden rounded-lg bg-white shadow">
-      <div className="px-4 py-5">
-        <dt className="truncate text-sm font-medium text-gray-500">{label}</dt>
-        <dd className={`mt-1 text-2xl font-semibold ${valueColor}`}>{value}</dd>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatTile
+          kicker="30D"
+          label="Success rate"
+          value={`${stats.successRate30d}%`}
+          sub={`${stats.completed30d.toLocaleString()} of ${stats.total30d.toLocaleString()}`}
+          tone={stats.successRate30d >= 90 ? 'emerald' : stats.successRate30d >= 70 ? 'amber' : 'red'}
+        />
+        <StatTile
+          kicker="AVG"
+          label="Onboarding time"
+          value={stats.avgOnboardingMinutes != null ? durationShort(Number(stats.avgOnboardingMinutes) / 60) : '—'}
+          sub="renewal complete → ATO complete"
+        />
+        <StatTile
+          kicker=">24H"
+          label="Stuck"
+          value={stats.stuck24h.toLocaleString()}
+          sub="renewal completed, ATO not done"
+          tone={stats.stuck24h > 0 ? 'red' : 'emerald'}
+        />
+        <SparklineTile
+          kicker="14D"
+          label="Today"
+          value={stats.today.toLocaleString()}
+          sub={`${stats.yesterday.toLocaleString()} yesterday`}
+          deltaPct={stats.deltaPct}
+          data={stats.daily14d.map((d) => d.count)}
+        />
       </div>
+
+      {/* Filters */}
+      <div className="mt-6 flex flex-wrap items-end gap-3">
+        <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={[
+          { value: '', label: 'All statuses' },
+          { value: 'Pending', label: 'Pending' },
+          { value: 'InProgress', label: 'In Progress' },
+          { value: 'AwaitingAuth', label: 'Awaiting Auth' },
+          { value: 'Completed', label: 'Completed' },
+          { value: 'Failed', label: 'Failed' },
+        ]} />
+        <div className="flex-1 min-w-[220px]">
+          <label className="block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">Search</label>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void load() }}
+            placeholder="ABN, email, or job ID"
+            className="w-full rounded-md border-zinc-300 text-sm font-mono shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2"
+          />
+        </div>
+      </div>
+
+      {(statusFilter || search) ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {statusFilter ? <Chip label={`Status ${statusFilter}`} onRemove={() => setStatusFilter('')} /> : null}
+          {search ? <Chip label={`Search ${search}`} onRemove={() => setSearch('')} /> : null}
+        </div>
+      ) : null}
+
+      <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead className="bg-zinc-50/80 backdrop-blur">
+              <tr>
+                <Th>Status</Th>
+                <Th>Business · ABN</Th>
+                <Th>Customer</Th>
+                <Th>Renewed</Th>
+                <Th>Time in flight</Th>
+                <Th>Job ID</Th>
+                <Th><span className="sr-only">Actions</span></Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {items.length === 0 ? (
+                <tr><td colSpan={7} className="px-4 py-12"><EmptyState title="No ATO onboarding records." /></td></tr>
+              ) : items.map((r) => (
+                <tr key={r.renewalRequestId} className="hover:bg-zinc-50 transition-colors">
+                  <td className="px-4 py-3 align-top"><AtoStatusPill status={r.atoStatus} /></td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="text-sm font-medium text-zinc-900 truncate max-w-[16rem]">{r.businessName}</div>
+                    <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="text-sm text-zinc-700">{r.fullName ?? '—'}</div>
+                    <div className="text-xxs font-mono text-zinc-400 truncate max-w-[14rem]">{r.email ?? ''}</div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <div className="text-sm text-zinc-700 tabular-nums">{r.completedAt ? relativeTime(r.completedAt) : '—'}</div>
+                    <div className="text-xxs font-mono text-zinc-400 tabular-nums">{r.completedAt ? `${fmtDate(r.completedAt)} ${fmtTime(r.completedAt)}` : ''}</div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    {r.timeInFlightHours != null ? (
+                      <span className={`text-sm tabular-nums ${r.timeInFlightHours > 24 ? 'text-red-700 font-medium' : 'text-zinc-700'}`}>
+                        {durationShort(Number(r.timeInFlightHours))}
+                      </span>
+                    ) : <span className="text-xxs font-mono text-zinc-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3 align-top text-xxs font-mono text-zinc-500 truncate max-w-[14rem]">{r.atoJobId}</td>
+                  <td className="px-4 py-3 align-top text-right">
+                    <div className="flex items-center justify-end gap-3">
+                      {r.atoStatus === 'Failed' ? (
+                        <button onClick={() => retryOne(r.renewalRequestId)} disabled={retryingId === r.renewalRequestId} className="text-sm font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50">
+                          {retryingId === r.renewalRequestId ? 'Retrying…' : 'Retry'}
+                        </button>
+                      ) : null}
+                      <Link to={`/admin/ato-onboarding/${r.renewalRequestId}`} className="text-sm font-medium text-brand-700 hover:text-brand-800">View →</Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {toast ? (
+        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
+      ) : null}
     </div>
   )
 }
+
+function defaultStats(): Stats {
+  return {
+    successRate30d: 0, completed30d: 0, total30d: 0, avgOnboardingMinutes: null,
+    stuck24h: 0, today: 0, yesterday: 0, deltaPct: null, daily14d: [],
+  }
+}
+
+function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }> }) {
+  return (
+    <div>
+      <label className="block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2"
+      >
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </div>
+  )
+}
+
+function AtoStatusPill({ status }: { status?: string | null }) {
+  switch (status) {
+    case 'Completed':    return <StatusPill tone="emerald">COMPLETED</StatusPill>
+    case 'Failed':       return <StatusPill tone="red">FAILED</StatusPill>
+    case 'AwaitingAuth': return <StatusPill tone="amber">AWAITING</StatusPill>
+    case 'InProgress':   return <StatusPill tone="indigo">IN PROGRESS</StatusPill>
+    case 'Pending':      return <StatusPill tone="amber">PENDING</StatusPill>
+    default:             return <StatusPill tone="zinc">{(status ?? '—').toUpperCase()}</StatusPill>
+  }
+}
+

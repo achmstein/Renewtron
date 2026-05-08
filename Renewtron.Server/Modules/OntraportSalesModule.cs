@@ -29,6 +29,10 @@ public sealed class OntraportSalesModule : ICarterModule
                     syncedAt = s.SyncedAt,
                     renewalDueDate = s.RenewalDueDate,
                     errorMessage = s.ErrorMessage,
+                    renewalRequestId = s.RenewalRequestId,
+                    renewalStatus = s.RenewalRequest != null ? s.RenewalRequest.Status.ToString() : null,
+                    renewalFailedAtStep = s.RenewalRequest != null ? s.RenewalRequest.FailedAtStep : null,
+                    renewalErrorMessage = s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null,
                 })
                 .ToListAsync();
 
@@ -38,7 +42,54 @@ public sealed class OntraportSalesModule : ICarterModule
             var completedCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.RenewalCompleted));
             var failedCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.RenewalFailed));
 
-            return Results.Ok(new { totalCount, waitingCount, queuedCount, completedCount, failedCount, items = sales });
+            // Pipeline value next 30 days — paid in Ontraport, not yet completed at ASIC.
+            var now = DateTime.UtcNow;
+            var thirtyDaysAhead = now.AddDays(30);
+            var pipelineValueNext30d = sales
+                .Where(s => s.renewalDueDate.HasValue && s.renewalDueDate.Value <= thirtyDaysAhead && s.renewalDueDate.Value >= now.AddDays(-30))
+                .Where(s => s.status != nameof(OntraportSaleStatus.RenewalCompleted))
+                .Sum(s => s.amountPaid);
+
+            // Daily synced volume for last 14 days
+            var fourteenDaysAgo = now.Date.AddDays(-13).ToUniversalTime();
+            var dailyMap = sales
+                .Where(s => s.syncedAt >= fourteenDaysAgo)
+                .GroupBy(s => DateOnly.FromDateTime(s.syncedAt))
+                .ToDictionary(g => g.Key, g => g.Count());
+            var daily14d = Enumerable.Range(0, 14).Select(i =>
+            {
+                var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
+                return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
+            }).ToList();
+            var todayCount = sales.Count(s => s.syncedAt.Date == now.Date);
+            var yesterdayCount = sales.Count(s => s.syncedAt.Date == now.Date.AddDays(-1));
+            decimal? deltaPct = null;
+            if (yesterdayCount > 0)
+                deltaPct = Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1);
+
+            DateTime? lastSyncAt = sales.Count > 0 ? sales.Max(s => s.syncedAt) : null;
+            // Next sync — the recurring job runs at 06:00 AEST. Compute next AEST 06:00 in UTC.
+            var aest = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
+            var aestNow = TimeZoneInfo.ConvertTimeFromUtc(now, aest);
+            var todaySix = new DateTime(aestNow.Year, aestNow.Month, aestNow.Day, 6, 0, 0, DateTimeKind.Unspecified);
+            var nextSixLocal = aestNow < todaySix ? todaySix : todaySix.AddDays(1);
+            var nextSyncAt = TimeZoneInfo.ConvertTimeToUtc(nextSixLocal, aest);
+
+            return Results.Ok(new
+            {
+                totalCount, waitingCount, queuedCount, completedCount, failedCount,
+                items = sales,
+                stats = new
+                {
+                    pipelineValueNext30d,
+                    lastSyncAt,
+                    nextSyncAt,
+                    today = todayCount,
+                    yesterday = yesterdayCount,
+                    deltaPct,
+                    daily14d,
+                },
+            });
         });
 
         group.MapPost("/sync", async (IOntraportSalesService service) =>

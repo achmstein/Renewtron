@@ -12,16 +12,20 @@ public interface ILeadEmailService
     Task SendNotDueForRenewalEmailAsync(Lead lead);
     Task SendNoBusinessNamesEmailAsync(Lead lead);
     Task SendRenewalInProgressEmailAsync(Lead lead);
+    /// <summary>Send the configurable win-back email. firstBusinessName is optional and merged into {{BusinessName}}.</summary>
+    Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null);
 }
 
 public class LeadEmailService : ILeadEmailService
 {
     private readonly SendGridClient _client;
     private readonly SendGridSettings _settings;
+    private readonly IOptionsMonitor<WinBackSettings> _winBack;
 
-    public LeadEmailService(IOptionsSnapshot<SendGridSettings> settings)
+    public LeadEmailService(IOptionsSnapshot<SendGridSettings> settings, IOptionsMonitor<WinBackSettings> winBack)
     {
         _settings = settings.Value;
+        _winBack = winBack;
         _client = new SendGridClient(_settings.ApiKey);
     }
 
@@ -59,6 +63,34 @@ public class LeadEmailService : ILeadEmailService
         var plainContent = GetRenewalInProgressPlain(lead);
 
         await SendEmailAsync(lead.Email, subject, plainContent, htmlContent);
+    }
+
+    public async Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null)
+    {
+        var template = _winBack.CurrentValue;
+        var subject = MergeTags(template.Subject, lead, firstBusinessName);
+        var plain = MergeTags(template.BodyPlain, lead, firstBusinessName);
+        var html = string.IsNullOrWhiteSpace(template.BodyHtml)
+            ? WrapPlainAsHtml(plain)
+            : MergeTags(template.BodyHtml, lead, firstBusinessName);
+        await SendEmailAsync(lead.Email, subject, plain, html);
+    }
+
+    private static string MergeTags(string source, Lead lead, string? firstBusinessName)
+    {
+        if (string.IsNullOrEmpty(source)) return source;
+        return source
+            .Replace("{{FullName}}", lead.FullName ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{Abn}}", lead.Abn ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{Email}}", lead.Email ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("{{BusinessName}}", firstBusinessName ?? "your business name", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string WrapPlainAsHtml(string plain)
+    {
+        var html = System.Net.WebUtility.HtmlEncode(plain).Replace("\n", "<br />");
+        return $@"<!DOCTYPE html><html><head><meta charset=""utf-8""><style>{GetEmailStyles()}</style></head>
+<body><div class=""container""><div class=""content""><p style=""white-space: pre-wrap;"">{html}</p></div></div></body></html>";
     }
 
     private async Task SendEmailAsync(string toEmail, string subject, string plainContent, string htmlContent)
