@@ -706,12 +706,16 @@ public class AsicPaymentClient : IAsicPaymentClient
     {
         try
         {
-            // Step 1: Parse the OTP entry form (<form id="mainForm">) that was returned by the cReqWebBased POST
+            // RSA's challenge flow returns a credential-selection page first (radio input named "dataEntry"
+            // — usually a single "send SMS" option valued "001"). Submitting that selection is what triggers
+            // the issuer to actually dispatch the OTP SMS; only the response to that submit is the real
+            // OTP-entry page (password input named "dataEntry"). Without this step, polling for the SMS
+            // waits indefinitely because the bank never sent one.
             var challengeDoc = await _htmlParser.ParseDocumentAsync(data.ThreeDSChallengeResponseContent ?? "");
             var mainForm = challengeDoc.QuerySelector("form#mainForm") ?? challengeDoc.QuerySelector("form");
 
             if (mainForm == null)
-                return StepResult<PaymentStepData>.Failure("Could not find RSA OTP entry form", "Submit OTP");
+                return StepResult<PaymentStepData>.Failure("Could not find RSA challenge form", "Submit OTP");
 
             var challengeWindowSize = mainForm.QuerySelector("input[name='challengeWindowSize']")?.GetAttribute("value") ?? "01";
             var threeDSServerTransID = mainForm.QuerySelector("input[name='threeDSServerTransID']")?.GetAttribute("value");
@@ -732,7 +736,61 @@ public class AsicPaymentClient : IAsicPaymentClient
                 ? new Uri(submitAction)
                 : new Uri(new Uri(data.ThreeDSChallengeUrl), submitAction);
 
-            // Step 2: Wait for OTP from SMS provider
+            // Step 2 (when present): submit the credential selection so the issuer dispatches the SMS,
+            // then re-parse the resulting OTP-entry page.
+            var radioOption = mainForm.QuerySelector("input[name='dataEntry'][type='radio']");
+            if (radioOption != null)
+            {
+                var radioValue = radioOption.GetAttribute("value") ?? "001";
+
+                var selectRequest = new HttpRequestMessage(HttpMethod.Post, submitUri)
+                {
+                    Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                    {
+                        ["challengeWindowSize"] = challengeWindowSize,
+                        ["threeDSServerTransID"] = threeDSServerTransID,
+                        ["messageVersion"] = messageVersion,
+                        ["acsTransID"] = acsTransID,
+                        ["dataEntry"] = radioValue
+                    })
+                };
+                selectRequest.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+                selectRequest.Headers.TryAddWithoutValidation("Origin", $"{submitUri.Scheme}://{submitUri.Host}");
+                selectRequest.Headers.TryAddWithoutValidation("Referer", data.ThreeDSChallengeUrl);
+                selectRequest.Headers.TryAddWithoutValidation("Upgrade-Insecure-Requests", "1");
+                selectRequest.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "same-origin");
+                selectRequest.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate");
+                selectRequest.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "iframe");
+
+                var selectResponse = await _http.SendAsync(selectRequest);
+                var selectContent = await selectResponse.Content.ReadAsStringAsync();
+
+                if (!selectResponse.IsSuccessStatusCode)
+                    return StepResult<PaymentStepData>.Failure($"RSA credential selection failed: {selectResponse.StatusCode}", "Submit OTP");
+
+                var otpDoc = await _htmlParser.ParseDocumentAsync(selectContent);
+                var otpForm = otpDoc.QuerySelector("form#mainForm") ?? otpDoc.QuerySelector("form");
+
+                if (otpForm == null || otpForm.QuerySelector("input[name='dataEntry']") == null)
+                    return StepResult<PaymentStepData>.Failure("RSA OTP-entry form not returned after credential selection", "Submit OTP");
+
+                challengeWindowSize = otpForm.QuerySelector("input[name='challengeWindowSize']")?.GetAttribute("value") ?? challengeWindowSize;
+                threeDSServerTransID = otpForm.QuerySelector("input[name='threeDSServerTransID']")?.GetAttribute("value") ?? threeDSServerTransID;
+                messageVersion = otpForm.QuerySelector("input[name='messageVersion']")?.GetAttribute("value") ?? messageVersion;
+                acsTransID = otpForm.QuerySelector("input[name='acsTransID']")?.GetAttribute("value") ?? acsTransID;
+
+                var newAction = HttpUtility.HtmlDecode(otpForm.GetAttribute("action") ?? submitAction);
+                submitUri = Uri.IsWellFormedUriString(newAction, UriKind.Absolute)
+                    ? new Uri(newAction)
+                    : new Uri(new Uri(data.ThreeDSChallengeUrl), newAction);
+
+                data.ThreeDSAcsTransId = acsTransID;
+                data.ThreeDSTransactionId = threeDSServerTransID;
+                data.ThreeDSMessageVersion = messageVersion;
+                data.ThreeDSChallengeWindowSize = challengeWindowSize;
+            }
+
+            // Step 3: Wait for OTP from SMS provider
             string otp;
             try
             {
@@ -743,7 +801,7 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return StepResult<PaymentStepData>.Failure($"Failed to retrieve OTP: {ex.Message}", "Submit OTP");
             }
 
-            // Step 3: POST OTP to challengeSubmit
+            // Step 4: POST OTP to challengeSubmit
             var submitRequest = new HttpRequestMessage(HttpMethod.Post, submitUri)
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>

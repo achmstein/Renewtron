@@ -31,17 +31,18 @@ public class OntraportSmsProvider : ISmsProvider
         _httpClient.DefaultRequestHeaders.Add("Api-Key", _settings.ApiKey);
         _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
 
-        // Configure retry policy for polling SMS
+        // SMS-forwarding to Ontraport has been observed to take up to ~9 minutes end-to-end, so the
+        // total window must comfortably exceed that. 60 polls × 10s = 10 minutes.
         _retryPolicy = Policy<string>
             .Handle<OntraportException>()
             .OrResult(sms => string.IsNullOrWhiteSpace(sms))
             .WaitAndRetryAsync(
-                retryCount: 40, // Poll up to 40 times
-                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(3), // Wait 3 seconds between polls
+                retryCount: 60,
+                sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(10),
                 onRetry: (outcome, timespan, retryAttempt, context) =>
                 {
                     var message = outcome.Exception?.Message ?? "SMS not yet available";
-                    _logger.LogInformation($"[Polling SMS - Attempt {retryAttempt}/40] {message}. Retrying in {timespan.TotalSeconds} seconds...");
+                    _logger.LogInformation($"[Polling SMS - Attempt {retryAttempt}/60] {message}. Retrying in {timespan.TotalSeconds} seconds...");
                 });
     }
 
@@ -82,6 +83,14 @@ public class OntraportSmsProvider : ISmsProvider
                 // No OTP found yet, trigger retry
                 return string.Empty;
             });
+
+            if (string.IsNullOrWhiteSpace(smsText))
+            {
+                throw new OntraportException(
+                    "No OTP SMS received within the 10-minute polling window. " +
+                    "The issuer may have declined the transaction (e.g. card overlimit/blocked) " +
+                    "or SMS forwarding to Ontraport is delayed beyond the window.");
+            }
 
             // Extract the OTP code
             var otpCode = ExtractOtpCode(smsText);
