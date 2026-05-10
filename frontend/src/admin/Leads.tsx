@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { Chip, EmptyState, FunnelPills, OutcomeBreakdownBar, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, Toast, type Tone } from './_ui'
+import { Chip, EmptyState, FunnelPills, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, Toast, type Tone } from './_ui'
 import { durationShort, fmtMoney0, relativeTime } from './_utils'
 
 type LeadsResponse = Awaited<ReturnType<typeof api.admin.leads>>
@@ -83,10 +83,6 @@ export default function Leads() {
       />
 
       <StatsStrip stats={stats} />
-
-      <div className="mt-6">
-        <OutcomeBreakdownBar segments={outcomeSegments(stats.outcomeBreakdown)} />
-      </div>
 
       {/* Filters */}
       <div className="mt-6 flex flex-wrap items-end gap-3">
@@ -275,20 +271,6 @@ function StatsStrip({ stats }: { stats: Stats }) {
       />
     </div>
   )
-}
-
-function outcomeSegments(map: Record<string, number>): Array<{ label: string; count: number; tone: Tone }> {
-  const ordered: Array<[string, Tone]> = [
-    ['RenewalCompleted', 'emerald'],
-    ['RenewalAvailable', 'emerald'],
-    ['RenewalInProgress', 'indigo'],
-    ['NotDueForRenewal', 'zinc'],
-    ['NoBusinessNames', 'amber'],
-    ['Pending', 'zinc'],
-  ]
-  return ordered
-    .map(([k, tone]) => ({ label: k, count: map[k] ?? 0, tone }))
-    .filter((s) => s.count > 0)
 }
 
 function leadFunnelStages(l: Lead): Array<{ label: string; tone: Tone; active: boolean }> {

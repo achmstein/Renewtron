@@ -153,47 +153,6 @@ export function Sparkline({ data, max }: { data: number[]; max: number }) {
   )
 }
 
-/** Outcome breakdown bar — horizontal stacked segments by tone. */
-export function OutcomeBreakdownBar({ segments }: { segments: Array<{ label: string; count: number; tone: Tone }> }) {
-  const total = segments.reduce((s, x) => s + x.count, 0)
-  if (total === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-zinc-200 bg-white/50 px-4 py-3 text-xs text-zinc-500">
-        No data yet.
-      </div>
-    )
-  }
-  const fillMap: Record<Tone, string> = {
-    emerald: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500', indigo: 'bg-indigo-500', zinc: 'bg-zinc-400',
-  }
-  const dotMap: Record<Tone, string> = {
-    emerald: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500', indigo: 'bg-indigo-500', zinc: 'bg-zinc-400',
-  }
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-zinc-100">
-        {segments.filter((s) => s.count > 0).map((s, i) => {
-          const pct = (s.count / total) * 100
-          return <div key={i} className={fillMap[s.tone]} style={{ width: `${pct}%` }} title={`${s.label}: ${s.count}`} />
-        })}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-        {segments.map((s, i) => {
-          const pct = total > 0 ? Math.round((s.count / total) * 100) : 0
-          return (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <span className={`h-1.5 w-1.5 rounded-full ${dotMap[s.tone]}`} />
-              <span className="text-zinc-600">{s.label}</span>
-              <span className="font-mono tabular-nums text-zinc-900">{s.count}</span>
-              <span className="font-mono tabular-nums text-zinc-400">{pct}%</span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 /* ─────────────────── Funnel pills ─────────────────── */
 
 export function FunnelPills({ stages }: { stages: Array<{ label: string; tone: Tone; active: boolean }> }) {
