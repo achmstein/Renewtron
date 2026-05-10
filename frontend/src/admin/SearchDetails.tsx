@@ -225,7 +225,7 @@ function BigStatusPill({ tone, label }: { tone: Tone; label: string }) {
   )
 }
 
-function OutcomePill({ outcome }: { outcome: string }) {
+function OutcomePill({ outcome }: { outcome: string | null | undefined }) {
   switch (outcome) {
     case 'RenewalAvailable':  return <StatusPill tone="emerald">RENEW. AVAIL.</StatusPill>
     case 'RenewalCompleted':  return <StatusPill tone="emerald">CONVERTED</StatusPill>
@@ -233,26 +233,26 @@ function OutcomePill({ outcome }: { outcome: string }) {
     case 'RenewalInProgress': return <StatusPill tone="indigo">IN PROGRESS</StatusPill>
     case 'NoBusinessNames':   return <StatusPill tone="amber">NO NAMES</StatusPill>
     case 'Pending':           return <StatusPill tone="zinc">PENDING</StatusPill>
-    default:                  return <StatusPill tone="zinc">{outcome.toUpperCase()}</StatusPill>
+    default:                  return <StatusPill tone="zinc">{outcome ? outcome.toUpperCase() : '—'}</StatusPill>
   }
 }
 
-function RenewalStatusPill({ status }: { status: string }) {
+function RenewalStatusPill({ status }: { status: string | null | undefined }) {
   switch (status) {
     case 'Completed':  return <StatusPill tone="emerald">PAID</StatusPill>
     case 'Processing': return <StatusPill tone="indigo">PROC.</StatusPill>
     case 'Pending':    return <StatusPill tone="amber">PEND.</StatusPill>
     case 'Failed':     return <StatusPill tone="red">FAILED</StatusPill>
-    default:           return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
+    default:           return <StatusPill tone="zinc">{status ? status.toUpperCase() : '—'}</StatusPill>
   }
 }
 
-function InitiatedByBadge({ value }: { value: string }) {
+function InitiatedByBadge({ value }: { value: string | null | undefined }) {
   switch (value) {
     case 'Admin':    return <StatusPill tone="indigo">ADMIN</StatusPill>
     case 'Customer': return <StatusPill tone="zinc">CUSTOMER</StatusPill>
     case 'System':   return <StatusPill tone="amber">SYSTEM</StatusPill>
-    default:         return <StatusPill tone="zinc">{value.toUpperCase()}</StatusPill>
+    default:         return <StatusPill tone="zinc">{value ? value.toUpperCase() : '—'}</StatusPill>
   }
 }
 
