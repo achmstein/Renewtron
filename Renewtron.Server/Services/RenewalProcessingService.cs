@@ -14,7 +14,7 @@ public class RenewalProcessingService : IRenewalProcessingService
     private readonly ApplicationDbContext _dbContext;
     private readonly IAsicRenewalClient _renewalClient;
     private readonly IEmailService _emailService;
-    private readonly IOptions<AsicSettings> _asicSettings;
+    private readonly IOptionsSnapshot<AsicSettings> _asicSettings;
     private readonly IOntraportSalesService _ontraportSalesService;
     private readonly IBackgroundJobClient _backgroundJobs;
     private readonly ILogger<RenewalProcessingService> _logger;
@@ -23,7 +23,7 @@ public class RenewalProcessingService : IRenewalProcessingService
         ApplicationDbContext dbContext,
         IAsicRenewalClient renewalClient,
         IEmailService emailService,
-        IOptions<AsicSettings> asicSettings,
+        IOptionsSnapshot<AsicSettings> asicSettings,
         IOntraportSalesService ontraportSalesService,
         IBackgroundJobClient backgroundJobs,
         ILogger<RenewalProcessingService> logger)

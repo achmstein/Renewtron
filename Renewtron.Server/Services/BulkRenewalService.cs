@@ -17,14 +17,14 @@ public class BulkRenewalService : IBulkRenewalService
     private readonly ApplicationDbContext _dbContext;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IAsicRenewalClient _asicClient;
-    private readonly IOptions<PricingSettings> _pricingSettings;
+    private readonly IOptionsSnapshot<PricingSettings> _pricingSettings;
     private readonly ILogger<BulkRenewalService> _logger;
 
     public BulkRenewalService(
         ApplicationDbContext dbContext,
         IBackgroundJobClient backgroundJobClient,
         IAsicRenewalClient asicClient,
-        IOptions<PricingSettings> pricingSettings,
+        IOptionsSnapshot<PricingSettings> pricingSettings,
         ILogger<BulkRenewalService> logger)
     {
         _dbContext = dbContext;

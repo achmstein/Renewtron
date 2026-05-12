@@ -8,21 +8,24 @@ namespace Renewtron.Services;
 
 public class SettingsService : ISettingsService
 {
-    private readonly IOptions<SendGridSettings> _sendGridSettings;
-    private readonly IOptions<StripeSettings> _stripeSettings;
-    private readonly IOptions<PricingSettings> _pricingSettings;
-    private readonly IOptions<AsicSettings> _asicSettings;
-    private readonly IOptions<OntraportSettings> _ontraportSettings;
+    // IOptionsMonitor (not IOptions) so the GET endpoint sees writes made by
+    // UpdateSettingsSectionAsync — IOptions caches the singleton value captured
+    // at startup and never reflects reloadOnChange refreshes.
+    private readonly IOptionsMonitor<SendGridSettings> _sendGridSettings;
+    private readonly IOptionsMonitor<StripeSettings> _stripeSettings;
+    private readonly IOptionsMonitor<PricingSettings> _pricingSettings;
+    private readonly IOptionsMonitor<AsicSettings> _asicSettings;
+    private readonly IOptionsMonitor<OntraportSettings> _ontraportSettings;
     private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
     private readonly IOptionsMonitor<WinBackSettings> _winBackSettings;
     private readonly string _overridesPath;
 
     public SettingsService(
-        IOptions<SendGridSettings> sendGridSettings,
-        IOptions<StripeSettings> stripeSettings,
-        IOptions<PricingSettings> pricingSettings,
-        IOptions<AsicSettings> asicSettings,
-        IOptions<OntraportSettings> ontraportSettings,
+        IOptionsMonitor<SendGridSettings> sendGridSettings,
+        IOptionsMonitor<StripeSettings> stripeSettings,
+        IOptionsMonitor<PricingSettings> pricingSettings,
+        IOptionsMonitor<AsicSettings> asicSettings,
+        IOptionsMonitor<OntraportSettings> ontraportSettings,
         IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
         IOptionsMonitor<WinBackSettings> winBackSettings,
         IConfiguration configuration,
@@ -43,27 +46,27 @@ public class SettingsService : ISettingsService
 
     public Task<SendGridSettings> GetSendGridSettingsAsync()
     {
-        return Task.FromResult(_sendGridSettings.Value);
+        return Task.FromResult(_sendGridSettings.CurrentValue);
     }
 
     public Task<StripeSettings> GetStripeSettingsAsync()
     {
-        return Task.FromResult(_stripeSettings.Value);
+        return Task.FromResult(_stripeSettings.CurrentValue);
     }
 
     public Task<PricingSettings> GetPricingSettingsAsync()
     {
-        return Task.FromResult(_pricingSettings.Value);
+        return Task.FromResult(_pricingSettings.CurrentValue);
     }
 
     public Task<AsicSettings> GetAsicSettingsAsync()
     {
-        return Task.FromResult(_asicSettings.Value);
+        return Task.FromResult(_asicSettings.CurrentValue);
     }
 
     public Task<OntraportSettings> GetOntraportSettingsAsync()
     {
-        return Task.FromResult(_ontraportSettings.Value);
+        return Task.FromResult(_ontraportSettings.CurrentValue);
     }
 
     public Task<AtoAgentSettings> GetAtoAgentSettingsAsync()
