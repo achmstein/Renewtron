@@ -7,5 +7,6 @@ public enum OntraportSaleStatus
     RenewalQueued = 2,
     RenewalCompleted = 3,
     RenewalFailed = 4,
-    NotDueForRenewal = 5
+    NotDueForRenewal = 5,
+    IneligibleForRenewal = 6
 }

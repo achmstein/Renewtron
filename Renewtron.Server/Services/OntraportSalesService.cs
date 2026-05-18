@@ -17,6 +17,7 @@ public class OntraportSalesService : IOntraportSalesService
     private readonly ApplicationDbContext _dbContext;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IAsicRenewalClient _asicClient;
+    private readonly IOptionsSnapshot<PricingSettings> _pricingSettings;
     private readonly ILogger<OntraportSalesService> _logger;
 
     // Ontraport custom field IDs for business name renewal data
@@ -25,7 +26,8 @@ public class OntraportSalesService : IOntraportSalesService
     private const string FieldBusinessNameOwner = "f5064";
     private const string FieldRenewalDueDate = "f5135";
     private const string FieldRenewalTerm = "f5193"; // dropdown: 2033=1yr, 2034=3yr, 2090=5yr
-    private const string FieldPaymentReceived = "f5194";
+    private const string FieldPaymentReceived = "f5194"; // text: "yes" = paid, "dispute" = refund requested
+    private const string FieldCancel = "f5418"; // dropdown: 2185 = Business Name Only, 2186 = ABN and Business Name (customer cancelled)
     private const string FieldDateOfBirth = "DateOfBirt_233";
 
     // Renewal term dropdown value mapping
@@ -42,12 +44,14 @@ public class OntraportSalesService : IOntraportSalesService
         IBackgroundJobClient backgroundJobClient,
         IAsicRenewalClient asicClient,
         IOptionsSnapshot<OntraportSettings> settings,
+        IOptionsSnapshot<PricingSettings> pricingSettings,
         ILogger<OntraportSalesService> logger)
     {
         _httpClient = httpClient;
         _dbContext = dbContext;
         _backgroundJobClient = backgroundJobClient;
         _asicClient = asicClient;
+        _pricingSettings = pricingSettings;
         _logger = logger;
 
         _httpClient.BaseAddress = new Uri("https://api.ontraport.com/1/");
@@ -111,6 +115,15 @@ public class OntraportSalesService : IOntraportSalesService
                             : OntraportSaleStatus.WaitingForRenewalWindow;
                     }
 
+                    // Skip cancellations, refunds, disputes, and underpayments so they never auto-renew
+                    var ineligibleReason = GetIneligibilityReason(contact, amountPaid);
+                    string? errorMessage = null;
+                    if (ineligibleReason != null)
+                    {
+                        status = OntraportSaleStatus.IneligibleForRenewal;
+                        errorMessage = ineligibleReason;
+                    }
+
                     var sale = new OntraportSale
                     {
                         Id = Guid.NewGuid(),
@@ -127,6 +140,7 @@ public class OntraportSalesService : IOntraportSalesService
                         RenewalYears = renewalYears,
                         AmountPaid = amountPaid,
                         Status = status,
+                        ErrorMessage = errorMessage,
                         SyncedAt = DateTime.UtcNow
                     };
 
@@ -189,6 +203,26 @@ public class OntraportSalesService : IOntraportSalesService
 
             try
             {
+                // Re-verify with Ontraport before queueing: catches disputes/refunds/cancellations
+                // that were applied between the 06:00 sync and the 07:00 processing run.
+                var liveContact = await FetchContactByIdAsync(sale.OntraportContactId);
+                if (liveContact != null)
+                {
+                    var liveSpentStr = liveContact.GetValueOrDefault("spent", "0");
+                    var liveAmountPaid = decimal.TryParse(liveSpentStr, out var liveSpent) ? liveSpent : sale.AmountPaid;
+                    var ineligibleReason = GetIneligibilityReason(liveContact, liveAmountPaid);
+                    if (ineligibleReason != null)
+                    {
+                        _logger.LogWarning("Skipping renewal for Ontraport contact {ContactId} ({BusinessName}): {Reason}",
+                            sale.OntraportContactId, sale.BusinessName, ineligibleReason);
+                        sale.Status = OntraportSaleStatus.IneligibleForRenewal;
+                        sale.ErrorMessage = ineligibleReason;
+                        sale.AmountPaid = liveAmountPaid;
+                        continue;
+                    }
+                    sale.AmountPaid = liveAmountPaid;
+                }
+
                 _logger.LogInformation("Queuing renewal for {BusinessName} (ABN: {Abn}), due in {Days} days",
                     sale.BusinessName, sale.Abn, (int)daysUntilDue);
 
@@ -309,7 +343,7 @@ public class OntraportSalesService : IOntraportSalesService
         // Condition format: value must be wrapped in {"value":"..."} for Ontraport API
         var condition = Uri.EscapeDataString(
             "[{\"field\":{\"field\":\"f5194\"},\"op\":\"=\",\"value\":{\"value\":\"yes\"}}]");
-        var fields = $"id,firstname,lastname,email,sms_number,spent,{FieldBusinessName},{FieldAbn},{FieldBusinessNameOwner},{FieldRenewalDueDate},{FieldRenewalTerm},{FieldDateOfBirth}";
+        var fields = $"id,firstname,lastname,email,sms_number,spent,refund,refundtotal,{FieldBusinessName},{FieldAbn},{FieldBusinessNameOwner},{FieldRenewalDueDate},{FieldRenewalTerm},{FieldPaymentReceived},{FieldCancel},{FieldDateOfBirth}";
 
         // Fetch up to 1000 most recent paid contacts in a single call (sorted by last activity desc)
         // New renewals always appear near the top; already-synced ones are skipped in code
@@ -333,6 +367,62 @@ public class OntraportSalesService : IOntraportSalesService
         }
 
         return contacts;
+    }
+
+    private async Task<Dictionary<string, string?>?> FetchContactByIdAsync(string contactId)
+    {
+        try
+        {
+            var fields = $"id,spent,refund,refundtotal,{FieldPaymentReceived},{FieldCancel}";
+            var response = await _httpClient.GetAsync($"Contact?id={contactId}&listFields={fields}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Ontraport contact lookup for {ContactId} returned {StatusCode}", contactId, response.StatusCode);
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(content);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                return null;
+
+            var dict = new Dictionary<string, string?>();
+            foreach (var prop in data.EnumerateObject())
+            {
+                dict[prop.Name] = prop.Value.ValueKind == JsonValueKind.Null ? null : prop.Value.ToString();
+            }
+            return dict;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch Ontraport contact {ContactId}", contactId);
+            return null;
+        }
+    }
+
+    private string? GetIneligibilityReason(Dictionary<string, string?> contact, decimal amountPaid)
+    {
+        // Payment must still read "yes" — David sets this to "dispute" when a refund is requested
+        var paymentReceived = (contact.GetValueOrDefault(FieldPaymentReceived, "") ?? "").Trim();
+        if (!string.Equals(paymentReceived, "yes", StringComparison.OrdinalIgnoreCase))
+            return $"Stripe Payment Recieved is '{paymentReceived}' (expected 'yes')";
+
+        // Customer marked the business name (or ABN+name) for cancellation rather than renewal
+        var cancelValue = (contact.GetValueOrDefault(FieldCancel, "") ?? "").Trim();
+        if (!string.IsNullOrEmpty(cancelValue) && cancelValue != "0")
+            return "Contact has the Cancel field set — customer is cancelling, not renewing";
+
+        // Ontraport's native refund rollup: >0 means Stripe issued a refund/chargeback for this contact
+        var refundCountStr = (contact.GetValueOrDefault("refund", "0") ?? "0").Trim();
+        if (decimal.TryParse(refundCountStr, out var refundCount) && refundCount > 0)
+            return $"Contact has {refundCount} refund(s) on file";
+
+        // Underpayment guard — customers paying only the $39/$49 cancellation fee fall below the one-year renewal price
+        var minimumFee = _pricingSettings.Value.OneYearFee;
+        if (minimumFee > 0 && amountPaid < minimumFee)
+            return $"Amount paid ({amountPaid:C}) is below the minimum renewal fee ({minimumFee:C})";
+
+        return null;
     }
 
     private static DateOnly? ParseDateOfBirth(string? dob)

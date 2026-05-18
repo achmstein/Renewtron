@@ -388,6 +388,7 @@ function OntraportStatusPill({ status }: { status: string }) {
     case 'RenewalCompleted':         return <StatusPill tone="emerald">COMPLETED</StatusPill>
     case 'RenewalFailed':            return <StatusPill tone="red">FAILED</StatusPill>
     case 'NotDueForRenewal':         return <StatusPill tone="zinc">NOT DUE</StatusPill>
+    case 'IneligibleForRenewal':     return <StatusPill tone="amber">INELIGIBLE</StatusPill>
     default:                         return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
   }
 }
@@ -401,6 +402,7 @@ function OntraportStatusPillDark({ status }: { status: string }) {
     RenewalCompleted:         ['COMPLETED', 'bg-emerald-500/20 text-emerald-200 ring-emerald-400/30'],
     RenewalFailed:            ['FAILED',    'bg-red-500/20 text-red-200 ring-red-400/30'],
     NotDueForRenewal:         ['NOT DUE',   'bg-zinc-700/40 text-zinc-300 ring-zinc-500/30'],
+    IneligibleForRenewal:     ['INELIGIBLE','bg-amber-500/20 text-amber-200 ring-amber-400/30'],
   }
   const [label, cls] = map[status] ?? [status.toUpperCase(), 'bg-zinc-700/40 text-zinc-200 ring-zinc-500/30']
   return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ring-1 ring-inset ${cls}`}>{label}</span>
