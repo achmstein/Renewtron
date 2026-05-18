@@ -119,11 +119,27 @@ public class RenewalProcessingService : IRenewalProcessingService
                         .FirstOrDefaultAsync(s => s.RenewalRequestId == renewalRequestId);
                     if (ontraportSale != null)
                     {
-                        ontraportSale.Status = result.IsSuccess
-                            ? OntraportSaleStatus.RenewalCompleted
-                            : OntraportSaleStatus.RenewalFailed;
+                        if (result.IsSuccess)
+                        {
+                            ontraportSale.Status = OntraportSaleStatus.RenewalCompleted;
+                            ontraportSale.ErrorMessage = null;
+                        }
+                        else
+                        {
+                            ontraportSale.Status = OntraportSaleStatusClassifier.ClassifyError(result.Message);
+                            ontraportSale.ErrorMessage = result.Message;
+
+                            // Retryable states (AsicNotYetDue / RenewalInProgress) need RenewalRequestId
+                            // cleared so the next ProcessEligibleRenewalsAsync run picks them up again.
+                            // The failed RenewalRequest record stays in the DB for audit but is no longer
+                            // linked back from the OntraportSale.
+                            if (ontraportSale.Status == OntraportSaleStatus.AsicNotYetDue
+                                || ontraportSale.Status == OntraportSaleStatus.RenewalInProgress)
+                            {
+                                ontraportSale.RenewalRequestId = null;
+                            }
+                        }
                         ontraportSale.ProcessedAt = DateTime.UtcNow;
-                        ontraportSale.ErrorMessage = result.IsSuccess ? null : result.Message;
                         await _dbContext.SaveChangesAsync();
 
                         // Sync status back to Ontraport contact

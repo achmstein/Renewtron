@@ -174,7 +174,10 @@ public class OntraportSalesService : IOntraportSalesService
         // Find sales that are within 30 days of due date and haven't been processed yet
         var now = DateTime.UtcNow;
         var eligibleSales = await _dbContext.OntraportSales
-            .Where(s => s.Status == OntraportSaleStatus.Synced || s.Status == OntraportSaleStatus.WaitingForRenewalWindow)
+            .Where(s => s.Status == OntraportSaleStatus.Synced
+                     || s.Status == OntraportSaleStatus.WaitingForRenewalWindow
+                     || s.Status == OntraportSaleStatus.AsicNotYetDue
+                     || s.Status == OntraportSaleStatus.RenewalInProgress)
             .Where(s => s.RenewalDueDate != null)
             .Where(s => s.RenewalRequestId == null)
             .ToListAsync();
@@ -231,9 +234,9 @@ public class OntraportSalesService : IOntraportSalesService
                 var asicSearch = await _asicClient.SearchByAbnAsync(sale.Abn);
                 if (!asicSearch.Success || asicSearch.BusinessNames == null || asicSearch.BusinessNames.Count == 0)
                 {
-                    sale.Status = OntraportSaleStatus.RenewalFailed;
                     sale.ErrorMessage = $"ASIC search failed: {asicSearch.ErrorMessage ?? "no business names returned"}";
-                    _logger.LogWarning("ASIC search failed for ABN {Abn}: {Message}", sale.Abn, sale.ErrorMessage);
+                    sale.Status = OntraportSaleStatusClassifier.ClassifyError(asicSearch.ErrorMessage);
+                    _logger.LogWarning("ASIC search failed for ABN {Abn} → {Status}: {Message}", sale.Abn, sale.Status, sale.ErrorMessage);
                     continue;
                 }
 

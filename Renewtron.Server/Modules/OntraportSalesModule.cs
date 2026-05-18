@@ -41,6 +41,10 @@ public sealed class OntraportSalesModule : ICarterModule
             var queuedCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.RenewalQueued));
             var completedCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.RenewalCompleted));
             var failedCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.RenewalFailed));
+            var ineligibleCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.IneligibleForRenewal));
+            var asicNotYetDueCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.AsicNotYetDue));
+            var renewalInProgressCount = sales.Count(s => s.status == nameof(OntraportSaleStatus.RenewalInProgress));
+            var blockedCount = ineligibleCount + asicNotYetDueCount + renewalInProgressCount;
 
             // Pipeline value next 30 days — paid in Ontraport, not yet completed at ASIC.
             var now = DateTime.UtcNow;
@@ -78,6 +82,7 @@ public sealed class OntraportSalesModule : ICarterModule
             return Results.Ok(new
             {
                 totalCount, waitingCount, queuedCount, completedCount, failedCount,
+                ineligibleCount, asicNotYetDueCount, renewalInProgressCount, blockedCount,
                 items = sales,
                 stats = new
                 {

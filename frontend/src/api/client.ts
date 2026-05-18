@@ -396,6 +396,10 @@ export const api = {
       queuedCount: number
       completedCount: number
       failedCount: number
+      ineligibleCount: number
+      asicNotYetDueCount: number
+      renewalInProgressCount: number
+      blockedCount: number
       items: Array<{ id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }>
       stats: {
         pipelineValueNext30d: number

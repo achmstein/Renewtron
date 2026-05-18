@@ -11,7 +11,19 @@ type Stats = SalesResponse['stats']
 
 type DueFilter = 'overdue' | '7d' | '30d' | 'all'
 
-const filledStatuses = ['Synced', 'WaitingForRenewalWindow', 'RenewalQueued', 'RenewalFailed']
+const filledStatuses = [
+  'Synced',
+  'WaitingForRenewalWindow',
+  'RenewalQueued',
+  'RenewalFailed',
+  'IneligibleForRenewal',
+  'AsicNotYetDue',
+  'RenewalInProgress',
+]
+
+// Statuses that aren't real failures — they'll retry automatically (AsicNotYetDue, RenewalInProgress)
+// or have been deliberately skipped (IneligibleForRenewal). Render with a yellow/info treatment, not red.
+const blockedStatuses = ['IneligibleForRenewal', 'AsicNotYetDue', 'RenewalInProgress']
 
 export default function OntraportSales() {
   const [data, setData] = useState<SalesResponse | null>(null)
@@ -41,6 +53,10 @@ export default function OntraportSales() {
   const sales = data?.items ?? []
   const stats: Stats = data?.stats ?? defaultStats()
   const failedCount = data?.failedCount ?? 0
+  const blockedCount = data?.blockedCount ?? 0
+  const asicNotYetDueCount = data?.asicNotYetDueCount ?? 0
+  const renewalInProgressCount = data?.renewalInProgressCount ?? 0
+  const ineligibleCount = data?.ineligibleCount ?? 0
 
   // Sales that are still in-flight (not Completed) and have a due date — these are the "pipeline".
   const pipeline = useMemo(() => {
@@ -132,7 +148,7 @@ export default function OntraportSales() {
       />
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatTile
           kicker="30D"
           label="Pipeline next 30d"
@@ -148,11 +164,20 @@ export default function OntraportSales() {
           tone={byBucket.overdue.length > 0 ? 'red' : 'zinc'}
         />
         <StatTile
-          kicker="STATUS"
-          label="Failed"
+          kicker="FAILED"
+          label="Real failures"
           value={failedCount.toLocaleString()}
           sub={failedCount > 0 ? 'review the table' : 'all clear'}
           tone={failedCount > 0 ? 'red' : 'zinc'}
+        />
+        <StatTile
+          kicker="BLOCKED"
+          label="Transient / skipped"
+          value={blockedCount.toLocaleString()}
+          sub={blockedCount > 0
+            ? `${asicNotYetDueCount} not yet due · ${renewalInProgressCount} in progress · ${ineligibleCount} ineligible`
+            : 'none'}
+          tone={blockedCount > 0 ? 'amber' : 'zinc'}
         />
         <SparklineTile
           kicker="SYNC · 14D"
@@ -315,16 +340,25 @@ function SaleRow({ s, onShowError }: { s: Sale & { _daysUntil: number }; onShowE
   const daysClass = days < 0 ? 'text-red-700 font-medium' : days <= 7 ? 'text-amber-700 font-medium' : days <= 30 ? 'text-emerald-700 font-medium' : 'text-zinc-500'
 
   const isFailed = s.status === 'RenewalFailed'
+  const isBlocked = blockedStatuses.includes(s.status)
+
   // Compose the error body from either the OntraportSale.errorMessage or the
   // linked RenewalRequest's full failure context. Renewal step + message is the
   // most useful for debugging — show it first if available.
   const errorBody = (() => {
     const parts: string[] = []
+    if (isBlocked) parts.push(retryBanner(s.status))
     if (s.renewalFailedAtStep) parts.push(`Failed at: ${s.renewalFailedAtStep}`)
     if (s.renewalErrorMessage) parts.push(s.renewalErrorMessage)
-    if (parts.length === 0 && s.errorMessage) parts.push(s.errorMessage)
+    if (s.errorMessage && !parts.some(p => p.includes(s.errorMessage!))) parts.push(s.errorMessage)
     return parts.join('\n\n') || 'No error details recorded.'
   })()
+
+  const modalTitle = isFailed
+    ? `Why ${s.businessName || 'this sale'} failed`
+    : isBlocked
+      ? `${s.businessName || 'This sale'} — ${prettyStatus(s.status).toLowerCase()}`
+      : 'Sale details'
 
   return (
     <tr className="hover:bg-zinc-50 transition-colors">
@@ -347,7 +381,7 @@ function SaleRow({ s, onShowError }: { s: Sale & { _daysUntil: number }; onShowE
           {isFailed ? (
             <button
               type="button"
-              onClick={() => onShowError(`Why ${s.businessName || 'this sale'} failed`, errorBody)}
+              onClick={() => onShowError(modalTitle, errorBody)}
               className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition"
               title="Why did this fail?"
             >
@@ -355,10 +389,24 @@ function SaleRow({ s, onShowError }: { s: Sale & { _daysUntil: number }; onShowE
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
               </svg>
             </button>
+          ) : isBlocked ? (
+            <button
+              type="button"
+              onClick={() => onShowError(modalTitle, errorBody)}
+              className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition"
+              title={retryBanner(s.status)}
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3h.008v.008H12v-.008zM2.697 16.126c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+              </svg>
+            </button>
           ) : null}
         </div>
         {isFailed && s.renewalFailedAtStep ? (
           <div className="mt-1 text-xxs font-mono text-red-700">Failed: {s.renewalFailedAtStep}</div>
+        ) : null}
+        {isBlocked ? (
+          <div className="mt-1 text-xxs font-mono text-amber-700">{retryHint(s.status)}</div>
         ) : null}
       </td>
       <td className="px-4 py-3 align-top">
@@ -380,6 +428,37 @@ function SaleRow({ s, onShowError }: { s: Sale & { _daysUntil: number }; onShowE
   )
 }
 
+function prettyStatus(status: string): string {
+  switch (status) {
+    case 'IneligibleForRenewal': return 'Ineligible'
+    case 'AsicNotYetDue':        return 'ASIC not yet due'
+    case 'RenewalInProgress':    return 'Renewal in progress'
+    default:                     return status
+  }
+}
+
+function retryBanner(status: string): string {
+  switch (status) {
+    case 'AsicNotYetDue':
+      return 'ASIC says this business name is not due for renewal yet. The next 07:00 process run will retry — no action needed.'
+    case 'RenewalInProgress':
+      return 'ASIC reports an existing renewal session for this ABN. Will be retried on the next 07:00 run once the prior session clears.'
+    case 'IneligibleForRenewal':
+      return 'Skipped — the customer paid a cancellation fee (below the renewal price), filed a dispute/refund, or the contact is flagged for cancellation in Ontraport. Will not be retried automatically.'
+    default:
+      return ''
+  }
+}
+
+function retryHint(status: string): string {
+  switch (status) {
+    case 'AsicNotYetDue':     return 'Auto-retry: next 07:00 run'
+    case 'RenewalInProgress': return 'Auto-retry: next 07:00 run'
+    case 'IneligibleForRenewal': return 'Skipped — no retry'
+    default:                  return ''
+  }
+}
+
 function OntraportStatusPill({ status }: { status: string }) {
   switch (status) {
     case 'Synced':                   return <StatusPill tone="zinc">SYNCED</StatusPill>
@@ -389,6 +468,8 @@ function OntraportStatusPill({ status }: { status: string }) {
     case 'RenewalFailed':            return <StatusPill tone="red">FAILED</StatusPill>
     case 'NotDueForRenewal':         return <StatusPill tone="zinc">NOT DUE</StatusPill>
     case 'IneligibleForRenewal':     return <StatusPill tone="amber">INELIGIBLE</StatusPill>
+    case 'AsicNotYetDue':            return <StatusPill tone="amber">ASIC NOT YET DUE</StatusPill>
+    case 'RenewalInProgress':        return <StatusPill tone="amber">IN PROGRESS</StatusPill>
     default:                         return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
   }
 }
@@ -403,6 +484,8 @@ function OntraportStatusPillDark({ status }: { status: string }) {
     RenewalFailed:            ['FAILED',    'bg-red-500/20 text-red-200 ring-red-400/30'],
     NotDueForRenewal:         ['NOT DUE',   'bg-zinc-700/40 text-zinc-300 ring-zinc-500/30'],
     IneligibleForRenewal:     ['INELIGIBLE','bg-amber-500/20 text-amber-200 ring-amber-400/30'],
+    AsicNotYetDue:            ['ASIC WAIT', 'bg-amber-500/20 text-amber-200 ring-amber-400/30'],
+    RenewalInProgress:        ['IN PROG',   'bg-amber-500/20 text-amber-200 ring-amber-400/30'],
   }
   const [label, cls] = map[status] ?? [status.toUpperCase(), 'bg-zinc-700/40 text-zinc-200 ring-zinc-500/30']
   return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ring-1 ring-inset ${cls}`}>{label}</span>
