@@ -1,5 +1,6 @@
-﻿using Asic.Client;
+using Asic.Client;
 using Asic.Client.Abstractions;
+using Asic.Client.ThreeDS;
 using Microsoft.Extensions.Configuration;
 
 namespace Microsoft.Extensions.DependencyInjection;
@@ -21,7 +22,12 @@ public static class ServiceCollectionExtensions
         // Register SMS provider first (if provided)
         configureSmsProvider?.Invoke(services);
 
-        // Register ASIC clients (these depend on ISmsProvider)
+        // Register 3DS challenge handlers. Order doesn't matter — selection is by CanHandle(host).
+        services.AddTransient<IThreeDSChallengeHandler, RsaChallengeHandler>();
+        services.AddTransient<IThreeDSChallengeHandler, CardinalChallengeHandler>();
+        services.AddTransient<IThreeDSChallengeHandler, ArcotChallengeHandler>();
+
+        // Register ASIC clients (these depend on ISmsProvider + 3DS challenge handlers)
         services.AddTransient<IAsicRenewalClient, AsicRenewalClient>();
         services.AddTransient<IAsicPaymentClient, AsicPaymentClient>();
 
