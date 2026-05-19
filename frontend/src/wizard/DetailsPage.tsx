@@ -18,15 +18,6 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
-// TFN: 9 digits, weighted-mod-11 checksum (ATO standard)
-function isValidTfn(value: string) {
-  const digits = value.replace(/\s/g, '')
-  if (!/^\d{9}$/.test(digits)) return false
-  const weights = [1, 4, 3, 7, 5, 8, 6, 9, 10]
-  const sum = digits.split('').reduce((acc, d, i) => acc + parseInt(d, 10) * weights[i], 0)
-  return sum % 11 === 0
-}
-
 export default function DetailsPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -38,8 +29,7 @@ export default function DetailsPage() {
   const [email, setEmail] = useState('')
   const [mobileNumber, setMobileNumber] = useState('')
   const [dob, setDob] = useState('')
-  const [tfn, setTfn] = useState('')
-  const [errors, setErrors] = useState({ fullName: '', email: '', mobile: '', dob: '', tfn: '', general: '' })
+  const [errors, setErrors] = useState({ fullName: '', email: '', mobile: '', dob: '', general: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const inputClass = (err: string) =>
@@ -48,7 +38,7 @@ export default function DetailsPage() {
     }`
 
   const validate = () => {
-    const next = { fullName: '', email: '', mobile: '', dob: '', tfn: '', general: '' }
+    const next = { fullName: '', email: '', mobile: '', dob: '', general: '' }
     if (!fullName.trim()) next.fullName = 'Please enter your full name'
     else if (fullName.trim().length < 2) next.fullName = 'Name must be at least 2 characters'
     if (!email.trim()) next.email = 'Please enter your email address'
@@ -62,10 +52,8 @@ export default function DetailsPage() {
       eighteenAgo.setFullYear(eighteenAgo.getFullYear() - 18)
       if (new Date(dob) > eighteenAgo) next.dob = 'You must be at least 18 years old'
     }
-    // TFN is optional, but if provided must be valid
-    if (tfn.trim() && !isValidTfn(tfn)) next.tfn = 'Please enter a valid 9-digit TFN'
     setErrors(next)
-    return !next.fullName && !next.email && !next.mobile && !next.dob && !next.tfn
+    return !next.fullName && !next.email && !next.mobile && !next.dob
   }
 
   const submit = async (e: React.FormEvent) => {
@@ -73,14 +61,12 @@ export default function DetailsPage() {
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const cleanTfn = tfn.replace(/\s/g, '')
       const result = await api.createLead({
         abn: abn.replace(/\s+/g, ''),
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
         mobileNumber: mobileNumber.replace(/[\s-]/g, ''),
         dateOfBirth: dob,
-        tfn: cleanTfn || undefined,
       })
       navigate(`/checking/${result.leadId}`)
     } catch (err) {
@@ -160,17 +146,6 @@ export default function DetailsPage() {
                 </div>
                 {errors.dob ? <p className="mt-1 text-sm text-red-600">{errors.dob}</p> : null}
                 <p className="mt-1 text-xs text-gray-500">You must be at least 18 years old</p>
-              </div>
-
-              <div>
-                <label htmlFor="tfn" className="block text-sm font-medium leading-6 text-gray-900">
-                  Tax File Number <span className="text-gray-400 text-xs">(optional)</span>
-                </label>
-                <div className="mt-2">
-                  <input id="tfn" type="text" inputMode="numeric" value={tfn} onChange={(e) => setTfn(e.target.value)} placeholder="123 456 789" maxLength={11} className={inputClass(errors.tfn)} />
-                </div>
-                {errors.tfn ? <p className="mt-1 text-sm text-red-600">{errors.tfn}</p> : null}
-                <p className="mt-1 text-xs text-gray-500">Provide your TFN to auto-fill your tax details after renewal</p>
               </div>
 
               {errors.general ? (

@@ -187,8 +187,6 @@ function PaymentForm({ leadId, ids, years, total, cardholderDefault, onComplete 
     if (!stripe || !elements) return
     setError('')
     setSubmitting(true)
-    setProcessing(true)
-    setProcessingStatus('Processing payment...')
 
     try {
       const card = elements.getElement(CardElement)
@@ -201,6 +199,7 @@ function PaymentForm({ leadId, ids, years, total, cardholderDefault, onComplete 
       })
       if (pmResult.error) throw new Error(pmResult.error.message ?? 'Card error.')
 
+      setProcessing(true)
       setProcessingStatus('Creating renewal requests...')
       const result = await api.createBatchRenewal({
         leadId,
