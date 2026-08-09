@@ -88,6 +88,17 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Select chevron clearance                                            */
+/* ------------------------------------------------------------------ */
+/* @tailwindcss/forms draws the dropdown arrow as a background image and reserves room
+   for it with padding-right: 2.5rem. Every select in the app also carries px-3, and that
+   utility overrides the reserved space, dropping the arrow on top of the option text.
+   Unlayered, so it outranks the utility without needing !important at each call site. */
+select:not([multiple]) {
+    padding-right: 2.5rem;
+}
+
+/* ------------------------------------------------------------------ */
 /* Motion — fade-in on page load, pulse-ring for awaiting state        */
 /* ------------------------------------------------------------------ */
 @keyframes fade-in-up {

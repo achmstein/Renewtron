@@ -11,6 +11,7 @@ public interface ISettingsService
     Task<OntraportSettings> GetOntraportSettingsAsync();
     Task<AtoAgentSettings> GetAtoAgentSettingsAsync();
     Task<WinBackSettings> GetWinBackSettingsAsync();
+    Task<TrackingSettings> GetTrackingSettingsAsync();
 
     Task UpdateSendGridSettingsAsync(SendGridSettings settings);
     Task UpdateStripeSettingsAsync(StripeSettings settings);
@@ -19,4 +20,5 @@ public interface ISettingsService
     Task UpdateOntraportSettingsAsync(OntraportSettings settings);
     Task UpdateAtoAgentSettingsAsync(AtoAgentSettings settings);
     Task UpdateWinBackSettingsAsync(WinBackSettings settings);
+    Task UpdateTrackingSettingsAsync(TrackingSettings settings);
 }

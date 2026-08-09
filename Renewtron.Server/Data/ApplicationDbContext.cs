@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<OntraportSale> OntraportSales { get; set; }
     public DbSet<BulkRenewalUpload> BulkRenewalUploads { get; set; }
     public DbSet<OutboundMessage> OutboundMessages { get; set; }
+    public DbSet<FunnelEvent> FunnelEvents { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -91,6 +92,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.IpAddress).HasMaxLength(50);
             entity.Property(e => e.UserAgent).HasMaxLength(500);
             entity.Property(e => e.OutcomeMessage).HasMaxLength(500);
+            entity.Property(e => e.Source).HasMaxLength(64);
+            entity.Property(e => e.OntraportContactId).HasMaxLength(20);
+            entity.Property(e => e.VisitorId).HasMaxLength(64);
 
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.Abn);
@@ -171,6 +175,31 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(e => e.LeadId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<FunnelEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.VisitorId).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.SessionId).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Step).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Abn).HasMaxLength(20);
+            entity.Property(e => e.Source).HasMaxLength(64);
+            entity.Property(e => e.Detail).HasMaxLength(500);
+            entity.Property(e => e.Path).HasMaxLength(300);
+            entity.Property(e => e.Referrer).HasMaxLength(500);
+            entity.Property(e => e.IpAddress).HasMaxLength(50);
+            entity.Property(e => e.UserAgent).HasMaxLength(500);
+
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.Step);
+            entity.HasIndex(e => e.VisitorId);
+            entity.HasIndex(e => new { e.Step, e.CreatedAt });
+
+            entity.HasOne(e => e.Lead)
+                .WithMany()
+                .HasForeignKey(e => e.LeadId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

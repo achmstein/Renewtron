@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { PageHeader, Toast, type Tone } from './_ui'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'atoagent'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'atoagent' | 'tracking'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -25,6 +25,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials',  description: 'Card details used at ASIC checkout.' },
   { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport',         description: 'API credentials for sales sync + OTP SMS.' },
   { key: 'atoagent',  group: 'COMPLIANCE',    title: 'ATO agent',         description: 'Default tax agent for ATO onboarding.' },
+  { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags',     description: 'GA4, GTM and Meta pixel ids.' },
 ]
 
 export default function Settings() {
@@ -45,6 +46,7 @@ export default function Settings() {
   const [ontraport, setOntraport] = useState({ apiAppId: '', apiKey: '', conversationId: '' })
   const [atoAgent, setAtoAgent] = useState({ defaultAgentAbn: '', defaultAgentName: '' })
   const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
+  const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
 
   // Live ATO session — populates the agent dropdown
   const [agentList, setAgentList] = useState<Array<{ abn: string; name: string }>>([])
@@ -60,6 +62,7 @@ export default function Settings() {
     setOntraport(r.ontraport)
     setAtoAgent(r.atoAgent)
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
+    setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
   }
   useEffect(() => { void load() }, [])
 
@@ -93,6 +96,7 @@ export default function Settings() {
   const onOntraport = (e: React.FormEvent) => { e.preventDefault(); void flash('Ontraport', () => api.admin.updateOntraport(ontraport))() }
   const onAtoAgent  = (e: React.FormEvent) => { e.preventDefault(); void flash('ATO Agent', () => api.admin.updateAtoAgent(atoAgent))() }
   const onWinBack   = (e: React.FormEvent) => { e.preventDefault(); void flash('Win-back template', () => api.admin.updateWinBack(winBack))() }
+  const onTracking  = (e: React.FormEvent) => { e.preventDefault(); void flash('Tracking tags', () => api.admin.updateTracking(tracking))() }
 
   // Configured-status per section (derived from current state in form, which mirrors what the server returned)
   const isFilled = (s: string | undefined | null) => !!s && s.trim().length > 0
@@ -116,6 +120,10 @@ export default function Settings() {
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
     atoagent: isFilled(atoAgent.defaultAgentAbn) ? 'configured' : 'empty',
+    tracking: (() => {
+      const total = [tracking.gtmContainerId, tracking.ga4MeasurementId, tracking.metaPixelId].filter(isFilled).length
+      return total === 0 ? 'empty' : total === 3 ? 'configured' : 'partial'
+    })(),
   }
 
   // Group sections for sidebar nav
@@ -339,6 +347,26 @@ export default function Settings() {
                       <button type="submit" disabled={!atoAgent.defaultAgentAbn} className={submitBtnCls}>Save</button>
                     </>
                   )}
+                </form>
+              ) : null}
+
+              {activeKey === 'tracking' ? (
+                <form onSubmit={onTracking} className="space-y-4">
+                  <p className="text-sm text-zinc-600">
+                    These load on the public site at runtime — save here and the tags apply on the next page
+                    load, no redeploy. Leave a field blank to skip that tag. Wizard steps are recorded
+                    server-side regardless, and show up under <span className="font-medium">Funnel</span>.
+                  </p>
+                  <Field label="Google Tag Manager container" hint="GTM-XXXXXXX. Use this if you'd rather manage tags inside GTM.">
+                    <input className={`${inputCls} font-mono`} value={tracking.gtmContainerId} onChange={(e) => setTracking({ ...tracking, gtmContainerId: e.target.value })} placeholder="GTM-XXXXXXX" />
+                  </Field>
+                  <Field label="GA4 measurement ID" hint="G-XXXXXXXXXX.">
+                    <input className={`${inputCls} font-mono`} value={tracking.ga4MeasurementId} onChange={(e) => setTracking({ ...tracking, ga4MeasurementId: e.target.value })} placeholder="G-XXXXXXXXXX" />
+                  </Field>
+                  <Field label="Meta pixel ID" hint="Fires Lead on details, InitiateCheckout on payment, Purchase on completion.">
+                    <input className={`${inputCls} font-mono`} value={tracking.metaPixelId} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} placeholder="1234567890" />
+                  </Field>
+                  <button type="submit" className={submitBtnCls}>Save</button>
                 </form>
               ) : null}
             </Section>

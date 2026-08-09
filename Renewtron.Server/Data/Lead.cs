@@ -23,6 +23,15 @@ public class Lead
     public string? UserAgent { get; set; }
     public string? SessionId { get; set; }
 
+    /// <summary>Where the visit came from — utm_source, or "ontraport" off a prefilled renewal link.</summary>
+    public string? Source { get; set; }
+
+    /// <summary>Set when they arrived from an Ontraport email that carried the contact id.</summary>
+    public string? OntraportContactId { get; set; }
+
+    /// <summary>Browser-stable id from the tracking helper, so funnel events join to the lead.</summary>
+    public string? VisitorId { get; set; }
+
     // Outcome
     public LeadOutcome Outcome { get; set; } = LeadOutcome.Pending;
     public string? OutcomeMessage { get; set; }

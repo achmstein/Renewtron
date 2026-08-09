@@ -4,6 +4,7 @@ import { api, type LeadDto } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
 import WizardProgress from '../components/WizardProgress'
+import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -46,16 +47,25 @@ export default function CheckingPage() {
     }, 1000)
 
     const run = async () => {
+      trackStep(FunnelStep.CheckStarted, { leadId, abn: lead.abn })
       try {
         const result = await api.checkLead(leadId)
         setProgress(100)
         if (result.outcome === 'RenewalAvailable' && result.businessNames.length > 0) {
+          trackStep(FunnelStep.CheckAvailable, {
+            leadId,
+            abn: lead.abn,
+            detail: `${result.businessNames.length} name(s)`,
+          })
           navigate(`/select-names/${leadId}`)
         } else {
+          trackStep(FunnelStep.CheckUnavailable, { leadId, abn: lead.abn, detail: result.outcome })
           navigate(`/not-available/${leadId}`)
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Search failed. Please try again.')
+        const message = err instanceof Error ? err.message : 'Search failed. Please try again.'
+        trackStep(FunnelStep.CheckFailed, { leadId, abn: lead.abn, detail: message })
+        setError(message)
       } finally {
         window.clearInterval(messageTimer)
         window.clearInterval(progressTimer)

@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, type LeadDto, type RenewalStatusItem } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
+import { FunnelStep, trackStep } from '../lib/tracking'
 
 export default function ConfirmationPage() {
   const { leadId } = useParams<{ leadId: string }>()
@@ -51,6 +52,20 @@ export default function ConfirmationPage() {
   const allCompleted = renewals.length > 0 && renewals.every((r) => r.status === 'Completed' || r.status === 'Failed')
   const completedCount = renewals.filter((r) => r.status === 'Completed').length
   const totalAmount = renewals.reduce((sum, r) => sum + (r.amount ?? 0), 0)
+
+  // Payment has cleared by the time this page renders, so this is the conversion —
+  // fired once even though the status poll re-renders every few seconds.
+  const trackedComplete = useRef(false)
+  useEffect(() => {
+    if (trackedComplete.current || renewals.length === 0) return
+    trackedComplete.current = true
+    trackStep(FunnelStep.RenewalComplete, {
+      leadId,
+      abn: lead?.abn,
+      detail: `${renewals.length} renewal(s)`,
+      value: totalAmount,
+    })
+  }, [renewals.length, leadId, lead?.abn, totalAmount])
 
   return (
     <div className="relative isolate overflow-auto flex-1">

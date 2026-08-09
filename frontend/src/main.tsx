@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './auth/AuthContext'
+import { installTrackingTags, loadSiteConfig } from './lib/siteConfig'
+
+void loadSiteConfig().then(installTrackingTags)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -6,5 +6,10 @@ public interface IOntraportSalesService
 {
     Task<List<OntraportSale>> SyncSalesAsync();
     Task ProcessEligibleRenewalsAsync();
-    Task UpdateOntraportContactStatusAsync(string contactId, bool success, string? transactionReference = null);
+
+    /// <summary>
+    /// Writes the outcome of a renewal attempt back onto the Ontraport contact: the renewal
+    /// status field, and — on success only — the rolled-forward renewal due date.
+    /// </summary>
+    Task SyncRenewalOutcomeAsync(string contactId, OntraportRenewalOutcome outcome, DateTime? newRenewalDueDate = null);
 }

@@ -5,6 +5,7 @@ import Searches from './Searches'
 import SearchDetails from './SearchDetails'
 import Leads from './Leads'
 import LeadDetails from './LeadDetails'
+import Funnel from './Funnel'
 import Renewals from './Renewals'
 import RenewalDetails from './RenewalDetails'
 import ManualRenewal from './ManualRenewal'
@@ -23,6 +24,7 @@ export default function AdminRoutes() {
         <Route path="searches/:id" element={<SearchDetails />} />
         <Route path="leads" element={<Leads />} />
         <Route path="leads/:id" element={<LeadDetails />} />
+        <Route path="funnel" element={<Funnel />} />
         <Route path="renewals" element={<Renewals />} />
         <Route path="renewals/:id" element={<RenewalDetails />} />
         <Route path="manual-renewal" element={<ManualRenewal />} />

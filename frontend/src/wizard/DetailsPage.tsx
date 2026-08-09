@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
+import { capturePrefill, normalizeAbn } from '../lib/prefill'
+import { FunnelStep, getVisitorId, trackStep } from '../lib/tracking'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -21,14 +23,19 @@ function isValidEmail(value: string) {
 export default function DetailsPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const abn = params.get('abn') ?? ''
+  const prefill = useMemo(() => capturePrefill(params.toString()), [params])
+  const abn = normalizeAbn(params.get('abn') ?? '') || prefill.abn
 
   useEffect(() => { if (!abn) navigate('/') }, [abn, navigate])
 
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [mobileNumber, setMobileNumber] = useState('')
-  const [dob, setDob] = useState('')
+  useEffect(() => {
+    if (abn) trackStep(FunnelStep.DetailsViewed, { abn })
+  }, [abn])
+
+  const [fullName, setFullName] = useState(prefill.fullName)
+  const [email, setEmail] = useState(prefill.email)
+  const [mobileNumber, setMobileNumber] = useState(prefill.mobile)
+  const [dob, setDob] = useState(prefill.dob)
   const [errors, setErrors] = useState({ fullName: '', email: '', mobile: '', dob: '', general: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -67,7 +74,11 @@ export default function DetailsPage() {
         email: email.trim().toLowerCase(),
         mobileNumber: mobileNumber.replace(/[\s-]/g, ''),
         dateOfBirth: dob,
+        source: prefill.source || (prefill.contactId ? 'ontraport' : undefined),
+        ontraportContactId: prefill.contactId || undefined,
+        visitorId: getVisitorId(),
       })
+      trackStep(FunnelStep.DetailsSubmitted, { abn, leadId: result.leadId })
       navigate(`/checking/${result.leadId}`)
     } catch (err) {
       setErrors((e2) => ({ ...e2, general: err instanceof Error ? err.message : 'An error occurred. Please try again.' }))

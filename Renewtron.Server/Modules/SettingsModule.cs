@@ -22,6 +22,7 @@ public sealed class SettingsModule : ICarterModule
                 ontraport = await settings.GetOntraportSettingsAsync(),
                 atoAgent = await settings.GetAtoAgentSettingsAsync(),
                 winBack = await settings.GetWinBackSettingsAsync(),
+                tracking = await settings.GetTrackingSettingsAsync(),
             });
         });
 
@@ -98,6 +99,12 @@ public sealed class SettingsModule : ICarterModule
         group.MapPut("/win-back", async (WinBackSettings body, ISettingsService settings) =>
         {
             await settings.UpdateWinBackSettingsAsync(body);
+            return Results.NoContent();
+        });
+
+        group.MapPut("/tracking", async (TrackingSettings body, ISettingsService settings) =>
+        {
+            await settings.UpdateTrackingSettingsAsync(body);
             return Results.NoContent();
         });
     }

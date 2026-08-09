@@ -18,6 +18,7 @@ public class SettingsService : ISettingsService
     private readonly IOptionsMonitor<OntraportSettings> _ontraportSettings;
     private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
     private readonly IOptionsMonitor<WinBackSettings> _winBackSettings;
+    private readonly IOptionsMonitor<TrackingSettings> _trackingSettings;
     private readonly string _overridesPath;
 
     public SettingsService(
@@ -28,6 +29,7 @@ public class SettingsService : ISettingsService
         IOptionsMonitor<OntraportSettings> ontraportSettings,
         IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
         IOptionsMonitor<WinBackSettings> winBackSettings,
+        IOptionsMonitor<TrackingSettings> trackingSettings,
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
@@ -38,6 +40,7 @@ public class SettingsService : ISettingsService
         _ontraportSettings = ontraportSettings;
         _atoAgentSettings = atoAgentSettings;
         _winBackSettings = winBackSettings;
+        _trackingSettings = trackingSettings;
 
         // Match Program.cs: writable overrides file lives outside the image.
         _overridesPath = configuration["Storage:OverridesPath"]
@@ -79,6 +82,11 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_winBackSettings.CurrentValue);
     }
 
+    public Task<TrackingSettings> GetTrackingSettingsAsync()
+    {
+        return Task.FromResult(_trackingSettings.CurrentValue);
+    }
+
     public async Task UpdateSendGridSettingsAsync(SendGridSettings settings)
     {
         await UpdateSettingsSectionAsync("SendGrid", settings);
@@ -112,6 +120,11 @@ public class SettingsService : ISettingsService
     public async Task UpdateWinBackSettingsAsync(WinBackSettings settings)
     {
         await UpdateSettingsSectionAsync("WinBack", settings);
+    }
+
+    public async Task UpdateTrackingSettingsAsync(TrackingSettings settings)
+    {
+        await UpdateSettingsSectionAsync("Tracking", settings);
     }
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)

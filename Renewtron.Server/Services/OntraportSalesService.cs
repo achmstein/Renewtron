@@ -28,7 +28,11 @@ public class OntraportSalesService : IOntraportSalesService
     private const string FieldRenewalTerm = "f5193"; // dropdown: 2033=1yr, 2034=3yr, 2090=5yr
     private const string FieldPaymentReceived = "f5194"; // text: "yes" = paid, "dispute" = refund requested
     private const string FieldCancel = "f5418"; // dropdown: 2185 = Business Name Only, 2186 = ABN and Business Name (customer cancelled)
+    private const string FieldRenewalStatus = "f5481"; // what we did last time we tried to renew — see OntraportRenewalOutcome
     private const string FieldDateOfBirth = "DateOfBirt_233";
+
+    // "checked business name due" tag, added once a renewal goes through
+    private const string RenewalCompletedTagId = "1810";
 
     // Renewal term dropdown value mapping
     private static readonly Dictionary<string, int> RenewalTermMap = new()
@@ -317,26 +321,78 @@ public class OntraportSalesService : IOntraportSalesService
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task UpdateOntraportContactStatusAsync(string contactId, bool success, string? transactionReference = null)
+    public async Task SyncRenewalOutcomeAsync(string contactId, OntraportRenewalOutcome outcome, DateTime? newRenewalDueDate = null)
+    {
+        if (string.IsNullOrWhiteSpace(contactId))
+            return;
+
+        var fields = new Dictionary<string, object>
+        {
+            ["id"] = contactId,
+            [FieldRenewalStatus] = outcome.ToFieldValue(),
+        };
+
+        // Only a completed renewal moves the due date. "Not Yet Due" means ASIC's window
+        // hasn't opened (the date we hold is too early, not too late) and "Already Processed"
+        // means someone else's renewal is still in flight — in both cases we'd be guessing.
+        if (newRenewalDueDate is { } due)
+            fields[FieldRenewalDueDate] = new DateTimeOffset(DateTime.SpecifyKind(due, DateTimeKind.Utc)).ToUnixTimeSeconds();
+
+        await UpdateContactFieldsAsync(contactId, fields);
+
+        if (outcome == OntraportRenewalOutcome.Successful)
+            await AddContactTagAsync(contactId, RenewalCompletedTagId);
+    }
+
+    private async Task UpdateContactFieldsAsync(string contactId, Dictionary<string, object> fields)
     {
         try
         {
-            // Add a tag to the contact to indicate renewal status
-            var tagId = success ? "1810" : null; // "checked business name due" tag for completed
-            if (tagId != null)
-            {
-                var tagContent = new StringContent(
-                    JsonSerializer.Serialize(new { objectID = 0, ids = new[] { contactId }, add_list = tagId }),
-                    System.Text.Encoding.UTF8,
-                    "application/json");
+            var content = new StringContent(
+                JsonSerializer.Serialize(fields),
+                System.Text.Encoding.UTF8,
+                "application/json");
 
-                await _httpClient.PutAsync("Contacts", tagContent);
-                _logger.LogInformation("Updated Ontraport contact {ContactId} with renewal status tag", contactId);
+            var response = await _httpClient.PutAsync("Contacts", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Ontraport field update for contact {ContactId} returned {StatusCode}: {Body}",
+                    contactId, (int)response.StatusCode, body.Length > 500 ? body[..500] : body);
+                return;
+            }
+
+            _logger.LogInformation("Updated Ontraport contact {ContactId} fields: {Fields}",
+                contactId, string.Join(", ", fields.Where(f => f.Key != "id").Select(f => $"{f.Key}={f.Value}")));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to update Ontraport contact {ContactId} fields", contactId);
+        }
+    }
+
+    private async Task AddContactTagAsync(string contactId, string tagId)
+    {
+        try
+        {
+            // Tags go through the tag endpoint, not the object-update one — a tag payload
+            // PUT to /Contacts is rejected because it carries no field values.
+            var content = new StringContent(
+                JsonSerializer.Serialize(new { objectID = 0, ids = new[] { contactId }, add_list = new[] { tagId } }),
+                System.Text.Encoding.UTF8,
+                "application/json");
+
+            var response = await _httpClient.PutAsync("objects/tag", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Ontraport tag add for contact {ContactId} returned {StatusCode}: {Body}",
+                    contactId, (int)response.StatusCode, body.Length > 500 ? body[..500] : body);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to update Ontraport contact {ContactId} status", contactId);
+            _logger.LogError(ex, "Failed to tag Ontraport contact {ContactId}", contactId);
         }
     }
 

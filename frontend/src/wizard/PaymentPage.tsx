@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { Elements, CardElement, useElements, useStripe } from '@stripe/react-stripe-js'
@@ -6,6 +6,8 @@ import { api, type LeadDto, type PricingResponse } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
 import WizardProgress from '../components/WizardProgress'
+import { loadSiteConfig } from '../lib/siteConfig'
+import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -26,13 +28,14 @@ export default function PaymentPage() {
     if (!leadId) return
     void api.getLead(leadId).then(setLead).catch(() => navigate('/'))
     void api.pricing().then(setPricing).catch(() => {})
-    void api.admin.settings()
-      .then((s) => setStripeKey(s.stripe.publishableKey))
-      .catch(() => {
-        // Public Stripe key isn't admin-only in practice; fall back to env override
-        const k = (import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined) ?? null
-        setStripeKey(k)
-      })
+    void loadSiteConfig().then((config) => {
+      // The publishable key is public by design — it comes from /api/site-config so the
+      // page doesn't depend on an admin session or a build-time env var.
+      setStripeKey(
+        config.stripePublishableKey ||
+          ((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined) ?? null),
+      )
+    })
   }, [leadId, navigate])
 
   const stripePromise = useMemo<Promise<Stripe | null> | null>(
@@ -43,6 +46,18 @@ export default function PaymentPage() {
   const selectedNames = (lead?.businessNames ?? []).filter((b) => ids.includes(b.id))
   const pricePerItem = pricing ? (years === 1 ? pricing.oneYearFee : pricing.threeYearFee) : 0
   const total = pricePerItem * selectedNames.length
+
+  const trackedView = useRef(false)
+  useEffect(() => {
+    if (trackedView.current || !lead || !pricing || selectedNames.length === 0) return
+    trackedView.current = true
+    trackStep(FunnelStep.PaymentViewed, {
+      leadId,
+      abn: lead.abn,
+      detail: `${selectedNames.length} name(s), ${years}yr`,
+      value: total,
+    })
+  }, [lead, pricing, selectedNames.length, years, total, leadId])
 
   if (!leadId || !lead) {
     return (
@@ -134,6 +149,7 @@ export default function PaymentPage() {
                   <Elements stripe={stripePromise}>
                     <PaymentForm
                       leadId={leadId}
+                      abn={lead.abn}
                       ids={ids}
                       years={years}
                       total={total}
@@ -166,6 +182,7 @@ export default function PaymentPage() {
 
 interface FormProps {
   leadId: string
+  abn: string
   ids: string[]
   years: 1 | 3
   total: number
@@ -173,7 +190,7 @@ interface FormProps {
   onComplete: (renewalIds: string[]) => void
 }
 
-function PaymentForm({ leadId, ids, years, total, cardholderDefault, onComplete }: FormProps) {
+function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComplete }: FormProps) {
   const stripe = useStripe()
   const elements = useElements()
   const [cardHolder, setCardHolder] = useState(cardholderDefault)
@@ -201,6 +218,12 @@ function PaymentForm({ leadId, ids, years, total, cardholderDefault, onComplete 
 
       setProcessing(true)
       setProcessingStatus('Creating renewal requests...')
+      trackStep(FunnelStep.PaymentSubmitted, {
+        leadId,
+        abn,
+        detail: `${ids.length} name(s), ${years}yr`,
+        value: total,
+      })
       const result = await api.createBatchRenewal({
         leadId,
         searchResultIds: ids,
@@ -212,7 +235,9 @@ function PaymentForm({ leadId, ids, years, total, cardholderDefault, onComplete 
       setProcessingStatus('Scheduling renewal processing...')
       onComplete(result.renewalIds)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred.')
+      const message = err instanceof Error ? err.message : 'An error occurred.'
+      trackStep(FunnelStep.PaymentFailed, { leadId, abn, detail: message, value: total })
+      setError(message)
       setProcessing(false)
       setSubmitting(false)
     }

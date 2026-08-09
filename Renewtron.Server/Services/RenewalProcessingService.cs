@@ -140,11 +140,24 @@ public class RenewalProcessingService : IRenewalProcessingService
                             }
                         }
                         ontraportSale.ProcessedAt = DateTime.UtcNow;
+
+                        // ASIC extends from the existing expiry, so the new due date is the old
+                        // one plus the term we just bought. Only a completed renewal moves it.
+                        DateTime? newRenewalDueDate = null;
+                        if (result.IsSuccess)
+                        {
+                            var basis = ontraportSale.RenewalDueDate ?? DateTime.UtcNow;
+                            newRenewalDueDate = basis.AddYears(renewalRequest.RenewalYears);
+                            ontraportSale.RenewalDueDate = newRenewalDueDate;
+                        }
+
                         await _dbContext.SaveChangesAsync();
 
-                        // Sync status back to Ontraport contact
-                        await _ontraportSalesService.UpdateOntraportContactStatusAsync(
-                            ontraportSale.OntraportContactId, result.IsSuccess, result.TransactionReference);
+                        // Sync the outcome back onto the Ontraport contact (f5481, and f5135 on success)
+                        await _ontraportSalesService.SyncRenewalOutcomeAsync(
+                            ontraportSale.OntraportContactId,
+                            OntraportRenewalOutcomeExtensions.FromSaleStatus(ontraportSale.Status),
+                            newRenewalDueDate);
                     }
                 }
                 catch (Exception opEx)

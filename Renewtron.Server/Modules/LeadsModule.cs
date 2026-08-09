@@ -27,7 +27,17 @@ public sealed class LeadsModule : ICarterModule
         string? MobileNumber,
         DateOnly DateOfBirth,
         string? Tfn,
-        Guid? SearchLogId);
+        Guid? SearchLogId,
+        string? Source,
+        string? OntraportContactId,
+        string? VisitorId);
+
+    private static string? Trim(string? value, int max)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        return trimmed.Length <= max ? trimmed : trimmed[..max];
+    }
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -57,6 +67,9 @@ public sealed class LeadsModule : ICarterModule
                 IpAddress = ip,
                 UserAgent = ua,
                 SessionId = httpContext.TraceIdentifier,
+                Source = Trim(request.Source, 64),
+                OntraportContactId = Trim(request.OntraportContactId, 20),
+                VisitorId = Trim(request.VisitorId, 64),
             });
 
             if (request.SearchLogId is { } sid)
@@ -277,6 +290,7 @@ public sealed class LeadsModule : ICarterModule
                     email = l.Email,
                     mobileNumber = l.MobileNumber,
                     createdAt = l.CreatedAt,
+                    source = l.Source,
                     outcome = l.Outcome.ToString(),
                     reminderOptIn = l.ReminderOptIn,
                     convertedToRenewal = l.ConvertedToRenewal,
@@ -423,6 +437,8 @@ public sealed class LeadsModule : ICarterModule
                 ipAddress = l.IpAddress,
                 userAgent = l.UserAgent,
                 sessionId = l.SessionId,
+                source = l.Source,
+                ontraportContactId = l.OntraportContactId,
                 outcome = l.Outcome.ToString(),
                 outcomeMessage = l.OutcomeMessage,
                 reminderOptIn = l.ReminderOptIn,

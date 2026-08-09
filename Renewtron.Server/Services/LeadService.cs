@@ -25,6 +25,9 @@ public class CreateLeadDto
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
     public string? SessionId { get; set; }
+    public string? Source { get; set; }
+    public string? OntraportContactId { get; set; }
+    public string? VisitorId { get; set; }
 }
 
 public class LeadService : ILeadService
@@ -50,6 +53,9 @@ public class LeadService : ILeadService
             IpAddress = dto.IpAddress,
             UserAgent = dto.UserAgent,
             SessionId = dto.SessionId,
+            Source = dto.Source,
+            OntraportContactId = dto.OntraportContactId,
+            VisitorId = dto.VisitorId,
             CreatedAt = DateTime.UtcNow,
             Outcome = LeadOutcome.Pending
         };

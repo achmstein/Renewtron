@@ -82,6 +82,7 @@ builder.Services.AddOptions<PricingSettings>().BindConfiguration("Pricing").Vali
 builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").ValidateDataAnnotations();
 builder.Services.AddOptions<AtoAgentSettings>().BindConfiguration("AtoAgent");
 builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
+builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();

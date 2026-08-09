@@ -1,16 +1,32 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
+import { capturePrefill } from '../lib/prefill'
+import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
 ]
 
+function formatAbn(abn: string) {
+  return abn.length === 11 ? `${abn.slice(0, 2)} ${abn.slice(2, 5)} ${abn.slice(5, 8)} ${abn.slice(8)}` : abn
+}
+
 export default function StartPage() {
   const navigate = useNavigate()
+  const { search } = useLocation()
   const [abn, setAbn] = useState('')
   const [error, setError] = useState('')
+  const [prefilled, setPrefilled] = useState(false)
+
+  useEffect(() => {
+    const prefill = capturePrefill(search)
+    trackStep(FunnelStep.AbnViewed, { abn: prefill.abn || undefined })
+    if (!prefill.abn) return
+    setAbn(formatAbn(prefill.abn))
+    setPrefilled(true)
+  }, [search])
 
   const isValid = () => {
     const clean = abn.replace(/\s+/g, '')
@@ -24,7 +40,9 @@ export default function StartPage() {
       setError('Please enter a valid 11-digit ABN')
       return
     }
-    navigate(`/details?abn=${abn.replace(/\s+/g, '')}`)
+    const clean = abn.replace(/\s+/g, '')
+    trackStep(FunnelStep.AbnSubmitted, { abn: clean })
+    navigate(`/details?abn=${clean}`)
   }
 
   return (
@@ -60,7 +78,11 @@ export default function StartPage() {
                   />
                 </div>
                 {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-                <p className="mt-2 text-sm text-gray-500">Your 11-digit Australian Business Number</p>
+                {prefilled && !error ? (
+                  <p className="mt-2 text-sm text-brand">We've filled in the ABN from your renewal notice — check it's right and continue.</p>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500">Your 11-digit Australian Business Number</p>
+                )}
               </div>
 
               <button

@@ -61,6 +61,31 @@ export interface RenewalStatusItem {
   errorMessage?: string | null
 }
 
+export interface TrackingSettings {
+  gtmContainerId: string
+  ga4MeasurementId: string
+  metaPixelId: string
+}
+
+export interface FunnelResponse {
+  totalVisitors: number
+  completedVisitors: number
+  conversionPct: number
+  steps: Array<{
+    step: string
+    label: string
+    visitors: number
+    events: number
+    droppedFromPrevious: number
+    stepConversionPct: number
+    overallConversionPct: number
+  }>
+  exits: Array<{ step: string; label: string; visitors: number }>
+  stoppedAt: Array<{ step: string; label: string; visitors: number; rank: number }>
+  bySource: Array<{ source: string; visitors: number; completed: number; conversionPct: number }>
+  daily14d: Array<{ date: string; count: number }>
+}
+
 export type ActivityKind = 'paid' | 'lead-warm' | 'ato-ok' | 'ato-fail'
 export interface ActivityItem {
   kind: ActivityKind
@@ -111,7 +136,7 @@ export const api = {
   logout: () => apiFetch<void>('/api/logout', { method: 'POST' }),
 
   pricing: () => apiFetch<PricingResponse>('/api/pricing'),
-  createLead: (input: { abn: string; fullName: string; email: string; mobileNumber: string; dateOfBirth: string; tfn?: string }) =>
+  createLead: (input: { abn: string; fullName: string; email: string; mobileNumber: string; dateOfBirth: string; tfn?: string; source?: string; ontraportContactId?: string; visitorId?: string }) =>
     apiFetch<{ leadId: string }>('/api/leads', { method: 'POST', body: JSON.stringify(input) }),
   getLead: (id: string) => apiFetch<LeadDto>(`/api/leads/${id}`),
   checkLead: (id: string) => apiFetch<CheckResponse>(`/api/leads/${id}/check`, { method: 'POST' }),
@@ -129,6 +154,7 @@ export const api = {
       ontraport: { apiAppId: string; apiKey: string; conversationId: string }
       atoAgent: { defaultAgentAbn: string; defaultAgentName: string }
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
+      tracking: TrackingSettings
     }>('/api/admin/settings'),
     atoAgents: () => apiFetch<{
       authenticated: boolean
@@ -443,6 +469,16 @@ export const api = {
     updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: { apiAppId: string; apiKey: string; conversationId: string }) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateAtoAgent: (body: { defaultAgentAbn: string; defaultAgentName: string }) => apiFetch<void>('/api/admin/settings/ato-agent', { method: 'PUT', body: JSON.stringify(body) }),
+    updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
+
+    funnel: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
+      if (params.dateTo) qs.set('dateTo', params.dateTo)
+      if (params.source) qs.set('source', params.source)
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<FunnelResponse>(`/api/admin/funnel${suffix}`)
+    },
 
     atoOnboarding: (params: { status?: string; search?: string; take?: number } = {}) => {
       const qs = new URLSearchParams()

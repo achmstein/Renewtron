@@ -4,6 +4,7 @@ import { api, type BusinessNameDto, type LeadDto, type PricingResponse } from '.
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
 import WizardProgress from '../components/WizardProgress'
+import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -24,6 +25,7 @@ export default function SelectNamesPage() {
       setLead(l)
       setBusinessNames(l.businessNames)
       setSelected(new Set(l.businessNames.map((b) => b.id)))
+      trackStep(FunnelStep.SelectViewed, { leadId, abn: l.abn, detail: `${l.businessNames.length} name(s)` })
     }).catch(() => navigate('/'))
     void api.pricing().then(setPricing).catch(() => {})
   }, [leadId, navigate])
@@ -46,6 +48,12 @@ export default function SelectNamesPage() {
   const proceed = () => {
     if (!leadId || selected.size === 0) return
     const ids = Array.from(selected).join(',')
+    trackStep(FunnelStep.SelectSubmitted, {
+      leadId,
+      abn: lead?.abn,
+      detail: `${selected.size} name(s), ${years}yr`,
+      value: total,
+    })
     navigate(`/payment/${leadId}?ids=${ids}&years=${years}`)
   }
 
