@@ -378,8 +378,18 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return StepResult<PaymentStepData>.Failure("Failed to submit device information", "Submit Device Information");
             }
 
-            var redirectUrlMatch = Regex.Match(content, @"window\.location\.href\s*=\s*'([^']+)'",
+            // ASIC hands back the navigation target in one of two shapes:
+            //  - <eval>window.location.href = '...'</eval>  -> challenge flow, points at the Worldline redirect handler
+            //  - <redirect url="..."/>                      -> ADF navigation, used when 3DS came back frictionless
+            //                                                  and the gateway goes straight to paymentSuccess/Failure.jsp
+            var redirectUrlMatch = Regex.Match(content, @"<redirect\s+url=""([^""]+)""",
                 RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            if (!redirectUrlMatch.Success)
+            {
+                redirectUrlMatch = Regex.Match(content, @"window\.location\.href\s*=\s*'([^']+)'",
+                    RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            }
 
             if (!redirectUrlMatch.Success)
             {
