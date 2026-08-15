@@ -380,13 +380,12 @@ function RenewalsTable({ renewals, onError, onRetry, retryingId }: {
               <Th>Years</Th>
               <Th>Source · Payment</Th>
               <Th>Time in status</Th>
-              <Th>ATO</Th>
               <Th><span className="sr-only">Actions</span></Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
             {renewals.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-12"><EmptyState title="No renewals match the current filters." /></td></tr>
+              <tr><td colSpan={7} className="px-4 py-12"><EmptyState title="No renewals match the current filters." /></td></tr>
             ) : renewals.map((r) => (
               <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
                 <td className="px-4 py-3 align-top">
@@ -407,9 +406,6 @@ function RenewalsTable({ renewals, onError, onRetry, retryingId }: {
                 </td>
                 <td className="px-4 py-3 align-top">
                   <TimeInStatus r={r} />
-                </td>
-                <td className="px-4 py-3 align-top">
-                  {r.atoStatus ? <AtoStatusPill status={r.atoStatus} /> : <span className="text-xxs font-mono text-zinc-400">—</span>}
                 </td>
                 <td className="px-4 py-3 align-top text-right">
                   <div className="flex items-center justify-end gap-3">
@@ -530,17 +526,6 @@ function TimeInStatus({ r }: { r: Renewal }) {
       ) : null}
     </div>
   )
-}
-
-function AtoStatusPill({ status }: { status: string }) {
-  switch (status) {
-    case 'Completed':    return <StatusPill tone="emerald">ATO/OK</StatusPill>
-    case 'Failed':       return <StatusPill tone="red">ATO/FAIL</StatusPill>
-    case 'AwaitingAuth': return <StatusPill tone="amber">ATO/AUTH</StatusPill>
-    case 'InProgress':   return <StatusPill tone="indigo">ATO/WIP</StatusPill>
-    case 'Pending':      return <StatusPill tone="amber">ATO/PEND.</StatusPill>
-    default:             return <StatusPill tone="zinc">{`ATO/${status.toUpperCase()}`}</StatusPill>
-  }
 }
 
 /* ─────── Bulk retry modal ─────── */

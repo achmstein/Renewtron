@@ -80,6 +80,13 @@ public sealed class SearchesAdminModule : ICarterModule
                         .OrderByDescending(r => r.InitiatedAt)
                         .Select(r => new { r.Id, r.Amount, Status = r.Status.ToString() })
                         .FirstOrDefault(),
+                    // Funnel facts aggregated across ALL of this search's renewal attempts, not just
+                    // the latest — a completed name shouldn't read as failed because a later retry failed.
+                    HasLead = db.Leads.Any(l => l.SearchLogId == s.Id),
+                    AnyPaid = db.RenewalRequests.Any(r => r.SearchResult.SearchLogId == s.Id && r.Status == RenewalStatus.Completed),
+                    AnyInflight = db.RenewalRequests.Any(r => r.SearchResult.SearchLogId == s.Id
+                        && (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)),
+                    AnyFailed = db.RenewalRequests.Any(r => r.SearchResult.SearchLogId == s.Id && r.Status == RenewalStatus.Failed),
                 })
                 .ToListAsync();
 
@@ -120,6 +127,13 @@ public sealed class SearchesAdminModule : ICarterModule
                     id = s.Renewal.Id,
                     amount = s.Renewal.Amount,
                     status = s.Renewal.Status,
+                },
+                funnel = new
+                {
+                    hasLead = s.HasLead,
+                    anyPaid = s.AnyPaid,
+                    anyInflight = s.AnyInflight,
+                    anyFailed = s.AnyFailed,
                 },
                 repeatCount7d = repeatMap.GetValueOrDefault(s.Abn, 0),
             }).ToList();
@@ -214,22 +228,61 @@ public sealed class SearchesAdminModule : ICarterModule
                 .Include(x => x.Results)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (s is null) return Results.NotFound();
+
+            var lead = await db.Leads.AsNoTracking()
+                .Where(l => l.SearchLogId == s.Id)
+                .Select(l => new { l.Id, l.FullName, l.Email, l.MobileNumber, Outcome = l.Outcome.ToString() })
+                .FirstOrDefaultAsync();
+
+            // Latest renewal attempt per result. Pulled flat and grouped in memory to avoid the
+            // per-group "OrderBy().First()" pattern EF can't translate.
+            var resultIds = s.Results.Select(r => r.Id).ToList();
+            var renewalsRaw = await db.RenewalRequests.AsNoTracking()
+                .Where(r => resultIds.Contains(r.SearchResultId))
+                .Select(r => new { r.SearchResultId, r.Id, Status = r.Status.ToString(), r.InitiatedAt, r.RenewalYears, r.Amount })
+                .ToListAsync();
+            var latestByResult = renewalsRaw
+                .GroupBy(r => r.SearchResultId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.InitiatedAt).First());
+
+            var results = s.Results.Select(r => new
+            {
+                id = r.Id,
+                businessName = r.BusinessName,
+                accountNumber = r.AccountNumber,
+                registrationDate = r.RegistrationDate,
+                renewalRequest = latestByResult.TryGetValue(r.Id, out var rr)
+                    ? new { id = rr.Id, status = rr.Status, initiatedAt = rr.InitiatedAt, renewalYears = rr.RenewalYears, amount = rr.Amount }
+                    : null,
+            }).ToList();
+
+            // Same funnel facts the list returns, aggregated across every renewal attempt.
+            var anyPaid = renewalsRaw.Any(r => r.Status == "Completed");
+            var anyInflight = renewalsRaw.Any(r => r.Status is "Pending" or "Processing");
+            var anyFailed = renewalsRaw.Any(r => r.Status == "Failed");
+
             return Results.Ok(new
             {
                 id = s.Id,
                 abn = s.Abn,
+                sessionId = s.SessionId,
                 searchedAt = s.SearchedAt,
                 success = s.Success,
                 errorMessage = s.ErrorMessage,
                 ipAddress = s.IpAddress,
                 userAgent = s.UserAgent,
-                results = s.Results.Select(r => new
+                resultsCount = s.ResultsCount,
+                initiatedBy = s.InitiatedBy.ToString(),
+                lead = lead == null ? null : new
                 {
-                    id = r.Id,
-                    businessName = r.BusinessName,
-                    accountNumber = r.AccountNumber,
-                    registrationDate = r.RegistrationDate,
-                }),
+                    id = lead.Id,
+                    fullName = lead.FullName,
+                    email = lead.Email,
+                    mobileNumber = lead.MobileNumber,
+                    outcome = lead.Outcome,
+                },
+                results,
+                funnel = new { hasLead = lead != null, anyPaid, anyInflight, anyFailed },
             });
         });
     }

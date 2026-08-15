@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { PageHeader, Toast, type Tone } from './_ui'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'atoagent' | 'tracking'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'tracking'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -24,7 +24,6 @@ const SECTIONS: SectionDef[] = [
   { key: 'pricing',   group: 'PAYMENTS',      title: 'Pricing',           description: 'Customer-facing renewal prices.' },
   { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials',  description: 'Card details used at ASIC checkout.' },
   { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport',         description: 'API credentials for sales sync + OTP SMS.' },
-  { key: 'atoagent',  group: 'COMPLIANCE',    title: 'ATO agent',         description: 'Default tax agent for ATO onboarding.' },
   { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags',     description: 'GA4, GTM and Meta pixel ids.' },
 ]
 
@@ -44,13 +43,8 @@ export default function Settings() {
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
   const [asic, setAsic] = useState({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '' })
   const [ontraport, setOntraport] = useState({ apiAppId: '', apiKey: '', conversationId: '' })
-  const [atoAgent, setAtoAgent] = useState({ defaultAgentAbn: '', defaultAgentName: '' })
   const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
-
-  // Live ATO session — populates the agent dropdown
-  const [agentList, setAgentList] = useState<Array<{ abn: string; name: string }>>([])
-  const [agentSession, setAgentSession] = useState<{ authenticated: boolean; phase: string; loaded: boolean; error?: string }>({ authenticated: false, phase: '', loaded: false })
 
   const load = async () => {
     const r = await api.admin.settings()
@@ -60,25 +54,10 @@ export default function Settings() {
     setPricing(r.pricing)
     setAsic(r.asic)
     setOntraport(r.ontraport)
-    setAtoAgent(r.atoAgent)
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
   }
   useEffect(() => { void load() }, [])
-
-  const loadAgents = async () => {
-    setAgentSession((s) => ({ ...s, loaded: false, error: undefined }))
-    try {
-      const r = await api.admin.atoAgents()
-      setAgentList(r.agents)
-      setAgentSession({ authenticated: r.authenticated, phase: r.phase, loaded: true })
-    } catch (e) {
-      setAgentSession({ authenticated: false, phase: '', loaded: true, error: e instanceof Error ? e.message : 'Failed to load agents' })
-    }
-  }
-  useEffect(() => {
-    if (activeKey === 'atoagent' && !agentSession.loaded) void loadAgents()
-  }, [activeKey])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = (label: string, action: () => Promise<void>) => async () => {
     try {
@@ -94,7 +73,6 @@ export default function Settings() {
   const onPricing   = (e: React.FormEvent) => { e.preventDefault(); void flash('Pricing', () => api.admin.updatePricing(pricing))() }
   const onAsic      = (e: React.FormEvent) => { e.preventDefault(); void flash('ASIC', () => api.admin.updateAsic(asic))() }
   const onOntraport = (e: React.FormEvent) => { e.preventDefault(); void flash('Ontraport', () => api.admin.updateOntraport(ontraport))() }
-  const onAtoAgent  = (e: React.FormEvent) => { e.preventDefault(); void flash('ATO Agent', () => api.admin.updateAtoAgent(atoAgent))() }
   const onWinBack   = (e: React.FormEvent) => { e.preventDefault(); void flash('Win-back template', () => api.admin.updateWinBack(winBack))() }
   const onTracking  = (e: React.FormEvent) => { e.preventDefault(); void flash('Tracking tags', () => api.admin.updateTracking(tracking))() }
 
@@ -119,7 +97,6 @@ export default function Settings() {
       const total = [ontraport.apiAppId, ontraport.apiKey, ontraport.conversationId].filter(isFilled).length
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
-    atoagent: isFilled(atoAgent.defaultAgentAbn) ? 'configured' : 'empty',
     tracking: (() => {
       const total = [tracking.gtmContainerId, tracking.ga4MeasurementId, tracking.metaPixelId].filter(isFilled).length
       return total === 0 ? 'empty' : total === 3 ? 'configured' : 'partial'
@@ -296,57 +273,6 @@ export default function Settings() {
                     <input className={`${inputCls} font-mono`} value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
-
-              {activeKey === 'atoagent' ? (
-                <form onSubmit={onAtoAgent} className="space-y-5">
-                  {!agentSession.loaded ? (
-                    <p className="text-sm text-zinc-500">Loading agents from the ATO session…</p>
-                  ) : agentSession.error ? (
-                    <div className="rounded-md bg-red-50 ring-1 ring-red-100 p-3">
-                      <p className="text-sm text-red-800">{agentSession.error}</p>
-                      <button type="button" onClick={() => void loadAgents()} className="mt-2 text-sm font-medium text-red-700 underline hover:text-red-900">Retry</button>
-                    </div>
-                  ) : !agentSession.authenticated ? (
-                    <div className="rounded-md bg-amber-50 ring-1 ring-amber-100 p-3 text-sm text-amber-800">
-                      <div className="font-medium">Ato.Api session is not authenticated ({agentSession.phase || 'unknown'}).</div>
-                      <div className="mt-1">Sign in to myID via the Ato.Api host first, then come back to pick a default agent.</div>
-                      <button type="button" onClick={() => void loadAgents()} className="mt-2 text-sm font-medium text-amber-700 underline hover:text-amber-900">Refresh</button>
-                    </div>
-                  ) : (
-                    <>
-                      <Field label="Default agent">
-                        <select
-                          className={inputCls}
-                          value={atoAgent.defaultAgentAbn}
-                          onChange={(e) => {
-                            const abn = e.target.value
-                            const found = agentList.find((a) => a.abn === abn)
-                            setAtoAgent({ defaultAgentAbn: abn, defaultAgentName: found?.name ?? '' })
-                          }}
-                        >
-                          <option value="">— Select an agent —</option>
-                          {agentList.map((a) => (
-                            <option key={a.abn} value={a.abn}>{a.name} · {a.abn}</option>
-                          ))}
-                        </select>
-                        <div className="mt-2 flex items-center justify-between">
-                          <p className="text-xxs font-mono text-zinc-500">{agentList.length} agent(s) available in this session.</p>
-                          <button type="button" onClick={() => void loadAgents()} className="text-xs font-medium text-brand-700 hover:text-brand-800">Refresh list</button>
-                        </div>
-                      </Field>
-
-                      {atoAgent.defaultAgentAbn ? (
-                        <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-                          <div><span className="font-medium text-zinc-700">Selected:</span> {atoAgent.defaultAgentName}</div>
-                          <div className="font-mono tabular-nums">ABN {atoAgent.defaultAgentAbn}</div>
-                        </div>
-                      ) : null}
-
-                      <button type="submit" disabled={!atoAgent.defaultAgentAbn} className={submitBtnCls}>Save</button>
-                    </>
-                  )}
                 </form>
               ) : null}
 

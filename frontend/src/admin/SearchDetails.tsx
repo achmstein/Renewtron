@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { FunnelPills, KickerLabel, StatusPill, type Tone } from './_ui'
+import { FunnelPills, KickerLabel, searchFunnelStages, StatusPill, type Tone } from './_ui'
 import { fmtMoney2, relativeTime } from './_utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.search>>
@@ -56,17 +56,7 @@ export default function SearchDetails() {
     )
   }
 
-  const hasPaid = data.results.some((r) => r.renewalRequest?.status === 'Completed')
-  const hasInflight = data.results.some((r) => r.renewalRequest?.status === 'Pending' || r.renewalRequest?.status === 'Processing')
-  const hasFailed = data.results.some((r) => r.renewalRequest?.status === 'Failed')
-
-  const funnelStages: Array<{ label: string; tone: Tone; active: boolean }> = [
-    { label: 'SRCH', tone: 'emerald', active: true },
-    { label: 'LEAD', tone: 'emerald', active: !!data.lead },
-    hasFailed && !hasPaid
-      ? { label: 'FAIL', tone: 'red',     active: true }
-      : { label: 'PAID', tone: hasPaid ? 'emerald' : hasInflight ? 'amber' : 'zinc', active: hasPaid || hasInflight },
-  ]
+  const funnelStages = searchFunnelStages(data.funnel)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">

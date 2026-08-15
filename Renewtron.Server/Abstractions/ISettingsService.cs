@@ -9,7 +9,6 @@ public interface ISettingsService
     Task<PricingSettings> GetPricingSettingsAsync();
     Task<AsicSettings> GetAsicSettingsAsync();
     Task<OntraportSettings> GetOntraportSettingsAsync();
-    Task<AtoAgentSettings> GetAtoAgentSettingsAsync();
     Task<WinBackSettings> GetWinBackSettingsAsync();
     Task<TrackingSettings> GetTrackingSettingsAsync();
 
@@ -18,7 +17,6 @@ public interface ISettingsService
     Task UpdatePricingSettingsAsync(PricingSettings settings);
     Task UpdateAsicSettingsAsync(AsicSettings settings);
     Task UpdateOntraportSettingsAsync(OntraportSettings settings);
-    Task UpdateAtoAgentSettingsAsync(AtoAgentSettings settings);
     Task UpdateWinBackSettingsAsync(WinBackSettings settings);
     Task UpdateTrackingSettingsAsync(TrackingSettings settings);
 }

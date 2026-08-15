@@ -15,7 +15,6 @@ public sealed class DashboardModule : ICarterModule
             var thirtyDaysAgo = now.AddDays(-30);
             var ninetyDaysAgo = now.AddDays(-90);
             var fortyEightHoursAgo = now.AddHours(-48);
-            var twentyFourHoursAgo = now.AddHours(-24);
             var thirtyDaysAhead = now.AddDays(30);
             var elevenMonthsAgo = now.AddMonths(-11);
             var thirteenMonthsAgo = now.AddMonths(-13);
@@ -74,15 +73,6 @@ public sealed class DashboardModule : ICarterModule
             var failedRenewalCount = failedRenewals.Count;
             var failedRenewalValue = failedRenewals.Sum();
 
-            // Action 4: ATO onboarding stuck >24h (renewal completed, ATO not done)
-            var stuckAtoCount = await db.RenewalRequests.AsNoTracking()
-                .CountAsync(r => r.AtoOnboardingJobId != null
-                    && r.AtoOnboardingStatus != "Completed"
-                    && r.AtoOnboardingStatus != "Failed"
-                    && r.AtoOnboardingCompletedAt == null
-                    && r.CompletedAt != null
-                    && r.CompletedAt < twentyFourHoursAgo);
-
             // Action 5: 1-year renewals from 11-13 months ago — coming back due soon
             var pastCustomersDueSoonCount = await db.RenewalRequests.AsNoTracking()
                 .CountAsync(r => r.Status == RenewalStatus.Completed
@@ -119,24 +109,8 @@ public sealed class DashboardModule : ICarterModule
                     null))
                 .ToListAsync();
 
-            var atoActivity = await db.RenewalRequests.AsNoTracking()
-                .Where(r => r.AtoOnboardingCompletedAt != null
-                    && r.AtoOnboardingCompletedAt >= fortyEightHoursAgo
-                    && (r.AtoOnboardingStatus == "Completed" || r.AtoOnboardingStatus == "Failed"))
-                .OrderByDescending(r => r.AtoOnboardingCompletedAt)
-                .Take(30)
-                .Select(r => new ActivityItem(
-                    r.AtoOnboardingStatus == "Completed" ? "ato-ok" : "ato-fail",
-                    r.AtoOnboardingCompletedAt!.Value,
-                    (r.Lead != null ? r.Lead.FullName : r.Email) ?? "—",
-                    r.SearchResult != null ? r.SearchResult.BusinessName : null,
-                    null,
-                    null))
-                .ToListAsync();
-
             var activity = paidActivity
                 .Concat(leadActivity)
-                .Concat(atoActivity)
                 .OrderByDescending(a => a.At)
                 .Take(20)
                 .ToList();
@@ -184,7 +158,6 @@ public sealed class DashboardModule : ICarterModule
                     ontraportPipelineValue,
                     failedRenewalCount,
                     failedRenewalValue,
-                    stuckAtoCount,
                     pastCustomersDueSoonCount,
                     pastCustomersDueSoonValue = pastCustomersDueSoonCount * avgBasket,
                 },

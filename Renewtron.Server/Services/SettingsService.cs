@@ -16,7 +16,6 @@ public class SettingsService : ISettingsService
     private readonly IOptionsMonitor<PricingSettings> _pricingSettings;
     private readonly IOptionsMonitor<AsicSettings> _asicSettings;
     private readonly IOptionsMonitor<OntraportSettings> _ontraportSettings;
-    private readonly IOptionsMonitor<AtoAgentSettings> _atoAgentSettings;
     private readonly IOptionsMonitor<WinBackSettings> _winBackSettings;
     private readonly IOptionsMonitor<TrackingSettings> _trackingSettings;
     private readonly string _overridesPath;
@@ -27,7 +26,6 @@ public class SettingsService : ISettingsService
         IOptionsMonitor<PricingSettings> pricingSettings,
         IOptionsMonitor<AsicSettings> asicSettings,
         IOptionsMonitor<OntraportSettings> ontraportSettings,
-        IOptionsMonitor<AtoAgentSettings> atoAgentSettings,
         IOptionsMonitor<WinBackSettings> winBackSettings,
         IOptionsMonitor<TrackingSettings> trackingSettings,
         IConfiguration configuration,
@@ -38,7 +36,6 @@ public class SettingsService : ISettingsService
         _pricingSettings = pricingSettings;
         _asicSettings = asicSettings;
         _ontraportSettings = ontraportSettings;
-        _atoAgentSettings = atoAgentSettings;
         _winBackSettings = winBackSettings;
         _trackingSettings = trackingSettings;
 
@@ -70,11 +67,6 @@ public class SettingsService : ISettingsService
     public Task<OntraportSettings> GetOntraportSettingsAsync()
     {
         return Task.FromResult(_ontraportSettings.CurrentValue);
-    }
-
-    public Task<AtoAgentSettings> GetAtoAgentSettingsAsync()
-    {
-        return Task.FromResult(_atoAgentSettings.CurrentValue);
     }
 
     public Task<WinBackSettings> GetWinBackSettingsAsync()
@@ -110,11 +102,6 @@ public class SettingsService : ISettingsService
     public async Task UpdateOntraportSettingsAsync(OntraportSettings settings)
     {
         await UpdateSettingsSectionAsync("Ontraport", settings);
-    }
-
-    public async Task UpdateAtoAgentSettingsAsync(AtoAgentSettings settings)
-    {
-        await UpdateSettingsSectionAsync("AtoAgent", settings);
     }
 
     public async Task UpdateWinBackSettingsAsync(WinBackSettings settings)

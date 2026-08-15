@@ -102,18 +102,6 @@ export default function Dashboard() {
               to: '/admin/renewals?status=Failed',
             },
             {
-              key: 'stuck',
-              tone: 'red' as const,
-              kicker: 'STUCK',
-              count: stats.stuckAtoCount,
-              value: '',
-              title: 'ATO stuck > 24h',
-              detail: 'Renewals that completed but never finished onboarding to the ATO.',
-              ctaLabel: 'Investigate →',
-              to: '/admin/ato-onboarding?status=Pending',
-              hideValue: true,
-            },
-            {
               key: 'repeat',
               tone: 'zinc' as const,
               kicker: 'REPEAT',
@@ -150,7 +138,6 @@ export default function Dashboard() {
                         detail={item.detail}
                         ctaLabel={item.ctaLabel}
                         to={item.to}
-                        hideValue={item.hideValue}
                       />
                     ))}
                   </div>
@@ -161,10 +148,8 @@ export default function Dashboard() {
         })()}
       </div>
 
-      {/* Status row: ATO + MTD, 50/50 */}
-      <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-        <AtoStatusWidget />
-
+      {/* MTD summary */}
+      <div className="mt-10">
         <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm flex flex-col">
           <SectionTitle kicker="MTD" title="This month" />
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -219,146 +204,6 @@ export default function Dashboard() {
   )
 }
 
-function AtoStatusWidget() {
-  const [loading, setLoading] = useState(true)
-  const [errored, setErrored] = useState(false)
-  const [authenticated, setAuthenticated] = useState(false)
-  const [agents, setAgents] = useState<{ abn: string; name: string }[]>([])
-  const [defaultAgentAbn, setDefaultAgentAbn] = useState('')
-  const [defaultAgentName, setDefaultAgentName] = useState('')
-  const [selectedAbn, setSelectedAbn] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [savedJustNow, setSavedJustNow] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      setLoading(true)
-      setErrored(false)
-      try {
-        const [agentsRes, settings] = await Promise.all([
-          api.admin.atoAgents(),
-          api.admin.settings(),
-        ])
-        if (cancelled) return
-        setAuthenticated(agentsRes.authenticated)
-        setAgents(agentsRes.agents)
-        setDefaultAgentAbn(settings.atoAgent.defaultAgentAbn)
-        setDefaultAgentName(settings.atoAgent.defaultAgentName)
-        setSelectedAbn(settings.atoAgent.defaultAgentAbn || agentsRes.selectedAgentAbn || '')
-      } catch {
-        if (!cancelled) setErrored(true)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void run()
-    return () => { cancelled = true }
-  }, [])
-
-  const onSave = async () => {
-    const found = agents.find((a) => a.abn === selectedAbn)
-    if (!found) return
-    setSaving(true)
-    try {
-      await api.admin.updateAtoAgent({ defaultAgentAbn: found.abn, defaultAgentName: found.name })
-      setDefaultAgentAbn(found.abn)
-      setDefaultAgentName(found.name)
-      setSavedJustNow(true)
-      setTimeout(() => setSavedJustNow(false), 2200)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const Wrap = ({ tone, label, children }: { tone: 'emerald' | 'amber' | 'red' | 'zinc'; label: string; children: ReactNode }) => (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm h-full flex flex-col">
-      <div className="flex items-center justify-between gap-3">
-        <SectionTitle kicker="STATUS" title="ATO integration" />
-        <StatusDot tone={tone} label={label} />
-      </div>
-      <div className="flex-1 flex flex-col">{children}</div>
-    </div>
-  )
-
-  if (loading) {
-    return <Wrap tone="zinc" label="checking…"><p className="mt-3 text-sm text-zinc-500">Checking ATO session…</p></Wrap>
-  }
-
-  if (errored) {
-    return (
-      <Wrap tone="zinc" label="unknown">
-        <p className="mt-3 text-sm text-zinc-500">Couldn't reach the ATO API. Open Settings to inspect.</p>
-        <Link to="/admin/settings" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800">Open Settings →</Link>
-      </Wrap>
-    )
-  }
-
-  if (!authenticated) {
-    return (
-      <Wrap tone="red" label="not connected">
-        <p className="mt-3 text-sm text-zinc-500">No active ATO session. New renewals won't be onboarded until you authenticate.</p>
-        <Link to="/admin/settings" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800">Authenticate in Settings →</Link>
-      </Wrap>
-    )
-  }
-
-  const noDefault = !defaultAgentAbn
-
-  return (
-    <Wrap tone={noDefault ? 'amber' : 'emerald'} label={noDefault ? 'no default' : 'connected'}>
-      {!noDefault ? (
-        <div className="mt-3">
-          <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">Default agent</div>
-          <div className="mt-1 text-sm font-medium text-zinc-900 truncate" title={defaultAgentName}>{defaultAgentName || '—'}</div>
-          <div className="font-mono tabular-nums text-xs text-zinc-500">ABN {defaultAgentAbn}</div>
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-zinc-500">ATO is authenticated, but no default agent is set. Onboarding will be skipped until you pick one.</p>
-      )}
-
-      {agents.length > 0 ? (
-        <div className="mt-4 space-y-2">
-          <label className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{noDefault ? 'Pick agent' : 'Change agent'}</label>
-          <div className="flex gap-2">
-            <select
-              value={selectedAbn}
-              onChange={(e) => setSelectedAbn(e.target.value)}
-              className="flex-1 min-w-0 rounded-md border-zinc-300 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-            >
-              <option value="">— select —</option>
-              {agents.map((a) => (
-                <option key={a.abn} value={a.abn}>{a.name}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={!selectedAbn || selectedAbn === defaultAgentAbn || saving}
-              className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
-            >
-              {saving ? 'Saving…' : savedJustNow ? 'Saved ✓' : 'Set'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <p className="mt-3 text-xs text-zinc-500">No agents available on the active ATO session.</p>
-      )}
-    </Wrap>
-  )
-}
-
-function StatusDot({ tone, label }: { tone: 'emerald' | 'amber' | 'red' | 'zinc'; label: string }) {
-  const dot = tone === 'emerald' ? 'bg-brand-500' : tone === 'amber' ? 'bg-amber-500' : tone === 'red' ? 'bg-red-500' : 'bg-zinc-400'
-  const text = tone === 'emerald' ? 'text-brand-700' : tone === 'amber' ? 'text-amber-700' : tone === 'red' ? 'text-red-700' : 'text-zinc-500'
-  return (
-    <div className={`inline-flex items-center gap-1.5 text-xxs font-mono uppercase tracking-[0.14em] ${text}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dot}`}></span>
-      {label}
-    </div>
-  )
-}
-
 function CaughtUp() {
   return (
     <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/50 p-8 text-center">
@@ -396,7 +241,6 @@ function withDefaults(s: Partial<DashboardResponse['stats']>): DashboardResponse
     ontraportPipelineValue: s.ontraportPipelineValue ?? 0,
     failedRenewalCount: s.failedRenewalCount ?? 0,
     failedRenewalValue: s.failedRenewalValue ?? 0,
-    stuckAtoCount: s.stuckAtoCount ?? 0,
     pastCustomersDueSoonCount: s.pastCustomersDueSoonCount ?? 0,
     pastCustomersDueSoonValue: s.pastCustomersDueSoonValue ?? 0,
   }
@@ -552,8 +396,6 @@ function activityTag(kind: ActivityKind) {
   switch (kind) {
     case 'paid':      return { label: 'PAID',     cls: 'bg-brand-50 text-brand-700 ring-1 ring-brand-100' }
     case 'lead-warm': return { label: 'LEAD',     cls: 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' }
-    case 'ato-ok':    return { label: 'ATO/OK',   cls: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100' }
-    case 'ato-fail':  return { label: 'ATO/FAIL', cls: 'bg-red-50 text-red-700 ring-1 ring-red-100' }
   }
 }
 

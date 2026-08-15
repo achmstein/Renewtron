@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { ErrorModal, FilterPopover, Pagination } from './_components'
-import { Cell, Chip, EmptyState, Field, FunnelPills, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, ViewToggle, type Tone } from './_ui'
+import { Cell, Chip, EmptyState, Field, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, SparklineTile, StatTile, StatusPill, Th, ViewToggle } from './_ui'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime, relativeTime } from './_utils'
 
 type SearchesResponse = Awaited<ReturnType<typeof api.admin.searches>>
@@ -318,7 +318,7 @@ function TableView({ searches, onShowError }: { searches: Search[]; onShowError:
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 align-top"><FunnelPills stages={searchFunnelStages(s)} /></td>
+                <td className="px-4 py-3 align-top"><FunnelPills stages={searchFunnelStages(s.funnel)} /></td>
                 <td className="px-4 py-3 align-top text-right">
                   {s.renewal ? (
                     <div>
@@ -395,7 +395,7 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
 
           <div className="mt-4 pt-4 border-t border-zinc-100">
             <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">Funnel</div>
-            <div className="mt-1.5"><FunnelPills stages={searchFunnelStages(s)} /></div>
+            <div className="mt-1.5"><FunnelPills stages={searchFunnelStages(s.funnel)} /></div>
           </div>
 
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -434,22 +434,6 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
 }
 
 /* ---------------- SMALL UI BITS ---------------- */
-
-function searchFunnelStages(s: Search): Array<{ label: string; tone: Tone; active: boolean }> {
-  const lead = !!s.lead
-  const status = s.renewal?.status
-  const paid = status === 'Completed'
-  const inflight = status === 'Pending' || status === 'Processing'
-  const failed = status === 'Failed'
-
-  return [
-    { label: 'SRCH', tone: 'emerald', active: true },
-    { label: 'LEAD', tone: 'emerald', active: lead },
-    failed
-      ? { label: 'FAIL', tone: 'red',     active: true }
-      : { label: 'PAID', tone: paid ? 'emerald' : inflight ? 'amber' : 'zinc', active: paid || inflight },
-  ]
-}
 
 function OutcomePill({ outcome }: { outcome: string }) {
   switch (outcome) {

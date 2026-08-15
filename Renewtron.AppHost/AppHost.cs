@@ -17,6 +17,20 @@ builder.AddDockerComposeEnvironment("renewtron-compose")
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
 var atoApiUrl = builder.AddParameter("ato-api-url");
 
+var securityApiKey = builder.AddParameter("security-api-key", secret: true, value: ""); // empty = auth not enforced
+var stripeSecretKey = builder.AddParameter("stripe-secret-key", secret: true, value: "");
+var sendGridApiKey = builder.AddParameter("sendgrid-api-key", secret: true, value: "");
+var ontraportApiAppId = builder.AddParameter("ontraport-api-app-id", secret: true, value: "");
+var ontraportApiKey = builder.AddParameter("ontraport-api-key", secret: true, value: "");
+var encryptionKey = builder.AddParameter("encryption-key", secret: true, value: "");
+var encryptionIv = builder.AddParameter("encryption-iv", secret: true, value: "");
+var asicEmail = builder.AddParameter("asic-email", secret: true, value: "");
+var asicCardNumber = builder.AddParameter("asic-card-number", secret: true, value: "");
+var asicCardholderName = builder.AddParameter("asic-cardholder-name", secret: true, value: "");
+var asicExpiryMonth = builder.AddParameter("asic-expiry-month", secret: true, value: "");
+var asicExpiryYear = builder.AddParameter("asic-expiry-year", secret: true, value: "");
+var asicCvc = builder.AddParameter("asic-cvc", secret: true, value: "");
+
 var sql = builder.AddSqlServer("sql", password: sqlPassword)
     .WithDataVolume("renewtron-sql-data")
     .WithLifetime(ContainerLifetime.Persistent)
@@ -28,6 +42,19 @@ var server = builder.AddProject<Projects.Renewtron_Server>("renewtron-server")
     .WithReference(renewtronDb)
     .WaitFor(sql)
     .WithEnvironment("AtoApi__Url", atoApiUrl)
+    .WithEnvironment("Security__ApiKey", securityApiKey)
+    .WithEnvironment("Stripe__SecretKey", stripeSecretKey)
+    .WithEnvironment("SendGrid__ApiKey", sendGridApiKey)
+    .WithEnvironment("Ontraport__ApiAppId", ontraportApiAppId)
+    .WithEnvironment("Ontraport__ApiKey", ontraportApiKey)
+    .WithEnvironment("Encryption__Key", encryptionKey)
+    .WithEnvironment("Encryption__IV", encryptionIv)
+    .WithEnvironment("Asic__Email", asicEmail)
+    .WithEnvironment("Asic__CardNumber", asicCardNumber)
+    .WithEnvironment("Asic__CardholderName", asicCardholderName)
+    .WithEnvironment("Asic__ExpiryMonth", asicExpiryMonth)
+    .WithEnvironment("Asic__ExpiryYear", asicExpiryYear)
+    .WithEnvironment("Asic__Cvc", asicCvc)
     // Writable settings overrides land here. The volume is bind-mounted so admin
     // edits to AtoAgent etc. survive container/image churn.
     .WithEnvironment("Storage__OverridesPath", "/data/settings.overrides.json")

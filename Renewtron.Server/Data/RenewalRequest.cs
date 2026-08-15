@@ -31,12 +31,6 @@ public class RenewalRequest
     public string? ErrorMessage { get; set; }
     public string? FailedAtStep { get; set; }
 
-    // ATO onboarding (populated after successful renewal for individuals with TFN)
-    public string? AtoOnboardingJobId { get; set; }
-    public string? AtoOnboardingStatus { get; set; }
-    public string? AtoOnboardingResultJson { get; set; }
-    public DateTime? AtoOnboardingCompletedAt { get; set; }
-
     // Navigation properties
     public SearchResult SearchResult { get; set; }
     public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments

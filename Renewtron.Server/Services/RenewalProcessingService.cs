@@ -16,7 +16,6 @@ public class RenewalProcessingService : IRenewalProcessingService
     private readonly IEmailService _emailService;
     private readonly IOptionsSnapshot<AsicSettings> _asicSettings;
     private readonly IOntraportSalesService _ontraportSalesService;
-    private readonly IBackgroundJobClient _backgroundJobs;
     private readonly ILogger<RenewalProcessingService> _logger;
 
     public RenewalProcessingService(
@@ -25,7 +24,6 @@ public class RenewalProcessingService : IRenewalProcessingService
         IEmailService emailService,
         IOptionsSnapshot<AsicSettings> asicSettings,
         IOntraportSalesService ontraportSalesService,
-        IBackgroundJobClient backgroundJobs,
         ILogger<RenewalProcessingService> logger)
     {
         _dbContext = dbContext;
@@ -33,7 +31,6 @@ public class RenewalProcessingService : IRenewalProcessingService
         _emailService = emailService;
         _asicSettings = asicSettings;
         _ontraportSalesService = ontraportSalesService;
-        _backgroundJobs = backgroundJobs;
         _logger = logger;
     }
 
@@ -170,19 +167,6 @@ public class RenewalProcessingService : IRenewalProcessingService
             {
                 _logger.LogInformation("ASIC renewal successful for request {RenewalRequestId}. Transaction: {TransactionRef}",
                     renewalRequestId, result.TransactionReference);
-
-                // Fire-and-forget ATO onboarding for individuals (only when TFN provided)
-                if (!string.IsNullOrEmpty(renewalRequest.Tfn) && renewalRequest.DateOfBirth is not null)
-                {
-                    try
-                    {
-                        _backgroundJobs.Enqueue<IAtoOnboardingService>(s => s.EnqueueAsync(renewalRequestId));
-                    }
-                    catch (Exception atoEx)
-                    {
-                        _logger.LogError(atoEx, "Failed to schedule ATO onboarding for renewal {RenewalRequestId}", renewalRequestId);
-                    }
-                }
 
                 // Send confirmation email
                 if (!string.IsNullOrEmpty(renewalRequest.Email))

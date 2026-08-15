@@ -1,7 +1,4 @@
 <Project>
   <PropertyGroup>
-    <!-- Pinned version of Ato.Api.Contracts consumed from GitHub Packages.
-         Bump this after publishing a new contracts package from the Ato.Api repo. -->
-    <AtoApiContractsVersion Condition="'$(AtoApiContractsVersion)' == ''">1.0.0-*</AtoApiContractsVersion>
   </PropertyGroup>
 </Project>

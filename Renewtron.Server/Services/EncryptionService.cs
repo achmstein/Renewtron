@@ -6,16 +6,23 @@ namespace Renewtron.Services;
 
 public class EncryptionService : IEncryptionService
 {
-    // WARNING: In production, store this key securely (Azure Key Vault, AWS Secrets Manager, etc.)
-    // DO NOT hardcode it in the source code!
     private readonly byte[] _key;
     private readonly byte[] _iv;
 
     public EncryptionService(IConfiguration configuration)
     {
-        // In production, load these from secure configuration
-        var keyString = configuration["Encryption:Key"] ?? "ThisIsA32ByteKeyForEncryption!!"; // 32 bytes
-        var ivString = configuration["Encryption:IV"] ?? "ThisIsA16ByteIV!"; // 16 bytes
+        // Key/IV must come from secure configuration (Encryption__Key / Encryption__IV
+        // environment variables, user secrets, a vault, ...) — never committed to source.
+        // Fail loudly rather than silently encrypting with a padded/empty key.
+        var keyString = configuration["Encryption:Key"];
+        var ivString = configuration["Encryption:IV"];
+
+        if (string.IsNullOrWhiteSpace(keyString) || string.IsNullOrWhiteSpace(ivString))
+        {
+            throw new InvalidOperationException(
+                "Encryption:Key and Encryption:IV are not configured. " +
+                "Set the Encryption__Key (32 chars) and Encryption__IV (16 chars) environment variables.");
+        }
 
         _key = Encoding.UTF8.GetBytes(keyString.PadRight(32).Substring(0, 32));
         _iv = Encoding.UTF8.GetBytes(ivString.PadRight(16).Substring(0, 16));

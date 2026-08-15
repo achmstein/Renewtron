@@ -168,6 +168,27 @@ export function FunnelPills({ stages }: { stages: Array<{ label: string; tone: T
   )
 }
 
+/** The facts a search's funnel is derived from. Computed once on the server and returned by both
+ *  the searches list and the search-detail endpoint, so the two views can never disagree. */
+export type SearchFunnel = { hasLead: boolean; anyPaid: boolean; anyInflight: boolean; anyFailed: boolean }
+
+/** Canonical Search → funnel pills, shared by the list column and the detail page.
+ *  Stage-3 priority: paid > in-flight > failed > none. */
+export function searchFunnelStages(f: SearchFunnel): Array<{ label: string; tone: Tone; active: boolean }> {
+  const third = f.anyPaid
+    ? { label: 'PAID', tone: 'emerald' as Tone, active: true }
+    : f.anyInflight
+      ? { label: 'PAID', tone: 'amber' as Tone, active: true }
+      : f.anyFailed
+        ? { label: 'FAIL', tone: 'red' as Tone, active: true }
+        : { label: 'PAID', tone: 'zinc' as Tone, active: false }
+  return [
+    { label: 'SRCH', tone: 'emerald', active: true },
+    { label: 'LEAD', tone: 'emerald', active: f.hasLead },
+    third,
+  ]
+}
+
 function FunnelStage({ label, tone, active }: { label: string; tone: Tone; active: boolean }) {
   // Inactive stages are always zinc-grey regardless of `tone` (greys-out the future).
   // Active stages render in their tone.

@@ -10,7 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Asic.Client\Asic.Client.csproj" />
     <ProjectReference Include="..\Renewtron.ServiceDefaults\Renewtron.ServiceDefaults.csproj" />
-    <PackageReference Include="Ato.Api.Contracts" Version="$(AtoApiContractsVersion)" />
   </ItemGroup>
 
   <ItemGroup>

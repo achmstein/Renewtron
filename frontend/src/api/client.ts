@@ -86,7 +86,7 @@ export interface FunnelResponse {
   daily14d: Array<{ date: string; count: number }>
 }
 
-export type ActivityKind = 'paid' | 'lead-warm' | 'ato-ok' | 'ato-fail'
+export type ActivityKind = 'paid' | 'lead-warm'
 export interface ActivityItem {
   kind: ActivityKind
   at: string
@@ -118,7 +118,6 @@ export interface DashboardResponse {
     ontraportPipelineValue: number
     failedRenewalCount: number
     failedRenewalValue: number
-    stuckAtoCount: number
     pastCustomersDueSoonCount: number
     pastCustomersDueSoonValue: number
   }
@@ -152,16 +151,9 @@ export const api = {
       pricing: { oneYearFee: number; threeYearFee: number }
       asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }
       ontraport: { apiAppId: string; apiKey: string; conversationId: string }
-      atoAgent: { defaultAgentAbn: string; defaultAgentName: string }
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
     }>('/api/admin/settings'),
-    atoAgents: () => apiFetch<{
-      authenticated: boolean
-      phase: string
-      agents: Array<{ abn: string; name: string }>
-      selectedAgentAbn?: string | null
-    }>('/api/admin/settings/ato-agents'),
     searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
@@ -191,6 +183,7 @@ export const api = {
           firstBusinessName?: string | null
           lead?: { id: string; fullName: string; email: string; outcome: string; converted: boolean } | null
           renewal?: { id: string; amount: number; status: string } | null
+          funnel: { hasLead: boolean; anyPaid: boolean; anyInflight: boolean; anyFailed: boolean }
           repeatCount7d: number
         }>
         stats: {
@@ -226,6 +219,7 @@ export const api = {
         registrationDate: string
         renewalRequest?: { id: string; status: string; initiatedAt: string; renewalYears: number; amount: number } | null
       }>
+      funnel: { hasLead: boolean; anyPaid: boolean; anyInflight: boolean; anyFailed: boolean }
     }>(`/api/admin/searches/${id}`),
     leads: (params: { outcome?: string; reminder?: string; search?: string; dateFrom?: string; dateTo?: string; hasRenewal?: string; take?: number } = {}) => {
       const qs = new URLSearchParams()
@@ -346,7 +340,6 @@ export const api = {
           cardBrand?: string | null
           cardLast4?: string | null
           lead?: { id: string; fullName: string; email: string } | null
-          atoStatus?: string | null
           timeInStatusHours: number
         }>
         stats: {
@@ -468,7 +461,6 @@ export const api = {
     updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: { apiAppId: string; apiKey: string; conversationId: string }) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
-    updateAtoAgent: (body: { defaultAgentAbn: string; defaultAgentName: string }) => apiFetch<void>('/api/admin/settings/ato-agent', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
 
     funnel: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
@@ -479,67 +471,5 @@ export const api = {
       const suffix = qs.toString() ? `?${qs}` : ''
       return apiFetch<FunnelResponse>(`/api/admin/funnel${suffix}`)
     },
-
-    atoOnboarding: (params: { status?: string; search?: string; take?: number } = {}) => {
-      const qs = new URLSearchParams()
-      if (params.status) qs.set('status', params.status)
-      if (params.search) qs.set('search', params.search)
-      if (params.take) qs.set('take', String(params.take))
-      const suffix = qs.toString() ? `?${qs}` : ''
-      return apiFetch<{
-        totalCount: number
-        pendingCount: number
-        completedCount: number
-        failedCount: number
-        items: Array<{
-          renewalRequestId: string
-          leadId?: string | null
-          fullName?: string | null
-          email?: string | null
-          abn: string
-          businessName: string
-          initiatedAt: string
-          completedAt?: string | null
-          renewalStatus: string
-          atoJobId: string
-          atoStatus?: string | null
-          atoCompletedAt?: string | null
-          timeInFlightHours?: number | null
-        }>
-        stats: {
-          successRate30d: number
-          completed30d: number
-          total30d: number
-          avgOnboardingMinutes: number | null
-          stuck24h: number
-          today: number
-          yesterday: number
-          deltaPct: number | null
-          daily14d: Array<{ date: string; count: number }>
-        }
-      }>(`/api/admin/ato-onboarding${suffix}`)
-    },
-    retryAtoOnboarding: (renewalId: string) =>
-      apiFetch<{ message: string }>(`/api/admin/ato-onboarding/${renewalId}/retry`, { method: 'POST' }),
-    retryAllFailedAtoOnboarding: () =>
-      apiFetch<{ retried: number }>('/api/admin/ato-onboarding/retry-all-failed', { method: 'POST' }),
-    atoOnboardingDetail: (renewalId: string) => apiFetch<{
-      renewalRequestId: string
-      leadId?: string | null
-      fullName?: string | null
-      email?: string | null
-      mobileNumber?: string | null
-      dateOfBirth?: string | null
-      tfn?: string | null
-      abn?: string | null
-      businessName?: string | null
-      initiatedAt: string
-      completedAt?: string | null
-      renewalStatus: string
-      atoJobId: string
-      atoStatus?: string | null
-      atoCompletedAt?: string | null
-      atoResultJson?: string | null
-    }>(`/api/admin/ato-onboarding/${renewalId}`),
   },
 }

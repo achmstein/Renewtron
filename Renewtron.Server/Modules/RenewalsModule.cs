@@ -364,19 +364,20 @@ public sealed class RenewalsModule : ICarterModule
                     cardBrand = r.StripePayment != null ? r.StripePayment.CardBrand : null,
                     cardLast4 = r.StripePayment != null ? r.StripePayment.CardLast4 : null,
                     lead = r.Lead == null ? null : new { id = r.Lead.Id, fullName = r.Lead.FullName, email = r.Lead.Email },
-                    atoStatus = r.AtoOnboardingStatus,
                 })
                 .ToListAsync();
 
-            // Compute time-in-status in code (TimeSpan ops aren't translatable in EF).
+            // Time the row has been in its CURRENT status (TimeSpan ops aren't translatable in EF,
+            // so compute in memory). A terminal row entered its status at CompletedAt; an in-flight
+            // row (or a failed one, which has no CompletedAt) has been in status since it was initiated.
             var items = rows.Select(r => new
             {
                 r.id, r.abn, r.businessName, r.renewalYears, r.amount, r.status, r.source,
                 r.paymentType, r.initiatedAt, r.completedAt, r.email, r.errorMessage, r.failedAtStep,
                 r.transactionReference, r.initiatedByLabel, r.stripePaymentSucceeded,
-                r.cardBrand, r.cardLast4, r.lead, r.atoStatus,
+                r.cardBrand, r.cardLast4, r.lead,
                 timeInStatusHours = r.completedAt.HasValue
-                    ? Math.Round((r.completedAt.Value - r.initiatedAt).TotalHours, 1)
+                    ? Math.Round((now - r.completedAt.Value).TotalHours, 1)
                     : Math.Round((now - r.initiatedAt).TotalHours, 1),
             }).ToList();
 

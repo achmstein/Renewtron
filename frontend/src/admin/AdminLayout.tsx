@@ -94,12 +94,6 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    kicker: 'Compliance',
-    items: [
-      { to: '/admin/ato-onboarding', label: 'ATO Onboarding', icon: Icon.Briefcase },
-    ],
-  },
-  {
     kicker: 'System',
     items: [
       { to: '/admin/settings', label: 'Settings', icon: Icon.Cog },

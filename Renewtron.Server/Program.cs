@@ -2,6 +2,8 @@ using Asic.Client.Abstractions;
 using Carter;
 using Hangfire;
 using Hangfire.SqlServer;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-// Writable overrides layer for runtime-mutable settings (e.g. AtoAgent default).
+// Writable overrides layer for runtime-mutable settings.
 // Lives outside the immutable container image so the SettingsService can persist
 // admin changes; reloadOnChange flushes IOptionsMonitor consumers automatically.
 var overridesPath = builder.Configuration["Storage:OverridesPath"]
@@ -57,11 +59,21 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         errorNumbersToAdd: null)));
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services
-    .AddAuthentication(IdentityConstants.ApplicationScheme)
-    .AddIdentityCookies();
+var authentication = builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme);
+authentication.AddIdentityCookies();
+authentication.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+    ApiKeyAuthenticationHandler.SchemeName, null);
 
-builder.Services.AddAuthorization();
+// Default policy accepts either the SPA's Identity cookie or the X-Api-Key header,
+// so every existing RequireAuthorization() endpoint works for both callers.
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new AuthorizationPolicyBuilder(
+            IdentityConstants.ApplicationScheme,
+            ApiKeyAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 builder.Services.AddIdentityCore<AppUser>(options => options.SignIn.RequireConfirmedAccount = false)
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -80,7 +92,6 @@ builder.Services.AddOptions<SendGridSettings>().BindConfiguration("SendGrid").Va
 builder.Services.AddOptions<AsicSettings>().BindConfiguration("Asic").ValidateDataAnnotations();
 builder.Services.AddOptions<PricingSettings>().BindConfiguration("Pricing").ValidateDataAnnotations();
 builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").ValidateDataAnnotations();
-builder.Services.AddOptions<AtoAgentSettings>().BindConfiguration("AtoAgent");
 builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
 builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
 
@@ -93,19 +104,7 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
-builder.Services.AddScoped<IAtoOnboardingService, AtoOnboardingService>();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
-
-var atoApiUrl = builder.Configuration["AtoApi:Url"];
-if (string.IsNullOrWhiteSpace(atoApiUrl))
-{
-    throw new InvalidOperationException("AtoApi:Url not configured (set ATO_API_URL in the deploy environment).");
-}
-
-builder.Services.AddGrpcClient<Ato.Api.Contracts.AtoApi.AtoApiClient>(o =>
-{
-    o.Address = new Uri(atoApiUrl);
-});
 
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
