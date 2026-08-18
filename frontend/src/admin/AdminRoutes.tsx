@@ -8,6 +8,7 @@ import LeadDetails from './LeadDetails'
 import Funnel from './Funnel'
 import Renewals from './Renewals'
 import RenewalDetails from './RenewalDetails'
+import Payments from './Payments'
 import ManualRenewal from './ManualRenewal'
 import OntraportSales from './OntraportSales'
 import BulkRenewals from './BulkRenewals'
@@ -25,6 +26,7 @@ export default function AdminRoutes() {
         <Route path="funnel" element={<Funnel />} />
         <Route path="renewals" element={<Renewals />} />
         <Route path="renewals/:id" element={<RenewalDetails />} />
+        <Route path="payments" element={<Payments />} />
         <Route path="manual-renewal" element={<ManualRenewal />} />
         <Route path="ontraport-sales" element={<OntraportSales />} />
         <Route path="bulk-renewals" element={<BulkRenewals />} />

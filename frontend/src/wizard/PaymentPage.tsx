@@ -232,6 +232,47 @@ function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComp
         cardholderName: cardHolder,
       })
 
+      if (result.requiresAction && result.clientSecret) {
+        // The bank wants 3D Secure. Stripe pops its challenge over this page; nothing
+        // has been charged or recorded until it passes and the server verifies it.
+        setProcessingStatus('Verifying your card with your bank...')
+        const next = await stripe.handleNextAction({ clientSecret: result.clientSecret })
+        if (next.error) throw new Error(next.error.message ?? 'Card authentication failed.')
+        if (next.paymentIntent?.status !== 'succeeded')
+          throw new Error('Card authentication was not completed. You have not been charged — please try again.')
+
+        setProcessingStatus('Creating renewal requests...')
+        // The card is charged at this point. The completion call is idempotent
+        // server-side, so retry transient failures instead of telling the customer
+        // to pay again.
+        let completed: { renewalIds: string[] } | null = null
+        let completeError: unknown = null
+        for (let attempt = 0; attempt < 3 && !completed; attempt++) {
+          try {
+            completed = await api.completeBatchRenewal({
+              leadId,
+              searchResultIds: ids,
+              renewalYears: years,
+              paymentIntentId: next.paymentIntent.id,
+              cardholderName: cardHolder,
+            })
+          } catch (e) {
+            completeError = e
+            await new Promise((r) => setTimeout(r, 1500))
+          }
+        }
+        if (!completed) {
+          const reason = completeError instanceof Error ? ` (${completeError.message})` : ''
+          throw new Error(
+            `Your payment went through, but we couldn't finish setting up the renewal${reason}. ` +
+            `Please do not pay again — contact support and quote payment reference ${next.paymentIntent.id}.`,
+          )
+        }
+        setProcessingStatus('Scheduling renewal processing...')
+        onComplete(completed.renewalIds)
+        return
+      }
+
       setProcessingStatus('Scheduling renewal processing...')
       onComplete(result.renewalIds)
     } catch (err) {

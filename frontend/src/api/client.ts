@@ -49,7 +49,13 @@ export interface CheckResponse {
   businessNames: BusinessNameDto[]
 }
 
-export interface BatchRenewalResponse { renewalIds: string[]; total: number }
+export interface BatchRenewalResponse {
+  renewalIds: string[]
+  total: number
+  /** True when the card wants 3D Secure — run stripe.handleNextAction(clientSecret), then completeBatchRenewal. */
+  requiresAction?: boolean
+  clientSecret?: string | null
+}
 export interface RenewalStatusItem {
   id: string
   status: 'Pending' | 'Processing' | 'Completed' | 'Failed'
@@ -141,6 +147,8 @@ export const api = {
   checkLead: (id: string) => apiFetch<CheckResponse>(`/api/leads/${id}/check`, { method: 'POST' }),
   createBatchRenewal: (input: { leadId: string; searchResultIds: string[]; renewalYears: 1 | 3; paymentMethodId: string; cardholderName?: string }) =>
     apiFetch<BatchRenewalResponse>('/api/renewals/batch', { method: 'POST', body: JSON.stringify(input) }),
+  completeBatchRenewal: (input: { leadId: string; searchResultIds: string[]; renewalYears: 1 | 3; paymentIntentId: string; cardholderName?: string }) =>
+    apiFetch<{ renewalIds: string[]; total: number }>('/api/renewals/batch/complete', { method: 'POST', body: JSON.stringify(input) }),
   batchStatus: (ids: string[]) => apiFetch<RenewalStatusItem[]>(`/api/renewals/batch?ids=${ids.join(',')}`),
 
   admin: {
@@ -357,6 +365,45 @@ export const api = {
           failedAtStepBreakdown: Array<{ step: string; count: number }>
         }
       }>(`/api/admin/renewals${suffix}`)
+    },
+    payments: (params: { status?: string; search?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set('status', params.status)
+      if (params.search) qs.set('search', params.search)
+      if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
+      if (params.dateTo) qs.set('dateTo', params.dateTo)
+      if (params.page) qs.set('page', String(params.page))
+      if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<{
+        totalCount: number
+        page: number
+        pageSize: number
+        items: Array<{
+          kind: 'succeeded' | 'failed'
+          when: string
+          paymentIntentId?: string | null
+          amount?: number | null
+          abn?: string | null
+          businessNames: string[]
+          leadId?: string | null
+          customerName?: string | null
+          email?: string | null
+          cardBrand?: string | null
+          cardLast4?: string | null
+          cardholderName?: string | null
+          error?: string | null
+          renewals: Array<{ id: string; status: string }>
+        }>
+        stats: {
+          succeededCount: number
+          succeededValue: number
+          failedCount: number
+          succeeded30d: number
+          succeededValue30d: number
+          failed30d: number
+        }
+      }>(`/api/admin/payments${suffix}`)
     },
     retryRenewalsBulk: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
       const qs = new URLSearchParams()

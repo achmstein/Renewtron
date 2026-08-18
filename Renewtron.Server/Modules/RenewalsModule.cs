@@ -29,6 +29,13 @@ public sealed class RenewalsModule : ICarterModule
         string PaymentMethodId,
         string? CardholderName);
 
+    public record BatchRenewalCompleteRequest(
+        Guid LeadId,
+        Guid[] SearchResultIds,
+        int RenewalYears,
+        string PaymentIntentId,
+        string? CardholderName);
+
     public record ManualRenewalRequest(
         string Abn,
         string BusinessName,
@@ -92,7 +99,7 @@ public sealed class RenewalsModule : ICarterModule
             db.RenewalRequests.Add(renewal);
             await db.SaveChangesAsync();
 
-            var (ok, paymentIntentId, stripeError) = await stripe.ConfirmPaymentAsync(
+            var confirm = await stripe.ConfirmPaymentAsync(
                 amount,
                 request.Email ?? string.Empty,
                 $"Business name renewal: {searchResult.BusinessName} ({searchResult.SearchLog.Abn})",
@@ -105,8 +112,12 @@ public sealed class RenewalsModule : ICarterModule
                 },
                 request.PaymentMethodId);
 
-            if (!ok)
+            if (!confirm.Success)
             {
+                // This legacy endpoint has no browser round-trip, so a 3DS request is a dead end here.
+                var stripeError = confirm.RequiresAction
+                    ? "This card requires 3D Secure authentication, which this checkout does not support. Please pay via the website."
+                    : confirm.ErrorMessage;
                 renewal.Status = RenewalStatus.Failed;
                 renewal.ErrorMessage = stripeError;
                 renewal.FailedAtStep = "StripePayment";
@@ -118,9 +129,13 @@ public sealed class RenewalsModule : ICarterModule
             {
                 Id = Guid.NewGuid(),
                 RenewalRequestId = renewal.Id,
-                PaymentIntentId = paymentIntentId!,
+                PaymentIntentId = confirm.PaymentIntentId!,
                 PaymentStatus = "succeeded",
                 PaidAt = DateTime.UtcNow,
+                CardBrand = confirm.Card?.Brand,
+                CardLast4 = confirm.Card?.Last4,
+                CardExpMonth = confirm.Card?.ExpMonth,
+                CardExpYear = confirm.Card?.ExpYear,
             });
             await db.SaveChangesAsync();
 
@@ -162,7 +177,7 @@ public sealed class RenewalsModule : ICarterModule
             var total = pricePer * searchResults.Count;
             var businessNames = string.Join(", ", searchResults.Select(s => s.BusinessName));
 
-            var (ok, paymentIntentId, stripeError) = await stripe.ConfirmPaymentAsync(
+            var confirm = await stripe.ConfirmPaymentAsync(
                 total,
                 lead.Email,
                 $"Business Name Renewal - {searchResults.Count} renewal(s)",
@@ -175,72 +190,88 @@ public sealed class RenewalsModule : ICarterModule
                 },
                 request.PaymentMethodId);
 
-            if (!ok)
-                return Results.UnprocessableEntity(new { error = stripeError ?? "Payment failed." });
-
-            var renewalIds = new List<Guid>();
-            foreach (var sr in searchResults)
+            if (confirm.RequiresAction)
             {
-                var existing = await db.RenewalRequests
-                    .Include(r => r.StripePayment)
-                    .FirstOrDefaultAsync(r => r.SearchResultId == sr.Id);
-
-                RenewalRequest renewal;
-                if (existing is not null)
+                // Card wants 3D Secure. Nothing is recorded yet — the browser runs
+                // stripe.handleNextAction(clientSecret) and then posts /batch/complete.
+                return Results.Ok(new
                 {
-                    renewal = existing;
-                    renewal.LeadId = lead.Id;
-                    renewal.RenewalYears = request.RenewalYears;
-                    renewal.Email = lead.Email;
-                    renewal.MobileNumber = lead.MobileNumber;
-                    renewal.DateOfBirth = lead.DateOfBirth;
-                    renewal.Tfn = lead.Tfn;
-                    renewal.PaymentType = PaymentType.Stripe;
-                    renewal.Amount = pricePer;
-                    renewal.Status = RenewalStatus.Pending;
-                    renewal.CompletedAt = null;
-                    renewal.TransactionReference = null;
-                    renewal.HostedTokenizationId = null;
-                    renewal.ErrorMessage = null;
-                    renewal.FailedAtStep = null;
-                    if (renewal.StripePayment is not null)
-                        db.StripePayments.Remove(renewal.StripePayment);
-                }
-                else
-                {
-                    renewal = new RenewalRequest
-                    {
-                        Id = Guid.NewGuid(),
-                        SearchResultId = sr.Id,
-                        LeadId = lead.Id,
-                        InitiatedAt = DateTime.UtcNow,
-                        RenewalYears = request.RenewalYears,
-                        Email = lead.Email,
-                        MobileNumber = lead.MobileNumber,
-                        DateOfBirth = lead.DateOfBirth,
-                        Tfn = lead.Tfn,
-                        Source = RenewalSource.Renewtron,
-                        PaymentType = PaymentType.Stripe,
-                        Amount = pricePer,
-                        Status = RenewalStatus.Pending,
-                    };
-                    db.RenewalRequests.Add(renewal);
-                }
-                await db.SaveChangesAsync();
-
-                db.StripePayments.Add(new StripePayment
-                {
-                    Id = Guid.NewGuid(),
-                    RenewalRequestId = renewal.Id,
-                    PaymentIntentId = paymentIntentId!,
-                    PaymentStatus = "succeeded",
-                    PaidAt = DateTime.UtcNow,
-                    CardholderName = request.CardholderName,
+                    renewalIds = Array.Empty<Guid>(),
+                    total,
+                    requiresAction = true,
+                    clientSecret = confirm.ClientSecret,
                 });
-                await db.SaveChangesAsync();
-
-                renewalIds.Add(renewal.Id);
             }
+
+            if (!confirm.Success)
+                return Results.UnprocessableEntity(new { error = confirm.ErrorMessage ?? "Payment failed." });
+
+            var renewalIds = await UpsertPaidRenewalsAsync(
+                db, lead, searchResults, request.RenewalYears, pricePer,
+                confirm.PaymentIntentId!, request.CardholderName, confirm.Card);
+
+            try { await leadService.MarkConvertedAsync(lead.Id); } catch { }
+
+            foreach (var rid in renewalIds)
+                jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
+
+            return Results.Ok(new { renewalIds, total, requiresAction = false, clientSecret = (string?)null });
+        }).WithTags("Wizard");
+
+        // Second leg of the 3DS flow: the browser has finished the challenge, we verify the
+        // PaymentIntent with Stripe ourselves (never trust the client's word) and only then
+        // record the renewals — the same writes the one-shot path above does.
+        app.MapPost("/api/renewals/batch/complete", async (
+            BatchRenewalCompleteRequest request,
+            ApplicationDbContext db,
+            IStripePaymentService stripe,
+            IBackgroundJobClient jobs,
+            ILeadService leadService,
+            IOptionsSnapshot<PricingSettings> pricing) =>
+        {
+            if (request.RenewalYears != 1 && request.RenewalYears != 3)
+                return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
+            if (request.SearchResultIds.Length == 0)
+                return Results.BadRequest(new { error = "At least one business name is required." });
+            if (string.IsNullOrWhiteSpace(request.PaymentIntentId))
+                return Results.BadRequest(new { error = "PaymentIntentId is required." });
+
+            var lead = await db.Leads.FirstOrDefaultAsync(l => l.Id == request.LeadId);
+            if (lead is null) return Results.NotFound(new { error = "Lead not found." });
+
+            var searchResults = await db.SearchResults
+                .Include(sr => sr.SearchLog)
+                .Where(sr => request.SearchResultIds.Contains(sr.Id))
+                .ToListAsync();
+
+            if (searchResults.Count == 0)
+                return Results.NotFound(new { error = "Search results not found." });
+
+            var pricePer = pricing.Value.GetCustomerPrice(request.RenewalYears);
+            var total = pricePer * searchResults.Count;
+
+            var intent = await stripe.GetPaymentIntentAsync(request.PaymentIntentId);
+            if (intent is null)
+                return Results.UnprocessableEntity(new { error = "Payment could not be verified. Please contact support." });
+            if (intent.Status != "succeeded")
+                return Results.UnprocessableEntity(new { error = $"Payment was not completed (status: {intent.Status}). You have not been charged — please try again." });
+            if (!intent.Metadata.TryGetValue("lead_id", out var intentLeadId) || intentLeadId != lead.Id.ToString())
+                return Results.UnprocessableEntity(new { error = "Payment does not belong to this renewal." });
+            if (intent.AmountInCents != (long)(total * 100))
+                return Results.UnprocessableEntity(new { error = "Payment amount does not match the order. Please contact support." });
+
+            // Idempotent: a retry / double-click after the renewals were already recorded
+            // just returns the existing ids instead of charging the work twice.
+            var alreadyRecorded = await db.StripePayments
+                .Where(p => p.PaymentIntentId == intent.PaymentIntentId)
+                .Select(p => p.RenewalRequestId)
+                .ToListAsync();
+            if (alreadyRecorded.Count > 0)
+                return Results.Ok(new { renewalIds = alreadyRecorded, total });
+
+            var renewalIds = await UpsertPaidRenewalsAsync(
+                db, lead, searchResults, request.RenewalYears, pricePer,
+                intent.PaymentIntentId, request.CardholderName, intent.Card);
 
             try { await leadService.MarkConvertedAsync(lead.Id); } catch { }
 
@@ -835,5 +866,90 @@ public sealed class RenewalsModule : ICarterModule
                 errorMessage = result.Message,
             });
         }).RequireAuthorization().WithTags("Admin.Renewals");
+    }
+
+    /// <summary>
+    /// Records the renewals for a batch that has already been paid — shared by the
+    /// immediate-success path and the post-3DS completion endpoint so the two can't drift.
+    /// Reuses an existing RenewalRequest per search result (a failed earlier attempt), else creates one.
+    /// </summary>
+    private static async Task<List<Guid>> UpsertPaidRenewalsAsync(
+        ApplicationDbContext db,
+        Lead lead,
+        List<SearchResult> searchResults,
+        int renewalYears,
+        decimal pricePer,
+        string paymentIntentId,
+        string? cardholderName,
+        StripeCardInfo? card)
+    {
+        var renewalIds = new List<Guid>();
+        foreach (var sr in searchResults)
+        {
+            var existing = await db.RenewalRequests
+                .Include(r => r.StripePayment)
+                .FirstOrDefaultAsync(r => r.SearchResultId == sr.Id);
+
+            RenewalRequest renewal;
+            if (existing is not null)
+            {
+                renewal = existing;
+                renewal.LeadId = lead.Id;
+                renewal.RenewalYears = renewalYears;
+                renewal.Email = lead.Email;
+                renewal.MobileNumber = lead.MobileNumber;
+                renewal.DateOfBirth = lead.DateOfBirth;
+                renewal.Tfn = lead.Tfn;
+                renewal.PaymentType = PaymentType.Stripe;
+                renewal.Amount = pricePer;
+                renewal.Status = RenewalStatus.Pending;
+                renewal.CompletedAt = null;
+                renewal.TransactionReference = null;
+                renewal.HostedTokenizationId = null;
+                renewal.ErrorMessage = null;
+                renewal.FailedAtStep = null;
+                if (renewal.StripePayment is not null)
+                    db.StripePayments.Remove(renewal.StripePayment);
+            }
+            else
+            {
+                renewal = new RenewalRequest
+                {
+                    Id = Guid.NewGuid(),
+                    SearchResultId = sr.Id,
+                    LeadId = lead.Id,
+                    InitiatedAt = DateTime.UtcNow,
+                    RenewalYears = renewalYears,
+                    Email = lead.Email,
+                    MobileNumber = lead.MobileNumber,
+                    DateOfBirth = lead.DateOfBirth,
+                    Tfn = lead.Tfn,
+                    Source = RenewalSource.Renewtron,
+                    PaymentType = PaymentType.Stripe,
+                    Amount = pricePer,
+                    Status = RenewalStatus.Pending,
+                };
+                db.RenewalRequests.Add(renewal);
+            }
+            await db.SaveChangesAsync();
+
+            db.StripePayments.Add(new StripePayment
+            {
+                Id = Guid.NewGuid(),
+                RenewalRequestId = renewal.Id,
+                PaymentIntentId = paymentIntentId,
+                PaymentStatus = "succeeded",
+                PaidAt = DateTime.UtcNow,
+                CardholderName = cardholderName,
+                CardBrand = card?.Brand,
+                CardLast4 = card?.Last4,
+                CardExpMonth = card?.ExpMonth,
+                CardExpYear = card?.ExpYear,
+            });
+            await db.SaveChangesAsync();
+
+            renewalIds.Add(renewal.Id);
+        }
+        return renewalIds;
     }
 }

@@ -3,7 +3,7 @@ export default function SiteFooter() {
   return (
     <footer className="bg-white border-t border-gray-200 py-10 px-6 mt-auto">
       <div className="max-w-[1200px] mx-auto">
-        <div className="grid grid-cols-1 gap-8 md:gap-10" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_1fr_1fr_1fr] gap-8 md:gap-10">
           <div>
             <span className="text-base font-bold brand-text">Business Name Services</span>
             <p className="text-[13px] text-gray-500 mt-3 max-w-[280px] leading-relaxed">
