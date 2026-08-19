@@ -31,6 +31,13 @@ public class RenewalRequest
     public string? ErrorMessage { get; set; }
     public string? FailedAtStep { get; set; }
 
+    // Retry tracking. AttemptCount counts processing runs; ErrorCategory is one of
+    // RenewalErrorCategories; NextRetryAt is set when an automatic retry is scheduled.
+    public int AttemptCount { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextRetryAt { get; set; }
+    public string? ErrorCategory { get; set; }
+
     // Navigation properties
     public SearchResult SearchResult { get; set; }
     public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments

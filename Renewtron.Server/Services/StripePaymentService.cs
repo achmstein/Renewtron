@@ -20,7 +20,8 @@ public class StripePaymentService : IStripePaymentService
         string customerEmail,
         string description,
         Dictionary<string, string> metadata,
-        string paymentMethodId)
+        string paymentMethodId,
+        string? idempotencyKey = null)
     {
         try
         {
@@ -42,7 +43,8 @@ public class StripePaymentService : IStripePaymentService
             };
 
             var service = new PaymentIntentService();
-            var paymentIntent = await service.CreateAsync(options);
+            var requestOptions = idempotencyKey is null ? null : new RequestOptions { IdempotencyKey = idempotencyKey };
+            var paymentIntent = await service.CreateAsync(options, requestOptions);
 
             return paymentIntent.Status switch
             {

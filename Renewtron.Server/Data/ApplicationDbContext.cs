@@ -15,6 +15,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<BulkRenewalUpload> BulkRenewalUploads { get; set; }
     public DbSet<OutboundMessage> OutboundMessages { get; set; }
     public DbSet<FunnelEvent> FunnelEvents { get; set; }
+    public DbSet<OntraportSyncOutbox> OntraportSyncOutbox { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -175,6 +176,16 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .WithMany()
                 .HasForeignKey(e => e.LeadId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OntraportSyncOutbox>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.OntraportContactId).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.LastError).HasMaxLength(1000);
+
+            entity.HasIndex(e => e.SentAt);
+            entity.HasIndex(e => e.CreatedAt);
         });
 
         modelBuilder.Entity<FunnelEvent>(entity =>

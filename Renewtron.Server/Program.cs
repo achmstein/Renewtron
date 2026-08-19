@@ -1,6 +1,7 @@
 using Asic.Client.Abstractions;
 using Carter;
 using Hangfire;
+using Microsoft.AspNetCore.RateLimiting;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -102,6 +103,7 @@ builder.Services.AddHttpClient<IBusinessNameFallbackService, DataGovBusinessName
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
+builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
@@ -124,9 +126,20 @@ builder.Services.AddHangfire(configuration => configuration
 builder.Services.AddHangfireServer(options =>
 {
     // Default = min(20, ProcessorCount * 5). On a 16-core dev box this pegs ~80 threads,
-    // each holding a SqlConnection while idle-polling. 5 is plenty for the recurring jobs
-    // we have (Ontraport sync, bulk renewal, ASIC renewals).
-    options.WorkerCount = 5;
+    // each holding a SqlConnection while idle-polling. 4 is plenty for the recurring jobs
+    // we have (Ontraport sync, bulk renewal, reconciliation, outbox retry).
+    options.ServerName = $"{Environment.MachineName}:default";
+    options.Queues = ["default"];
+    options.WorkerCount = 4;
+});
+
+// ASIC renewals run on their own strictly-serial queue: the pipeline shares one company
+// card and one OTP SMS conversation, so two concurrent renewals race for the same OTP.
+builder.Services.AddHangfireServer(options =>
+{
+    options.ServerName = $"{Environment.MachineName}:asic";
+    options.Queues = ["asic"];
+    options.WorkerCount = 1;
 });
 
 builder.Services.AddMemoryCache();
@@ -137,6 +150,37 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddAsic(builder.Configuration, services =>
 {
     services.AddHttpClient<ISmsProvider, OntraportSmsProvider>();
+});
+
+// The wizard surface is unauthenticated by design; rate limiting is the only brake on
+// abuse. Partition by client IP (nginx fronts the app, so prefer X-Forwarded-For).
+builder.Services.AddRateLimiter(options =>
+{
+    static string ClientKey(HttpContext ctx) =>
+        ctx.Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+        ?? ctx.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(ctx),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 300,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    // The ASIC search screen-scrapes a slow upstream — much tighter than the global cap.
+    options.AddPolicy("asic-search", ctx =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(ctx),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
 });
 
 builder.Services.AddCors(options =>
@@ -172,6 +216,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors();
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -179,6 +225,14 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
     Authorization = [new HangfireAuthorizationFilter()]
 });
+
+// Runs before the 06:00 sync so orphaned/stale renewals are repaired ahead of the
+// day's processing. Re-queues are capped per run to bound the blast radius.
+RecurringJob.AddOrUpdate<IRenewalReconciliationService>(
+    "renewal-reconciliation",
+    service => service.ReconcileAsync(false, 25),
+    "30 5 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
 RecurringJob.AddOrUpdate<IOntraportSalesService>(
     "ontraport-sales-sync",
@@ -197,6 +251,12 @@ RecurringJob.AddOrUpdate<IBulkRenewalService>(
     service => service.ProcessEligibleRenewalsAsync(),
     "30 7 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// Retries renewal-outcome write-backs to Ontraport that failed at completion time.
+RecurringJob.AddOrUpdate<IOntraportSalesService>(
+    "ontraport-outbox-retry",
+    service => service.ProcessSyncOutboxAsync(),
+    "15,45 * * * *");
 
 app.MapGroup("/api").MapIdentityApi<AppUser>();
 

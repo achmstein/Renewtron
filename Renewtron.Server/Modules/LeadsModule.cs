@@ -249,33 +249,62 @@ public sealed class LeadsModule : ICarterModule
         {
             take = Math.Clamp(take, 1, 500);
 
-            IQueryable<Lead> query = db.Leads.AsNoTracking();
-            if (!string.IsNullOrEmpty(outcome) && Enum.TryParse<LeadOutcome>(outcome, out var oc))
-                query = query.Where(l => l.Outcome == oc);
-            if (!string.IsNullOrEmpty(reminder))
+            // Facet params accept comma-separated multi-values ("RenewalAvailable,Pending").
+            var outcomeValues = Helpers.ParseEnumList<LeadOutcome>(outcome);
+
+            // Reminder round-trips as OptedIn/NotOptedIn (facet values); legacy true/false
+            // still accepted. Both selected (or neither) means no filter.
+            var reminderTokens = (reminder ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var wantOptedIn = reminderTokens.Any(t =>
+                t.Equals("OptedIn", StringComparison.OrdinalIgnoreCase) || t.Equals("true", StringComparison.OrdinalIgnoreCase));
+            var wantNotOptedIn = reminderTokens.Any(t =>
+                t.Equals("NotOptedIn", StringComparison.OrdinalIgnoreCase) || t.Equals("false", StringComparison.OrdinalIgnoreCase));
+            bool? reminderOn = wantOptedIn == wantNotOptedIn ? null : wantOptedIn;
+
+            // One filter pipeline, with each facet dimension excludable so its own option
+            // counts can be computed under the OTHER selections (classic faceted search).
+            IQueryable<Lead> Filtered(bool applyOutcome = true, bool applyReminder = true)
             {
-                var on = reminder == "true";
-                query = query.Where(l => l.ReminderOptIn == on);
+                IQueryable<Lead> q = db.Leads.AsNoTracking();
+                if (applyOutcome && outcomeValues.Length > 0)
+                    q = q.Where(l => outcomeValues.Contains(l.Outcome));
+                if (applyReminder && reminderOn is { } on)
+                    q = q.Where(l => l.ReminderOptIn == on);
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var term = search.ToLower();
+                    q = q.Where(l =>
+                        l.Abn.Contains(term) ||
+                        l.FullName.ToLower().Contains(term) ||
+                        l.Email.ToLower().Contains(term));
+                }
+                if (dateFrom.HasValue)
+                    q = q.Where(l => l.CreatedAt >= dateFrom.Value.ToUniversalTime());
+                if (dateTo.HasValue)
+                {
+                    var until = dateTo.Value.Date.AddDays(1).ToUniversalTime();
+                    q = q.Where(l => l.CreatedAt < until);
+                }
+                if (hasRenewal == "true")
+                    q = q.Where(l => l.RenewalRequests.Any());
+                else if (hasRenewal == "false")
+                    q = q.Where(l => !l.RenewalRequests.Any());
+                return q;
             }
-            if (!string.IsNullOrWhiteSpace(search))
+
+            var query = Filtered();
+
+            var outcomeFacet = await Filtered(applyOutcome: false)
+                .GroupBy(l => l.Outcome).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+            var reminderFacet = await Filtered(applyReminder: false)
+                .GroupBy(l => l.ReminderOptIn).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+
+            var facets = new
             {
-                var term = search.ToLower();
-                query = query.Where(l =>
-                    l.Abn.Contains(term) ||
-                    l.FullName.ToLower().Contains(term) ||
-                    l.Email.ToLower().Contains(term));
-            }
-            if (dateFrom.HasValue)
-                query = query.Where(l => l.CreatedAt >= dateFrom.Value.ToUniversalTime());
-            if (dateTo.HasValue)
-            {
-                var until = dateTo.Value.Date.AddDays(1).ToUniversalTime();
-                query = query.Where(l => l.CreatedAt < until);
-            }
-            if (hasRenewal == "true")
-                query = query.Where(l => l.RenewalRequests.Any());
-            else if (hasRenewal == "false")
-                query = query.Where(l => !l.RenewalRequests.Any());
+                outcome = outcomeFacet.OrderByDescending(f => f.Count).Select(f => new { value = f.Key.ToString(), count = f.Count }),
+                reminder = reminderFacet.OrderByDescending(f => f.Count).Select(f => new { value = f.Key ? "OptedIn" : "NotOptedIn", count = f.Count }),
+            };
 
             var totalCount = await query.CountAsync();
 
@@ -397,6 +426,7 @@ public sealed class LeadsModule : ICarterModule
             {
                 totalCount,
                 items,
+                facets,
                 stats = new
                 {
                     totalAllTime,

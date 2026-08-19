@@ -85,6 +85,6 @@ public sealed class SearchModule : ICarterModule
                     registrationDate = r.RegistrationDate,
                 }),
             });
-        }).WithTags("Wizard");
+        }).WithTags("Wizard").RequireRateLimiting("asic-search");
     }
 }

@@ -26,12 +26,15 @@ public record StripeIntentState(
 
 public interface IStripePaymentService
 {
+    /// <param name="idempotencyKey">Stripe idempotency key — the same key always maps to the
+    /// same PaymentIntent, so a double-submit can never charge twice.</param>
     Task<StripeConfirmResult> ConfirmPaymentAsync(
         decimal amount,
         string customerEmail,
         string description,
         Dictionary<string, string> metadata,
-        string paymentMethodId);
+        string paymentMethodId,
+        string? idempotencyKey = null);
 
     Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId);
 }

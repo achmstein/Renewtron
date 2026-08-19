@@ -8,7 +8,9 @@ public class HangfireAuthorizationFilter : IDashboardAuthorizationFilter
     {
         var httpContext = context.GetHttpContext();
 
-        // Only allow access to authenticated admin users
-        return httpContext.User.Identity?.IsAuthenticated == true;
+        // Cookie-authenticated humans only. The X-Api-Key machine scheme also satisfies
+        // IsAuthenticated, but a machine credential must not grant an interactive dashboard
+        // that can enqueue/delete arbitrary jobs.
+        return httpContext.User.Identity is { IsAuthenticated: true, AuthenticationType: "Identity.Application" };
     }
 }

@@ -49,6 +49,28 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     public async Task<BusinessNamesResult> SearchByAbnAsync(string abn)
     {
+        // The search is read-only, so transient failures (network blips, ASIC
+        // maintenance pages that break session init) are safe to retry in place.
+        const int maxAttempts = 3;
+        BusinessNamesResult result = null;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            result = await SearchByAbnOnceAsync(abn);
+            if (result.Success || !IsTransientSearchFailure(result)) return result;
+            if (attempt < maxAttempts) await Task.Delay(TimeSpan.FromSeconds(attempt * 3));
+        }
+        return result;
+    }
+
+    private static bool IsTransientSearchFailure(BusinessNamesResult result)
+    {
+        var message = result?.ErrorMessage ?? "";
+        return message.StartsWith("Search failed:") ||
+               message == "Failed to initialize renewal session";
+    }
+
+    private async Task<BusinessNamesResult> SearchByAbnOnceAsync(string abn)
+    {
         try
         {
             // Reset session to ensure fresh state for each search
@@ -120,18 +142,32 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     private async Task<StepResult<RenewalStepData>> InitializeSessionStepAsync(RenewalStepData data)
     {
-        var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
-
-        if (string.IsNullOrEmpty(sessionId) || string.IsNullOrEmpty(adfWindowId) || string.IsNullOrEmpty(viewState))
+        // Session init happens before any payment, so transient failures are safe to retry.
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            return StepResult<RenewalStepData>.Failure("Failed to initialize renewal session", "Initialize Session");
+            try
+            {
+                ResetSession();
+                var (sessionId, adfWindowId, viewState) = await InitializeSessionAsync();
+
+                if (!string.IsNullOrEmpty(sessionId) && !string.IsNullOrEmpty(adfWindowId) && !string.IsNullOrEmpty(viewState))
+                {
+                    data.SessionId = sessionId;
+                    data.AdfWindowId = adfWindowId;
+                    data.ViewState = viewState;
+                    return StepResult<RenewalStepData>.Success(data);
+                }
+            }
+            catch (Exception) when (attempt < maxAttempts)
+            {
+                // fall through to the delayed retry below
+            }
+
+            if (attempt < maxAttempts) await Task.Delay(TimeSpan.FromSeconds(attempt * 3));
         }
 
-        data.SessionId = sessionId;
-        data.AdfWindowId = adfWindowId;
-        data.ViewState = viewState;
-
-        return StepResult<RenewalStepData>.Success(data);
+        return StepResult<RenewalStepData>.Failure("Failed to initialize renewal session", "Initialize Session");
     }
 
     private async Task<StepResult<RenewalStepData>> SubmitAbnStepAsync(RenewalStepData data)
@@ -703,11 +739,20 @@ public class AsicRenewalClient : IAsicRenewalClient
         var response = await _http.GetAsync("public/faces/renewal");
         var content = await response.Content.ReadAsStringAsync();
 
-        // Extract session ID from Set-Cookie header
-        var sessionId = response.Headers.GetValues("Set-Cookie")
-            .FirstOrDefault(x => x.StartsWith("JSESSIONID="))?
-            .Split(';')[0]
-            .Replace("JSESSIONID=", "");
+        // Extract session ID from Set-Cookie header. The header is absent when ASIC
+        // serves an error/maintenance page or reuses the handler's existing cookie —
+        // GetValues would throw "The given header was not found", so probe instead
+        // and fall back to the cookie container the handler populates.
+        string sessionId = null;
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            sessionId = setCookies
+                .FirstOrDefault(x => x.StartsWith("JSESSIONID="))?
+                .Split(';')[0]
+                .Replace("JSESSIONID=", "");
+        }
+        sessionId ??= _httpHandler.CookieContainer.GetCookies(_http.BaseAddress)
+            .FirstOrDefault(c => c.Name == "JSESSIONID" && !c.Expired)?.Value;
 
         // Extract parameters from JavaScript
         var afrLoop = Regex.Match(content, @"'_afrLoop',\s*'(\d+)'").Groups[1].Value;

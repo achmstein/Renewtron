@@ -25,32 +25,65 @@ public sealed class SearchesAdminModule : ICarterModule
             pageSize = Math.Clamp(pageSize, 1, 200);
             var skip = (page - 1) * pageSize;
 
+            // Facet params accept comma-separated multi-values ("Customer,Admin").
+            var initiatedByValues = Helpers.ParseEnumList<SearchInitiator>(initiatedBy);
+
+            // "true"/"false" kept for old callers; "Success"/"Failed" is what the Result
+            // facet round-trips. Both result values selected means the page sends no filter.
+            bool? successFilter = success?.Trim().ToLowerInvariant() switch
+            {
+                "true" or "success" => true,
+                "false" or "failed" => false,
+                _ => null,
+            };
+
             // System searches are internal plumbing (Ontraport sync, bulk renewal pipelines).
             // They flood the list and dilute customer-funnel metrics, so we exclude them by
             // default. An explicit initiatedBy filter overrides; includeSystem=true also opts in.
-            var explicitInitiator = !string.IsNullOrWhiteSpace(initiatedBy)
-                && Enum.TryParse<SearchInitiator>(initiatedBy, true, out _);
-            var hideSystem = !includeSystem && !explicitInitiator;
+            var hideSystem = !includeSystem && initiatedByValues.Length == 0;
 
-            var query = db.SearchLogs.AsNoTracking().AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(abn))
-                query = query.Where(s => s.Abn.Contains(abn));
-            if (success == "true")
-                query = query.Where(s => s.Success);
-            else if (success == "false")
-                query = query.Where(s => !s.Success);
-            if (!string.IsNullOrWhiteSpace(initiatedBy) && Enum.TryParse<SearchInitiator>(initiatedBy, true, out var initEnum))
-                query = query.Where(s => s.InitiatedBy == initEnum);
-            else if (hideSystem)
-                query = query.Where(s => s.InitiatedBy != SearchInitiator.System);
-            if (dateFrom.HasValue)
-                query = query.Where(s => s.SearchedAt >= dateFrom.Value.ToUniversalTime());
-            if (dateTo.HasValue)
+            // One filter pipeline, with each facet dimension excludable so its own option
+            // counts can be computed under the OTHER selections (classic faceted search).
+            // The default hide-System rule belongs to the initiatedBy dimension: the facet
+            // must still show System's count so the operator can opt in by selecting it.
+            IQueryable<SearchLog> Filtered(bool applySuccess = true, bool applyInitiatedBy = true)
             {
-                var until = dateTo.Value.Date.AddDays(1).ToUniversalTime();
-                query = query.Where(s => s.SearchedAt < until);
+                IQueryable<SearchLog> q = db.SearchLogs.AsNoTracking();
+                if (!string.IsNullOrWhiteSpace(abn))
+                    q = q.Where(s => s.Abn.Contains(abn));
+                if (dateFrom.HasValue)
+                    q = q.Where(s => s.SearchedAt >= dateFrom.Value.ToUniversalTime());
+                if (dateTo.HasValue)
+                {
+                    var until = dateTo.Value.Date.AddDays(1).ToUniversalTime();
+                    q = q.Where(s => s.SearchedAt < until);
+                }
+                if (applySuccess && successFilter.HasValue)
+                    q = q.Where(s => s.Success == successFilter.Value);
+                if (applyInitiatedBy)
+                {
+                    if (initiatedByValues.Length > 0)
+                        q = q.Where(s => initiatedByValues.Contains(s.InitiatedBy));
+                    else if (hideSystem)
+                        q = q.Where(s => s.InitiatedBy != SearchInitiator.System);
+                }
+                return q;
             }
+
+            var query = Filtered();
+
+            var resultFacet = await Filtered(applySuccess: false)
+                .GroupBy(s => s.Success).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+            var initiatedByFacet = await Filtered(applyInitiatedBy: false)
+                .GroupBy(s => s.InitiatedBy).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+
+            var facets = new
+            {
+                result = resultFacet.OrderByDescending(f => f.Count)
+                    .Select(f => new { value = f.Key ? "Success" : "Failed", count = f.Count }),
+                initiatedBy = initiatedByFacet.OrderByDescending(f => f.Count)
+                    .Select(f => new { value = f.Key.ToString(), count = f.Count }),
+            };
 
             var totalCount = await query.CountAsync();
 
@@ -148,8 +181,8 @@ public sealed class SearchesAdminModule : ICarterModule
             var yesterdayStart = todayStart.AddDays(-1);
 
             var statsBase = db.SearchLogs.AsNoTracking().AsQueryable();
-            if (!string.IsNullOrWhiteSpace(initiatedBy) && Enum.TryParse<SearchInitiator>(initiatedBy, true, out var statsInit))
-                statsBase = statsBase.Where(s => s.InitiatedBy == statsInit);
+            if (initiatedByValues.Length > 0)
+                statsBase = statsBase.Where(s => initiatedByValues.Contains(s.InitiatedBy));
             else if (hideSystem)
                 statsBase = statsBase.Where(s => s.InitiatedBy != SearchInitiator.System);
 
@@ -206,6 +239,7 @@ public sealed class SearchesAdminModule : ICarterModule
                 page,
                 pageSize,
                 items,
+                facets,
                 stats = new
                 {
                     totalAllTime,

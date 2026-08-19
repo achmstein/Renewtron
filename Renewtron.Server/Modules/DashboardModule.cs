@@ -1,6 +1,8 @@
 using Carter;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Renewtron.Data;
+using Renewtron.Settings;
 
 namespace Renewtron.Modules;
 
@@ -8,10 +10,13 @@ public sealed class DashboardModule : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/admin/dashboard", async (ApplicationDbContext db) =>
+        app.MapGet("/api/admin/dashboard", async (ApplicationDbContext db, IOptionsSnapshot<PricingSettings> pricing) =>
         {
             var now = DateTime.UtcNow;
-            var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            // The business runs on Sydney time — "this month" means the AEST month.
+            var aest = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
+            var aestNow = TimeZoneInfo.ConvertTimeFromUtc(now, aest);
+            var monthStart = TimeZoneInfo.ConvertTimeToUtc(new DateTime(aestNow.Year, aestNow.Month, 1, 0, 0, 0, DateTimeKind.Unspecified), aest);
             var thirtyDaysAgo = now.AddDays(-30);
             var ninetyDaysAgo = now.AddDays(-90);
             var fortyEightHoursAgo = now.AddHours(-48);
@@ -30,23 +35,29 @@ public sealed class DashboardModule : ICarterModule
             var convertedLeads = await db.Leads.AsNoTracking().CountAsync(l => l.Outcome == LeadOutcome.RenewalCompleted);
             var notDueLeads = await db.Leads.AsNoTracking().CountAsync(l => l.Outcome == LeadOutcome.NotDueForRenewal);
 
-            // Channel breakdown for the current month
+            // Channel breakdown for the current month — COMPLETED renewals only. Counting
+            // failed/pending rows as revenue made this page disagree with the Renewals page.
             var renewtronDirect = await db.RenewalRequests.AsNoTracking()
-                .Where(r => r.Source == RenewalSource.Renewtron && r.InitiatedAt >= monthStart)
+                .Where(r => r.Source == RenewalSource.Renewtron && r.Status == RenewalStatus.Completed
+                    && r.CompletedAt != null && r.CompletedAt >= monthStart)
                 .Select(r => r.Amount)
                 .ToListAsync();
             var ontraport = await db.RenewalRequests.AsNoTracking()
-                .Where(r => r.Source == RenewalSource.Ontraport && r.InitiatedAt >= monthStart)
+                .Where(r => r.Source == RenewalSource.Ontraport && r.Status == RenewalStatus.Completed
+                    && r.CompletedAt != null && r.CompletedAt >= monthStart)
                 .Select(r => r.Amount)
                 .ToListAsync();
 
-            // Average basket — used to estimate $ value of leads that haven't paid yet
+            // Average basket — recent completions (90d), falling back to the configured
+            // 1-year price rather than a hardcoded number that matches no real fee.
             var basketStats = await db.RenewalRequests.AsNoTracking()
-                .Where(r => r.Status == RenewalStatus.Completed && r.Amount > 0)
+                .Where(r => r.Status == RenewalStatus.Completed && r.Amount > 0 && r.CompletedAt >= ninetyDaysAgo)
                 .GroupBy(r => 1)
                 .Select(g => new { Count = g.Count(), Sum = g.Sum(r => r.Amount) })
                 .FirstOrDefaultAsync();
-            var avgBasket = basketStats != null && basketStats.Count > 0 ? basketStats.Sum / basketStats.Count : 79m;
+            var avgBasket = basketStats != null && basketStats.Count > 0
+                ? basketStats.Sum / basketStats.Count
+                : pricing.Value.GetCustomerPrice(1);
 
             // Action 1: leads that found a renewable name and never paid
             var abandonedAtPaymentCount = await db.Leads.AsNoTracking()
@@ -73,12 +84,15 @@ public sealed class DashboardModule : ICarterModule
             var failedRenewalCount = failedRenewals.Count;
             var failedRenewalValue = failedRenewals.Sum();
 
-            // Action 5: 1-year renewals from 11-13 months ago — coming back due soon
+            // Action 5: 1-year renewals from 11-13 months ago — coming back due soon.
+            // Bucketed by CompletedAt: the term starts when the renewal actually completed,
+            // not when the customer first clicked (a retried renewal can differ by days).
             var pastCustomersDueSoonCount = await db.RenewalRequests.AsNoTracking()
                 .CountAsync(r => r.Status == RenewalStatus.Completed
                     && r.RenewalYears == 1
-                    && r.InitiatedAt >= thirteenMonthsAgo
-                    && r.InitiatedAt <= elevenMonthsAgo);
+                    && r.CompletedAt != null
+                    && r.CompletedAt >= thirteenMonthsAgo
+                    && r.CompletedAt <= elevenMonthsAgo);
 
             // Recent activity feed — combined timeline (last 48h, capped at 30)
             var paidActivity = await db.RenewalRequests.AsNoTracking()
@@ -134,6 +148,44 @@ public sealed class DashboardModule : ICarterModule
                 })
                 .ToListAsync();
 
+            // System health — "is the machine actually running?" at a glance.
+            var staleCutoff = now.AddHours(-2);
+            var stuckAgg = await db.RenewalRequests.AsNoTracking()
+                .Where(r => (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)
+                    && (r.LastAttemptAt ?? r.InitiatedAt) < staleCutoff)
+                .GroupBy(r => 1)
+                .Select(g => new { Count = g.Count(), Oldest = g.Min(r => r.InitiatedAt) })
+                .FirstOrDefaultAsync();
+            var outboxPending = await db.OntraportSyncOutbox.CountAsync(o => o.SentAt == null && o.AttemptCount < 10);
+            var outboxDead = await db.OntraportSyncOutbox.CountAsync(o => o.SentAt == null && o.AttemptCount >= 10);
+
+            object? recurringJobs = null;
+            long queueDepth = 0;
+            try
+            {
+                var monitoring = Hangfire.JobStorage.Current.GetMonitoringApi();
+                queueDepth = monitoring.Queues().Sum(q => (long)q.Length);
+                using var connection = Hangfire.JobStorage.Current.GetConnection();
+                recurringJobs = Hangfire.Storage.StorageConnectionExtensions.GetRecurringJobs(connection)
+                    .Select(j => new { id = j.Id, lastExecution = j.LastExecution, nextExecution = j.NextExecution })
+                    .OrderBy(j => j.id)
+                    .ToList();
+            }
+            catch
+            {
+                // Hangfire storage being unreachable is itself a health signal; the nulls say so.
+            }
+
+            var health = new
+            {
+                stuckCount = stuckAgg?.Count ?? 0,
+                oldestStuckAt = stuckAgg?.Oldest,
+                outboxPending,
+                outboxDead,
+                queueDepth,
+                recurringJobs,
+            };
+
             return Results.Ok(new
             {
                 stats = new
@@ -164,6 +216,7 @@ public sealed class DashboardModule : ICarterModule
                 activity,
                 recentSearches,
                 recentRenewals,
+                health,
             });
         }).RequireAuthorization().WithTags("Admin.Dashboard");
     }

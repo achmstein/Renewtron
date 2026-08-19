@@ -12,8 +12,14 @@ public sealed class BulkRenewalsModule : ICarterModule
     {
         var group = app.MapGroup("/api/admin/bulk-renewals").RequireAuthorization().WithTags("Admin.BulkRenewals");
 
-        group.MapGet("/", async (ApplicationDbContext db) =>
+        group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? batch = null) =>
         {
+            // Facet params accept comma-separated multi-values ("RenewalFailed,RenewalQueued").
+            var statusNames = Helpers.ParseEnumList<BulkRenewalStatus>(status).Select(s => s.ToString()).ToHashSet();
+            var batchNames = (batch ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet();
+
             var uploads = await db.BulkRenewalUploads.AsNoTracking()
                 .OrderByDescending(b => b.UploadedAt)
                 .Select(b => new
@@ -31,6 +37,29 @@ public sealed class BulkRenewalsModule : ICarterModule
                     errorMessage = b.ErrorMessage,
                 })
                 .ToListAsync();
+
+            // One predicate per facet dimension, each excludable so its own option counts
+            // can be computed under the OTHER selections (classic faceted search). Header
+            // counts, stats and totalCount deliberately stay computed over ALL rows.
+            bool MatchStatus(string s) => statusNames.Count == 0 || statusNames.Contains(s);
+            bool MatchBatch(string? sourceFile) => batchNames.Count == 0 || (sourceFile != null && batchNames.Contains(sourceFile));
+
+            var items = uploads.Where(u => MatchStatus(u.status) && MatchBatch(u.sourceFile)).ToList();
+
+            var statusFacet = uploads
+                .Where(u => MatchBatch(u.sourceFile))
+                .GroupBy(u => u.status)
+                .Select(g => new { value = g.Key, count = g.Count() })
+                .OrderByDescending(f => f.count)
+                .ToList();
+            // Batch facet is per sourceFile; rows without one (direct entries) aren't facetable.
+            var batchFacet = uploads
+                .Where(u => MatchStatus(u.status))
+                .Where(u => !string.IsNullOrEmpty(u.sourceFile))
+                .GroupBy(u => u.sourceFile!)
+                .Select(g => new { value = g.Key, count = g.Count() })
+                .OrderByDescending(f => f.count)
+                .ToList();
 
             var totalCount = uploads.Count;
             var waitingCount = uploads.Count(u => u.status == nameof(BulkRenewalStatus.WaitingForRenewalWindow));
@@ -85,7 +114,8 @@ public sealed class BulkRenewalsModule : ICarterModule
             return Results.Ok(new
             {
                 totalCount, waitingCount, queuedCount, completedCount, failedCount,
-                items = uploads,
+                items,
+                facets = new { status = statusFacet, batch = batchFacet },
                 stats = new
                 {
                     pipelineValueNext30d,

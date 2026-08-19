@@ -321,10 +321,10 @@ public class OntraportSalesService : IOntraportSalesService
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task SyncRenewalOutcomeAsync(string contactId, OntraportRenewalOutcome outcome, DateTime? newRenewalDueDate = null)
+    public async Task<bool> SyncRenewalOutcomeAsync(string contactId, OntraportRenewalOutcome outcome, DateTime? newRenewalDueDate = null)
     {
         if (string.IsNullOrWhiteSpace(contactId))
-            return;
+            return true;
 
         var fields = new Dictionary<string, object>
         {
@@ -338,13 +338,51 @@ public class OntraportSalesService : IOntraportSalesService
         if (newRenewalDueDate is { } due)
             fields[FieldRenewalDueDate] = new DateTimeOffset(DateTime.SpecifyKind(due, DateTimeKind.Utc)).ToUnixTimeSeconds();
 
-        await UpdateContactFieldsAsync(contactId, fields);
+        var fieldsOk = await UpdateContactFieldsAsync(contactId, fields);
 
+        var tagOk = true;
         if (outcome == OntraportRenewalOutcome.Successful)
-            await AddContactTagAsync(contactId, RenewalCompletedTagId);
+            tagOk = await AddContactTagAsync(contactId, RenewalCompletedTagId);
+
+        return fieldsOk && tagOk;
     }
 
-    private async Task UpdateContactFieldsAsync(string contactId, Dictionary<string, object> fields)
+    public async Task<int> ProcessSyncOutboxAsync()
+    {
+        var pending = await _dbContext.OntraportSyncOutbox
+            .Where(o => o.SentAt == null && o.AttemptCount < 10)
+            .OrderBy(o => o.CreatedAt)
+            .Take(100)
+            .ToListAsync();
+
+        var sent = 0;
+        foreach (var entry in pending)
+        {
+            entry.AttemptCount++;
+            entry.LastAttemptAt = DateTime.UtcNow;
+
+            var ok = await SyncRenewalOutcomeAsync(entry.OntraportContactId, entry.Outcome, entry.NewRenewalDueDate);
+            if (ok)
+            {
+                entry.SentAt = DateTime.UtcNow;
+                entry.LastError = null;
+                sent++;
+            }
+            else
+            {
+                entry.LastError = "One or more Ontraport writes failed; see server logs.";
+            }
+
+            await _dbContext.SaveChangesAsync();
+        }
+
+        if (pending.Count > 0)
+            _logger.LogInformation("Ontraport sync outbox: sent {Sent} of {Pending} pending entries", sent, pending.Count);
+
+        return sent;
+    }
+
+    private async Task<bool> UpdateContactFieldsAsync(string contactId, Dictionary<string, object> fields)
     {
         try
         {
@@ -359,19 +397,21 @@ public class OntraportSalesService : IOntraportSalesService
                 var body = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Ontraport field update for contact {ContactId} returned {StatusCode}: {Body}",
                     contactId, (int)response.StatusCode, body.Length > 500 ? body[..500] : body);
-                return;
+                return false;
             }
 
             _logger.LogInformation("Updated Ontraport contact {ContactId} fields: {Fields}",
                 contactId, string.Join(", ", fields.Where(f => f.Key != "id").Select(f => $"{f.Key}={f.Value}")));
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update Ontraport contact {ContactId} fields", contactId);
+            return false;
         }
     }
 
-    private async Task AddContactTagAsync(string contactId, string tagId)
+    private async Task<bool> AddContactTagAsync(string contactId, string tagId)
     {
         try
         {
@@ -388,11 +428,14 @@ public class OntraportSalesService : IOntraportSalesService
                 var body = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Ontraport tag add for contact {ContactId} returned {StatusCode}: {Body}",
                     contactId, (int)response.StatusCode, body.Length > 500 ? body[..500] : body);
+                return false;
             }
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to tag Ontraport contact {ContactId}", contactId);
+            return false;
         }
     }
 
