@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { CircleAlert, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, useDebouncedValue } from './_components'
@@ -10,7 +10,10 @@ import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 type SalesResponse = Awaited<ReturnType<typeof api.admin.ontraportSales>>
 type Sale = SalesResponse['items'][number]
@@ -57,6 +60,7 @@ export default function OntraportSales() {
   const [searchInput, setSearchInput] = useState('')
   const search = useDebouncedValue(searchInput, 300)
   const [statuses, setStatuses] = useState<string[]>([])
+  const [requeueOpen, setRequeueOpen] = useState(false)
   const [errorModal, setErrorModal] = useState<{ title: string; body: string } | null>(null)
 
   const queryClient = useQueryClient()
@@ -240,6 +244,13 @@ export default function OntraportSales() {
             >
               {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
             </button>
+            {failedCount > 0 ? (
+              <Button variant="outline" className="h-9 whitespace-nowrap border-amber-300 text-amber-800 hover:bg-amber-50" onClick={() => setRequeueOpen(true)}>
+                <ListRestart className="h-4 w-4" />
+                <span className="hidden sm:inline">Requeue failed</span>
+                <span className="sm:hidden">Requeue</span>
+              </Button>
+            ) : null}
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
@@ -346,6 +357,8 @@ export default function OntraportSales() {
         <DataTable columns={columns} data={tableRows} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
       </div>
 
+      <RequeueFailedDialog open={requeueOpen} onClose={() => setRequeueOpen(false)} onDone={() => void invalidate()} />
+
       <ErrorModal
         open={errorModal !== null}
         title={errorModal?.title ?? 'Renewal error details'}
@@ -353,6 +366,109 @@ export default function OntraportSales() {
         onClose={() => setErrorModal(null)}
       />
     </div>
+  )
+}
+
+/* ─────── Requeue-failed dialog ─────── */
+
+/**
+ * Puts failed sales back into the daily processor's pool in controlled batches.
+ * Opens straight into a dry-run preview — nothing changes until "Requeue" runs.
+ */
+function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+  const [max, setMax] = useState(50)
+  const [includePastDue, setIncludePastDue] = useState(false)
+  const [errorInput, setErrorInput] = useState('')
+  const errorContains = useDebouncedValue(errorInput, 300)
+
+  const { data: preview, isFetching } = useQuery({
+    queryKey: ['ontraport-requeue-preview', { max, includePastDue, errorContains }],
+    queryFn: () => api.admin.requeueFailedOntraport({ dryRun: true, max, includePastDue, errorContains: errorContains || undefined }),
+    enabled: open,
+    staleTime: 0,
+  })
+
+  const liveMutation = useMutation({
+    mutationFn: () => api.admin.requeueFailedOntraport({ dryRun: false, max, includePastDue, errorContains: errorContains || undefined }),
+  })
+  const runLive = () => {
+    void sileo.promise(liveMutation.mutateAsync(), {
+      loading: { title: 'Re-queuing failed sales…' },
+      success: (r) => ({
+        title: `Re-queued ${r.requeued} of ${r.totalMatching} failed sales`,
+        description: 'They will process on the next 07:00 run, or immediately via Process eligible.',
+      }),
+      error: (e) => ({ title: 'Requeue failed', description: e instanceof Error ? e.message : undefined }),
+    }).then(() => { onDone(); onClose() }).catch(() => {})
+  }
+
+  const nothingToDo = preview && preview.batchSize === 0
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !liveMutation.isPending) onClose() }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RECOVERY</div>
+          <DialogTitle>Requeue failed sales</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-700">
+            Puts failed sales back into the eligible pool in a controlled batch. Start small,
+            watch the completion rate, then run again — sales past the renewal window are excluded.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="requeue-max" className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">Batch size</Label>
+              <Input
+                id="requeue-max" type="number" min={1} max={500} value={max}
+                onChange={(e) => setMax(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                className="h-8 w-20 font-mono tabular-nums"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs text-zinc-600">
+              <Checkbox checked={includePastDue} onCheckedChange={(v) => setIncludePastDue(v === true)} />
+              include past-due
+            </label>
+          </div>
+          <Input
+            value={errorInput}
+            onChange={(e) => setErrorInput(e.target.value)}
+            placeholder="Only errors containing… (optional)"
+            className="h-8 text-xs"
+          />
+
+          {isFetching && !preview ? (
+            <div className="flex items-center gap-2 py-4 justify-center text-sm text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Running dry-run…
+            </div>
+          ) : preview ? (
+            <>
+              <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xs font-mono text-zinc-700">
+                <span className="text-zinc-900 font-semibold tabular-nums">{preview.batchSize}</span> of{' '}
+                <span className="tabular-nums">{preview.totalMatching}</span> matching failed sales in this batch
+              </div>
+              {preview.items.length > 0 ? (
+                <div className="max-h-36 overflow-y-auto rounded-md ring-1 ring-zinc-200 divide-y divide-zinc-100">
+                  {preview.items.slice(0, 25).map((i) => (
+                    <div key={i.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                      <span className="min-w-0 truncate text-zinc-700">{i.businessName} · {i.abn}</span>
+                      <span className="shrink-0 font-mono tabular-nums text-zinc-400">{fmtMoney0(i.amountPaid)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={liveMutation.isPending}>Close</Button>
+          <Button onClick={runLive} disabled={liveMutation.isPending || !preview || nothingToDo} className="bg-amber-600 hover:bg-amber-700">
+            {liveMutation.isPending ? 'Re-queuing…' : nothingToDo ? 'Nothing matches' : `Requeue ${preview?.batchSize ?? ''}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

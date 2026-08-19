@@ -453,6 +453,34 @@ export const api = {
       const suffix = qs.toString() ? `?${qs}` : ''
       return apiFetch<{ retried: number; skipped: number; skippedPaymentRisk: number }>(`/api/admin/renewals/retry-bulk${suffix}`, { method: 'POST' })
     },
+    reconcileRenewals: (params: { dryRun: boolean; maxRequeue?: number }) => {
+      const qs = new URLSearchParams({ dryRun: String(params.dryRun) })
+      if (params.maxRequeue != null) qs.set('maxRequeue', String(params.maxRequeue))
+      return apiFetch<{
+        dryRun: boolean
+        scanned: number
+        skippedLiveJob: number
+        requeued: number
+        needsVerification: number
+        markedStale: number
+        requeueCapped: number
+        items: Array<{ renewalId: string; businessName?: string | null; abn?: string | null; amount: number; status: string; ageHours: number; action: string }>
+      }>(`/api/admin/renewals/reconcile?${qs}`, { method: 'POST' })
+    },
+    requeueFailedOntraport: (params: { dryRun: boolean; max?: number; includePastDue?: boolean; errorContains?: string }) => {
+      const qs = new URLSearchParams({ dryRun: String(params.dryRun) })
+      if (params.max != null) qs.set('max', String(params.max))
+      if (params.includePastDue) qs.set('includePastDue', 'true')
+      if (params.errorContains) qs.set('errorContains', params.errorContains)
+      return apiFetch<{
+        dryRun: boolean
+        totalMatching: number
+        batchSize: number
+        requeued: number
+        note: string
+        items: Array<{ id: string; businessName: string; abn: string; amountPaid: number; renewalDueDate?: string | null; error?: string | null }>
+      }>(`/api/admin/ontraport-sales/requeue-failed?${qs}`, { method: 'POST' })
+    },
     renewal: (id: string) => apiFetch<{
       id: string
       status: 'Pending' | 'Processing' | 'Completed' | 'Failed'

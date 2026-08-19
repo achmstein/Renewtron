@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarRange, RefreshCw, X } from 'lucide-react'
+import { CalendarRange, Loader2, RefreshCw, Wrench, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
@@ -54,6 +54,7 @@ export default function Renewals() {
   const [dateTo, setDateTo] = useState('')
 
   const [bulkRetryConfirm, setBulkRetryConfirm] = useState(false)
+  const [reconcileOpen, setReconcileOpen] = useState(false)
   const [errorModal, setErrorModal] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
@@ -225,6 +226,10 @@ export default function Renewals() {
                 <span className="ml-0.5 inline-flex items-center justify-center rounded bg-white/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{fmtMoney0(stats.failedValue30d)}</span>
               </Button>
             ) : null}
+            <Button variant="outline" className="h-9 whitespace-nowrap" onClick={() => setReconcileOpen(true)}>
+              <Wrench className="h-4 w-4" />
+              <span className="hidden sm:inline">Reconcile</span>
+            </Button>
             <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
@@ -284,7 +289,114 @@ export default function Renewals() {
         />
       ) : null}
 
+      <ReconcileDialog open={reconcileOpen} onClose={() => setReconcileOpen(false)} onDone={() => void invalidate()} />
+
       <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Renewal error details" />
+    </div>
+  )
+}
+
+/* ─────── Reconcile dialog ─────── */
+
+/**
+ * Runs the queue-vs-DB reconciliation. Opens straight into a dry-run preview —
+ * nothing changes until the operator explicitly runs it live.
+ */
+function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+  const [maxRequeue, setMaxRequeue] = useState(25)
+  const { data: preview, isFetching } = useQuery({
+    queryKey: ['reconcile-preview', maxRequeue],
+    queryFn: () => api.admin.reconcileRenewals({ dryRun: true, maxRequeue }),
+    enabled: open,
+    staleTime: 0,
+  })
+
+  const liveMutation = useMutation({
+    mutationFn: () => api.admin.reconcileRenewals({ dryRun: false, maxRequeue }),
+  })
+  const runLive = () => {
+    void sileo.promise(liveMutation.mutateAsync(), {
+      loading: { title: 'Reconciling…' },
+      success: (r) => ({
+        title: `Reconciled — ${r.requeued} re-queued`,
+        description: [
+          r.needsVerification > 0 ? `${r.needsVerification} flagged for payment verification` : null,
+          r.markedStale > 0 ? `${r.markedStale} stale runs surfaced as failed` : null,
+          r.requeueCapped > 0 ? `${r.requeueCapped} over the cap — run again to continue` : null,
+        ].filter(Boolean).join(' · ') || 'Queue and database agree.',
+      }),
+      error: (e) => ({ title: 'Reconcile failed', description: e instanceof Error ? e.message : undefined }),
+    }).then(() => { onDone(); onClose() }).catch(() => {})
+  }
+
+  const nothingToDo = preview && preview.scanned === 0
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !liveMutation.isPending) onClose() }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">RECOVERY</div>
+          <DialogTitle>Reconcile queue &amp; database</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-700">
+            Finds renewals whose row and Hangfire job have diverged. Safe rows are re-queued;
+            anything that may already hold an ASIC payment is flagged for you instead.
+          </p>
+
+          {isFetching && !preview ? (
+            <div className="flex items-center gap-2 py-6 justify-center text-sm text-zinc-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Running dry-run…
+            </div>
+          ) : preview ? (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <PreviewStat label="Scanned" value={preview.scanned} />
+                <PreviewStat label="Re-queue" value={preview.requeued} tone={preview.requeued > 0 ? 'brand' : undefined} />
+                <PreviewStat label="Verify" value={preview.needsVerification} tone={preview.needsVerification > 0 ? 'amber' : undefined} />
+                <PreviewStat label="Stale" value={preview.markedStale} tone={preview.markedStale > 0 ? 'amber' : undefined} />
+                <PreviewStat label="Capped" value={preview.requeueCapped} />
+                <PreviewStat label="Live job" value={preview.skippedLiveJob} />
+              </div>
+              {preview.items.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto rounded-md ring-1 ring-zinc-200 divide-y divide-zinc-100">
+                  {preview.items.slice(0, 25).map((i) => (
+                    <div key={i.renewalId} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
+                      <span className="min-w-0 truncate text-zinc-700">{i.businessName ?? i.abn ?? i.renewalId}</span>
+                      <span className="shrink-0 font-mono tabular-nums text-zinc-400">{fmtMoney0(i.amount)} · {i.ageHours}h · {i.action}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2">
+                <span className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">Re-queue cap</span>
+                <Input
+                  type="number" min={0} max={500} value={maxRequeue}
+                  onChange={(e) => setMaxRequeue(Math.max(0, Math.min(500, Number(e.target.value) || 0)))}
+                  className="h-8 w-24 font-mono tabular-nums"
+                />
+                <span className="text-xs text-zinc-500">per run — keeps the ASIC queue manageable</span>
+              </div>
+            </>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={liveMutation.isPending}>Close</Button>
+          <Button onClick={runLive} disabled={liveMutation.isPending || !preview || nothingToDo}>
+            {liveMutation.isPending ? 'Running…' : nothingToDo ? 'Nothing to reconcile' : 'Run live'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PreviewStat({ label, value, tone }: { label: string; value: number; tone?: 'brand' | 'amber' }) {
+  const color = tone === 'brand' ? 'text-brand-700' : tone === 'amber' ? 'text-amber-700' : 'text-zinc-900'
+  return (
+    <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-2.5 py-1.5">
+      <div className="text-xxs font-mono uppercase tracking-[0.12em] text-zinc-500">{label}</div>
+      <div className={`text-base font-semibold tabular-nums ${color}`}>{value.toLocaleString()}</div>
     </div>
   )
 }
