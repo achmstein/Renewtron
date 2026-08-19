@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, type FunnelResponse } from '../api/client'
 import { Chip, EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th } from './_ui'
 
@@ -11,26 +12,19 @@ function isoDaysAgo(days: number) {
 export default function Funnel() {
   const [days, setDays] = useState('30')
   const [source, setSource] = useState('')
-  const [data, setData] = useState<FunnelResponse | null>(null)
   // Held separately: the response is filtered once a source is picked, which would
   // otherwise strip every other option out of the dropdown.
   const [allSources, setAllSources] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
 
-  const load = useCallback(() => {
-    setIsLoading(true)
-    api.admin.funnel({ dateFrom: isoDaysAgo(Number(days)), source: source || undefined })
-      .then((d) => {
-        setData(d)
-        setError('')
-        if (!source) setAllSources(d.bySource.map((s) => s.source))
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load the funnel.'))
-      .finally(() => setIsLoading(false))
-  }, [days, source])
+  const { data, error, isFetching, isPlaceholderData, refetch } = useQuery({
+    queryKey: ['admin-funnel', { days, source }],
+    queryFn: () => api.admin.funnel({ dateFrom: isoDaysAgo(Number(days)), source: source || undefined }),
+    placeholderData: keepPreviousData,
+  })
 
-  useEffect(load, [load])
+  useEffect(() => {
+    if (!source && data && !isPlaceholderData) setAllSources(data.bySource.map((s) => s.source))
+  }, [data, source, isPlaceholderData])
 
   const steps = data?.steps ?? []
   const stoppedAt = data?.stoppedAt ?? []
@@ -50,7 +44,7 @@ export default function Funnel() {
         kicker="OPS"
         title="Funnel"
         subtitle="Every step of the public renewal flow, counted per person rather than per page view."
-        right={<RefreshButton onClick={load} busy={isLoading} />}
+        right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -103,7 +97,7 @@ export default function Funnel() {
       ) : null}
 
       {error ? (
-        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">{error}</div>
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">{error instanceof Error ? error.message : 'Could not load the funnel.'}</div>
       ) : null}
 
       {biggestDrop && biggestDrop.droppedFromPrevious > 0 ? (

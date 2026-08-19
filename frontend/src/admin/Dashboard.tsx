@@ -1,45 +1,21 @@
-import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { Check } from 'lucide-react'
 import { api, type ActivityItem, type ActivityKind, type DashboardResponse } from '../api/client'
-
-const fmtMoney0 = (n: number) =>
-  '$' + Math.round(n).toLocaleString('en-AU')
-const fmtMoney2 = (n: number) =>
-  '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-function relativeTime(iso: string) {
-  const t = new Date(iso).getTime()
-  const diff = Date.now() - t
-  const s = Math.floor(diff / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  return `${d}d ago`
-}
+import { PageHeader, SectionTitle, StatusPill, Th } from './_ui'
+import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 
 export default function Dashboard() {
-  const [data, setData] = useState<DashboardResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = () => {
-      api.admin.dashboard()
-        .then((d) => { if (!cancelled) setData(d) })
-        .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Load failed.') })
-    }
-    load()
-    const t = setInterval(load, 30_000)
-    return () => { cancelled = true; clearInterval(t) }
-  }, [])
+  const { data, error } = useQuery({
+    queryKey: ['admin-dashboard'],
+    queryFn: () => api.admin.dashboard(),
+    refetchInterval: 30_000,
+  })
 
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error instanceof Error ? error.message : 'Load failed.'}</div>
       </div>
     )
   }
@@ -54,6 +30,7 @@ export default function Dashboard() {
   const stats = withDefaults(data.stats)
   const activity = data.activity ?? []
   const recentRenewals = data.recentRenewals ?? []
+  const health = data.health
   const conv = stats.totalLeads > 0 ? (stats.convertedLeads * 100) / stats.totalLeads : 0
   const mtdRevenue = stats.renewtronDirectRevenue + stats.ontraportRevenue
   const mtdSales = stats.renewtronDirectCount + stats.ontraportCount
@@ -64,6 +41,8 @@ export default function Dashboard() {
 
       <Hero stats={stats} />
 
+      {health ? <HealthStrip health={health} /> : null}
+
       {/* Action queue — full width */}
       <div className="mt-10">
         {(() => {
@@ -73,7 +52,7 @@ export default function Dashboard() {
               tone: 'emerald' as const,
               kicker: 'WIN-BACK',
               count: stats.abandonedAtPaymentCount,
-              value: fmtMoney0(stats.abandonedAtPaymentValue),
+              value: `~${fmtMoney0(stats.abandonedAtPaymentValue)}`,
               title: 'Abandoned at payment',
               detail: 'Leads found a renewable name but never paid. Hit them with a follow-up.',
               ctaLabel: 'Open leads →',
@@ -106,7 +85,7 @@ export default function Dashboard() {
               tone: 'zinc' as const,
               kicker: 'REPEAT',
               count: stats.pastCustomersDueSoonCount,
-              value: fmtMoney0(stats.pastCustomersDueSoonValue),
+              value: `~${fmtMoney0(stats.pastCustomersDueSoonValue)}`,
               title: 'Past customers due soon',
               detail: '1-year renewals from 11–13 months ago — these come back due in the next 60 days.',
               ctaLabel: 'View renewals →',
@@ -204,13 +183,115 @@ export default function Dashboard() {
   )
 }
 
+/** Display names and staleness thresholds for the Hangfire recurring jobs. */
+const jobDisplay: Record<string, { label: string; staleAfterHours: number }> = {
+  'renewal-reconciliation':     { label: 'Reconciliation',   staleAfterHours: 26 },
+  'ontraport-sales-sync':       { label: 'Ontraport sync',   staleAfterHours: 26 },
+  'ontraport-process-renewals': { label: 'Process renewals', staleAfterHours: 26 },
+  'bulk-renewal-process':       { label: 'Bulk process',     staleAfterHours: 26 },
+  'ontraport-outbox-retry':     { label: 'Outbox retry',     staleAfterHours: 2 },
+}
+
+type JobState = 'ok' | 'stale' | 'never'
+
+/** "Is the machine running?" — job freshness, queue depth, stuck rows, outbox backlog. */
+function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health']> }) {
+  const jobs = (health.recurringJobs ?? []).map((j) => {
+    const display = jobDisplay[j.id] ?? { label: j.id.replace(/-/g, ' '), staleAfterHours: 26 }
+    const state: JobState = !j.lastExecution
+      ? 'never'
+      : Date.now() - new Date(j.lastExecution).getTime() > display.staleAfterHours * 3600_000
+        ? 'stale'
+        : 'ok'
+    return { ...j, ...display, state }
+  })
+  // "never" doesn't trip the card: right after a deploy every job reads never
+  // until its first scheduled run, and that's expected, not an incident.
+  const attention = health.stuckCount > 0 || health.outboxDead > 0 || jobs.some((j) => j.state === 'stale')
+
+  return (
+    <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+      {/* Header — the one-glance verdict */}
+      <div className="flex items-center justify-between gap-3 px-5 py-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="relative flex h-2 w-2 shrink-0">
+            {attention ? <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60 motion-reduce:hidden"></span> : null}
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${attention ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+          </span>
+          <div className="min-w-0">
+            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">System</div>
+            <div className="text-sm font-semibold text-zinc-900 truncate">
+              {attention ? 'Something needs a look' : 'All systems running'}
+            </div>
+          </div>
+        </div>
+        <StatusPill tone={attention ? 'amber' : 'emerald'}>{attention ? 'ATTENTION' : 'HEALTHY'}</StatusPill>
+      </div>
+
+      {/* Metrics band */}
+      <div className="grid grid-cols-3 divide-x divide-zinc-100 border-t border-zinc-100">
+        <HealthMetric
+          label="Queue"
+          value={String(health.queueDepth)}
+          sub={health.queueDepth === 1 ? 'job waiting' : 'jobs waiting'}
+        />
+        <HealthMetric
+          label="Stuck"
+          value={String(health.stuckCount)}
+          sub={health.stuckCount > 0 ? 'need review →' : 'renewals'}
+          warn={health.stuckCount > 0}
+          link={health.stuckCount > 0 ? '/admin/renewals' : undefined}
+        />
+        <HealthMetric
+          label="Outbox"
+          value={String(health.outboxPending)}
+          sub={health.outboxDead > 0 ? `pending · ${health.outboxDead} dead` : 'pending'}
+          warn={health.outboxDead > 0}
+        />
+      </div>
+
+      {/* Recurring jobs — freshness per job */}
+      {jobs.length > 0 ? (
+        <div className="border-t border-zinc-100 bg-zinc-50/50 px-5 py-3">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5">
+            {jobs.map((j) => (
+              <div key={j.id} className="flex items-start gap-2 min-w-0" title={j.nextExecution ? `Next run: ${new Date(j.nextExecution).toLocaleString()}` : undefined}>
+                <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                  j.state === 'ok' ? 'bg-emerald-500' : j.state === 'stale' ? 'bg-amber-500' : 'bg-zinc-300'
+                }`}></span>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-zinc-700 truncate">{j.label}</div>
+                  <div className={`text-xxs font-mono tabular-nums ${j.state === 'stale' ? 'text-amber-700 font-semibold' : 'text-zinc-400'}`}>
+                    {j.lastExecution ? relativeTime(j.lastExecution) : 'never ran'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function HealthMetric({ label, value, sub, warn = false, link }: { label: string; value: string; sub: string; warn?: boolean; link?: string }) {
+  const body = (
+    <div className="px-5 py-3">
+      <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">{label}</div>
+      <div className="mt-0.5 flex items-baseline gap-1.5">
+        <span className={`text-lg font-semibold tabular-nums leading-none ${warn ? 'text-amber-700' : 'text-zinc-900'}`}>{value}</span>
+        <span className={`text-xxs font-mono ${warn ? 'text-amber-700' : 'text-zinc-400'}`}>{sub}</span>
+      </div>
+    </div>
+  )
+  return link ? <Link to={link} className="block transition-colors hover:bg-zinc-50">{body}</Link> : body
+}
+
 function CaughtUp() {
   return (
     <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/50 p-8 text-center">
       <div className="mx-auto h-10 w-10 rounded-full bg-brand-100 flex items-center justify-center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-brand-600">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
+        <Check className="h-5 w-5 text-brand-600" />
       </div>
       <div className="mt-3 text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">All clear</div>
       <h3 className="mt-1 text-base font-semibold text-zinc-900">Nothing in the queue right now</h3>
@@ -246,28 +327,6 @@ function withDefaults(s: Partial<DashboardResponse['stats']>): DashboardResponse
   }
 }
 
-function PageHeader({ kicker, title, subtitle }: { kicker: string; title: string; subtitle?: string }) {
-  return (
-    <div className="mb-8">
-      <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">{kicker}</div>
-      <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight">{title}</h1>
-      {subtitle ? <p className="mt-1 text-sm text-zinc-500">{subtitle}</p> : null}
-    </div>
-  )
-}
-
-function SectionTitle({ kicker, title, right }: { kicker: string; title: string; right?: ReactNode }) {
-  return (
-    <div className="flex items-end justify-between gap-3">
-      <div>
-        <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">{kicker}</div>
-        <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
-      </div>
-      {right ? <div className="text-xs font-mono text-zinc-500 tabular-nums">{right}</div> : null}
-    </div>
-  )
-}
-
 function Hero({ stats }: { stats: DashboardResponse['stats'] }) {
   const total = stats.abandonedAtPaymentValue + stats.ontraportPipelineValue + stats.failedRenewalValue + stats.pastCustomersDueSoonValue
   const headline = total > 0 ? fmtMoney0(total) : '$0'
@@ -286,10 +345,10 @@ function Hero({ stats }: { stats: DashboardResponse['stats'] }) {
           </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <HeroStat label="Abandoned" value={fmtMoney0(stats.abandonedAtPaymentValue)} count={stats.abandonedAtPaymentCount} />
+          <HeroStat label="Abandoned" value={`~${fmtMoney0(stats.abandonedAtPaymentValue)}`} count={stats.abandonedAtPaymentCount} />
           <HeroStat label="Pipeline" value={fmtMoney0(stats.ontraportPipelineValue)} count={stats.ontraportPipelineCount} />
           <HeroStat label="Failed" value={fmtMoney0(stats.failedRenewalValue)} count={stats.failedRenewalCount} />
-          <HeroStat label="Repeat" value={fmtMoney0(stats.pastCustomersDueSoonValue)} count={stats.pastCustomersDueSoonCount} />
+          <HeroStat label="Repeat" value={`~${fmtMoney0(stats.pastCustomersDueSoonValue)}`} count={stats.pastCustomersDueSoonCount} />
         </div>
       </div>
     </div>
@@ -406,14 +465,6 @@ function KpiMini({ label, value, sub }: { label: string; value: string; sub?: st
       <div className="mt-1 text-base font-semibold text-zinc-900 tabular-nums">{value}</div>
       {sub ? <div className="text-xs text-zinc-500 tabular-nums">{sub}</div> : null}
     </div>
-  )
-}
-
-function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-2.5 text-left text-xxs font-mono font-medium uppercase tracking-[0.12em] text-zinc-500 border-b border-zinc-200">
-      {children}
-    </th>
   )
 }
 

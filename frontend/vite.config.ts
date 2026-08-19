@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -16,6 +17,20 @@ const proxyTarget =
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Recharts is by far the heaviest dependency — keep it in its own
+        // long-cached chunk instead of bloating the admin bundle.
+        manualChunks: { charts: ['recharts'] },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

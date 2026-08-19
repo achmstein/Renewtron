@@ -130,7 +130,18 @@ export interface DashboardResponse {
   activity: ActivityItem[]
   recentSearches: Array<{ id: string; abn: string; searchedAt: string; success: boolean; resultsCount: number }>
   recentRenewals: Array<{ id: string; businessName: string | null; initiatedAt: string; status: string }>
+  health?: {
+    stuckCount: number
+    oldestStuckAt: string | null
+    outboxPending: number
+    outboxDead: number
+    queueDepth: number
+    recurringJobs: Array<{ id: string; lastExecution: string | null; nextExecution: string | null }> | null
+  }
 }
+
+/** Server-computed facet options: value + row count under the other active filters. */
+export type Facet = Array<{ value: string; count: number }>
 
 export const api = {
   me: () => apiFetch<MeResponse>('/api/me'),
@@ -194,6 +205,10 @@ export const api = {
           funnel: { hasLead: boolean; anyPaid: boolean; anyInflight: boolean; anyFailed: boolean }
           repeatCount7d: number
         }>
+        facets: {
+          result: Facet
+          initiatedBy: Facet
+        }
         stats: {
           totalAllTime: number
           total30d: number
@@ -256,6 +271,10 @@ export const api = {
           firstBusinessName?: string | null
           renewal?: { id: string; status: string; amount: number } | null
         }>
+        facets: {
+          outcome: Facet
+          reminder: Facet
+        }
         stats: {
           totalAllTime: number
           total30d: number
@@ -312,13 +331,14 @@ export const api = {
       } | null
       renewalRequests: Array<{ id: string; status: string; amount: number; renewalYears: number; initiatedAt: string; businessName?: string | null }>
     }>(`/api/admin/leads/${id}`),
-    renewals: (params: { abn?: string; status?: string; initiatedBy?: string; source?: string; failedAtStep?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
+    renewals: (params: { abn?: string; status?: string; initiatedBy?: string; source?: string; failedAtStep?: string; errorCategory?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
       if (params.status) qs.set('status', params.status)
       if (params.initiatedBy) qs.set('initiatedBy', params.initiatedBy)
       if (params.source) qs.set('source', params.source)
       if (params.failedAtStep) qs.set('failedAtStep', params.failedAtStep)
+      if (params.errorCategory) qs.set('errorCategory', params.errorCategory)
       if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
       if (params.dateTo) qs.set('dateTo', params.dateTo)
       if (params.page) qs.set('page', String(params.page))
@@ -342,6 +362,9 @@ export const api = {
           email?: string
           errorMessage?: string | null
           failedAtStep?: string | null
+          errorCategory?: string | null
+          attemptCount: number
+          nextRetryAt?: string | null
           transactionReference?: string | null
           initiatedByLabel: string
           stripePaymentSucceeded: boolean
@@ -350,25 +373,38 @@ export const api = {
           lead?: { id: string; fullName: string; email: string } | null
           timeInStatusHours: number
         }>
+        facets: {
+          status: Array<{ value: string; count: number }>
+          source: Array<{ value: string; count: number }>
+          initiatedBy: Array<{ value: string; count: number }>
+          errorCategory: Array<{ value: string; count: number }>
+        }
         stats: {
           successRate30d: number
           completed30d: number
+          decided30d: number
           total30d: number
           avgCompletionMinutes: number | null
           revenueMtd: number
-          pipelineValue: number
+          liveValue: number
+          stuckValue: number
+          stuckCount: number
+          scheduledRetryValue: number
+          needsReviewCount: number
+          needsReviewValue: number
           failedValue30d: number
           today: number
           yesterday: number
           deltaPct: number | null
           daily14d: Array<{ date: string; count: number }>
-          failedAtStepBreakdown: Array<{ step: string; count: number }>
+          errorCategoryBreakdown: Array<{ category: string; count: number; retryable: boolean }>
         }
       }>(`/api/admin/renewals${suffix}`)
     },
-    payments: (params: { status?: string; search?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
+    payments: (params: { status?: string; cardBrand?: string; search?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
+      if (params.cardBrand) qs.set('cardBrand', params.cardBrand)
       if (params.search) qs.set('search', params.search)
       if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
       if (params.dateTo) qs.set('dateTo', params.dateTo)
@@ -395,6 +431,10 @@ export const api = {
           error?: string | null
           renewals: Array<{ id: string; status: string }>
         }>
+        facets: {
+          result: Facet
+          cardBrand: Facet
+        }
         stats: {
           succeededCount: number
           succeededValue: number
@@ -411,7 +451,7 @@ export const api = {
       if (params.dateTo) qs.set('dateTo', params.dateTo)
       if (params.source) qs.set('source', params.source)
       const suffix = qs.toString() ? `?${qs}` : ''
-      return apiFetch<{ retried: number; skipped: number }>(`/api/admin/renewals/retry-bulk${suffix}`, { method: 'POST' })
+      return apiFetch<{ retried: number; skipped: number; skippedPaymentRisk: number }>(`/api/admin/renewals/retry-bulk${suffix}`, { method: 'POST' })
     },
     renewal: (id: string) => apiFetch<{
       id: string
@@ -434,6 +474,10 @@ export const api = {
       hostedTokenizationId?: string | null
       errorMessage?: string | null
       failedAtStep?: string | null
+      errorCategory?: string | null
+      attemptCount: number
+      lastAttemptAt?: string | null
+      nextRetryAt?: string | null
       stripePayment?: {
         paymentIntentId: string
         paymentStatus: string
@@ -448,7 +492,7 @@ export const api = {
     }>(`/api/admin/renewals/${id}`),
     retryRenewal: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewals/${id}/retry`, { method: 'POST' }),
     manualRenewal: (input: { abn: string; businessName: string; accountNumber: string; registrationDate?: string; renewalYears: 1 | 3; email?: string }) =>
-      apiFetch<{ renewalId: string; status: string; transactionReference?: string; errorMessage?: string }>('/api/admin/manual-renewal', { method: 'POST', body: JSON.stringify(input) }),
+      apiFetch<{ renewalId: string; status: string; message?: string }>('/api/admin/manual-renewal', { method: 'POST', body: JSON.stringify(input) }),
     manualSearch: (abn: string) => apiFetch<{
       success: boolean
       errorMessage?: string
@@ -456,46 +500,65 @@ export const api = {
     }>('/api/admin/manual-search', { method: 'POST', body: JSON.stringify({ abn }) }),
     submitManualRenewal: (input: { searchResultId: string; renewalYears: 1 | 3; email: string; mobileNumber?: string; dateOfBirth?: string; amount: number }) =>
       apiFetch<{ renewalId: string; businessName: string; message: string }>('/api/admin/manual-renewal/submit', { method: 'POST', body: JSON.stringify(input) }),
-    ontraportSales: () => apiFetch<{
-      totalCount: number
-      waitingCount: number
-      queuedCount: number
-      completedCount: number
-      failedCount: number
-      ineligibleCount: number
-      asicNotYetDueCount: number
-      renewalInProgressCount: number
-      blockedCount: number
-      items: Array<{ id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }>
-      stats: {
-        pipelineValueNext30d: number
-        lastSyncAt: string | null
-        nextSyncAt: string | null
-        today: number
-        yesterday: number
-        deltaPct: number | null
-        daily14d: Array<{ date: string; count: number }>
-      }
-    }>('/api/admin/ontraport-sales'),
+    ontraportSales: (params: { status?: string; search?: string } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set('status', params.status)
+      if (params.search) qs.set('search', params.search)
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<{
+        totalCount: number
+        waitingCount: number
+        queuedCount: number
+        completedCount: number
+        failedCount: number
+        ineligibleCount: number
+        asicNotYetDueCount: number
+        renewalInProgressCount: number
+        blockedCount: number
+        items: Array<{ id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }>
+        facets: {
+          status: Facet
+        }
+        stats: {
+          pipelineValueNext30d: number
+          lastSyncAt: string | null
+          nextSyncAt: string | null
+          today: number
+          yesterday: number
+          deltaPct: number | null
+          daily14d: Array<{ date: string; count: number }>
+        }
+      }>(`/api/admin/ontraport-sales${suffix}`)
+    },
     syncOntraport: () => apiFetch<{ syncedCount: number; message: string }>('/api/admin/ontraport-sales/sync', { method: 'POST' }),
     processEligibleOntraport: () => apiFetch<{ jobId: string; message: string }>('/api/admin/ontraport-sales/process-eligible', { method: 'POST' }),
-    bulkRenewals: () => apiFetch<{
-      totalCount: number
-      waitingCount: number
-      queuedCount: number
-      completedCount: number
-      failedCount: number
-      items: Array<{ id: string; businessName: string; abn: string; ownerName?: string; renewalYears: number; amount: number; status: string; uploadedAt: string; renewalDueDate?: string | null; sourceFile?: string; errorMessage?: string | null }>
-      stats: {
-        pipelineValueNext30d: number
-        lastUploadAt: string | null
-        today: number
-        yesterday: number
-        deltaPct: number | null
-        daily14d: Array<{ date: string; count: number }>
-        byBatch: Array<{ sourceFile: string; total: number; completed: number; failed: number; pipelineValue: number; lastUploadAt: string }>
-      }
-    }>('/api/admin/bulk-renewals'),
+    bulkRenewals: (params: { status?: string; batch?: string } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.status) qs.set('status', params.status)
+      if (params.batch) qs.set('batch', params.batch)
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<{
+        totalCount: number
+        waitingCount: number
+        queuedCount: number
+        completedCount: number
+        failedCount: number
+        items: Array<{ id: string; businessName: string; abn: string; ownerName?: string; renewalYears: number; amount: number; status: string; uploadedAt: string; renewalDueDate?: string | null; sourceFile?: string; errorMessage?: string | null }>
+        facets: {
+          status: Facet
+          batch: Facet
+        }
+        stats: {
+          pipelineValueNext30d: number
+          lastUploadAt: string | null
+          today: number
+          yesterday: number
+          deltaPct: number | null
+          daily14d: Array<{ date: string; count: number }>
+          byBatch: Array<{ sourceFile: string; total: number; completed: number; failed: number; pipelineValue: number; lastUploadAt: string }>
+        }
+      }>(`/api/admin/bulk-renewals${suffix}`)
+    },
     processEligibleBulk: () => apiFetch<{ jobId: string; message: string }>('/api/admin/bulk-renewals/process-eligible', { method: 'POST' }),
     retryFailedBulk: () => apiFetch<{ retried: number }>('/api/admin/bulk-renewals/retry-failed', { method: 'POST' }),
     uploadBulkRenewals: (file: File) => {

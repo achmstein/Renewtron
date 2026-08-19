@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, CircleCheck, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { FunnelPills, KickerLabel, StatusPill, type Tone } from './_ui'
 import { fmtMoney2, relativeTime } from './_utils'
-
-type Detail = Awaited<ReturnType<typeof api.admin.lead>>
 
 function formatAbn(abn: string) {
   const clean = (abn ?? '').replace(/\s+/g, '')
@@ -28,32 +28,22 @@ function fmtDob(s: string) {
 
 export default function LeadDetails() {
   const { id } = useParams()
-  const [data, setData] = useState<Detail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['admin-lead', id],
+    queryFn: () => api.admin.lead(id!),
+    enabled: !!id,
+  })
 
-  useEffect(() => {
-    if (!id) return
-    setIsLoading(true)
-    api.admin.lead(id)
-      .then(setData)
-      .catch(() => setNotFound(true))
-      .finally(() => setIsLoading(false))
-  }, [id])
-
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
-        <svg className="mx-auto h-8 w-8 animate-spin text-brand-600" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-        </svg>
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
         <p className="mt-3 text-sm text-zinc-500">Loading…</p>
       </div>
     )
   }
 
-  if (notFound || !data) {
+  if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
         <h3 className="text-base font-semibold text-zinc-900">Lead not found</h3>
@@ -80,7 +70,7 @@ export default function LeadDetails() {
       {/* Top bar */}
       <div className="mb-6">
         <Link to="/admin/leads" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          <ChevronLeft className="h-3 w-3" />
           Back to leads
         </Link>
       </div>
@@ -105,9 +95,7 @@ export default function LeadDetails() {
             <div className="mt-2"><FunnelPills stages={funnelStages} /></div>
             {data.reminderOptIn ? (
               <div className="mt-2 inline-flex items-center gap-1 text-xxs font-mono uppercase tracking-[0.14em] text-emerald-700">
-                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                </svg>
+                <CircleCheck className="h-3 w-3" />
                 Reminder opt-in
               </div>
             ) : null}

@@ -1,150 +1,213 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CalendarRange, RefreshCw, X } from 'lucide-react'
+import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { ErrorModal, FilterPopover, Pagination } from './_components'
-import { Chip, EmptyState, Field, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, Toast, ViewToggle, type Tone } from './_ui'
+import { ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, ViewToggle } from './_ui'
 import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
+import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 type RenewalsResponse = Awaited<ReturnType<typeof api.admin.renewals>>
 type Renewal = RenewalsResponse['items'][number]
 type Stats = RenewalsResponse['stats']
+type Facets = RenewalsResponse['facets']
 
 type ViewMode = 'Table' | 'Cards'
 const PAGE_SIZE = 10
-
-function fmtDateRange(s: string) { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) }
 
 function canRetry(r: Renewal) {
   return r.status === 'Failed' && ((r.paymentType === 'Stripe' && r.stripePaymentSucceeded) || r.paymentType === 'External')
 }
 
+/** Operator-friendly names for RenewalErrorCategories values. */
+function categoryLabel(category: string): string {
+  switch (category) {
+    case 'Transient':         return 'Network/ASIC'
+    case 'NotDueYet':         return 'Not due yet'
+    case 'AlreadyInProgress': return 'In progress'
+    case 'PaymentRisk':       return 'Verify payment'
+    case 'Terminal':          return 'Bad data'
+    default:                  return category
+  }
+}
+
 export default function Renewals() {
-  const [viewMode, setViewMode] = useState<ViewMode>('Table')
+  // Cards are the usable default on phones; the wide table needs a desktop viewport.
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    window.matchMedia('(min-width: 1024px)').matches ? 'Table' : 'Cards')
   const [page, setPage] = useState(1)
-  const [data, setData] = useState<RenewalsResponse | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const [filterAbn, setFilterAbn] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterInitiatedBy, setFilterInitiatedBy] = useState('')
-  const [filterSource, setFilterSource] = useState('')
-  const [filterFailedAtStep, setFilterFailedAtStep] = useState('')
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo, setFilterDateTo] = useState('')
+  const [abnInput, setAbnInput] = useState('')
+  const abn = useDebouncedValue(abnInput, 300)
+  const [statuses, setStatuses] = useState<string[]>([])
+  const [sources, setSources] = useState<string[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [initiators, setInitiators] = useState<string[]>([])
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
-  const [showPopover, setShowPopover] = useState(false)
-  const [tempAbn, setTempAbn] = useState('')
-  const [tempStatus, setTempStatus] = useState('')
-  const [tempInitiatedBy, setTempInitiatedBy] = useState('')
-  const [tempSource, setTempSource] = useState('')
-  const [tempDateFrom, setTempDateFrom] = useState('')
-  const [tempDateTo, setTempDateTo] = useState('')
-
-  const [retryingId, setRetryingId] = useState<string | null>(null)
   const [bulkRetryConfirm, setBulkRetryConfirm] = useState(false)
-  const [bulkRetrying, setBulkRetrying] = useState(false)
-  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
   const [errorModal, setErrorModal] = useState<string | null>(null)
 
-  const showToast = (tone: Tone, message: string) => {
-    setToast({ tone, message })
-    setTimeout(() => setToast(null), 4000)
+  const queryClient = useQueryClient()
+  const { data, isFetching, refetch } = useQuery({
+    queryKey: ['admin-renewals', { abn, statuses, sources, categories, initiators, dateFrom, dateTo, page }],
+    queryFn: () => api.admin.renewals({
+      abn: abn || undefined,
+      status: statuses.join(',') || undefined,
+      source: sources.join(',') || undefined,
+      errorCategory: categories.join(',') || undefined,
+      initiatedBy: initiators.join(',') || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    placeholderData: keepPreviousData,
+    // Auto-refresh while there are Processing/Pending renewals in view
+    refetchInterval: (query) =>
+      query.state.data?.items.some((r) => r.status === 'Processing' || r.status === 'Pending') ? 5000 : false,
+  })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
+
+  const retryOneMutation = useMutation({
+    mutationFn: (id: string) => api.admin.retryRenewal(id),
+    onSettled: () => void invalidate(),
+  })
+  const retryOne = (id: string) => {
+    void sileo.promise(retryOneMutation.mutateAsync(id), {
+      loading: { title: 'Retrying renewal…' },
+      success: (r) => ({ title: r.message ?? 'Renewal queued for retry.' }),
+      error: (e) => ({ title: 'Retry failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
   }
 
-  const load = useMemo(() => async () => {
-    setIsRefreshing(true)
-    try {
-      const r = await api.admin.renewals({
-        abn: filterAbn || undefined,
-        status: filterStatus || undefined,
-        initiatedBy: filterInitiatedBy || undefined,
-        source: filterSource || undefined,
-        failedAtStep: filterFailedAtStep || undefined,
-        dateFrom: filterDateFrom || undefined,
-        dateTo: filterDateTo || undefined,
-        page,
-        pageSize: PAGE_SIZE,
-      })
-      setData(r)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [filterAbn, filterStatus, filterInitiatedBy, filterSource, filterFailedAtStep, filterDateFrom, filterDateTo, page])
-
-  useEffect(() => { void load() }, [load])
-
-  // Auto-refresh while there are Processing/Pending renewals
-  const pollRef = useRef<number | undefined>(undefined)
-  useEffect(() => {
-    if (!data) return
-    const needsPolling = data.items.some((r) => r.status === 'Processing' || r.status === 'Pending')
-    if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = undefined }
-    if (needsPolling) {
-      pollRef.current = window.setInterval(() => { void load() }, 5000)
-    }
-    return () => {
-      if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = undefined }
-    }
-  }, [data, load])
+  const bulkRetryMutation = useMutation({
+    mutationFn: () => api.admin.retryRenewalsBulk({
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      source: sources.length === 1 ? sources[0] : undefined,
+    }),
+    onSuccess: () => setBulkRetryConfirm(false),
+    onSettled: () => void invalidate(),
+  })
+  const retryAllFailed = () => {
+    void sileo.promise(bulkRetryMutation.mutateAsync(), {
+      loading: { title: 'Queuing failed renewals…' },
+      success: (r) => ({
+        title: `Queued ${r.retried} for retry`,
+        description: [
+          r.skipped > 0 ? `${r.skipped} skipped — Stripe payment didn't succeed.` : null,
+          r.skippedPaymentRisk > 0 ? `${r.skippedPaymentRisk} held back — ASIC may already hold payment.` : null,
+        ].filter(Boolean).join(' ') || undefined,
+      }),
+      error: (e) => ({ title: 'Bulk retry failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
 
   const totalCount = data?.totalCount ?? 0
   const renewals = data?.items ?? []
   const stats: Stats = data?.stats ?? defaultStats()
+  const facets: Facets = data?.facets ?? { status: [], source: [], initiatedBy: [], errorCategory: [] }
 
-  const activeFilterCount = [filterAbn, filterStatus, filterInitiatedBy, filterSource, filterFailedAtStep, filterDateFrom, filterDateTo].filter(Boolean).length
-  const hasActiveFilters = activeFilterCount > 0
-
-  const openPopover = () => {
-    setTempAbn(filterAbn); setTempStatus(filterStatus); setTempInitiatedBy(filterInitiatedBy); setTempSource(filterSource); setTempDateFrom(filterDateFrom); setTempDateTo(filterDateTo)
-    setShowPopover(true)
-  }
-  const applyAndClose = () => {
+  const hasActiveFilters = !!abnInput || statuses.length > 0 || sources.length > 0 || categories.length > 0 || initiators.length > 0 || !!dateFrom || !!dateTo
+  const resetFilters = () => {
     setPage(1)
-    setFilterAbn(tempAbn); setFilterStatus(tempStatus); setFilterInitiatedBy(tempInitiatedBy); setFilterSource(tempSource); setFilterDateFrom(tempDateFrom); setFilterDateTo(tempDateTo)
-    setShowPopover(false)
+    setAbnInput(''); setStatuses([]); setSources([]); setCategories([]); setInitiators([]); setDateFrom(''); setDateTo('')
   }
-  const clearAndClose = () => {
-    setPage(1)
-    setTempAbn(''); setTempStatus(''); setTempInitiatedBy(''); setTempSource(''); setTempDateFrom(''); setTempDateTo('')
-    setFilterAbn(''); setFilterStatus(''); setFilterInitiatedBy(''); setFilterSource(''); setFilterDateFrom(''); setFilterDateTo('')
-    setShowPopover(false)
-  }
-  const clearAll = () => {
-    setPage(1)
-    setFilterAbn(''); setFilterStatus(''); setFilterInitiatedBy(''); setFilterSource(''); setFilterFailedAtStep(''); setFilterDateFrom(''); setFilterDateTo('')
-  }
+  const withPageReset = <T,>(setter: (v: T) => void) => (v: T) => { setPage(1); setter(v) }
 
-  const retryOne = async (id: string) => {
-    setRetryingId(id)
-    try {
-      const r = await api.admin.retryRenewal(id)
-      showToast('emerald', r.message ?? 'Renewal queued for retry.')
-      await load()
-    } catch (e) {
-      showToast('red', e instanceof Error ? e.message : 'Retry failed')
-    } finally {
-      setRetryingId(null)
-    }
-  }
+  const sourceLabels: Record<string, string> = { Renewtron: 'Direct', Ontraport: 'Ontraport', BulkUpload: 'Bulk upload' }
+  const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: f.value, count: f.count }))
+  const sourceOptions: FacetOption[] = facets.source.map((f) => ({ value: f.value, label: sourceLabels[f.value] ?? f.value, count: f.count }))
+  const categoryOptions: FacetOption[] = facets.errorCategory.map((f) => ({ value: f.value, label: categoryLabel(f.value), count: f.count }))
+  const initiatorOptions: FacetOption[] = facets.initiatedBy.map((f) => ({ value: f.value, label: f.value, count: f.count }))
 
-  const retryAllFailed = async () => {
-    setBulkRetrying(true)
-    try {
-      const r = await api.admin.retryRenewalsBulk({
-        dateFrom: filterDateFrom || undefined,
-        dateTo: filterDateTo || undefined,
-        source: filterSource || undefined,
-      })
-      showToast('emerald', `Queued ${r.retried} for retry${r.skipped > 0 ? ` (${r.skipped} skipped — Stripe payment didn't succeed)` : ''}.`)
-      setBulkRetryConfirm(false)
-      await load()
-    } catch (e) {
-      showToast('red', e instanceof Error ? e.message : 'Bulk retry failed')
-    } finally {
-      setBulkRetrying(false)
-    }
-  }
+  const columns = useMemo<DataTableColumn<Renewal>[]>(() => [
+    {
+      id: 'business',
+      accessorKey: 'businessName',
+      header: 'Business · ABN · Customer',
+      meta: { sticky: true, className: 'min-w-[15rem] max-w-[19rem]' },
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <div>
+            <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
+            <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+            {r.lead ? (
+              <Link to={`/admin/leads/${r.lead.id}`} className="block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">{r.lead.fullName} · {r.lead.email}</Link>
+            ) : (
+              <div className="text-xxs font-mono text-zinc-400 truncate">{r.email ?? 'no lead'}</div>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => <StatusCell r={row.original} onError={setErrorModal} />,
+    },
+    {
+      accessorKey: 'amount',
+      header: 'Amount',
+      meta: { className: 'text-right font-mono tabular-nums text-sm text-zinc-900', headerClassName: 'text-right' },
+      cell: ({ row }) => fmtMoney2(row.original.amount),
+    },
+    {
+      accessorKey: 'renewalYears',
+      header: 'Years',
+      meta: { className: 'text-sm tabular-nums text-zinc-700' },
+    },
+    {
+      id: 'sourcePayment',
+      header: 'Source · Payment',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div>
+          <SourcePill source={row.original.source} />
+          <div className="mt-1"><PaymentPill r={row.original} /></div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'timeInStatusHours',
+      header: 'Time in status',
+      cell: ({ row }) => <TimeInStatus r={row.original} />,
+    },
+    {
+      id: 'actions',
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      meta: { className: 'text-right' },
+      cell: ({ row }) => {
+        const r = row.original
+        return (
+          <div className="flex items-center justify-end gap-3">
+            {canRetry(r) ? (
+              <button
+                onClick={() => retryOne(r.id)}
+                disabled={retryOneMutation.isPending && retryOneMutation.variables === r.id}
+                className="text-sm font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50"
+              >
+                {retryOneMutation.isPending && retryOneMutation.variables === r.id ? 'Retrying…' : 'Retry'}
+              </button>
+            ) : null}
+            <Link to={`/admin/renewals/${r.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800 whitespace-nowrap">View →</Link>
+          </div>
+        )
+      },
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [retryOneMutation.isPending, retryOneMutation.variables])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -155,141 +218,55 @@ export default function Renewals() {
         right={
           <>
             {stats.failedValue30d > 0 ? (
-              <button
-                type="button"
-                onClick={() => setBulkRetryConfirm(true)}
-                className="inline-flex items-center gap-2 rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm transition"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                </svg>
-                Retry all failed
+              <Button onClick={() => setBulkRetryConfirm(true)} className="h-9 bg-amber-600 hover:bg-amber-700 whitespace-nowrap">
+                <RefreshCw className="h-4 w-4" />
+                <span className="hidden sm:inline">Retry all failed</span>
+                <span className="sm:hidden">Retry failed</span>
                 <span className="ml-0.5 inline-flex items-center justify-center rounded bg-white/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{fmtMoney0(stats.failedValue30d)}</span>
-              </button>
+              </Button>
             ) : null}
             <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
-            <div className="relative">
-              <button
-                onClick={() => (showPopover ? setShowPopover(false) : openPopover())}
-                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset transition ${
-                  hasActiveFilters
-                    ? 'bg-brand-50 text-brand-800 ring-brand-200 hover:bg-brand-100'
-                    : 'bg-white text-zinc-700 ring-zinc-300 hover:bg-zinc-50'
-                }`}
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-                </svg>
-                Filters
-                {hasActiveFilters ? <span className="ml-0.5 inline-flex items-center justify-center rounded bg-brand-600 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{activeFilterCount}</span> : null}
-              </button>
-              <FilterPopover open={showPopover} onClose={() => setShowPopover(false)} title="Filter renewals">
-                <div className="space-y-3">
-                  <Field label="ABN">
-                    <input type="text" value={tempAbn} onChange={(e) => setTempAbn(e.target.value)} placeholder="11 digits" className="block w-full rounded-md border-zinc-300 text-sm font-mono tabular-nums shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2" />
-                  </Field>
-                  <Field label="Status">
-                    <select value={tempStatus} onChange={(e) => setTempStatus(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2">
-                      <option value="">All</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Processing">Processing</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Failed">Failed</option>
-                    </select>
-                  </Field>
-                  <Field label="Source">
-                    <select value={tempSource} onChange={(e) => setTempSource(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2">
-                      <option value="">All sources</option>
-                      <option value="Renewtron">Renewtron direct</option>
-                      <option value="Ontraport">Ontraport</option>
-                      <option value="BulkUpload">Bulk upload</option>
-                    </select>
-                  </Field>
-                  <Field label="Initiated by">
-                    <select value={tempInitiatedBy} onChange={(e) => setTempInitiatedBy(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2">
-                      <option value="">All</option>
-                      <option value="Customer">Customer</option>
-                      <option value="Admin">Admin</option>
-                      <option value="System">System</option>
-                    </select>
-                  </Field>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="From">
-                      <input type="date" value={tempDateFrom} onChange={(e) => setTempDateFrom(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm font-mono tabular-nums shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2" />
-                    </Field>
-                    <Field label="To">
-                      <input type="date" value={tempDateTo} onChange={(e) => setTempDateTo(e.target.value)} className="block w-full rounded-md border-zinc-300 text-sm font-mono tabular-nums shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2" />
-                    </Field>
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <button onClick={applyAndClose} className="flex-1 inline-flex justify-center items-center rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition">Apply</button>
-                  <button onClick={clearAndClose} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 transition">Clear</button>
-                </div>
-              </FilterPopover>
-            </div>
-            <RefreshButton onClick={() => void load()} busy={isRefreshing} />
+            <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
       />
 
       <StatsStrip stats={stats} />
 
-      {/* Top failure reasons */}
-      {stats.failedAtStepBreakdown.length > 0 ? (
-        <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">FAILURE REASONS · 30D</div>
-              <div className="text-sm text-zinc-500">Click a reason to filter the list.</div>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {stats.failedAtStepBreakdown.map((s) => (
-              <button
-                key={s.step}
-                onClick={() => { setPage(1); setFilterFailedAtStep(filterFailedAtStep === s.step ? '' : s.step); setFilterStatus('Failed') }}
-                className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ring-1 ring-inset transition ${
-                  filterFailedAtStep === s.step
-                    ? 'bg-red-50 text-red-800 ring-red-200'
-                    : 'bg-white text-zinc-700 ring-zinc-200 hover:bg-zinc-50'
-                }`}
-              >
-                <span className="font-mono">{s.step}</span>
-                <span className="font-mono tabular-nums text-zinc-500">{s.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {/* Filter toolbar — every facet is resolved server-side with live counts */}
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <Input
+          value={abnInput}
+          onChange={(e) => { setPage(1); setAbnInput(e.target.value) }}
+          placeholder="Filter ABN…"
+          className="h-9 w-40 font-mono tabular-nums"
+        />
+        <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={withPageReset(setStatuses)} />
+        <FacetedFilter title="Source" options={sourceOptions} selected={sources} onChange={withPageReset(setSources)} />
+        <FacetedFilter title="Category" options={categoryOptions} selected={categories} onChange={withPageReset(setCategories)} />
+        <FacetedFilter title="Initiated by" options={initiatorOptions} selected={initiators} onChange={withPageReset(setInitiators)} />
+        <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onFrom={withPageReset(setDateFrom)} onTo={withPageReset(setDateTo)} />
+        {hasActiveFilters ? (
+          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+            Reset
+            <X className="h-4 w-4" />
+          </Button>
+        ) : null}
+      </div>
 
-      {/* Active filter chips */}
-      {hasActiveFilters ? (
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          {filterAbn ? <Chip label={`ABN ${filterAbn}`} onRemove={() => { setPage(1); setFilterAbn('') }} /> : null}
-          {filterStatus ? <Chip label={`Status ${filterStatus}`} onRemove={() => { setPage(1); setFilterStatus('') }} /> : null}
-          {filterSource ? <Chip label={`Source ${filterSource}`} onRemove={() => { setPage(1); setFilterSource('') }} /> : null}
-          {filterFailedAtStep ? <Chip label={`Failed at ${filterFailedAtStep}`} onRemove={() => { setPage(1); setFilterFailedAtStep('') }} /> : null}
-          {filterInitiatedBy ? <Chip label={`By ${filterInitiatedBy}`} onRemove={() => { setPage(1); setFilterInitiatedBy('') }} /> : null}
-          {filterDateFrom ? <Chip label={`From ${fmtDateRange(filterDateFrom)}`} onRemove={() => { setPage(1); setFilterDateFrom('') }} /> : null}
-          {filterDateTo ? <Chip label={`To ${fmtDateRange(filterDateTo)}`} onRemove={() => { setPage(1); setFilterDateTo('') }} /> : null}
-          <button onClick={clearAll} className="text-xs font-medium text-zinc-600 hover:text-zinc-900 px-2">Clear all</button>
-        </div>
-      ) : null}
-
-      <div className="mt-6">
+      <div className="mt-4">
         {viewMode === 'Cards' ? (
           renewals.length === 0 ? (
             <EmptyState title="No renewals match the current filters." />
           ) : (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {renewals.map((r) => (
-                <RenewalCard key={r.id} r={r} onError={setErrorModal} onRetry={retryOne} retrying={retryingId === r.id} />
+                <RenewalCard key={r.id} r={r} onError={setErrorModal} onRetry={retryOne} retrying={retryOneMutation.isPending && retryOneMutation.variables === r.id} />
               ))}
             </div>
           )
         ) : (
-          <RenewalsTable renewals={renewals} onError={setErrorModal} onRetry={retryOne} retryingId={retryingId} />
+          <DataTable columns={columns} data={renewals} empty={<EmptyState title="No renewals match the current filters." />} />
         )}
 
         <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
@@ -298,17 +275,13 @@ export default function Renewals() {
       {bulkRetryConfirm ? (
         <BulkRetryModal
           stats={stats}
-          dateFrom={filterDateFrom}
-          dateTo={filterDateTo}
-          source={filterSource}
-          busy={bulkRetrying}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          source={sources.length === 1 ? sources[0] : ''}
+          busy={bulkRetryMutation.isPending}
           onClose={() => setBulkRetryConfirm(false)}
           onConfirm={retryAllFailed}
         />
-      ) : null}
-
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
       ) : null}
 
       <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Renewal error details" />
@@ -316,11 +289,45 @@ export default function Renewals() {
   )
 }
 
+function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
+  dateFrom: string
+  dateTo: string
+  onFrom: (v: string) => void
+  onTo: (v: string) => void
+}) {
+  const active = dateFrom || dateTo
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-9 border-dashed whitespace-nowrap">
+          <CalendarRange className="h-4 w-4" />
+          Dates
+          {active ? <span className="font-mono text-xs text-muted-foreground">{dateFrom || '…'} → {dateTo || '…'}</span> : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 space-y-3" align="start">
+        <div>
+          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">From</div>
+          <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
+        </div>
+        <div>
+          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">To</div>
+          <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
+        </div>
+        {active ? (
+          <Button variant="ghost" size="sm" className="w-full" onClick={() => { onFrom(''); onTo('') }}>Clear dates</Button>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function defaultStats(): Stats {
   return {
-    successRate30d: 0, completed30d: 0, total30d: 0, avgCompletionMinutes: null,
-    revenueMtd: 0, pipelineValue: 0, failedValue30d: 0,
-    today: 0, yesterday: 0, deltaPct: null, daily14d: [], failedAtStepBreakdown: [],
+    successRate30d: 0, completed30d: 0, decided30d: 0, total30d: 0, avgCompletionMinutes: null,
+    revenueMtd: 0, liveValue: 0, stuckValue: 0, stuckCount: 0, scheduledRetryValue: 0,
+    needsReviewCount: 0, needsReviewValue: 0, failedValue30d: 0,
+    today: 0, yesterday: 0, deltaPct: null, daily14d: [], errorCategoryBreakdown: [],
   }
 }
 
@@ -331,7 +338,7 @@ function StatsStrip({ stats }: { stats: Stats }) {
         kicker="30D"
         label="Success rate"
         value={`${stats.successRate30d}%`}
-        sub={`${stats.completed30d.toLocaleString()} of ${stats.total30d.toLocaleString()}`}
+        sub={`${stats.completed30d.toLocaleString()} of ${stats.decided30d.toLocaleString()} decided`}
         tone={stats.successRate30d >= 90 ? 'emerald' : stats.successRate30d >= 70 ? 'amber' : 'red'}
       />
       <StatTile
@@ -342,11 +349,11 @@ function StatsStrip({ stats }: { stats: Stats }) {
         tone="emerald"
       />
       <StatTile
-        kicker="$ AT RISK"
-        label="Pipeline + failed"
-        value={fmtMoney0(stats.pipelineValue + stats.failedValue30d)}
-        sub={`${fmtMoney0(stats.pipelineValue)} in flight · ${fmtMoney0(stats.failedValue30d)} failed`}
-        tone={stats.failedValue30d > 0 ? 'amber' : 'zinc'}
+        kicker="PIPELINE"
+        label="Needs attention"
+        value={fmtMoney0(stats.stuckValue + stats.needsReviewValue)}
+        sub={`${fmtMoney0(stats.liveValue)} live · ${fmtMoney0(stats.scheduledRetryValue)} auto-retry`}
+        tone={stats.stuckValue + stats.needsReviewValue > 0 ? 'amber' : 'zinc'}
       />
       <SparklineTile
         kicker="14D"
@@ -355,78 +362,13 @@ function StatsStrip({ stats }: { stats: Stats }) {
         sub={`${stats.yesterday.toLocaleString()} yesterday`}
         deltaPct={stats.deltaPct}
         data={stats.daily14d.map((d) => d.count)}
+        labels={stats.daily14d.map((d) => d.date)}
       />
     </div>
   )
 }
 
-/* ─────── Table view ─────── */
-
-function RenewalsTable({ renewals, onError, onRetry, retryingId }: {
-  renewals: Renewal[]
-  onError: (m: string) => void
-  onRetry: (id: string) => void
-  retryingId: string | null
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-zinc-50/80 backdrop-blur">
-            <tr>
-              <Th>Business · ABN · Customer</Th>
-              <Th>Status</Th>
-              <Th className="text-right">Amount</Th>
-              <Th>Years</Th>
-              <Th>Source · Payment</Th>
-              <Th>Time in status</Th>
-              <Th><span className="sr-only">Actions</span></Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {renewals.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12"><EmptyState title="No renewals match the current filters." /></td></tr>
-            ) : renewals.map((r) => (
-              <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
-                <td className="px-4 py-3 align-top">
-                  <div className="text-sm font-medium text-zinc-900 truncate max-w-[18rem]">{r.businessName}</div>
-                  <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
-                  {r.lead ? (
-                    <Link to={`/admin/leads/${r.lead.id}`} className="block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate max-w-[18rem]">{r.lead.fullName} · {r.lead.email}</Link>
-                  ) : (
-                    <div className="text-xxs font-mono text-zinc-400">{r.email ?? 'no lead'}</div>
-                  )}
-                </td>
-                <td className="px-4 py-3 align-top"><StatusCell r={r} onError={onError} /></td>
-                <td className="px-4 py-3 align-top text-right text-sm font-mono tabular-nums text-zinc-900">{fmtMoney2(r.amount)}</td>
-                <td className="px-4 py-3 align-top text-sm tabular-nums text-zinc-700">{r.renewalYears}</td>
-                <td className="px-4 py-3 align-top">
-                  <SourcePill source={r.source} />
-                  <div className="mt-1"><PaymentPill r={r} /></div>
-                </td>
-                <td className="px-4 py-3 align-top">
-                  <TimeInStatus r={r} />
-                </td>
-                <td className="px-4 py-3 align-top text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    {canRetry(r) ? (
-                      <button onClick={() => onRetry(r.id)} disabled={retryingId === r.id} className="text-sm font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50">
-                        {retryingId === r.id ? 'Retrying…' : 'Retry'}
-                      </button>
-                    ) : null}
-                    <Link to={`/admin/renewals/${r.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800">View →</Link>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-/* ─────── Cards view ─────── */
+/* ─────── Cards view (mobile default) ─────── */
 
 function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (m: string) => void; onRetry: (id: string) => void; retrying: boolean }) {
   return (
@@ -524,6 +466,12 @@ function TimeInStatus({ r }: { r: Renewal }) {
       {!isInflight && r.completedAt ? (
         <div className="text-xxs font-mono text-zinc-400 tabular-nums">closed {fmtDate(r.completedAt)}</div>
       ) : null}
+      {r.status === 'Failed' && r.nextRetryAt ? (
+        <div className="text-xxs font-mono text-indigo-600 tabular-nums">auto-retry {fmtDate(r.nextRetryAt)} {fmtTime(r.nextRetryAt)}</div>
+      ) : null}
+      {r.attemptCount > 1 ? (
+        <div className="text-xxs font-mono text-zinc-400 tabular-nums">attempt {r.attemptCount}</div>
+      ) : null}
     </div>
   )
 }
@@ -539,38 +487,32 @@ function BulkRetryModal({ stats, dateFrom, dateTo, source, busy, onClose, onConf
   onClose: () => void
   onConfirm: () => void
 }) {
-  return createPortal(
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-zinc-950/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-0 overflow-y-auto">
-        <div className="flex min-h-full items-center justify-center p-4">
-          <div className="relative w-full max-w-md rounded-xl bg-white shadow-xl">
-            <div className="px-6 py-5 border-b border-zinc-100">
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RETRY</div>
-              <h2 className="mt-0.5 text-lg font-semibold text-zinc-900 tracking-tight">Retry all failed renewals</h2>
-            </div>
-            <div className="px-6 py-5 space-y-3">
-              <p className="text-sm text-zinc-700">
-                This will re-queue every <span className="font-medium">Failed</span> renewal in your current filter.
-                Stripe-paid renewals where the payment didn't succeed will be skipped automatically.
-              </p>
-              <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xs font-mono text-zinc-700 space-y-1">
-                <div>Failed (30d): <span className="text-zinc-900 tabular-nums">{fmtMoney0(stats.failedValue30d)}</span></div>
-                {dateFrom ? <div>From: <span className="text-zinc-900 tabular-nums">{dateFrom}</span></div> : null}
-                {dateTo ? <div>To: <span className="text-zinc-900 tabular-nums">{dateTo}</span></div> : null}
-                {source ? <div>Source: <span className="text-zinc-900">{source}</span></div> : null}
-              </div>
-            </div>
-            <div className="px-6 py-4 border-t border-zinc-100 flex items-center justify-end gap-2">
-              <button onClick={onClose} disabled={busy} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 transition disabled:opacity-50">Cancel</button>
-              <button onClick={onConfirm} disabled={busy} className="inline-flex items-center rounded-md bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition">
-                {busy ? 'Retrying…' : 'Retry all'}
-              </button>
-            </div>
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose() }}>
+      <DialogContent>
+        <DialogHeader>
+          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RETRY</div>
+          <DialogTitle>Retry all failed renewals</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-700">
+            This will re-queue every <span className="font-medium">Failed</span> renewal in your current filter.
+            Stripe-unpaid renewals and rows where ASIC may already hold payment are skipped automatically.
+          </p>
+          <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xs font-mono text-zinc-700 space-y-1">
+            <div>Failed (30d): <span className="text-zinc-900 tabular-nums">{fmtMoney0(stats.failedValue30d)}</span></div>
+            {dateFrom ? <div>From: <span className="text-zinc-900 tabular-nums">{dateFrom}</span></div> : null}
+            {dateTo ? <div>To: <span className="text-zinc-900 tabular-nums">{dateTo}</span></div> : null}
+            {source ? <div>Source: <span className="text-zinc-900">{source}</span></div> : null}
           </div>
         </div>
-      </div>
-    </div>,
-    document.body,
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={onConfirm} disabled={busy} className="bg-amber-600 hover:bg-amber-700">
+            {busy ? 'Retrying…' : 'Retry all'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

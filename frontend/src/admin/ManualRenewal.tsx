@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { CircleCheck, Loader2, Search } from 'lucide-react'
+import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { KickerLabel, PageHeader, Toast, type Tone } from './_ui'
+import { KickerLabel, PageHeader } from './_ui'
 
 type SearchResult = { id: string; businessName: string; accountNumber: string; registrationDate: string }
 
@@ -10,10 +13,10 @@ const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14e
 
 export default function ManualRenewal() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [pricing, setPricing] = useState<{ oneYearFee: number; threeYearFee: number } | null>(null)
 
   const [searchAbn, setSearchAbn] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null)
 
@@ -22,14 +25,6 @@ export default function ManualRenewal() {
   const [mobileNumber, setMobileNumber] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [amount, setAmount] = useState(0)
-
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
-
-  const showToast = (tone: Tone, message: string) => {
-    setToast({ tone, message })
-    setTimeout(() => setToast(null), 4000)
-  }
 
   useEffect(() => {
     api.pricing().then((p) => {
@@ -57,50 +52,49 @@ export default function ManualRenewal() {
     if (pricing) setAmount(years === 1 ? pricing.oneYearFee : pricing.threeYearFee)
   }
 
-  const search = async () => {
+  const searchMutation = useMutation({
+    mutationFn: async (abn: string) => {
+      const r = await api.admin.manualSearch(abn)
+      if (!r.success) throw new Error(r.errorMessage ?? 'Failed to search ASIC renewal service.')
+      return r.results
+    },
+    onSuccess: (results) => setSearchResults(results),
+  })
+  const search = () => {
     setSearchResults([]); setSelectedResult(null)
     if (!searchAbn || searchAbn.length !== 11) {
-      showToast('red', 'Please enter a valid 11-digit ABN.')
+      sileo.error({ title: 'Please enter a valid 11-digit ABN.' })
       return
     }
-    setIsSearching(true)
-    try {
-      const r = await api.admin.manualSearch(searchAbn)
-      if (!r.success) {
-        showToast('red', r.errorMessage ?? 'Failed to search ASIC renewal service.')
-        return
-      }
-      setSearchResults(r.results)
-      showToast('emerald', `Found ${r.results.length} business name(s) for ABN ${searchAbn}.`)
-    } catch (e) {
-      showToast('red', `Error searching: ${e instanceof Error ? e.message : 'unknown'}`)
-    } finally {
-      setIsSearching(false)
-    }
+    void sileo.promise(searchMutation.mutateAsync(searchAbn), {
+      loading: { title: 'Searching ASIC…' },
+      success: (results) => ({ title: `Found ${results.length} business name(s) for ABN ${searchAbn}.` }),
+      error: (e) => ({ title: 'Search failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
   }
 
-  const process = async () => {
-    if (!selectedResult) { showToast('red', 'Please select a business.'); return }
-    if (!customerEmail.trim()) { showToast('red', 'Please enter customer email.'); return }
-    if (amount <= 0) { showToast('red', 'Please enter amount paid by customer.'); return }
+  const processMutation = useMutation({
+    mutationFn: () => api.admin.submitManualRenewal({
+      searchResultId: selectedResult!.id,
+      renewalYears,
+      email: customerEmail,
+      mobileNumber: mobileNumber || undefined,
+      dateOfBirth: dateOfBirth || undefined,
+      amount,
+    }),
+    onSuccess: () => { setTimeout(() => navigate('/admin/renewals'), 1800) },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] }),
+  })
+  const process = () => {
+    if (!selectedResult) { sileo.error({ title: 'Please select a business.' }); return }
+    if (!customerEmail.trim()) { sileo.error({ title: 'Please enter customer email.' }); return }
+    if (amount <= 0) { sileo.error({ title: 'Please enter amount paid by customer.' }); return }
 
-    setIsProcessing(true)
-    try {
-      const r = await api.admin.submitManualRenewal({
-        searchResultId: selectedResult.id,
-        renewalYears,
-        email: customerEmail,
-        mobileNumber: mobileNumber || undefined,
-        dateOfBirth: dateOfBirth || undefined,
-        amount,
-      })
-      showToast('emerald', r.message)
-      setTimeout(() => navigate('/admin/renewals'), 1800)
-    } catch (e) {
-      showToast('red', `Error processing renewal: ${e instanceof Error ? e.message : 'unknown'}`)
-    } finally {
-      setIsProcessing(false)
-    }
+    void sileo.promise(processMutation.mutateAsync(), {
+      loading: { title: 'Processing renewal…' },
+      success: (r) => ({ title: r.message }),
+      error: (e) => ({ title: 'Error processing renewal', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
   }
 
   const oneYearDefault = pricing?.oneYearFee.toFixed(2) ?? '—'
@@ -121,20 +115,20 @@ export default function ManualRenewal() {
             type="text"
             value={searchAbn}
             onChange={(e) => setSearchAbn(e.target.value.replace(/\D/g, '').slice(0, 11))}
-            onKeyDown={(e) => { if (e.key === 'Enter') void search() }}
+            onKeyDown={(e) => { if (e.key === 'Enter') search() }}
             placeholder="11-digit ABN"
             className={`${inputCls} font-mono tabular-nums flex-1`}
             maxLength={11}
           />
           <button
             onClick={search}
-            disabled={isSearching}
+            disabled={searchMutation.isPending}
             className="inline-flex items-center gap-2 rounded-md bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-800 disabled:opacity-50 transition self-start mt-1"
           >
-            {isSearching ? (
-              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75"></path></svg>
+            {searchMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+              <Search className="h-4 w-4" />
             )}
             Search
           </button>
@@ -194,17 +188,17 @@ export default function ManualRenewal() {
           <div className="mt-6">
             <button
               onClick={process}
-              disabled={isProcessing}
+              disabled={processMutation.isPending}
               className="inline-flex items-center gap-2 rounded-md bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm transition"
             >
-              {isProcessing ? (
+              {processMutation.isPending ? (
                 <>
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75"></path></svg>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Processing…
                 </>
               ) : (
                 <>
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <CircleCheck className="h-4 w-4" />
                   Process manual renewal
                 </>
               )}
@@ -212,10 +206,6 @@ export default function ManualRenewal() {
           </div>
         ) : null}
       </Step>
-
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
-      ) : null}
     </div>
   )
 }

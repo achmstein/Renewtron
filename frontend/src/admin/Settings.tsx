@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { PageHeader, Toast, type Tone } from './_ui'
+import { PageHeader } from './_ui'
 
 type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'tracking'
 
@@ -30,12 +32,6 @@ const SECTIONS: SectionDef[] = [
 export default function Settings() {
   const [activeKey, setActiveKey] = useState<SectionKey>('sendgrid')
   const [data, setData] = useState<Settings | null>(null)
-  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
-
-  const showToast = (tone: Tone, message: string) => {
-    setToast({ tone, message })
-    setTimeout(() => setToast(null), 4000)
-  }
 
   // Form state mirrors the original separate models
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
@@ -59,22 +55,25 @@ export default function Settings() {
   }
   useEffect(() => { void load() }, [])
 
-  const flash = (label: string, action: () => Promise<void>) => async () => {
-    try {
-      await action()
-      showToast('emerald', `${label} saved.`)
-    } catch (e) {
-      showToast('red', `Error saving ${label}: ${e instanceof Error ? e.message : 'unknown'}`)
-    }
+  const saveMutation = useMutation({
+    mutationFn: (action: () => Promise<void>) => action(),
+  })
+  const save = (label: string, action: () => Promise<void>) => (e: React.FormEvent) => {
+    e.preventDefault()
+    void sileo.promise(saveMutation.mutateAsync(action), {
+      loading: { title: `Saving ${label}…` },
+      success: () => ({ title: `${label} saved.` }),
+      error: (err) => ({ title: `Error saving ${label}`, description: err instanceof Error ? err.message : undefined }),
+    }).catch(() => {})
   }
 
-  const onSendGrid  = (e: React.FormEvent) => { e.preventDefault(); void flash('SendGrid', () => api.admin.updateSendGrid(sg))() }
-  const onStripe    = (e: React.FormEvent) => { e.preventDefault(); void flash('Stripe', () => api.admin.updateStripe(stripe))() }
-  const onPricing   = (e: React.FormEvent) => { e.preventDefault(); void flash('Pricing', () => api.admin.updatePricing(pricing))() }
-  const onAsic      = (e: React.FormEvent) => { e.preventDefault(); void flash('ASIC', () => api.admin.updateAsic(asic))() }
-  const onOntraport = (e: React.FormEvent) => { e.preventDefault(); void flash('Ontraport', () => api.admin.updateOntraport(ontraport))() }
-  const onWinBack   = (e: React.FormEvent) => { e.preventDefault(); void flash('Win-back template', () => api.admin.updateWinBack(winBack))() }
-  const onTracking  = (e: React.FormEvent) => { e.preventDefault(); void flash('Tracking tags', () => api.admin.updateTracking(tracking))() }
+  const onSendGrid  = save('SendGrid', () => api.admin.updateSendGrid(sg))
+  const onStripe    = save('Stripe', () => api.admin.updateStripe(stripe))
+  const onPricing   = save('Pricing', () => api.admin.updatePricing(pricing))
+  const onAsic      = save('ASIC', () => api.admin.updateAsic(asic))
+  const onOntraport = save('Ontraport', () => api.admin.updateOntraport(ontraport))
+  const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
+  const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
 
   // Configured-status per section (derived from current state in form, which mirrors what the server returned)
   const isFilled = (s: string | undefined | null) => !!s && s.trim().length > 0
@@ -299,10 +298,6 @@ export default function Settings() {
           )}
         </div>
       </div>
-
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
-      ) : null}
     </div>
   )
 }

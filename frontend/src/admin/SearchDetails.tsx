@@ -1,5 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, CircleAlert, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { FunnelPills, KickerLabel, searchFunnelStages, StatusPill, type Tone } from './_ui'
 import { fmtMoney2, relativeTime } from './_utils'
@@ -21,32 +23,22 @@ function fmtDateTime(s: string) {
 
 export default function SearchDetails() {
   const { id } = useParams()
-  const [data, setData] = useState<Detail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['admin-search', id],
+    queryFn: () => api.admin.search(id!),
+    enabled: !!id,
+  })
 
-  useEffect(() => {
-    if (!id) return
-    setIsLoading(true)
-    api.admin.search(id)
-      .then(setData)
-      .catch(() => setNotFound(true))
-      .finally(() => setIsLoading(false))
-  }, [id])
-
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
-        <svg className="mx-auto h-8 w-8 animate-spin text-brand-600" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-        </svg>
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
         <p className="mt-3 text-sm text-zinc-500">Loading…</p>
       </div>
     )
   }
 
-  if (notFound || !data) {
+  if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
         <h3 className="text-base font-semibold text-zinc-900">Search not found</h3>
@@ -63,7 +55,7 @@ export default function SearchDetails() {
       {/* Top bar */}
       <div className="mb-6">
         <Link to="/admin/searches" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          <ChevronLeft className="h-3 w-3" />
           Back to searches
         </Link>
       </div>
@@ -93,9 +85,7 @@ export default function SearchDetails() {
         {!data.success && data.errorMessage ? (
           <div className="mt-5 rounded-lg bg-red-50 ring-1 ring-red-100 p-4">
             <div className="flex items-start gap-3">
-              <svg className="h-4 w-4 text-red-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-              </svg>
+              <CircleAlert className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-red-700">FAILURE</div>
                 <div className="mt-1 text-sm text-red-900 break-words font-mono">{data.errorMessage}</div>

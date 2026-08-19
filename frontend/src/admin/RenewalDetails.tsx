@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChevronLeft, CircleAlert, Loader2, RefreshCw } from 'lucide-react'
+import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { KickerLabel, StatusPill, Toast, type Tone } from './_ui'
+import { KickerLabel, StatusPill, type Tone } from './_ui'
 import { fmtMoney2, relativeTime } from './_utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.renewal>>
@@ -31,85 +34,41 @@ function statusTone(status: string): Tone {
 
 export default function RenewalDetails() {
   const { id } = useParams()
-  const [data, setData] = useState<Detail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
-  const [isRetrying, setIsRetrying] = useState(false)
-  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
-  const pollRef = useRef<number | undefined>(undefined)
+  const queryClient = useQueryClient()
 
-  const showToast = (tone: Tone, message: string) => {
-    setToast({ tone, message })
-    setTimeout(() => setToast(null), 4000)
+  const { data, isPending } = useQuery({
+    queryKey: ['admin-renewal', id],
+    queryFn: () => api.admin.renewal(id!),
+    enabled: !!id,
+    // Auto-refresh while queued or processing (manual renewals land here as Pending)
+    refetchInterval: (query) => (query.state.data?.status === 'Processing' || query.state.data?.status === 'Pending' ? 3000 : false),
+  })
+
+  const retryMutation = useMutation({
+    mutationFn: () => api.admin.retryRenewal(id!),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-renewal', id] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
+    },
+  })
+  const retry = () => {
+    void sileo.promise(retryMutation.mutateAsync(), {
+      loading: { title: 'Retrying renewal…' },
+      success: (r) => ({ title: r.message ?? 'Renewal queued for retry.' }),
+      error: (e) => ({ title: 'Retry failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
   }
 
-  // Foreground load — toggles the full-page spinner. Use only for the first fetch
-  // and explicit user actions (retry).
-  const load = async () => {
-    if (!id) return
-    setIsLoading(true)
-    try {
-      const r = await api.admin.renewal(id)
-      setData(r)
-    } catch {
-      setNotFound(true)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Background poll — updates state silently without flashing the spinner.
-  const refreshQuietly = async () => {
-    if (!id) return
-    try {
-      const r = await api.admin.renewal(id)
-      setData(r)
-    } catch {
-      // ignore transient errors during polling
-    }
-  }
-
-  useEffect(() => { void load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-poll while processing
-  useEffect(() => {
-    if (!data) return
-    if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = undefined }
-    if (data.status === 'Processing') {
-      pollRef.current = window.setInterval(() => { void refreshQuietly() }, 3000)
-    }
-    return () => {
-      if (pollRef.current) { window.clearInterval(pollRef.current); pollRef.current = undefined }
-    }
-  }, [data?.status]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const retry = async () => {
-    if (!id) return
-    setIsRetrying(true)
-    try {
-      const r = await api.admin.retryRenewal(id)
-      showToast('emerald', r.message)
-      await load()
-    } catch (e) {
-      showToast('red', e instanceof Error ? e.message : 'Retry failed')
-    } finally {
-      setIsRetrying(false)
-    }
-  }
-
-  if (isLoading) {
+  if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
-        <svg className="mx-auto h-8 w-8 animate-spin text-brand-600" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-        </svg>
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
         <p className="mt-3 text-sm text-zinc-500">Loading…</p>
       </div>
     )
   }
 
-  if (notFound || !data) {
+  if (!data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
         <h3 className="text-base font-semibold text-zinc-900">Renewal request not found</h3>
@@ -126,23 +85,23 @@ export default function RenewalDetails() {
       {/* Top bar — back link + retry */}
       <div className="mb-6 flex items-center justify-between gap-3">
         <Link to="/admin/renewals" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
-          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          <ChevronLeft className="h-3 w-3" />
           Back to renewals
         </Link>
         {canRetry ? (
           <button
             onClick={retry}
-            disabled={isRetrying}
+            disabled={retryMutation.isPending}
             className="inline-flex items-center gap-2 rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm disabled:opacity-50 transition"
           >
-            {isRetrying ? (
+            {retryMutation.isPending ? (
               <>
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75"></path></svg>
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Retrying…
               </>
             ) : (
               <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                <RefreshCw className="h-4 w-4" />
                 Retry renewal
               </>
             )}
@@ -185,12 +144,16 @@ export default function RenewalDetails() {
         {data.status === 'Failed' && (data.errorMessage || data.failedAtStep) ? (
           <div className="mt-5 rounded-lg bg-red-50 ring-1 ring-red-100 p-4">
             <div className="flex items-start gap-3">
-              <svg className="h-4 w-4 text-red-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-              </svg>
+              <CircleAlert className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-red-700">FAILED{data.failedAtStep ? ` · ${data.failedAtStep}` : ''}</div>
+                <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-red-700">FAILED{data.failedAtStep ? ` · ${data.failedAtStep}` : ''}{data.errorCategory ? ` · ${data.errorCategory}` : ''}</div>
                 {data.errorMessage ? <div className="mt-1 text-sm text-red-900 break-words font-mono">{data.errorMessage}</div> : null}
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xxs font-mono text-red-800/70 tabular-nums">
+                  <span>attempt {data.attemptCount || 1}</span>
+                  {data.lastAttemptAt ? <span>last run {fmtDateTime(data.lastAttemptAt)}</span> : null}
+                  {data.nextRetryAt ? <span className="text-indigo-700">auto-retry {fmtDateTime(data.nextRetryAt)}</span> : null}
+                  {!data.nextRetryAt && data.errorCategory !== 'NotDueYet' ? <span>no auto-retry — needs you</span> : null}
+                </div>
               </div>
             </div>
           </div>
@@ -258,10 +221,6 @@ export default function RenewalDetails() {
           </Section>
         ) : null}
       </div>
-
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
-      ) : null}
     </div>
   )
 }

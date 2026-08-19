@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CircleAlert, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { ErrorModal } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, Th, Toast, type Tone } from './_ui'
+import { ErrorModal, useDebouncedValue } from './_components'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
+import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 type SalesResponse = Awaited<ReturnType<typeof api.admin.ontraportSales>>
 type Sale = SalesResponse['items'][number]
 type Stats = SalesResponse['stats']
+type Facets = SalesResponse['facets']
+
+/** A sale annotated with days until its due date (null when no due date is known). */
+type SaleRow = Sale & { _daysUntil: number | null }
 
 type DueFilter = 'overdue' | '7d' | '30d' | 'all'
 
@@ -25,95 +36,182 @@ const filledStatuses = [
 // or have been deliberately skipped (IneligibleForRenewal). Render with a yellow/info treatment, not red.
 const blockedStatuses = ['IneligibleForRenewal', 'AsicNotYetDue', 'RenewalInProgress']
 
+/** Operator-friendly names for the raw OntraportSaleStatus enum values. */
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'RenewalFailed':           return 'Failed'
+    case 'WaitingForRenewalWindow': return 'Waiting'
+    case 'AsicNotYetDue':           return 'ASIC not due'
+    case 'RenewalInProgress':       return 'In progress'
+    case 'IneligibleForRenewal':    return 'Ineligible'
+    case 'RenewalCompleted':        return 'Completed'
+    case 'Synced':                  return 'Synced'
+    case 'RenewalQueued':           return 'Queued'
+    case 'NotDueForRenewal':        return 'Not due'
+    default:                        return status
+  }
+}
+
 export default function OntraportSales() {
-  const [data, setData] = useState<SalesResponse | null>(null)
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
   const [dueFilter, setDueFilter] = useState<DueFilter>('30d')
-  const [toast, setToast] = useState<{ tone: Tone; message: string } | null>(null)
+  const [searchInput, setSearchInput] = useState('')
+  const search = useDebouncedValue(searchInput, 300)
+  const [statuses, setStatuses] = useState<string[]>([])
   const [errorModal, setErrorModal] = useState<{ title: string; body: string } | null>(null)
 
-  const showToast = (tone: Tone, message: string) => {
-    setToast({ tone, message })
-    setTimeout(() => setToast(null), 4000)
-  }
+  const queryClient = useQueryClient()
+  const { data, isFetching, refetch } = useQuery({
+    queryKey: ['admin-ontraport-sales', { statuses, search }],
+    queryFn: () => api.admin.ontraportSales({
+      status: statuses.join(',') || undefined,
+      search: search || undefined,
+    }),
+    placeholderData: keepPreviousData,
+  })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sales'] })
 
-  const load = async () => {
-    setIsRefreshing(true)
-    try {
-      setData(await api.admin.ontraportSales())
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
-  useEffect(() => { void load() }, [])
-
-  const sales = data?.items ?? []
   const stats: Stats = data?.stats ?? defaultStats()
+  const facets: Facets = data?.facets ?? { status: [] }
   const failedCount = data?.failedCount ?? 0
   const blockedCount = data?.blockedCount ?? 0
   const asicNotYetDueCount = data?.asicNotYetDueCount ?? 0
   const renewalInProgressCount = data?.renewalInProgressCount ?? 0
   const ineligibleCount = data?.ineligibleCount ?? 0
 
-  // Sales that are still in-flight (not Completed) and have a due date — these are the "pipeline".
-  const pipeline = useMemo(() => {
+  const hasActiveFilters = !!searchInput || statuses.length > 0
+  const resetFilters = () => { setSearchInput(''); setStatuses([]) }
+
+  const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: statusLabel(f.value), count: f.count }))
+
+  // Server-filtered items, annotated with days until the due date.
+  const items = useMemo<SaleRow[]>(() => {
     const now = Date.now()
-    return sales
-      .filter((s) => filledStatuses.includes(s.status))
-      .filter((s) => !!s.renewalDueDate)
-      .map((s) => ({
-        ...s,
-        _daysUntil: Math.floor((new Date(s.renewalDueDate!).getTime() - now) / 86400000),
-      }))
-      .sort((a, b) => a._daysUntil - b._daysUntil)
-  }, [sales])
+    return (data?.items ?? []).map((s) => ({
+      ...s,
+      _daysUntil: s.renewalDueDate ? Math.floor((new Date(s.renewalDueDate).getTime() - now) / 86400000) : null,
+    }))
+  }, [data])
+
+  // Sales that are still in-flight (not Completed) and have a due date — the actionable "pipeline".
+  const pipeline = useMemo(
+    () => items
+      .filter((s): s is SaleRow & { _daysUntil: number } => filledStatuses.includes(s.status) && s._daysUntil !== null)
+      .sort((a, b) => a._daysUntil - b._daysUntil),
+    [items],
+  )
 
   const byBucket = useMemo(() => ({
     overdue: pipeline.filter((s) => s._daysUntil < 0),
     soon7:   pipeline.filter((s) => s._daysUntil >= 0 && s._daysUntil <= 7),
     soon30:  pipeline.filter((s) => s._daysUntil >= 0 && s._daysUntil <= 30),
-    all:     pipeline,
   }), [pipeline])
 
-  const filteredPipeline = useMemo(() => {
+  // The All view shows every fetched row — Completed and no-due-date included — urgency first.
+  const allRows = useMemo(
+    () => items.slice().sort((a, b) => (a._daysUntil ?? Number.POSITIVE_INFINITY) - (b._daysUntil ?? Number.POSITIVE_INFINITY)),
+    [items],
+  )
+
+  const tableRows = useMemo<SaleRow[]>(() => {
     switch (dueFilter) {
       case 'overdue': return byBucket.overdue
       case '7d':      return byBucket.soon7
       case '30d':     return byBucket.soon30
-      case 'all':     return byBucket.all
+      case 'all':     return allRows
     }
-  }, [dueFilter, byBucket])
+  }, [dueFilter, byBucket, allRows])
 
-  const upNext = byBucket.all.slice(0, 5)
+  const upNext = pipeline.slice(0, 5)
   const upNextValue = upNext.reduce((sum, s) => sum + s.amountPaid, 0)
 
-  const sync = async () => {
-    setIsSyncing(true)
-    try {
-      const r = await api.admin.syncOntraport()
-      showToast('emerald', r.message)
-      await load()
-    } catch (e) {
-      showToast('red', e instanceof Error ? `Sync failed: ${e.message}` : 'Sync failed')
-    } finally {
-      setIsSyncing(false)
-    }
+  const syncMutation = useMutation({
+    mutationFn: () => api.admin.syncOntraport(),
+    onSettled: () => void invalidate(),
+  })
+  const sync = () => {
+    void sileo.promise(syncMutation.mutateAsync(), {
+      loading: { title: 'Syncing Ontraport sales…' },
+      success: (r) => ({ title: r.message }),
+      error: (e) => ({ title: 'Sync failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
   }
 
-  const processEligible = async () => {
-    setIsProcessing(true)
-    try {
-      const r = await api.admin.processEligibleOntraport()
-      showToast('emerald', r.message)
-    } catch (e) {
-      showToast('red', e instanceof Error ? e.message : 'Failed to enqueue')
-    } finally {
-      setIsProcessing(false)
-    }
+  const processMutation = useMutation({
+    mutationFn: () => api.admin.processEligibleOntraport(),
+    onSettled: () => void invalidate(),
+  })
+  const processEligible = () => {
+    void sileo.promise(processMutation.mutateAsync(), {
+      loading: { title: 'Queueing eligible sales…' },
+      success: (r) => ({ title: r.message }),
+      error: (e) => ({ title: 'Failed to enqueue', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
   }
+
+  const columns = useMemo<DataTableColumn<SaleRow>[]>(() => [
+    {
+      id: 'business',
+      accessorKey: 'businessName',
+      header: 'Business · ABN · Contact',
+      meta: { sticky: true, className: 'min-w-[15rem] max-w-[19rem]' },
+      cell: ({ row }) => {
+        const s = row.original
+        return (
+          <div>
+            <div className="text-sm font-medium text-zinc-900 truncate">{s.businessName}</div>
+            <div className="text-xxs font-mono tabular-nums text-zinc-500">{s.abn}</div>
+            <div className="mt-0.5 text-xxs font-mono text-zinc-400 truncate">
+              {s.contactName ? `${s.contactName} · ${s.email}` : s.email}
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'renewalDueDate',
+      accessorFn: (s) => s._daysUntil ?? Number.POSITIVE_INFINITY,
+      header: 'Due',
+      cell: ({ row }) => <DueCell s={row.original} />,
+    },
+    {
+      accessorKey: 'amountPaid',
+      header: 'Amount paid',
+      meta: { className: 'text-right font-mono tabular-nums text-sm text-zinc-900', headerClassName: 'text-right' },
+      cell: ({ row }) => fmtMoney2(row.original.amountPaid),
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      enableSorting: false,
+      cell: ({ row }) => <SaleStatusCell s={row.original} onShowError={(title, body) => setErrorModal({ title, body })} />,
+    },
+    {
+      id: 'syncedAt',
+      accessorFn: (s) => new Date(s.syncedAt).getTime(),
+      header: 'Synced',
+      meta: { className: 'text-sm text-zinc-700 tabular-nums whitespace-nowrap' },
+      cell: ({ row }) => relativeTime(row.original.syncedAt),
+    },
+    {
+      id: 'actions',
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      meta: { className: 'text-right' },
+      cell: ({ row }) => {
+        const s = row.original
+        if (!s.renewalRequestId) return <span className="text-xxs font-mono text-zinc-400">—</span>
+        const isFailed = s.status === 'RenewalFailed'
+        return (
+          <Link
+            to={`/admin/renewals/${s.renewalRequestId}`}
+            className={`inline-flex items-center text-sm font-medium whitespace-nowrap ${isFailed ? 'text-red-700 hover:text-red-800' : 'text-brand-700 hover:text-brand-800'}`}
+          >
+            {isFailed ? 'Investigate →' : 'View renewal →'}
+          </Link>
+        )
+      },
+    },
+  ], [])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -125,29 +223,29 @@ export default function OntraportSales() {
           <>
             <button
               onClick={sync}
-              disabled={isSyncing}
-              className="inline-flex items-center gap-2 rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium hover:bg-zinc-800 shadow-sm disabled:opacity-50 transition"
+              disabled={syncMutation.isPending}
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium hover:bg-zinc-800 shadow-sm disabled:opacity-50 transition"
             >
-              {isSyncing ? (
-                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75"></path></svg>
+              {syncMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                <RefreshCw className="h-4 w-4" />
               )}
               Sync now
             </button>
             <button
               onClick={processEligible}
-              disabled={isProcessing}
-              className="inline-flex items-center rounded-md bg-brand-600 text-white px-3 py-2 text-sm font-medium hover:bg-brand-700 shadow-sm disabled:opacity-50 transition"
+              disabled={processMutation.isPending}
+              className="inline-flex items-center whitespace-nowrap rounded-md bg-brand-600 text-white px-3 py-2 text-sm font-medium hover:bg-brand-700 shadow-sm disabled:opacity-50 transition"
             >
-              {isProcessing ? 'Queueing…' : 'Process eligible'}
+              {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
             </button>
-            <RefreshButton onClick={() => void load()} busy={isRefreshing} />
+            <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
       />
 
-      {/* Stats strip */}
+      {/* Stats strip — counts come from the server and describe ALL sales, not the filter */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatTile
           kicker="30D"
@@ -213,7 +311,7 @@ export default function OntraportSales() {
         </div>
       ) : null}
 
-      {/* Due-date filter chips */}
+      {/* Heading + due-date urgency chips (a client-side view over the server-filtered rows) */}
       <div className="mt-8 flex items-end justify-between gap-3 flex-wrap">
         <div>
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">VIEW</div>
@@ -223,36 +321,30 @@ export default function OntraportSales() {
           <FilterTab active={dueFilter === 'overdue'} onClick={() => setDueFilter('overdue')} count={byBucket.overdue.length} tone="red">Overdue</FilterTab>
           <FilterTab active={dueFilter === '7d'}      onClick={() => setDueFilter('7d')}      count={byBucket.soon7.length}    tone="amber">Next 7d</FilterTab>
           <FilterTab active={dueFilter === '30d'}     onClick={() => setDueFilter('30d')}     count={byBucket.soon30.length}   tone="emerald">Next 30d</FilterTab>
-          <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={byBucket.all.length}      tone="zinc">All</FilterTab>
+          <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={items.length}             tone="zinc">All</FilterTab>
         </div>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-zinc-50/80 backdrop-blur">
-              <tr>
-                <Th>Business · ABN</Th>
-                <Th>Customer</Th>
-                <Th>Due</Th>
-                <Th className="text-right">Amount paid</Th>
-                <Th>Status</Th>
-                <Th>Synced</Th>
-                <Th><span className="sr-only">Actions</span></Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {filteredPipeline.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12"><EmptyState title={emptyMessage(dueFilter)} /></td></tr>
-              ) : filteredPipeline.map((s) => <SaleRow key={s.id} s={s} onShowError={(title, body) => setErrorModal({ title, body })} />)}
-            </tbody>
-          </table>
-        </div>
+      {/* Filter toolbar — status facet is resolved server-side with live counts */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Input
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search business, contact, ABN, email…"
+          className="h-9 w-64"
+        />
+        <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
+        {hasActiveFilters ? (
+          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+            Reset
+            <X className="h-4 w-4" />
+          </Button>
+        ) : null}
       </div>
 
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 fade-in"><Toast tone={toast.tone} message={toast.message} /></div>
-      ) : null}
+      <div className="mt-4">
+        <DataTable columns={columns} data={tableRows} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
+      </div>
 
       <ErrorModal
         open={errorModal !== null}
@@ -264,7 +356,12 @@ export default function OntraportSales() {
   )
 }
 
-function emptyMessage(f: DueFilter) {
+function emptyMessage(f: DueFilter, hasFilters: boolean) {
+  if (hasFilters) {
+    return f === 'all'
+      ? 'No Ontraport sales match the current filters.'
+      : 'No matches due in this window — try the All tab or reset the filters.'
+  }
   switch (f) {
     case 'overdue': return 'No overdue sales — everything\'s on schedule.'
     case '7d':      return 'Nothing due in the next 7 days.'
@@ -335,10 +432,21 @@ function UpNextCard({ s }: { s: Sale & { _daysUntil: number } }) {
   )
 }
 
-function SaleRow({ s, onShowError }: { s: Sale & { _daysUntil: number }; onShowError: (title: string, body: string) => void }) {
+function DueCell({ s }: { s: SaleRow }) {
+  if (!s.renewalDueDate || s._daysUntil === null) {
+    return <span className="text-xxs font-mono text-zinc-400">—</span>
+  }
   const days = s._daysUntil
   const daysClass = days < 0 ? 'text-red-700 font-medium' : days <= 7 ? 'text-amber-700 font-medium' : days <= 30 ? 'text-emerald-700 font-medium' : 'text-zinc-500'
+  return (
+    <div>
+      <div className="text-sm text-zinc-700 tabular-nums whitespace-nowrap">{new Date(s.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })}</div>
+      <div className={`text-xxs font-mono tabular-nums ${daysClass}`}>{days < 0 ? `${Math.abs(days)} days overdue` : days === 0 ? 'today' : `in ${days} days`}</div>
+    </div>
+  )
+}
 
+function SaleStatusCell({ s, onShowError }: { s: SaleRow; onShowError: (title: string, body: string) => void }) {
   const isFailed = s.status === 'RenewalFailed'
   const isBlocked = blockedStatuses.includes(s.status)
 
@@ -361,70 +469,36 @@ function SaleRow({ s, onShowError }: { s: Sale & { _daysUntil: number }; onShowE
       : 'Sale details'
 
   return (
-    <tr className="hover:bg-zinc-50 transition-colors">
-      <td className="px-4 py-3 align-top">
-        <div className="text-sm font-medium text-zinc-900 truncate max-w-[18rem]">{s.businessName}</div>
-        <div className="text-xxs font-mono tabular-nums text-zinc-500">{s.abn}</div>
-      </td>
-      <td className="px-4 py-3 align-top">
-        <div className="text-sm text-zinc-700">{s.contactName || '—'}</div>
-        <div className="text-xxs font-mono text-zinc-400 truncate max-w-[16rem]">{s.email}</div>
-      </td>
-      <td className="px-4 py-3 align-top">
-        <div className="text-sm text-zinc-700 tabular-nums">{s.renewalDueDate ? new Date(s.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</div>
-        <div className={`text-xxs font-mono tabular-nums ${daysClass}`}>{days < 0 ? `${Math.abs(days)} days overdue` : days === 0 ? 'today' : `in ${days} days`}</div>
-      </td>
-      <td className="px-4 py-3 align-top text-right text-sm font-mono tabular-nums text-zinc-900">{fmtMoney2(s.amountPaid)}</td>
-      <td className="px-4 py-3 align-top">
-        <div className="flex items-center gap-1.5">
-          <OntraportStatusPill status={s.status} />
-          {isFailed ? (
-            <button
-              type="button"
-              onClick={() => onShowError(modalTitle, errorBody)}
-              className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition"
-              title="Why did this fail?"
-            >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-              </svg>
-            </button>
-          ) : isBlocked ? (
-            <button
-              type="button"
-              onClick={() => onShowError(modalTitle, errorBody)}
-              className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition"
-              title={retryBanner(s.status)}
-            >
-              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3h.008v.008H12v-.008zM2.697 16.126c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
-              </svg>
-            </button>
-          ) : null}
-        </div>
-        {isFailed && s.renewalFailedAtStep ? (
-          <div className="mt-1 text-xxs font-mono text-red-700">Failed: {s.renewalFailedAtStep}</div>
-        ) : null}
-        {isBlocked ? (
-          <div className="mt-1 text-xxs font-mono text-amber-700">{retryHint(s.status)}</div>
-        ) : null}
-      </td>
-      <td className="px-4 py-3 align-top">
-        <div className="text-sm text-zinc-700 tabular-nums">{relativeTime(s.syncedAt)}</div>
-      </td>
-      <td className="px-4 py-3 align-top text-right">
-        {s.renewalRequestId ? (
-          <Link
-            to={`/admin/renewals/${s.renewalRequestId}`}
-            className={`inline-flex items-center text-sm font-medium ${isFailed ? 'text-red-700 hover:text-red-800' : 'text-brand-700 hover:text-brand-800'}`}
+    <div>
+      <div className="flex items-center gap-1.5">
+        <OntraportStatusPill status={s.status} />
+        {isFailed ? (
+          <button
+            type="button"
+            onClick={() => onShowError(modalTitle, errorBody)}
+            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100 transition"
+            title="Why did this fail?"
           >
-            {isFailed ? 'Investigate →' : 'View renewal →'}
-          </Link>
-        ) : (
-          <span className="text-xxs font-mono text-zinc-400">—</span>
-        )}
-      </td>
-    </tr>
+            <CircleAlert className="h-3 w-3" />
+          </button>
+        ) : isBlocked ? (
+          <button
+            type="button"
+            onClick={() => onShowError(modalTitle, errorBody)}
+            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-amber-50 text-amber-600 hover:bg-amber-100 transition"
+            title={retryBanner(s.status)}
+          >
+            <TriangleAlert className="h-3 w-3" />
+          </button>
+        ) : null}
+      </div>
+      {isFailed && s.renewalFailedAtStep ? (
+        <div className="mt-1 text-xxs font-mono text-red-700">Failed: {s.renewalFailedAtStep}</div>
+      ) : null}
+      {isBlocked ? (
+        <div className="mt-1 text-xxs font-mono text-amber-700">{retryHint(s.status)}</div>
+      ) : null}
+    </div>
   )
 }
 
