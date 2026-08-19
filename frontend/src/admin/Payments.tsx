@@ -63,7 +63,7 @@ export default function Payments() {
       accessorKey: 'customerName',
       header: 'Customer · Names',
       enableSorting: false,
-      meta: { sticky: true, className: 'min-w-[15rem] max-w-[19rem]' },
+      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const p = row.original
         return (

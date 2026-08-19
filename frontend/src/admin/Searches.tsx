@@ -72,7 +72,7 @@ export default function Searches() {
       id: 'identity',
       accessorKey: 'abn',
       header: 'ABN · Name · Customer',
-      meta: { sticky: true, className: 'min-w-[14rem] max-w-[18rem]' },
+      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
       cell: ({ row }) => {
         const s = row.original
         return (

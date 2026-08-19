@@ -109,7 +109,7 @@ export default function BulkRenewals() {
       id: 'business',
       accessorKey: 'businessName',
       header: 'Business · ABN · Owner',
-      meta: { sticky: true, className: 'min-w-[14rem] max-w-[18rem]' },
+      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
       cell: ({ row }) => {
         const u = row.original
         return (

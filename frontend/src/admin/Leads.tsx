@@ -111,7 +111,7 @@ export default function Leads() {
       id: 'customer',
       accessorKey: 'fullName',
       header: 'Customer · ABN',
-      meta: { sticky: true, className: 'min-w-[14rem] max-w-[19rem]' },
+      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[14rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const l = row.original
         return (

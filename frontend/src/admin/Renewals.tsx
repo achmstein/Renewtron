@@ -136,7 +136,7 @@ export default function Renewals() {
       id: 'business',
       accessorKey: 'businessName',
       header: 'Business · ABN · Customer',
-      meta: { sticky: true, className: 'min-w-[15rem] max-w-[19rem]' },
+      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const r = row.original
         return (
@@ -333,7 +333,7 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !liveMutation.isPending) onClose() }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">RECOVERY</div>
           <DialogTitle>Reconcile queue &amp; database</DialogTitle>
@@ -350,7 +350,7 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
             </div>
           ) : preview ? (
             <>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <PreviewStat label="Scanned" value={preview.scanned} />
                 <PreviewStat label="Re-queue" value={preview.requeued} tone={preview.requeued > 0 ? 'brand' : undefined} />
                 <PreviewStat label="Verify" value={preview.needsVerification} tone={preview.needsVerification > 0 ? 'amber' : undefined} />
@@ -368,7 +368,7 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
                   ))}
                 </div>
               ) : null}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">Re-queue cap</span>
                 <Input
                   type="number" min={0} max={500} value={maxRequeue}
@@ -601,7 +601,7 @@ function BulkRetryModal({ stats, dateFrom, dateTo, source, busy, onClose, onConf
 }) {
   return (
     <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose() }}>
-      <DialogContent>
+      <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RETRY</div>
           <DialogTitle>Retry all failed renewals</DialogTitle>

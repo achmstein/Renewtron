@@ -157,7 +157,7 @@ export default function OntraportSales() {
       id: 'business',
       accessorKey: 'businessName',
       header: 'Business · ABN · Contact',
-      meta: { sticky: true, className: 'min-w-[15rem] max-w-[19rem]' },
+      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const s = row.original
         return (
@@ -328,11 +328,14 @@ export default function OntraportSales() {
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">VIEW</div>
           <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">All pipeline</h2>
         </div>
-        <div className="inline-flex rounded-md bg-white ring-1 ring-zinc-200 shadow-sm" role="group">
-          <FilterTab active={dueFilter === 'overdue'} onClick={() => setDueFilter('overdue')} count={byBucket.overdue.length} tone="red">Overdue</FilterTab>
-          <FilterTab active={dueFilter === '7d'}      onClick={() => setDueFilter('7d')}      count={byBucket.soon7.length}    tone="amber">Next 7d</FilterTab>
-          <FilterTab active={dueFilter === '30d'}     onClick={() => setDueFilter('30d')}     count={byBucket.soon30.length}   tone="emerald">Next 30d</FilterTab>
-          <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={items.length}             tone="zinc">All</FilterTab>
+        {/* Scrolls within itself on narrow screens instead of overflowing the page */}
+        <div className="max-w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="inline-flex w-max rounded-md bg-white ring-1 ring-zinc-200 shadow-sm" role="group">
+            <FilterTab active={dueFilter === 'overdue'} onClick={() => setDueFilter('overdue')} count={byBucket.overdue.length} tone="red">Overdue</FilterTab>
+            <FilterTab active={dueFilter === '7d'}      onClick={() => setDueFilter('7d')}      count={byBucket.soon7.length}    tone="amber">Next 7d</FilterTab>
+            <FilterTab active={dueFilter === '30d'}     onClick={() => setDueFilter('30d')}     count={byBucket.soon30.length}   tone="emerald">Next 30d</FilterTab>
+            <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={items.length}             tone="zinc">All</FilterTab>
+          </div>
         </div>
       </div>
 
@@ -406,7 +409,7 @@ function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !liveMutation.isPending) onClose() }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RECOVERY</div>
           <DialogTitle>Requeue failed sales</DialogTitle>
@@ -499,7 +502,7 @@ function FilterTab({ active, count, onClick, tone, children }: { active: boolean
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition first:rounded-l-md last:rounded-r-md ${
+      className={`inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition first:rounded-l-md last:rounded-r-md ${
         active ? 'bg-zinc-900 text-white' : 'text-zinc-700 hover:bg-zinc-50'
       }`}
     >
