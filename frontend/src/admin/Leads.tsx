@@ -110,17 +110,18 @@ export default function Leads() {
     {
       id: 'customer',
       accessorKey: 'fullName',
-      header: 'Customer · ABN',
-      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[14rem] sm:max-w-[19rem]' },
+      header: 'Lead',
+      // Compact on phones: name only (no avatar); email + ABN return at sm.
+      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const l = row.original
         return (
           <div className="flex items-center gap-3">
-            <Avatar name={l.fullName} />
+            <span className="hidden sm:block"><Avatar name={l.fullName} /></span>
             <div className="min-w-0">
               <Link to={`/admin/leads/${l.id}`} className="block text-sm font-medium text-zinc-900 hover:underline truncate">{l.fullName || '—'}</Link>
-              <div className="text-xxs font-mono text-zinc-400 truncate">{l.email}</div>
-              <div className="text-xs font-mono tabular-nums text-zinc-500 mt-0.5">
+              <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{l.email}</div>
+              <div className="hidden sm:block text-xs font-mono tabular-nums text-zinc-500 mt-0.5">
                 <button type="button" onClick={() => toggleOutcome(l.outcome)} className="hover:underline" title="Toggle this lead's outcome in the filter">{l.abn}</button>
               </div>
             </div>

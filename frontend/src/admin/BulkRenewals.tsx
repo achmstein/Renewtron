@@ -108,15 +108,16 @@ export default function BulkRenewals() {
     {
       id: 'business',
       accessorKey: 'businessName',
-      header: 'Business · ABN · Owner',
-      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
+      header: 'Business',
+      // Compact on phones: business name only; ABN + owner return at sm.
+      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
       cell: ({ row }) => {
         const u = row.original
         return (
           <div>
             <div className="text-sm font-medium text-zinc-900 truncate">{u.businessName}</div>
-            <div className="text-xxs font-mono tabular-nums text-zinc-500">{u.abn}</div>
-            <div className="text-xxs font-mono text-zinc-400 truncate">{u.ownerName ?? 'no owner'}</div>
+            <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{u.abn}</div>
+            <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{u.ownerName ?? 'no owner'}</div>
           </div>
         )
       },

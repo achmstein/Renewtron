@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export function ErrorModal({ open, message, onClose, title = 'Error details' }: { open: boolean; message: string; onClose: () => void; title?: string }) {
   return (
@@ -18,9 +18,9 @@ export function ErrorModal({ open, message, onClose, title = 'Error details' }: 
             </div>
           </div>
         </DialogHeader>
-        <div className="max-h-[50dvh] overflow-y-auto">
+        <DialogBody className="max-h-[50dvh] overflow-y-auto">
           <p className="text-sm text-zinc-700 break-words font-mono whitespace-pre-wrap">{message}</p>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button onClick={onClose} className="bg-zinc-900 hover:bg-zinc-800">Close</Button>
         </DialogFooter>

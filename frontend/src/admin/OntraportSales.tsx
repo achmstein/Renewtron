@@ -11,7 +11,7 @@ import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -156,15 +156,16 @@ export default function OntraportSales() {
     {
       id: 'business',
       accessorKey: 'businessName',
-      header: 'Business · ABN · Contact',
-      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
+      header: 'Business',
+      // Compact on phones: business name only; ABN + contact return at sm.
+      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const s = row.original
         return (
           <div>
             <div className="text-sm font-medium text-zinc-900 truncate">{s.businessName}</div>
-            <div className="text-xxs font-mono tabular-nums text-zinc-500">{s.abn}</div>
-            <div className="mt-0.5 text-xxs font-mono text-zinc-400 truncate">
+            <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{s.abn}</div>
+            <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 truncate">
               {s.contactName ? `${s.contactName} · ${s.email}` : s.email}
             </div>
           </div>
@@ -414,7 +415,7 @@ function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RECOVERY</div>
           <DialogTitle>Requeue failed sales</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <DialogBody className="space-y-3">
           <p className="text-sm text-zinc-700">
             Puts failed sales back into the eligible pool in a controlled batch. Start small,
             watch the completion rate, then run again — sales past the renewal window are excluded.
@@ -463,7 +464,7 @@ function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose
               ) : null}
             </>
           ) : null}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={liveMutation.isPending}>Close</Button>
           <Button onClick={runLive} disabled={liveMutation.isPending || !preview || nothingToDo} className="bg-amber-600 hover:bg-amber-700">

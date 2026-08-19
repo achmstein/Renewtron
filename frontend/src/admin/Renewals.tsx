@@ -10,7 +10,7 @@ import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
@@ -135,18 +135,20 @@ export default function Renewals() {
     {
       id: 'business',
       accessorKey: 'businessName',
-      header: 'Business · ABN · Customer',
-      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
+      header: 'Business',
+      // Compact on phones: name only, with the pinned column capped narrow so the
+      // scrolling columns stay usable. Full ABN + customer detail returns at sm.
+      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const r = row.original
         return (
           <div>
             <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
-            <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+            <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
             {r.lead ? (
-              <Link to={`/admin/leads/${r.lead.id}`} className="block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">{r.lead.fullName} · {r.lead.email}</Link>
+              <Link to={`/admin/leads/${r.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">{r.lead.fullName} · {r.lead.email}</Link>
             ) : (
-              <div className="text-xxs font-mono text-zinc-400 truncate">{r.email ?? 'no lead'}</div>
+              <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{r.email ?? 'no lead'}</div>
             )}
           </div>
         )
@@ -338,7 +340,7 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">RECOVERY</div>
           <DialogTitle>Reconcile queue &amp; database</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <DialogBody className="space-y-3">
           <p className="text-sm text-zinc-700">
             Finds renewals whose row and Hangfire job have diverged. Safe rows are re-queued;
             anything that may already hold an ASIC payment is flagged for you instead.
@@ -379,7 +381,7 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
               </div>
             </>
           ) : null}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={liveMutation.isPending}>Close</Button>
           <Button onClick={runLive} disabled={liveMutation.isPending || !preview || nothingToDo}>
@@ -606,7 +608,7 @@ function BulkRetryModal({ stats, dateFrom, dateTo, source, busy, onClose, onConf
           <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RETRY</div>
           <DialogTitle>Retry all failed renewals</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        <DialogBody className="space-y-3">
           <p className="text-sm text-zinc-700">
             This will re-queue every <span className="font-medium">Failed</span> renewal in your current filter.
             Stripe-unpaid renewals and rows where ASIC may already hold payment are skipped automatically.
@@ -617,7 +619,7 @@ function BulkRetryModal({ stats, dateFrom, dateTo, source, busy, onClose, onConf
             {dateTo ? <div>To: <span className="text-zinc-900 tabular-nums">{dateTo}</span></div> : null}
             {source ? <div>Source: <span className="text-zinc-900">{source}</span></div> : null}
           </div>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={onConfirm} disabled={busy} className="bg-amber-600 hover:bg-amber-700">

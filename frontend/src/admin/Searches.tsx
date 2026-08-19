@@ -71,8 +71,9 @@ export default function Searches() {
     {
       id: 'identity',
       accessorKey: 'abn',
-      header: 'ABN · Name · Customer',
-      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
+      header: 'ABN',
+      // Compact on phones: the searched ABN only; names + lead return at sm.
+      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
       cell: ({ row }) => {
         const s = row.original
         return (
@@ -82,19 +83,19 @@ export default function Searches() {
               {s.repeatCount7d >= 3 ? <StatusPill tone="amber">×{s.repeatCount7d} 7D</StatusPill> : null}
             </div>
             {s.resultsCount === 0 ? (
-              <div className="mt-0.5 text-xxs font-mono text-zinc-400">no names found</div>
+              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400">no names found</div>
             ) : (
-              <div className="mt-0.5 text-sm text-zinc-700 truncate">
+              <div className="hidden sm:block mt-0.5 text-sm text-zinc-700 truncate">
                 {s.firstBusinessName ?? '—'}
                 {s.resultsCount > 1 ? <span className="ml-1 text-xxs font-mono text-zinc-400 tabular-nums">+{s.resultsCount - 1}</span> : null}
               </div>
             )}
             {s.lead ? (
-              <Link to={`/admin/leads/${s.lead.id}`} className="block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">
+              <Link to={`/admin/leads/${s.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">
                 {s.lead.fullName} · {s.lead.email}
               </Link>
             ) : (
-              <div className="mt-0.5 text-xxs font-mono text-zinc-400">no lead</div>
+              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400">no lead</div>
             )}
           </div>
         )

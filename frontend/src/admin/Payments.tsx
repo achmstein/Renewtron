@@ -61,9 +61,10 @@ export default function Payments() {
     {
       id: 'customer',
       accessorKey: 'customerName',
-      header: 'Customer · Names',
+      header: 'Customer',
       enableSorting: false,
-      meta: { sticky: true, className: 'min-w-[9rem] max-w-[45vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
+      // Compact on phones: customer name only; email + business names return at sm.
+      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
       cell: ({ row }) => {
         const p = row.original
         return (
@@ -73,9 +74,9 @@ export default function Payments() {
             ) : (
               <div className="text-sm font-medium text-zinc-900 truncate">{p.customerName ?? '—'}</div>
             )}
-            {p.email ? <div className="text-xxs font-mono text-zinc-400 truncate">{p.email}</div> : null}
+            {p.email ? <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{p.email}</div> : null}
             {p.businessNames.length > 0 ? (
-              <div className="mt-0.5 text-xxs text-zinc-500 truncate" title={p.businessNames.join(', ')}>{p.businessNames.join(', ')}</div>
+              <div className="hidden sm:block mt-0.5 text-xxs text-zinc-500 truncate" title={p.businessNames.join(', ')}>{p.businessNames.join(', ')}</div>
             ) : null}
           </div>
         )
