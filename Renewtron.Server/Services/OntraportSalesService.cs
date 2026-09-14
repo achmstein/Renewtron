@@ -382,7 +382,69 @@ public class OntraportSalesService : IOntraportSalesService
         return sent;
     }
 
-    private async Task<bool> UpdateContactFieldsAsync(string contactId, Dictionary<string, object> fields)
+    public async Task<List<Dictionary<string, string?>>> FindContactsByFieldAsync(string fieldId, string value, int max = 25)
+    {
+        // Unlike the sync paths this throws on failure: an empty list must mean "no such
+        // contact", never "the API call didn't work", or callers misreport a 401 as no match.
+        var condition = Uri.EscapeDataString(JsonSerializer.Serialize(new[]
+        {
+            new { field = new { field = fieldId }, op = "=", value = new { value } },
+        }));
+        var fields = $"id,firstname,lastname,email,{FieldBusinessName},{FieldAbn}";
+        var response = await _httpClient.GetAsync($"Contacts?condition={condition}&range={max}&listFields={fields}");
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Ontraport contact search on {Field}='{Value}' returned {StatusCode}", fieldId, value, response.StatusCode);
+            var hint = (int)response.StatusCode is 401 or 403 ? " — check the Ontraport API app ID and key in Settings" : "";
+            throw new InvalidOperationException($"Ontraport contact search returned HTTP {(int)response.StatusCode}{hint}.");
+        }
+
+        var content = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(content);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var contacts = new List<Dictionary<string, string?>>();
+        foreach (var contact in data.EnumerateArray())
+        {
+            var dict = new Dictionary<string, string?>();
+            foreach (var prop in contact.EnumerateObject())
+                dict[prop.Name] = prop.Value.ValueKind == JsonValueKind.Null ? null : prop.Value.ToString();
+            contacts.Add(dict);
+        }
+        return contacts;
+    }
+
+    public async Task<string?> GetContactFieldAliasAsync(string fieldId)
+    {
+        // objectID 0 = Contact. With format=byId the payload is data.{objectId}.fields.{fieldId}.
+        var response = await _httpClient.GetAsync("objects/meta?format=byId&objectID=0");
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Ontraport metadata call returned HTTP {(int)response.StatusCode} — check the API app ID and key.");
+
+        var content = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(content);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            return null;
+
+        foreach (var obj in data.EnumerateObject())
+        {
+            if (obj.Value.ValueKind != JsonValueKind.Object
+                || !obj.Value.TryGetProperty("fields", out var fieldsElement)
+                || fieldsElement.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (fieldsElement.TryGetProperty(fieldId, out var field))
+            {
+                return field.ValueKind == JsonValueKind.Object && field.TryGetProperty("alias", out var alias)
+                    ? alias.GetString() ?? fieldId
+                    : fieldId;
+            }
+        }
+        return null;
+    }
+
+    public async Task<bool> UpdateContactFieldsAsync(string contactId, Dictionary<string, object> fields)
     {
         try
         {

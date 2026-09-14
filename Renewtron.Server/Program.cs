@@ -95,6 +95,7 @@ builder.Services.AddOptions<PricingSettings>().BindConfiguration("Pricing").Vali
 builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").ValidateDataAnnotations();
 builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
 builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
+builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyInbox");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -107,6 +108,17 @@ builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationS
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
+
+// ASIC key pipeline: IMAP reader + the service that turns notification emails into
+// Ontraport field writes. The HttpClient is for the PDF download behind "Click here".
+builder.Services.AddScoped<IAsicNotificationMailbox, ImapAsicNotificationMailbox>();
+builder.Services.AddHttpClient<IAsicKeyInboxService, AsicKeyInboxService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+    client.MaxResponseContentBufferSize = 20 * 1024 * 1024;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Renewtron/1.0");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/pdf,*/*;q=0.8");
+});
 
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -257,6 +269,13 @@ RecurringJob.AddOrUpdate<IOntraportSalesService>(
     "ontraport-outbox-retry",
     service => service.ProcessSyncOutboxAsync(),
     "15,45 * * * *");
+
+// Picks up ASIC "Notification request" emails and writes the ASIC key onto the Ontraport
+// contact. Cheap when idle (one IMAP search), so it runs often. Hangfire swaps in a real token.
+RecurringJob.AddOrUpdate<IAsicKeyInboxService>(
+    Renewtron.Modules.AsicKeysModule.RecurringJobId,
+    service => service.ScanAsync(CancellationToken.None),
+    "*/15 * * * *");
 
 app.MapGroup("/api").MapIdentityApi<AppUser>();
 

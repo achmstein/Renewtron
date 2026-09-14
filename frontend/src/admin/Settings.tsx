@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api } from '../api/client'
+import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult } from '../api/client'
 import { PageHeader } from './_ui'
+import { relativeTime } from './_utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'tracking'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'tracking'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -26,6 +27,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'pricing',   group: 'PAYMENTS',      title: 'Pricing',           description: 'Customer-facing renewal prices.' },
   { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials',  description: 'Card details used at ASIC checkout.' },
   { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport',         description: 'API credentials for sales sync + OTP SMS.' },
+  { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox',    description: 'Gmail inbox scanned for ASIC key notifications.' },
   { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags',     description: 'GA4, GTM and Meta pixel ids.' },
 ]
 
@@ -41,6 +43,8 @@ export default function Settings() {
   const [ontraport, setOntraport] = useState({ apiAppId: '', apiKey: '', conversationId: '' })
   const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
+  const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
+  const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
 
   const load = async () => {
     const r = await api.admin.settings()
@@ -52,6 +56,7 @@ export default function Settings() {
     setOntraport(r.ontraport)
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
+    setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
   }
   useEffect(() => { void load() }, [])
 
@@ -74,6 +79,22 @@ export default function Settings() {
   const onOntraport = save('Ontraport', () => api.admin.updateOntraport(ontraport))
   const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
   const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
+  const onAsicKeys  = save('ASIC key inbox', () => api.admin.updateAsicKeyInbox(asicKeys))
+
+  // Tests the form's current values without saving them; each check reports on its own line.
+  const testMutation = useMutation({ mutationFn: () => api.admin.testAsicKeyInbox(asicKeys) })
+  const testAsicKeys = () => {
+    setAsicKeysTest(null)
+    void sileo.promise(testMutation.mutateAsync(), {
+      loading: { title: 'Testing inbox, Ontraport field and pattern…' },
+      success: (r) => {
+        setAsicKeysTest(r)
+        const allOk = r.mailbox.ok && r.ontraportField.ok && r.keyPattern.ok
+        return { title: allOk ? 'All checks passed' : 'Some checks failed', description: allOk ? 'Save to keep these values.' : 'See the results under the form.' }
+      },
+      error: (err) => ({ title: 'Test failed', description: err instanceof Error ? err.message : undefined }),
+    }).catch(() => {})
+  }
 
   // Configured-status per section (derived from current state in form, which mirrors what the server returned)
   const isFilled = (s: string | undefined | null) => !!s && s.trim().length > 0
@@ -99,6 +120,10 @@ export default function Settings() {
     tracking: (() => {
       const total = [tracking.gtmContainerId, tracking.ga4MeasurementId, tracking.metaPixelId].filter(isFilled).length
       return total === 0 ? 'empty' : total === 3 ? 'configured' : 'partial'
+    })(),
+    asickeys: (() => {
+      const total = [asicKeys.username, asicKeys.password, asicKeys.ontraportFieldId].filter(isFilled).length
+      return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
   }
 
@@ -275,6 +300,75 @@ export default function Settings() {
                 </form>
               ) : null}
 
+              {activeKey === 'asickeys' ? (
+                <form onSubmit={onAsicKeys} className="space-y-4">
+                  <p className="text-sm text-zinc-600">
+                    Every 15 minutes Renewtron reads this inbox for ASIC "Notification request" emails,
+                    downloads the linked PDF, extracts the ASIC key and writes it onto the matching
+                    Ontraport contact. Results are listed under <span className="font-medium">ASIC Keys</span>.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={asicKeys.enabled} onChange={(e) => setAsicKeys({ ...asicKeys, enabled: e.target.checked })} />
+                    Scanning enabled
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem] gap-4">
+                    <Field label="IMAP host">
+                      <input className={`${inputCls} font-mono`} value={asicKeys.imapHost} onChange={(e) => setAsicKeys({ ...asicKeys, imapHost: e.target.value })} placeholder="imap.gmail.com" />
+                    </Field>
+                    <Field label="Port">
+                      <input type="number" className={`${inputCls} font-mono tabular-nums`} value={asicKeys.imapPort} onChange={(e) => setAsicKeys({ ...asicKeys, imapPort: Number(e.target.value) || 993 })} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Gmail address">
+                      <input type="email" className={inputCls} value={asicKeys.username} onChange={(e) => setAsicKeys({ ...asicKeys, username: e.target.value })} />
+                    </Field>
+                    <Field label="App password" hint="Google Account → Security → 2-Step Verification → App passwords. Not the account password.">
+                      <input type="password" className={`${inputCls} font-mono`} value={asicKeys.password} onChange={(e) => setAsicKeys({ ...asicKeys, password: e.target.value })} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Folder / label">
+                      <input className={`${inputCls} font-mono`} value={asicKeys.folder} onChange={(e) => setAsicKeys({ ...asicKeys, folder: e.target.value })} placeholder="INBOX" />
+                    </Field>
+                    <Field label="Subject contains">
+                      <input className={inputCls} value={asicKeys.subjectFilter} onChange={(e) => setAsicKeys({ ...asicKeys, subjectFilter: e.target.value })} />
+                    </Field>
+                    <Field label="Lookback (days)" hint="ASIC download links expire after 30 days.">
+                      <input type="number" min={1} max={365} className={`${inputCls} font-mono tabular-nums`} value={asicKeys.lookbackDays} onChange={(e) => setAsicKeys({ ...asicKeys, lookbackDays: Number(e.target.value) || 30 })} />
+                    </Field>
+                  </div>
+                  <Field label="Ontraport ASIC key field" hint="The custom field ID on the Contact object that receives the key, e.g. f5xxx.">
+                    <input className={`${inputCls} font-mono`} value={asicKeys.ontraportFieldId} onChange={(e) => setAsicKeys({ ...asicKeys, ontraportFieldId: e.target.value })} placeholder="f5xxx" />
+                  </Field>
+                  <Field label="ASIC key pattern" hint="Regex run over the PDF text (case-insensitive); group 1 is the key. ASIC sends several letter types — Test connection checks the pattern against all of them.">
+                    <input className={`${inputCls} font-mono text-xs`} value={asicKeys.asicKeyPattern} onChange={(e) => setAsicKeys({ ...asicKeys, asicKeyPattern: e.target.value })} />
+                    {asicKeys.defaultAsicKeyPattern && asicKeys.asicKeyPattern !== asicKeys.defaultAsicKeyPattern ? (
+                      <button
+                        type="button"
+                        onClick={() => setAsicKeys({ ...asicKeys, asicKeyPattern: asicKeys.defaultAsicKeyPattern! })}
+                        className="mt-1 text-xxs font-mono text-brand-700 hover:underline"
+                      >
+                        Use the current default pattern
+                      </button>
+                    ) : null}
+                  </Field>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="submit" className={submitBtnCls}>Save</button>
+                    <button
+                      type="button"
+                      onClick={testAsicKeys}
+                      disabled={testMutation.isPending}
+                      className="inline-flex justify-center rounded-md bg-white text-zinc-800 px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {testMutation.isPending ? 'Testing…' : 'Test connection'}
+                    </button>
+                    <span className="text-xxs font-mono text-zinc-500">Tests the values above without saving.</span>
+                  </div>
+                  {asicKeysTest ? <AsicKeyTestResults result={asicKeysTest} /> : null}
+                </form>
+              ) : null}
+
               {activeKey === 'tracking' ? (
                 <form onSubmit={onTracking} className="space-y-4">
                   <p className="text-sm text-zinc-600">
@@ -297,6 +391,54 @@ export default function Settings() {
             </Section>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function defaultAsicKeyInbox(): AsicKeyInboxSettings {
+  return {
+    enabled: true, imapHost: 'imap.gmail.com', imapPort: 993, username: '', password: '',
+    folder: 'INBOX', subjectFilter: 'Notification request', lookbackDays: 30,
+    ontraportFieldId: '', asicKeyPattern: '',
+  }
+}
+
+function AsicKeyTestResults({ result }: { result: AsicKeyInboxTestResult }) {
+  const { mailbox, ontraportField, keyPattern } = result
+  return (
+    <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 divide-y divide-zinc-200 text-sm">
+      <TestRow ok={mailbox.ok} label="Mailbox">
+        {mailbox.ok ? (
+          <>
+            Signed in to <span className="font-mono">{mailbox.host}</span> as <span className="font-mono">{mailbox.username}</span>.{' '}
+            <span className="font-mono">{mailbox.folder}</span> holds {mailbox.messagesInFolder.toLocaleString()} messages;{' '}
+            <span className="font-semibold tabular-nums">{mailbox.matchingInLookback}</span> match the subject filter in the lookback window
+            {mailbox.latestSubject ? <> — latest: “{mailbox.latestSubject}”{mailbox.latestReceivedAt ? ` (${relativeTime(mailbox.latestReceivedAt)})` : ''}</> : null}.
+          </>
+        ) : mailbox.error}
+      </TestRow>
+      <TestRow ok={ontraportField.ok} label="Ontraport field">
+        {ontraportField.ok
+          ? <>Field <span className="font-mono">{ontraportField.fieldId}</span> exists on Contacts as “{ontraportField.alias}”.</>
+          : ontraportField.error}
+      </TestRow>
+      <TestRow ok={keyPattern.ok} label="Key pattern">
+        {keyPattern.ok
+          ? <>Extracts <span className="font-mono">{keyPattern.sampleKey}</span> from the sample letter wording.</>
+          : keyPattern.error}
+      </TestRow>
+    </div>
+  )
+}
+
+function TestRow({ ok, label, children }: { ok: boolean; label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 px-3 py-2">
+      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+      <div className="min-w-0">
+        <div className={`text-xxs font-mono font-medium uppercase tracking-[0.14em] ${ok ? 'text-emerald-700' : 'text-red-700'}`}>{label} · {ok ? 'OK' : 'FAILED'}</div>
+        <div className={`mt-0.5 break-words ${ok ? 'text-zinc-700' : 'text-red-800'}`}>{children}</div>
       </div>
     </div>
   )

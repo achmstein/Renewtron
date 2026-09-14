@@ -16,6 +16,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<OutboundMessage> OutboundMessages { get; set; }
     public DbSet<FunnelEvent> FunnelEvents { get; set; }
     public DbSet<OntraportSyncOutbox> OntraportSyncOutbox { get; set; }
+    public DbSet<AsicKeyNotification> AsicKeyNotifications { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -185,6 +186,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.LastError).HasMaxLength(1000);
 
             entity.HasIndex(e => e.SentAt);
+            entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<AsicKeyNotification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.MessageId).IsRequired().HasMaxLength(300);
+            entity.Property(e => e.Subject).HasMaxLength(300);
+            entity.Property(e => e.From).HasMaxLength(300);
+            entity.Property(e => e.BusinessName).HasMaxLength(200);
+            entity.Property(e => e.Abn).HasMaxLength(20);
+            entity.Property(e => e.DownloadUrl).HasMaxLength(2000);
+            entity.Property(e => e.AsicKey).HasMaxLength(50);
+            entity.Property(e => e.OntraportContactIds).HasMaxLength(500);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+            entity.Property(e => e.PdfTextExcerpt).HasMaxLength(2000);
+
+            entity.HasIndex(e => e.MessageId).IsUnique();
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.ReceivedAt);
             entity.HasIndex(e => e.CreatedAt);
         });
 

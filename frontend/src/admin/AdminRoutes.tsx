@@ -15,6 +15,7 @@ import Payments from './Payments'
 import ManualRenewal from './ManualRenewal'
 import OntraportSales from './OntraportSales'
 import BulkRenewals from './BulkRenewals'
+import AsicKeys from './AsicKeys'
 import Settings from './Settings'
 
 const queryClient = new QueryClient({
@@ -40,6 +41,7 @@ export default function AdminRoutes() {
           <Route path="manual-renewal" element={<ManualRenewal />} />
           <Route path="ontraport-sales" element={<OntraportSales />} />
           <Route path="bulk-renewals" element={<BulkRenewals />} />
+          <Route path="asic-keys" element={<AsicKeys />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

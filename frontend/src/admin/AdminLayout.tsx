@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Archive, Briefcase, CreditCard, Filter, House, LogOut, Menu as MenuIcon,
+  Archive, Briefcase, CreditCard, Filter, House, KeyRound, LogOut, Menu as MenuIcon,
   RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -19,6 +19,7 @@ const Icon = {
   Bulk: <Archive strokeWidth={1.5} className="size-4 shrink-0" />,
   Briefcase: <Briefcase strokeWidth={1.5} className="size-4 shrink-0" />,
   Pencil: <SquarePen strokeWidth={1.5} className="size-4 shrink-0" />,
+  Key: <KeyRound strokeWidth={1.5} className="size-4 shrink-0" />,
   Funnel: <Filter strokeWidth={1.5} className="size-4 shrink-0" />,
   Cog: <Settings strokeWidth={1.5} className="size-4 shrink-0" />,
   Logout: <LogOut strokeWidth={1.5} className="size-4 shrink-0" />,
@@ -43,6 +44,7 @@ const navSections: NavSection[] = [
       { to: '/admin/payments', label: 'Payments', icon: Icon.Card },
       { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },
       { to: '/admin/bulk-renewals', label: 'Bulk Renewals', icon: Icon.Bulk },
+      { to: '/admin/asic-keys', label: 'ASIC Keys', icon: Icon.Key },
       { to: '/admin/manual-renewal', label: 'Manual Renewal', icon: Icon.Pencil },
     ],
   },

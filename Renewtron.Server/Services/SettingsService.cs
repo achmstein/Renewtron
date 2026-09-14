@@ -18,6 +18,7 @@ public class SettingsService : ISettingsService
     private readonly IOptionsMonitor<OntraportSettings> _ontraportSettings;
     private readonly IOptionsMonitor<WinBackSettings> _winBackSettings;
     private readonly IOptionsMonitor<TrackingSettings> _trackingSettings;
+    private readonly IOptionsMonitor<AsicKeyInboxSettings> _asicKeyInboxSettings;
     private readonly string _overridesPath;
 
     public SettingsService(
@@ -28,6 +29,7 @@ public class SettingsService : ISettingsService
         IOptionsMonitor<OntraportSettings> ontraportSettings,
         IOptionsMonitor<WinBackSettings> winBackSettings,
         IOptionsMonitor<TrackingSettings> trackingSettings,
+        IOptionsMonitor<AsicKeyInboxSettings> asicKeyInboxSettings,
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
@@ -38,6 +40,7 @@ public class SettingsService : ISettingsService
         _ontraportSettings = ontraportSettings;
         _winBackSettings = winBackSettings;
         _trackingSettings = trackingSettings;
+        _asicKeyInboxSettings = asicKeyInboxSettings;
 
         // Match Program.cs: writable overrides file lives outside the image.
         _overridesPath = configuration["Storage:OverridesPath"]
@@ -79,6 +82,11 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_trackingSettings.CurrentValue);
     }
 
+    public Task<AsicKeyInboxSettings> GetAsicKeyInboxSettingsAsync()
+    {
+        return Task.FromResult(_asicKeyInboxSettings.CurrentValue);
+    }
+
     public async Task UpdateSendGridSettingsAsync(SendGridSettings settings)
     {
         await UpdateSettingsSectionAsync("SendGrid", settings);
@@ -112,6 +120,11 @@ public class SettingsService : ISettingsService
     public async Task UpdateTrackingSettingsAsync(TrackingSettings settings)
     {
         await UpdateSettingsSectionAsync("Tracking", settings);
+    }
+
+    public async Task UpdateAsicKeyInboxSettingsAsync(AsicKeyInboxSettings settings)
+    {
+        await UpdateSettingsSectionAsync("AsicKeyInbox", settings);
     }
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)
