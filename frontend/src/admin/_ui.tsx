@@ -12,7 +12,7 @@ export function PageHeader({ kicker, title, subtitle, right }: { kicker: string;
         <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-zinc-500">{subtitle}</p> : null}
       </div>
-      {right ? <div className="flex flex-wrap items-center gap-2">{right}</div> : null}
+      {right ? <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{right}</div> : null}
     </div>
   )
 }

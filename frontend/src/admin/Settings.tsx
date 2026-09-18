@@ -325,11 +325,6 @@ export default function Settings() {
 
               {activeKey === 'asickeys' ? (
                 <form onSubmit={onAsicKeys} className="space-y-4">
-                  <p className="text-sm text-zinc-600">
-                    Every 15 minutes Renewtron reads this inbox for ASIC "Notification request" emails,
-                    downloads the linked PDF, extracts the ASIC key and writes it onto the matching
-                    Ontraport contact. Results are listed under <span className="font-medium">ASIC Keys</span>.
-                  </p>
                   <label className="flex items-center gap-2 text-sm text-zinc-700">
                     <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={asicKeys.enabled} onChange={(e) => setAsicKeys({ ...asicKeys, enabled: e.target.checked })} />
                     Scanning enabled
@@ -346,7 +341,7 @@ export default function Settings() {
                     <Field label="Gmail address">
                       <input type="email" className={inputCls} value={asicKeys.username} onChange={(e) => setAsicKeys({ ...asicKeys, username: e.target.value })} />
                     </Field>
-                    <Field label="App password" hint="Google Account → Security → 2-Step Verification → App passwords. Not the account password.">
+                    <Field label="App password" hint="A Google app password, not the account password.">
                       <input type="password" className={`${inputCls} font-mono`} value={asicKeys.password} onChange={(e) => setAsicKeys({ ...asicKeys, password: e.target.value })} />
                     </Field>
                   </div>
@@ -361,10 +356,10 @@ export default function Settings() {
                       <input type="number" min={1} max={365} className={`${inputCls} font-mono tabular-nums`} value={asicKeys.lookbackDays} onChange={(e) => setAsicKeys({ ...asicKeys, lookbackDays: Number(e.target.value) || 30 })} />
                     </Field>
                   </div>
-                  <Field label="Ontraport ASIC key field" hint="The custom field ID on the Contact object that receives the key, e.g. f5xxx.">
+                  <Field label="Ontraport ASIC key field" hint="Contact custom field ID, e.g. f5xxx.">
                     <input className={`${inputCls} font-mono`} value={asicKeys.ontraportFieldId} onChange={(e) => setAsicKeys({ ...asicKeys, ontraportFieldId: e.target.value })} placeholder="f5xxx" />
                   </Field>
-                  <Field label="ASIC key pattern" hint="Regex run over the PDF text (case-insensitive); group 1 is the key. ASIC sends several letter types — Test connection checks the pattern against all of them.">
+                  <Field label="ASIC key pattern" hint="Regex over the PDF text; group 1 is the key.">
                     <input className={`${inputCls} font-mono text-xs`} value={asicKeys.asicKeyPattern} onChange={(e) => setAsicKeys({ ...asicKeys, asicKeyPattern: e.target.value })} />
                     {asicKeys.defaultAsicKeyPattern && asicKeys.asicKeyPattern !== asicKeys.defaultAsicKeyPattern ? (
                       <button
@@ -386,7 +381,6 @@ export default function Settings() {
                     >
                       {testMutation.isPending ? 'Testing…' : 'Test connection'}
                     </button>
-                    <span className="text-xxs font-mono text-zinc-500">Tests the values above without saving.</span>
                   </div>
                   {asicKeysTest ? <AsicKeyTestResults result={asicKeysTest} /> : null}
                 </form>
@@ -394,13 +388,6 @@ export default function Settings() {
 
               {activeKey === 'asickeyreq' ? (
                 <form onSubmit={onKeyReq} className="space-y-4">
-                  <p className="text-sm text-zinc-600">
-                    Every 30 minutes Renewtron takes each new Ontraport sale and fills in ASIC's online
-                    enquiry form (Business Name → Maintain information) asking for the business name's
-                    ASIC key to be emailed to the inbox above. ASIC's form runs reCAPTCHA v3 with a
-                    minimum score of 0.5, so each submission buys a token from 2Captcha. Progress is
-                    under <span className="font-medium">Key Requests</span>.
-                  </p>
                   <div className="flex flex-wrap gap-x-6 gap-y-2">
                     <label className="flex items-center gap-2 text-sm text-zinc-700">
                       <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyReq.enabled} onChange={(e) => setKeyReq({ ...keyReq, enabled: e.target.checked })} />
@@ -411,36 +398,36 @@ export default function Settings() {
                       Queue one for every new sale
                     </label>
                   </div>
-                  <Field label="2Captcha API key" hint="2captcha.com → Dashboard. The same account Businesstron uses works here.">
+                  <Field label="2Captcha API key">
                     <input type="password" className={`${inputCls} font-mono`} value={keyReq.twoCaptchaApiKey} onChange={(e) => setKeyReq({ ...keyReq, twoCaptchaApiKey: e.target.value })} />
                   </Field>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Field label="Captcha score to request" hint="ASIC rejects below 0.5. 0.9 was accepted in testing; costs more per solve.">
+                    <Field label="Captcha score" hint="ASIC rejects tokens under 0.5.">
                       <select className={inputCls} value={String(keyReq.minCaptchaScore)} onChange={(e) => setKeyReq({ ...keyReq, minCaptchaScore: Number(e.target.value) })}>
-                        <option value="0.3">0.3 (cheapest — rejected by ASIC)</option>
+                        <option value="0.3">0.3</option>
                         <option value="0.7">0.7</option>
                         <option value="0.9">0.9 (recommended)</option>
                       </select>
                     </Field>
-                    <Field label="Tokens per submission" hint="Fresh tokens to try before the request is marked failed. Each is billed.">
+                    <Field label="Captcha attempts">
                       <input type="number" min={1} max={5} className={`${inputCls} font-mono tabular-nums`} value={keyReq.maxCaptchaAttempts} onChange={(e) => setKeyReq({ ...keyReq, maxCaptchaAttempts: Number(e.target.value) || 3 })} />
                     </Field>
-                    <Field label="Max per run" hint="Caps how many enquiries one 30-minute run sends.">
+                    <Field label="Max per run">
                       <input type="number" min={1} max={500} className={`${inputCls} font-mono tabular-nums`} value={keyReq.maxPerRun} onChange={(e) => setKeyReq({ ...keyReq, maxPerRun: Number(e.target.value) || 25 })} />
                     </Field>
                   </div>
-                  <Field label="Email ASIC should send the key to" hint="Must be the inbox scanned under ASIC key inbox, or the loop never closes.">
+                  <Field label="Send key to" hint="Must be the inbox configured under ASIC key inbox.">
                     <input type="email" className={inputCls} value={keyReq.requestEmail} onChange={(e) => setKeyReq({ ...keyReq, requestEmail: e.target.value })} />
                   </Field>
-                  <div className="grid grid-cols-[6rem_1fr] gap-4">
-                    <Field label="Fallback prefix">
+                  <div className="grid grid-cols-[8rem_1fr] gap-4">
+                    <Field label="Phone prefix">
                       <input className={`${inputCls} font-mono tabular-nums`} value={keyReq.defaultPhonePrefix} onChange={(e) => setKeyReq({ ...keyReq, defaultPhonePrefix: e.target.value })} placeholder="02" />
                     </Field>
-                    <Field label="Fallback phone number" hint="Used on the form when the sale has no usable mobile number. ASIC may call it about the enquiry.">
+                    <Field label="Fallback phone number" hint="Used when the sale has no mobile number.">
                       <input className={`${inputCls} font-mono tabular-nums`} value={keyReq.defaultPhoneNumber} onChange={(e) => setKeyReq({ ...keyReq, defaultPhoneNumber: e.target.value })} placeholder="12345678" />
                     </Field>
                   </div>
-                  <Field label="Enquiry text" hint="Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email}. Read by ASIC staff.">
+                  <Field label="Enquiry text" hint="Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email}.">
                     <textarea
                       rows={3}
                       className={`${inputCls} font-mono text-xs leading-relaxed`}
@@ -467,7 +454,6 @@ export default function Settings() {
                     >
                       {keyReqTestMutation.isPending ? 'Testing…' : 'Test settings'}
                     </button>
-                    <span className="text-xxs font-mono text-zinc-500">Checks the values above without saving or contacting ASIC.</span>
                   </div>
                   {keyReqTest ? <AsicKeyRequestTestResults result={keyReqTest} /> : null}
                 </form>
@@ -475,18 +461,13 @@ export default function Settings() {
 
               {activeKey === 'tracking' ? (
                 <form onSubmit={onTracking} className="space-y-4">
-                  <p className="text-sm text-zinc-600">
-                    These load on the public site at runtime — save here and the tags apply on the next page
-                    load, no redeploy. Leave a field blank to skip that tag. Wizard steps are recorded
-                    server-side regardless, and show up under <span className="font-medium">Funnel</span>.
-                  </p>
-                  <Field label="Google Tag Manager container" hint="GTM-XXXXXXX. Use this if you'd rather manage tags inside GTM.">
+                  <Field label="Google Tag Manager container">
                     <input className={`${inputCls} font-mono`} value={tracking.gtmContainerId} onChange={(e) => setTracking({ ...tracking, gtmContainerId: e.target.value })} placeholder="GTM-XXXXXXX" />
                   </Field>
-                  <Field label="GA4 measurement ID" hint="G-XXXXXXXXXX.">
+                  <Field label="GA4 measurement ID">
                     <input className={`${inputCls} font-mono`} value={tracking.ga4MeasurementId} onChange={(e) => setTracking({ ...tracking, ga4MeasurementId: e.target.value })} placeholder="G-XXXXXXXXXX" />
                   </Field>
-                  <Field label="Meta pixel ID" hint="Fires Lead on details, InitiateCheckout on payment, Purchase on completion.">
+                  <Field label="Meta pixel ID">
                     <input className={`${inputCls} font-mono`} value={tracking.metaPixelId} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} placeholder="1234567890" />
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
