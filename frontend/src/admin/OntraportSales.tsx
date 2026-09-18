@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, useDebouncedValue } from './_components'
@@ -152,6 +152,21 @@ export default function OntraportSales() {
     }).catch(() => {})
   }
 
+  // Asks ASIC (via its enquiry form) to email this business name's ASIC key to the scanned
+  // inbox. Submits inline so the operator sees ASIC's reference number in the toast.
+  const keyRequestMutation = useMutation({
+    mutationFn: (saleId: string) => api.admin.requestAsicKeyForSale(saleId),
+  })
+  const requestKey = (s: Sale) => {
+    void sileo.promise(keyRequestMutation.mutateAsync(s.id), {
+      loading: { title: `Requesting ASIC key for ${s.businessName}…` },
+      success: (r) => r.status === 'Submitted'
+        ? { title: `Requested — ASIC reference ${r.asicReferenceNumber}`, description: 'The key will land in the ASIC Keys inbox; track it under Key Requests.' }
+        : { title: 'ASIC request failed', description: r.errorMessage ?? 'See Key Requests for details.' },
+      error: (e) => ({ title: 'Could not request key', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
+
   const columns = useMemo<DataTableColumn<SaleRow>[]>(() => [
     {
       id: 'business',
@@ -204,19 +219,31 @@ export default function OntraportSales() {
       meta: { className: 'text-right' },
       cell: ({ row }) => {
         const s = row.original
-        if (!s.renewalRequestId) return <span className="text-xxs font-mono text-zinc-400">—</span>
         const isFailed = s.status === 'RenewalFailed'
         return (
-          <Link
-            to={`/admin/renewals/${s.renewalRequestId}`}
-            className={`inline-flex items-center text-sm font-medium whitespace-nowrap ${isFailed ? 'text-red-700 hover:text-red-800' : 'text-brand-700 hover:text-brand-800'}`}
-          >
-            {isFailed ? 'Investigate →' : 'View renewal →'}
-          </Link>
+          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+            <Button
+              variant="ghost" size="sm" className="h-7 px-2 text-xs"
+              disabled={keyRequestMutation.isPending}
+              onClick={() => requestKey(s)}
+              title="Ask ASIC to email this business name's ASIC key to the scanned inbox"
+            >
+              <KeyRound className="h-3.5 w-3.5" /> Request key
+            </Button>
+            {s.renewalRequestId ? (
+              <Link
+                to={`/admin/renewals/${s.renewalRequestId}`}
+                className={`inline-flex items-center text-sm font-medium ${isFailed ? 'text-red-700 hover:text-red-800' : 'text-brand-700 hover:text-brand-800'}`}
+              >
+                {isFailed ? 'Investigate →' : 'View renewal →'}
+              </Link>
+            ) : null}
+          </div>
         )
       },
     },
-  ], [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [keyRequestMutation.isPending])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

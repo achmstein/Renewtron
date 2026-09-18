@@ -17,6 +17,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<FunnelEvent> FunnelEvents { get; set; }
     public DbSet<OntraportSyncOutbox> OntraportSyncOutbox { get; set; }
     public DbSet<AsicKeyNotification> AsicKeyNotifications { get; set; }
+    public DbSet<AsicKeyRequest> AsicKeyRequests { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -207,6 +208,37 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.ReceivedAt);
             entity.HasIndex(e => e.CreatedAt);
+        });
+
+        modelBuilder.Entity<AsicKeyRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.OntraportContactId).HasMaxLength(20);
+            entity.Property(e => e.GivenNames).IsRequired().HasMaxLength(140);
+            entity.Property(e => e.FamilyName).IsRequired().HasMaxLength(40);
+            entity.Property(e => e.Phone).HasMaxLength(30);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Question).HasMaxLength(2000);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.AsicReferenceNumber).HasMaxLength(50);
+            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.BusinessName);
+            entity.HasIndex(e => e.Abn);
+            entity.HasIndex(e => e.OntraportSaleId);
+
+            entity.HasOne(e => e.OntraportSale)
+                .WithMany()
+                .HasForeignKey(e => e.OntraportSaleId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.AsicKeyNotification)
+                .WithMany()
+                .HasForeignKey(e => e.AsicKeyNotificationId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<FunnelEvent>(entity =>

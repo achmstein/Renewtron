@@ -19,6 +19,7 @@ public class SettingsService : ISettingsService
     private readonly IOptionsMonitor<WinBackSettings> _winBackSettings;
     private readonly IOptionsMonitor<TrackingSettings> _trackingSettings;
     private readonly IOptionsMonitor<AsicKeyInboxSettings> _asicKeyInboxSettings;
+    private readonly IOptionsMonitor<AsicKeyRequestSettings> _asicKeyRequestSettings;
     private readonly string _overridesPath;
 
     public SettingsService(
@@ -30,9 +31,11 @@ public class SettingsService : ISettingsService
         IOptionsMonitor<WinBackSettings> winBackSettings,
         IOptionsMonitor<TrackingSettings> trackingSettings,
         IOptionsMonitor<AsicKeyInboxSettings> asicKeyInboxSettings,
+        IOptionsMonitor<AsicKeyRequestSettings> asicKeyRequestSettings,
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
+        _asicKeyRequestSettings = asicKeyRequestSettings;
         _sendGridSettings = sendGridSettings;
         _stripeSettings = stripeSettings;
         _pricingSettings = pricingSettings;
@@ -87,6 +90,11 @@ public class SettingsService : ISettingsService
         return Task.FromResult(_asicKeyInboxSettings.CurrentValue);
     }
 
+    public Task<AsicKeyRequestSettings> GetAsicKeyRequestSettingsAsync()
+    {
+        return Task.FromResult(_asicKeyRequestSettings.CurrentValue);
+    }
+
     public async Task UpdateSendGridSettingsAsync(SendGridSettings settings)
     {
         await UpdateSettingsSectionAsync("SendGrid", settings);
@@ -125,6 +133,11 @@ public class SettingsService : ISettingsService
     public async Task UpdateAsicKeyInboxSettingsAsync(AsicKeyInboxSettings settings)
     {
         await UpdateSettingsSectionAsync("AsicKeyInbox", settings);
+    }
+
+    public async Task UpdateAsicKeyRequestSettingsAsync(AsicKeyRequestSettings settings)
+    {
+        await UpdateSettingsSectionAsync("AsicKeyRequest", settings);
     }
 
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)

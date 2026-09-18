@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult } from '../api/client'
+import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type AsicKeyRequestTestResult } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'tracking'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyreq' | 'tracking'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -28,6 +28,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials',  description: 'Card details used at ASIC checkout.' },
   { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport',         description: 'API credentials for sales sync + OTP SMS.' },
   { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox',    description: 'Gmail inbox scanned for ASIC key notifications.' },
+  { key: 'asickeyreq', group: 'INTEGRATIONS', title: 'ASIC key requests', description: 'Ask ASIC for each sale\'s key via its enquiry form (2Captcha).' },
   { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags',     description: 'GA4, GTM and Meta pixel ids.' },
 ]
 
@@ -45,6 +46,8 @@ export default function Settings() {
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
+  const [keyReq, setKeyReq] = useState<AsicKeyRequestSettings>(defaultAsicKeyRequest())
+  const [keyReqTest, setKeyReqTest] = useState<AsicKeyRequestTestResult | null>(null)
 
   const load = async () => {
     const r = await api.admin.settings()
@@ -57,6 +60,7 @@ export default function Settings() {
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
+    setKeyReq(r.asicKeyRequest ?? defaultAsicKeyRequest())
   }
   useEffect(() => { void load() }, [])
 
@@ -80,6 +84,21 @@ export default function Settings() {
   const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
   const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
   const onAsicKeys  = save('ASIC key inbox', () => api.admin.updateAsicKeyInbox(asicKeys))
+  const onKeyReq    = save('ASIC key requests', () => api.admin.updateAsicKeyRequest(keyReq))
+
+  const keyReqTestMutation = useMutation({ mutationFn: () => api.admin.testAsicKeyRequest(keyReq) })
+  const testKeyReq = () => {
+    setKeyReqTest(null)
+    void sileo.promise(keyReqTestMutation.mutateAsync(), {
+      loading: { title: 'Checking 2Captcha, score, template and inbox…' },
+      success: (r) => {
+        setKeyReqTest(r)
+        const allOk = r.captcha.ok && r.score.ok && r.template.ok && r.email.ok
+        return { title: allOk ? 'All checks passed' : 'Some checks failed', description: allOk ? 'Save to keep these values.' : 'See the results under the form.' }
+      },
+      error: (err) => ({ title: 'Test failed', description: err instanceof Error ? err.message : undefined }),
+    }).catch(() => {})
+  }
 
   // Tests the form's current values without saving them; each check reports on its own line.
   const testMutation = useMutation({ mutationFn: () => api.admin.testAsicKeyInbox(asicKeys) })
@@ -124,6 +143,10 @@ export default function Settings() {
     asickeys: (() => {
       const total = [asicKeys.username, asicKeys.password, asicKeys.ontraportFieldId].filter(isFilled).length
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
+    })(),
+    asickeyreq: (() => {
+      if (!isFilled(keyReq.twoCaptchaApiKey)) return 'empty'
+      return keyReq.enabled && isFilled(keyReq.requestEmail) ? 'configured' : 'partial'
     })(),
   }
 
@@ -369,6 +392,87 @@ export default function Settings() {
                 </form>
               ) : null}
 
+              {activeKey === 'asickeyreq' ? (
+                <form onSubmit={onKeyReq} className="space-y-4">
+                  <p className="text-sm text-zinc-600">
+                    Every 30 minutes Renewtron takes each new Ontraport sale and fills in ASIC's online
+                    enquiry form (Business Name → Maintain information) asking for the business name's
+                    ASIC key to be emailed to the inbox above. ASIC's form runs reCAPTCHA v3 with a
+                    minimum score of 0.5, so each submission buys a token from 2Captcha. Progress is
+                    under <span className="font-medium">Key Requests</span>.
+                  </p>
+                  <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    <label className="flex items-center gap-2 text-sm text-zinc-700">
+                      <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyReq.enabled} onChange={(e) => setKeyReq({ ...keyReq, enabled: e.target.checked })} />
+                      Requests enabled
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-zinc-700">
+                      <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyReq.autoRequestOnSync} onChange={(e) => setKeyReq({ ...keyReq, autoRequestOnSync: e.target.checked })} />
+                      Queue one for every new sale
+                    </label>
+                  </div>
+                  <Field label="2Captcha API key" hint="2captcha.com → Dashboard. The same account Businesstron uses works here.">
+                    <input type="password" className={`${inputCls} font-mono`} value={keyReq.twoCaptchaApiKey} onChange={(e) => setKeyReq({ ...keyReq, twoCaptchaApiKey: e.target.value })} />
+                  </Field>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Captcha score to request" hint="ASIC rejects below 0.5. 0.9 was accepted in testing; costs more per solve.">
+                      <select className={inputCls} value={String(keyReq.minCaptchaScore)} onChange={(e) => setKeyReq({ ...keyReq, minCaptchaScore: Number(e.target.value) })}>
+                        <option value="0.3">0.3 (cheapest — rejected by ASIC)</option>
+                        <option value="0.7">0.7</option>
+                        <option value="0.9">0.9 (recommended)</option>
+                      </select>
+                    </Field>
+                    <Field label="Tokens per submission" hint="Fresh tokens to try before the request is marked failed. Each is billed.">
+                      <input type="number" min={1} max={5} className={`${inputCls} font-mono tabular-nums`} value={keyReq.maxCaptchaAttempts} onChange={(e) => setKeyReq({ ...keyReq, maxCaptchaAttempts: Number(e.target.value) || 3 })} />
+                    </Field>
+                    <Field label="Max per run" hint="Caps how many enquiries one 30-minute run sends.">
+                      <input type="number" min={1} max={500} className={`${inputCls} font-mono tabular-nums`} value={keyReq.maxPerRun} onChange={(e) => setKeyReq({ ...keyReq, maxPerRun: Number(e.target.value) || 25 })} />
+                    </Field>
+                  </div>
+                  <Field label="Email ASIC should send the key to" hint="Must be the inbox scanned under ASIC key inbox, or the loop never closes.">
+                    <input type="email" className={inputCls} value={keyReq.requestEmail} onChange={(e) => setKeyReq({ ...keyReq, requestEmail: e.target.value })} />
+                  </Field>
+                  <div className="grid grid-cols-[6rem_1fr] gap-4">
+                    <Field label="Fallback prefix">
+                      <input className={`${inputCls} font-mono tabular-nums`} value={keyReq.defaultPhonePrefix} onChange={(e) => setKeyReq({ ...keyReq, defaultPhonePrefix: e.target.value })} placeholder="02" />
+                    </Field>
+                    <Field label="Fallback phone number" hint="Used on the form when the sale has no usable mobile number. ASIC may call it about the enquiry.">
+                      <input className={`${inputCls} font-mono tabular-nums`} value={keyReq.defaultPhoneNumber} onChange={(e) => setKeyReq({ ...keyReq, defaultPhoneNumber: e.target.value })} placeholder="12345678" />
+                    </Field>
+                  </div>
+                  <Field label="Enquiry text" hint="Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email}. Read by ASIC staff.">
+                    <textarea
+                      rows={3}
+                      className={`${inputCls} font-mono text-xs leading-relaxed`}
+                      value={keyReq.messageTemplate}
+                      onChange={(e) => setKeyReq({ ...keyReq, messageTemplate: e.target.value })}
+                    />
+                    {keyReq.defaultMessageTemplate && keyReq.messageTemplate !== keyReq.defaultMessageTemplate ? (
+                      <button
+                        type="button"
+                        onClick={() => setKeyReq({ ...keyReq, messageTemplate: keyReq.defaultMessageTemplate! })}
+                        className="mt-1 text-xxs font-mono text-brand-700 hover:underline"
+                      >
+                        Use the default text
+                      </button>
+                    ) : null}
+                  </Field>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="submit" className={submitBtnCls}>Save</button>
+                    <button
+                      type="button"
+                      onClick={testKeyReq}
+                      disabled={keyReqTestMutation.isPending}
+                      className="inline-flex justify-center rounded-md bg-white text-zinc-800 px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {keyReqTestMutation.isPending ? 'Testing…' : 'Test settings'}
+                    </button>
+                    <span className="text-xxs font-mono text-zinc-500">Checks the values above without saving or contacting ASIC.</span>
+                  </div>
+                  {keyReqTest ? <AsicKeyRequestTestResults result={keyReqTest} /> : null}
+                </form>
+              ) : null}
+
               {activeKey === 'tracking' ? (
                 <form onSubmit={onTracking} className="space-y-4">
                   <p className="text-sm text-zinc-600">
@@ -402,6 +506,34 @@ function defaultAsicKeyInbox(): AsicKeyInboxSettings {
     folder: 'INBOX', subjectFilter: 'Notification request', lookbackDays: 30,
     ontraportFieldId: '', asicKeyPattern: '',
   }
+}
+
+function defaultAsicKeyRequest(): AsicKeyRequestSettings {
+  return {
+    enabled: false, autoRequestOnSync: true, twoCaptchaApiKey: '', minCaptchaScore: 0.9, maxCaptchaAttempts: 3,
+    requestEmail: 'businessnames@idealbusiness.com.au', defaultPhonePrefix: '02', defaultPhoneNumber: '',
+    messageTemplate: '', maxPerRun: 25,
+  }
+}
+
+function AsicKeyRequestTestResults({ result }: { result: AsicKeyRequestTestResult }) {
+  const { captcha, score, template, email } = result
+  return (
+    <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 divide-y divide-zinc-200 text-sm">
+      <TestRow ok={captcha.ok} label="2Captcha">
+        {captcha.ok ? <>Key accepted; balance <span className="font-mono tabular-nums">${captcha.balance.toFixed(2)}</span>.</> : captcha.error}
+      </TestRow>
+      <TestRow ok={score.ok} label="Captcha score">
+        {score.ok ? <>Requesting <span className="font-mono">{score.minScore}</span>, above ASIC's 0.5 minimum.</> : score.error}
+      </TestRow>
+      <TestRow ok={template.ok} label="Enquiry text">
+        {template.ok ? <>“{template.sample}”</> : template.error}
+      </TestRow>
+      <TestRow ok={email.ok} label="Reply-to inbox">
+        {email.ok ? <>Keys go to <span className="font-mono">{email.email}</span>, which the inbox scanner reads.</> : email.error}
+      </TestRow>
+    </div>
+  )
 }
 
 function AsicKeyTestResults({ result }: { result: AsicKeyInboxTestResult }) {

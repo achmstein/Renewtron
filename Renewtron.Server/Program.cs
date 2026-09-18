@@ -96,6 +96,7 @@ builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").
 builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
 builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
 builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyInbox");
+builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKeyRequest");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -119,6 +120,12 @@ builder.Services.AddHttpClient<IAsicKeyInboxService, AsicKeyInboxService>(client
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Renewtron/1.0");
     client.DefaultRequestHeaders.Accept.ParseAdd("application/pdf,*/*;q=0.8");
 });
+
+// Outbound half of the ASIC key loop: 2Captcha tokens for ASIC's enquiry form (reCAPTCHA v3),
+// and the service that turns sales into enquiries and closes them when the key arrives.
+// The form client itself is registered by AddAsic (transient — one cookie jar per enquiry).
+builder.Services.AddHttpClient<Asic.Client.Abstractions.ICaptchaSolver, TwoCaptchaSolver>();
+builder.Services.AddScoped<IAsicKeyRequestService, AsicKeyRequestService>();
 
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -276,6 +283,14 @@ RecurringJob.AddOrUpdate<IAsicKeyInboxService>(
     Renewtron.Modules.AsicKeysModule.RecurringJobId,
     service => service.ScanAsync(CancellationToken.None),
     "*/15 * * * *");
+
+// Submits queued ASIC key requests (each buys a captcha token, so it's capped per run) and
+// marks earlier ones KeyReceived once the inbox scan has logged their key. Offset from the
+// inbox scan so a key that just landed is matched on the same half hour.
+RecurringJob.AddOrUpdate<IAsicKeyRequestService>(
+    Renewtron.Modules.AsicKeyRequestsModule.RecurringJobId,
+    service => service.ProcessPendingAsync(CancellationToken.None),
+    "5,35 * * * *");
 
 app.MapGroup("/api").MapIdentityApi<AppUser>();
 
