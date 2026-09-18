@@ -41,6 +41,8 @@ export default function Settings() {
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
   const [asic, setAsic] = useState({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '' })
+  // The CVC never comes back from the server; this flag says one is stored.
+  const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState({ apiAppId: '', apiKey: '', conversationId: '' })
   const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
@@ -55,7 +57,9 @@ export default function Settings() {
     setSg(r.sendGrid)
     setStripe(r.stripe)
     setPricing(r.pricing)
-    setAsic(r.asic)
+    const { hasCvc, ...asicFields } = r.asic
+    setAsic(asicFields)
+    setAsicHasCvc(hasCvc)
     setOntraport(r.ontraport)
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
@@ -79,7 +83,7 @@ export default function Settings() {
   const onSendGrid  = save('SendGrid', () => api.admin.updateSendGrid(sg))
   const onStripe    = save('Stripe', () => api.admin.updateStripe(stripe))
   const onPricing   = save('Pricing', () => api.admin.updatePricing(pricing))
-  const onAsic      = save('ASIC', () => api.admin.updateAsic(asic))
+  const onAsic      = save('ASIC', () => api.admin.updateAsic(asic).then(() => { if (asic.cvc) setAsicHasCvc(true) }))
   const onOntraport = save('Ontraport', () => api.admin.updateOntraport(ontraport))
   const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
   const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
@@ -129,7 +133,8 @@ export default function Settings() {
     })(),
     pricing: pricing.oneYearFee > 0 && pricing.threeYearFee > 0 ? 'configured' : pricing.oneYearFee > 0 || pricing.threeYearFee > 0 ? 'partial' : 'empty',
     asic: (() => {
-      const total = [asic.email, asic.cardNumber, asic.cardholderName, asic.expiryMonth, asic.expiryYear, asic.cvc].filter(isFilled).length
+      const total = [asic.email, asic.cardNumber, asic.cardholderName, asic.expiryMonth, asic.expiryYear].filter(isFilled).length
+        + (isFilled(asic.cvc) || asicHasCvc ? 1 : 0)
       return total === 6 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
     ontraport: (() => {
@@ -300,8 +305,8 @@ export default function Settings() {
                     <Field label="Expiry year">
                       <input className={`${inputCls} font-mono tabular-nums`} value={asic.expiryYear} onChange={(e) => setAsic({ ...asic, expiryYear: e.target.value })} />
                     </Field>
-                    <Field label="CVC">
-                      <input type="password" className={`${inputCls} font-mono tabular-nums`} value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} />
+                    <Field label="CVC" hint={asicHasCvc ? 'Stored. Leave blank to keep it.' : undefined}>
+                      <input type="password" className={`${inputCls} font-mono tabular-nums`} value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} placeholder={asicHasCvc ? '•••' : ''} />
                     </Field>
                   </div>
                   <button type="submit" className={submitBtnCls}>Save</button>

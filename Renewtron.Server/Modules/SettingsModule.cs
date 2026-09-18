@@ -78,8 +78,10 @@ public sealed class SettingsModule : ICarterModule
                     cardholderName = asic.CardholderName,
                     expiryMonth = asic.ExpiryMonth,
                     expiryYear = asic.ExpiryYear,
-                    // Deliberately never returned. Saving with an empty value keeps the stored one.
+                    // Deliberately never returned. Saving with an empty value keeps the stored one;
+                    // hasCvc lets the UI show the section as complete without seeing the value.
                     cvc = "",
+                    hasCvc = !string.IsNullOrEmpty(asic.Cvc),
                 },
                 ontraport = new
                 {

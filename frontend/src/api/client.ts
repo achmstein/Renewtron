@@ -277,7 +277,7 @@ export const api = {
       sendGrid: { apiKey: string; fromEmail: string; fromName: string }
       stripe: { secretKey: string; publishableKey: string }
       pricing: { oneYearFee: number; threeYearFee: number }
-      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }
+      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean }
       ontraport: { apiAppId: string; apiKey: string; conversationId: string }
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
