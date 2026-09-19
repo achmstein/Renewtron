@@ -41,5 +41,9 @@ public sealed class AsicKeyRequestResult
 /// </summary>
 public interface IAsicKeyRequestClient
 {
-    Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, CancellationToken ct = default);
+    /// <param name="proxyUrl">Optional http(s)://user:pass@host:port proxy for the ASIC traffic; null/empty = direct.</param>
+    Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, string proxyUrl = null, CancellationToken ct = default);
+
+    /// <summary>The public IP ASIC would see for form traffic (through the proxy when one is given).</summary>
+    Task<string> GetEgressIpAsync(string proxyUrl = null, CancellationToken ct = default);
 }

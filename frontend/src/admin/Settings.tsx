@@ -97,7 +97,7 @@ export default function Settings() {
       loading: { title: 'Checking 2Captcha, score, template and inbox…' },
       success: (r) => {
         setKeyReqTest(r)
-        const allOk = r.captcha.ok && r.score.ok && r.template.ok && r.email.ok
+        const allOk = r.captcha.ok && r.proxy.ok && r.score.ok && r.template.ok && r.email.ok
         return { title: allOk ? 'All checks passed' : 'Some checks failed', description: allOk ? 'Save to keep these values.' : 'See the results under the form.' }
       },
       error: (err) => ({ title: 'Test failed', description: err instanceof Error ? err.message : undefined }),
@@ -406,6 +406,9 @@ export default function Settings() {
                   <Field label="2Captcha API key">
                     <input type="password" className={`${inputCls} font-mono`} value={keyReq.twoCaptchaApiKey} onChange={(e) => setKeyReq({ ...keyReq, twoCaptchaApiKey: e.target.value })} />
                   </Field>
+                  <Field label="Residential proxy" hint="ASIC rejects captchas sent from the server's datacenter IP. http://user:pass@host:port">
+                    <input type="password" className={`${inputCls} font-mono`} value={keyReq.proxyUrl} onChange={(e) => setKeyReq({ ...keyReq, proxyUrl: e.target.value })} placeholder="http://user:pass@host:port" />
+                  </Field>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Field label="Captcha score" hint="ASIC rejects tokens under 0.5.">
                       <select className={inputCls} value={String(keyReq.minCaptchaScore)} onChange={(e) => setKeyReq({ ...keyReq, minCaptchaScore: Number(e.target.value) })}>
@@ -498,16 +501,19 @@ function defaultAsicKeyRequest(): AsicKeyRequestSettings {
   return {
     enabled: false, autoRequestOnSync: true, twoCaptchaApiKey: '', minCaptchaScore: 0.9, maxCaptchaAttempts: 3,
     requestEmail: 'businessnames@idealbusiness.com.au', defaultPhonePrefix: '02', defaultPhoneNumber: '',
-    messageTemplate: '', maxPerRun: 25,
+    messageTemplate: '', maxPerRun: 25, proxyUrl: '',
   }
 }
 
 function AsicKeyRequestTestResults({ result }: { result: AsicKeyRequestTestResult }) {
-  const { captcha, score, template, email } = result
+  const { captcha, proxy, score, template, email } = result
   return (
     <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 divide-y divide-zinc-200 text-sm">
       <TestRow ok={captcha.ok} label="2Captcha">
         {captcha.ok ? <>Key accepted; balance <span className="font-mono tabular-nums">${captcha.balance.toFixed(2)}</span>.</> : captcha.error}
+      </TestRow>
+      <TestRow ok={proxy.ok} label="Egress IP">
+        {proxy.ok ? <>ASIC will see <span className="font-mono">{proxy.ip}</span> via the proxy.</> : proxy.error}
       </TestRow>
       <TestRow ok={score.ok} label="Captcha score">
         {score.ok ? <>Requesting <span className="font-mono">{score.minScore}</span>, above ASIC's 0.5 minimum.</> : score.error}

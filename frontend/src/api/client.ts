@@ -131,12 +131,15 @@ export interface AsicKeyRequestSettings {
   defaultPhoneNumber: string
   messageTemplate: string
   maxPerRun: number
+  /** http://user:pass@host:port for the ASIC form traffic; blank = direct. Masked on read. */
+  proxyUrl: string
   /** Read-only: the code default, so the UI can offer a way back to it. */
   defaultMessageTemplate?: string
 }
 
 export interface AsicKeyRequestTestResult {
   captcha: { ok: true; balance: number } | { ok: false; error: string }
+  proxy: { ok: true; ip: string } | { ok: false; ip?: string; error: string }
   score: { ok: true; minScore: number } | { ok: false; error: string }
   template: { ok: true; sample: string } | { ok: false; error: string }
   email: { ok: true; email: string } | { ok: false; error: string }

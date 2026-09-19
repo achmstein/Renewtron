@@ -170,7 +170,7 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
         AsicKeyRequestResult result;
         try
         {
-            result = await _client.SubmitAsync(input, settings.MinCaptchaScore, Math.Clamp(settings.MaxCaptchaAttempts, 1, 5), ct);
+            result = await _client.SubmitAsync(input, settings.MinCaptchaScore, Math.Clamp(settings.MaxCaptchaAttempts, 1, 5), settings.ProxyUrl, ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)

@@ -38,6 +38,13 @@ public class AsicKeyRequestSettings
     /// <summary>Cap per run so a backlog can't fire hundreds of enquiries (and captcha solves) at once.</summary>
     public int MaxPerRun { get; set; } = 25;
 
+    /// <summary>
+    /// Optional proxy for the ASIC form traffic only, e.g. http://user:pass@host:port. ASIC passes
+    /// the submitting IP to Google when it verifies the captcha token, and a datacenter address
+    /// (the Lightsail host) scores 0.1 where a residential one passes — so route through one.
+    /// </summary>
+    public string ProxyUrl { get; set; } = "";
+
     public const string DefaultMessageTemplate =
         "My name is {FirstName} {LastName} ABN {Abn} for my business name {BusinessName} please email a copy of my ASIC key to {Email}";
 }

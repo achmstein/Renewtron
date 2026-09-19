@@ -43,6 +43,7 @@ public sealed class SettingsModule : ICarterModule
     private static void NormalizeAsicKeyRequest(AsicKeyRequestSettings body, AsicKeyRequestSettings current)
     {
         body.TwoCaptchaApiKey = Unmask(body.TwoCaptchaApiKey, current.TwoCaptchaApiKey).Trim();
+        body.ProxyUrl = Unmask(body.ProxyUrl, current.ProxyUrl).Trim();
         body.RequestEmail = (body.RequestEmail ?? "").Trim();
         body.DefaultPhonePrefix = (body.DefaultPhonePrefix ?? "").Trim();
         body.DefaultPhoneNumber = (body.DefaultPhoneNumber ?? "").Trim();
@@ -119,6 +120,8 @@ public sealed class SettingsModule : ICarterModule
                     defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
                     messageTemplate = asicKeyRequest.MessageTemplate,
                     maxPerRun = asicKeyRequest.MaxPerRun,
+                    // Carries a password; masked like the other secrets and round-tripped on save.
+                    proxyUrl = Mask(asicKeyRequest.ProxyUrl),
                     defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
                 },
             });
@@ -295,10 +298,27 @@ public sealed class SettingsModule : ICarterModule
             AsicKeyRequestSettings body,
             ISettingsService settings,
             ICaptchaSolver captcha,
+            IAsicKeyRequestClient asicClient,
             CancellationToken ct) =>
         {
             var current = await settings.GetAsicKeyRequestSettingsAsync();
             NormalizeAsicKeyRequest(body, current);
+
+            // The IP ASIC sees decides the captcha score: the Lightsail address scored 0.1 in
+            // testing, a residential one passed. Report what the form traffic will go out as.
+            object proxyCheck;
+            try
+            {
+                var ip = await asicClient.GetEgressIpAsync(body.ProxyUrl, ct);
+                proxyCheck = string.IsNullOrWhiteSpace(body.ProxyUrl)
+                    ? new { ok = false, ip, error = $"No proxy set — ASIC will see this server's own address ({ip}), which Google scores as a datacenter and ASIC then rejects the captcha. Add a residential proxy." }
+                    : new { ok = true, ip };
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                proxyCheck = new { ok = false, error = $"Proxy check failed: {ex.Message}" };
+            }
 
             object captchaCheck;
             if (string.IsNullOrWhiteSpace(body.TwoCaptchaApiKey))
@@ -362,7 +382,7 @@ public sealed class SettingsModule : ICarterModule
             else
                 emailCheck = new { ok = true, email = body.RequestEmail };
 
-            return Results.Ok(new { captcha = captchaCheck, score = scoreCheck, template = templateCheck, email = emailCheck });
+            return Results.Ok(new { captcha = captchaCheck, proxy = proxyCheck, score = scoreCheck, template = templateCheck, email = emailCheck });
         });
     }
 }

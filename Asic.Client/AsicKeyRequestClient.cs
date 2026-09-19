@@ -62,7 +62,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
 
     // One enquiry = one ASIC session: a fresh cookie jar per call so a service that submits
     // several requests in a row never carries one enquiry's session token into the next.
-    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateHttpClient(string proxyUrl)
     {
         var handler = new HttpClientHandler
         {
@@ -71,6 +71,12 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
             AllowAutoRedirect = true,
             AutomaticDecompression = DecompressionMethods.All,
         };
+        var proxy = CreateProxy(proxyUrl);
+        if (proxy != null)
+        {
+            handler.Proxy = proxy;
+            handler.UseProxy = true;
+        }
         var http = new HttpClient(handler)
         {
             BaseAddress = new Uri(BaseUrl),
@@ -83,13 +89,47 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
         return http;
     }
 
-    public async Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, CancellationToken ct = default)
+    /// <summary>http://user:pass@host:port → WebProxy with credentials; null when blank or unparseable.</summary>
+    private static WebProxy CreateProxy(string proxyUrl)
+    {
+        if (string.IsNullOrWhiteSpace(proxyUrl)) return null;
+        if (!Uri.TryCreate(proxyUrl.Trim(), UriKind.Absolute, out var uri))
+            throw new ArgumentException($"Proxy URL '{proxyUrl}' is not a valid absolute URL (expected http://user:pass@host:port).");
+
+        var proxy = new WebProxy(new UriBuilder(uri) { UserName = "", Password = "" }.Uri) { BypassProxyOnLocal = false };
+        if (!string.IsNullOrEmpty(uri.UserInfo))
+        {
+            var parts = uri.UserInfo.Split(':', 2);
+            proxy.Credentials = new NetworkCredential(Uri.UnescapeDataString(parts[0]), parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : "");
+        }
+        return proxy;
+    }
+
+    public async Task<string> GetEgressIpAsync(string proxyUrl = null, CancellationToken ct = default)
+    {
+        using var http = CreateHttpClient(proxyUrl);
+        http.Timeout = TimeSpan.FromSeconds(30);
+        using var response = await http.GetAsync("https://api.ipify.org", ct);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadAsStringAsync(ct)).Trim();
+    }
+
+    public async Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, string proxyUrl = null, CancellationToken ct = default)
     {
         if (!_captcha.IsConfigured)
             return AsicKeyRequestResult.Failed("No captcha solver API key is configured (Settings → ASIC key requests).", 0, transient: false);
 
         var captchaAttempts = 0;
-        using var http = CreateHttpClient();
+        HttpClient http;
+        try
+        {
+            http = CreateHttpClient(proxyUrl);
+        }
+        catch (ArgumentException ex)
+        {
+            return AsicKeyRequestResult.Failed(ex.Message, 0, transient: false);
+        }
+        using var _ = http;
         _http = http;
         try
         {
@@ -145,9 +185,17 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
 
             if (detailsPage == null)
             {
+                // Keep ASIC's own wording: "Score :0.1; minimum score require : 0.5" says the token
+                // was weak, while "The response parameter is invalid" or a 0.0 score says the
+                // token was refused outright — different problems, different fixes.
                 var score = lastError != null && CaptchaScoreRegex.Match(lastError) is { Success: true } sm ? sm.Groups[1].Value : null;
-                var detail = score != null ? $"best captcha score {score}" : lastError ?? "no token accepted";
-                return AsicKeyRequestResult.Failed($"ASIC did not accept the captcha after {captchaAttempts} attempt(s) ({detail}).", captchaAttempts, transient: true);
+                var refused = score == null || score.TrimEnd('0', '.') is "" or "0";
+                return AsicKeyRequestResult.Failed(
+                    $"ASIC did not accept the captcha after {captchaAttempts} attempt(s). ASIC said: {lastError ?? "no token accepted"}",
+                    captchaAttempts,
+                    // A weak score can improve on a retry; a refused token is systematic (IP, key, or
+                    // format) and retrying only spends captcha credit.
+                    transient: !refused);
             }
 
             // ---- Page 2: enquiry details ---------------------------------------------
