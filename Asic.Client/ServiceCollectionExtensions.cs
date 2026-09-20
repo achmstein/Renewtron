@@ -31,9 +31,6 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IAsicRenewalClient, AsicRenewalClient>();
         services.AddTransient<IAsicPaymentClient, AsicPaymentClient>();
 
-        // Online enquiry form (ASIC key requests). Depends on an ICaptchaSolver the host registers.
-        services.AddTransient<IAsicKeyRequestClient, AsicKeyRequestClient>();
-
         return services;
     }
 }

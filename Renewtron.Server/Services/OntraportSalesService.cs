@@ -18,7 +18,6 @@ public class OntraportSalesService : IOntraportSalesService
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IAsicRenewalClient _asicClient;
     private readonly IOptionsSnapshot<PricingSettings> _pricingSettings;
-    private readonly IOptionsMonitor<AsicKeyRequestSettings> _asicKeyRequestSettings;
     private readonly ILogger<OntraportSalesService> _logger;
 
     // Ontraport custom field IDs for business name renewal data
@@ -50,7 +49,6 @@ public class OntraportSalesService : IOntraportSalesService
         IAsicRenewalClient asicClient,
         IOptionsSnapshot<OntraportSettings> settings,
         IOptionsSnapshot<PricingSettings> pricingSettings,
-        IOptionsMonitor<AsicKeyRequestSettings> asicKeyRequestSettings,
         ILogger<OntraportSalesService> logger)
     {
         _httpClient = httpClient;
@@ -58,7 +56,6 @@ public class OntraportSalesService : IOntraportSalesService
         _backgroundJobClient = backgroundJobClient;
         _asicClient = asicClient;
         _pricingSettings = pricingSettings;
-        _asicKeyRequestSettings = asicKeyRequestSettings;
         _logger = logger;
 
         _httpClient.BaseAddress = new Uri("https://api.ontraport.com/1/");
@@ -153,15 +150,6 @@ public class OntraportSalesService : IOntraportSalesService
 
                     _dbContext.OntraportSales.Add(sale);
                     synced.Add(sale);
-
-                    // Queue the ASIC key request alongside the sale; the half-hourly run sends it.
-                    // Cancellations/disputes are skipped — no point asking ASIC for a key we
-                    // won't use, and each request costs a captcha solve.
-                    if (status != OntraportSaleStatus.IneligibleForRenewal
-                        && _asicKeyRequestSettings.CurrentValue is { Enabled: true, AutoRequestOnSync: true })
-                    {
-                        _dbContext.AsicKeyRequests.Add(AsicKeyRequestService.FromSale(sale, "Sync"));
-                    }
 
                     _logger.LogInformation("Synced Ontraport sale: {BusinessName} (ABN: {Abn}), due: {DueDate}, contact: {ContactName}",
                         businessName, abn, renewalDueDate?.ToString("yyyy-MM-dd") ?? "unknown", sale.ContactName);

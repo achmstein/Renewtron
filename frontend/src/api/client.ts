@@ -120,65 +120,6 @@ export interface AsicKeyNotificationDto {
   attemptCount: number
 }
 
-export interface AsicKeyRequestSettings {
-  enabled: boolean
-  autoRequestOnSync: boolean
-  twoCaptchaApiKey: string
-  minCaptchaScore: number
-  maxCaptchaAttempts: number
-  requestEmail: string
-  defaultPhonePrefix: string
-  defaultPhoneNumber: string
-  messageTemplate: string
-  maxPerRun: number
-  /** http://user:pass@host:port for the ASIC form traffic; blank = direct. Masked on read. */
-  proxyUrl: string
-  /** Read-only: the code default, so the UI can offer a way back to it. */
-  defaultMessageTemplate?: string
-}
-
-export interface AsicKeyRequestTestResult {
-  captcha: { ok: true; balance: number } | { ok: false; error: string }
-  proxy: { ok: true; ip: string } | { ok: false; ip?: string; error: string }
-  score: { ok: true; minScore: number } | { ok: false; error: string }
-  template: { ok: true; sample: string } | { ok: false; error: string }
-  email: { ok: true; email: string } | { ok: false; error: string }
-}
-
-export interface AsicKeyRequestJobStatus {
-  jobId: string
-  state: string
-  done: boolean
-  result: { skipped: boolean; message: string; submitted: number; failed: number; keysMatched: number } | null
-  error: string | null
-}
-
-export interface AsicKeyRequestDto {
-  id: string
-  ontraportSaleId: string | null
-  ontraportContactId: string | null
-  contactName: string
-  phone: string | null
-  abn: string
-  businessName: string
-  question: string | null
-  source: string
-  status: string
-  asicReferenceNumber: string | null
-  errorMessage: string | null
-  canAutoRetry: boolean
-  captchaSolves: number
-  asicKeyNotificationId: string | null
-  asicKey: string | null
-  attemptCount: number
-  createdAt: string
-  processedAt: string | null
-  submittedAt: string | null
-  keyReceivedAt: string | null
-}
-
-export type AsicKeyRequestDetail = Pick<AsicKeyRequestDto, 'id' | 'ontraportSaleId' | 'businessName' | 'abn' | 'status' | 'asicReferenceNumber' | 'errorMessage' | 'canAutoRetry' | 'captchaSolves' | 'attemptCount' | 'processedAt' | 'submittedAt'>
-
 export interface TrackingSettings {
   gtmContainerId: string
   ga4MeasurementId: string
@@ -285,7 +226,6 @@ export const api = {
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
       asicKeyInbox: AsicKeyInboxSettings
-      asicKeyRequest: AsicKeyRequestSettings
     }>('/api/admin/settings'),
     searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
@@ -708,43 +648,6 @@ export const api = {
       apiFetch<Pick<AsicKeyNotificationDto, 'id' | 'businessName' | 'abn' | 'asicKey' | 'ontraportContactIds' | 'ontraportContactsUpdated' | 'status' | 'errorMessage' | 'processedAt' | 'attemptCount'>>(`/api/admin/asic-keys/${id}/retry`, { method: 'POST' }),
     applyAsicKey: (id: string, contactId: string) =>
       apiFetch<Pick<AsicKeyNotificationDto, 'id' | 'businessName' | 'abn' | 'asicKey' | 'ontraportContactIds' | 'ontraportContactsUpdated' | 'status' | 'errorMessage' | 'processedAt' | 'attemptCount'>>(`/api/admin/asic-keys/${id}/apply`, { method: 'POST', body: JSON.stringify({ contactId }) }),
-    asicKeyRequests: (params: { status?: string; search?: string } = {}) => {
-      const qs = new URLSearchParams()
-      if (params.status) qs.set('status', params.status)
-      if (params.search) qs.set('search', params.search)
-      const suffix = qs.toString() ? `?${qs}` : ''
-      return apiFetch<{
-        totalCount: number
-        pendingCount: number
-        submittedCount: number
-        keyReceivedCount: number
-        failedCount: number
-        items: AsicKeyRequestDto[]
-        facets: {
-          status: Facet
-        }
-        stats: {
-          lastRunAt: string | null
-          lastRunState: string | null
-          lastRunError: string | null
-          nextRunAt: string | null
-          runCron: string | null
-          avgTurnaroundHours: number | null
-          captchaSolves: number
-          today: number
-          yesterday: number
-          deltaPct: number | null
-          daily14d: Array<{ date: string; count: number }>
-        }
-      }>(`/api/admin/asic-key-requests${suffix}`)
-    },
-    runAsicKeyRequests: () => apiFetch<{ jobId: string; message: string }>('/api/admin/asic-key-requests/run', { method: 'POST' }),
-    retryFailedAsicKeyRequests: () => apiFetch<{ jobId: string; requeued: number; message: string }>('/api/admin/asic-key-requests/retry-failed', { method: 'POST' }),
-    asicKeyRequestJob: (jobId: string) => apiFetch<AsicKeyRequestJobStatus>(`/api/admin/asic-key-requests/jobs/${encodeURIComponent(jobId)}`),
-    submitAsicKeyRequest: (id: string) => apiFetch<AsicKeyRequestDetail>(`/api/admin/asic-key-requests/${id}/submit`, { method: 'POST' }),
-    requeueAsicKeyRequest: (id: string) => apiFetch<AsicKeyRequestDetail>(`/api/admin/asic-key-requests/${id}/requeue`, { method: 'POST' }),
-    requestAsicKeyForSale: (saleId: string, submitNow = true) =>
-      apiFetch<AsicKeyRequestDetail>(`/api/admin/asic-key-requests/for-sale/${saleId}?submitNow=${submitNow}`, { method: 'POST' }),
     bulkRenewals: (params: { status?: string; batch?: string } = {}) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
@@ -787,8 +690,6 @@ export const api = {
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),
     testAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<AsicKeyInboxTestResult>('/api/admin/settings/asic-key-inbox/test', { method: 'POST', body: JSON.stringify(body) }),
-    updateAsicKeyRequest: (body: AsicKeyRequestSettings) => apiFetch<void>('/api/admin/settings/asic-key-request', { method: 'PUT', body: JSON.stringify(body) }),
-    testAsicKeyRequest: (body: AsicKeyRequestSettings) => apiFetch<AsicKeyRequestTestResult>('/api/admin/settings/asic-key-request/test', { method: 'POST', body: JSON.stringify(body) }),
 
     funnel: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
       const qs = new URLSearchParams()

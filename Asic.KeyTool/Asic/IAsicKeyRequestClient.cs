@@ -1,4 +1,4 @@
-namespace Asic.Client.Abstractions;
+namespace Asic.KeyTool;
 
 /// <summary>What goes into ASIC's online enquiry form when asking for a business name's ASIC key.</summary>
 public sealed class AsicKeyRequestInput
@@ -21,8 +21,8 @@ public sealed class AsicKeyRequestResult
 {
     public bool Success { get; init; }
     /// <summary>ASIC's "Reference Number" from the Thank You page.</summary>
-    public string ReferenceNumber { get; init; }
-    public string ErrorMessage { get; init; }
+    public string? ReferenceNumber { get; init; }
+    public string? ErrorMessage { get; init; }
     /// <summary>How many captcha tokens were bought for this submission.</summary>
     public int CaptchaAttempts { get; init; }
     /// <summary>True when a later attempt could plausibly succeed (low captcha score, network blip).</summary>
@@ -42,8 +42,8 @@ public sealed class AsicKeyRequestResult
 public interface IAsicKeyRequestClient
 {
     /// <param name="proxyUrl">Optional http(s)://user:pass@host:port proxy for the ASIC traffic; null/empty = direct.</param>
-    Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, string proxyUrl = null, CancellationToken ct = default);
+    Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, string? proxyUrl = null, CancellationToken ct = default);
 
     /// <summary>The public IP ASIC would see for form traffic (through the proxy when one is given).</summary>
-    Task<string> GetEgressIpAsync(string proxyUrl = null, CancellationToken ct = default);
+    Task<string> GetEgressIpAsync(string? proxyUrl = null, CancellationToken ct = default);
 }

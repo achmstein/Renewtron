@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Asic.Client.Abstractions;
 using Carter;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
@@ -40,19 +39,6 @@ public sealed class SettingsModule : ICarterModule
         if (string.IsNullOrWhiteSpace(body.AsicKeyPattern)) body.AsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern;
     }
 
-    private static void NormalizeAsicKeyRequest(AsicKeyRequestSettings body, AsicKeyRequestSettings current)
-    {
-        body.TwoCaptchaApiKey = Unmask(body.TwoCaptchaApiKey, current.TwoCaptchaApiKey).Trim();
-        body.ProxyUrl = Unmask(body.ProxyUrl, current.ProxyUrl).Trim();
-        body.RequestEmail = (body.RequestEmail ?? "").Trim();
-        body.DefaultPhonePrefix = (body.DefaultPhonePrefix ?? "").Trim();
-        body.DefaultPhoneNumber = (body.DefaultPhoneNumber ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(body.MessageTemplate)) body.MessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate;
-        if (body.MinCaptchaScore <= 0 || body.MinCaptchaScore > 1) body.MinCaptchaScore = 0.9;
-        body.MaxCaptchaAttempts = Math.Clamp(body.MaxCaptchaAttempts <= 0 ? 3 : body.MaxCaptchaAttempts, 1, 5);
-        body.MaxPerRun = Math.Clamp(body.MaxPerRun <= 0 ? 25 : body.MaxPerRun, 1, 500);
-    }
-
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/settings").RequireAuthorization().WithTags("Admin.Settings");
@@ -64,7 +50,6 @@ public sealed class SettingsModule : ICarterModule
             var asic = await settings.GetAsicSettingsAsync();
             var ontraport = await settings.GetOntraportSettingsAsync();
             var asicKeyInbox = await settings.GetAsicKeyInboxSettingsAsync();
-            var asicKeyRequest = await settings.GetAsicKeyRequestSettingsAsync();
 
             return Results.Ok(new
             {
@@ -107,22 +92,6 @@ public sealed class SettingsModule : ICarterModule
                     asicKeyPattern = asicKeyInbox.AsicKeyPattern,
                     // Saved overrides pin the pattern, so a newer code default needs a way back in.
                     defaultAsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern,
-                },
-                asicKeyRequest = new
-                {
-                    enabled = asicKeyRequest.Enabled,
-                    autoRequestOnSync = asicKeyRequest.AutoRequestOnSync,
-                    twoCaptchaApiKey = Mask(asicKeyRequest.TwoCaptchaApiKey),
-                    minCaptchaScore = asicKeyRequest.MinCaptchaScore,
-                    maxCaptchaAttempts = asicKeyRequest.MaxCaptchaAttempts,
-                    requestEmail = asicKeyRequest.RequestEmail,
-                    defaultPhonePrefix = asicKeyRequest.DefaultPhonePrefix,
-                    defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
-                    messageTemplate = asicKeyRequest.MessageTemplate,
-                    maxPerRun = asicKeyRequest.MaxPerRun,
-                    // Carries a password; masked like the other secrets and round-tripped on save.
-                    proxyUrl = Mask(asicKeyRequest.ProxyUrl),
-                    defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
                 },
             });
         });
@@ -281,108 +250,6 @@ public sealed class SettingsModule : ICarterModule
             }
 
             return Results.Ok(new { mailbox = mailboxCheck, ontraportField = ontraportCheck, keyPattern = patternCheck });
-        });
-
-        group.MapPut("/asic-key-request", async (AsicKeyRequestSettings body, ISettingsService settings) =>
-        {
-            var current = await settings.GetAsicKeyRequestSettingsAsync();
-            NormalizeAsicKeyRequest(body, current);
-            await settings.UpdateAsicKeyRequestSettingsAsync(body);
-            return Results.NoContent();
-        });
-
-        // Checks the form's values without saving: the 2Captcha key (balance), the score
-        // against ASIC's known minimum, the template's placeholders, and that the reply-to
-        // address is the inbox the scanner actually reads.
-        group.MapPost("/asic-key-request/test", async (
-            AsicKeyRequestSettings body,
-            ISettingsService settings,
-            ICaptchaSolver captcha,
-            IAsicKeyRequestClient asicClient,
-            CancellationToken ct) =>
-        {
-            var current = await settings.GetAsicKeyRequestSettingsAsync();
-            NormalizeAsicKeyRequest(body, current);
-
-            // The IP ASIC sees decides the captcha score: the Lightsail address scored 0.1 in
-            // testing, a residential one passed. Report what the form traffic will go out as.
-            object proxyCheck;
-            try
-            {
-                var ip = await asicClient.GetEgressIpAsync(body.ProxyUrl, ct);
-                proxyCheck = string.IsNullOrWhiteSpace(body.ProxyUrl)
-                    ? new { ok = false, ip, error = $"No proxy set — ASIC will see this server's own address ({ip}), which Google scores as a datacenter and ASIC then rejects the captcha. Add a residential proxy." }
-                    : new { ok = true, ip };
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                proxyCheck = new { ok = false, error = $"Proxy check failed: {ex.Message}" };
-            }
-
-            object captchaCheck;
-            if (string.IsNullOrWhiteSpace(body.TwoCaptchaApiKey))
-            {
-                captchaCheck = new { ok = false, error = "Enter the 2Captcha API key first." };
-            }
-            else
-            {
-                try
-                {
-                    var balance = await captcha.GetBalanceAsync(body.TwoCaptchaApiKey, ct);
-                    captchaCheck = balance > 0
-                        ? new { ok = true, balance }
-                        : new { ok = false, error = "2Captcha key is valid but the balance is $0 — top up before enabling." };
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    captchaCheck = new { ok = false, error = ex.Message };
-                }
-            }
-
-            // ASIC's server-side check as observed in testing: "minimum score require : 0.5".
-            object scoreCheck = body.MinCaptchaScore >= 0.5
-                ? new { ok = true, minScore = body.MinCaptchaScore }
-                : new { ok = false, error = $"Minimum score {body.MinCaptchaScore} is below ASIC's 0.5 threshold — tokens will be rejected. Use 0.7 or 0.9." };
-
-            object templateCheck;
-            var unknown = Regex.Matches(body.MessageTemplate, @"\{(\w+)\}")
-                .Select(m => m.Groups[1].Value)
-                .Where(p => !new[] { "FirstName", "LastName", "Abn", "BusinessName", "Email" }.Contains(p, StringComparer.OrdinalIgnoreCase))
-                .Distinct()
-                .ToList();
-            if (unknown.Count > 0)
-            {
-                templateCheck = new { ok = false, error = $"Unknown placeholder(s): {string.Join(", ", unknown.Select(u => "{" + u + "}"))}. Known: {{FirstName}} {{LastName}} {{Abn}} {{BusinessName}} {{Email}}." };
-            }
-            else if (!body.MessageTemplate.Contains("{Email}", StringComparison.OrdinalIgnoreCase))
-            {
-                templateCheck = new { ok = false, error = "The template never mentions {Email}, so ASIC won't know where to send the key." };
-            }
-            else
-            {
-                var sample = body.MessageTemplate
-                    .Replace("{FirstName}", "Jane", StringComparison.OrdinalIgnoreCase)
-                    .Replace("{LastName}", "Citizen", StringComparison.OrdinalIgnoreCase)
-                    .Replace("{Abn}", "12345678901", StringComparison.OrdinalIgnoreCase)
-                    .Replace("{BusinessName}", "EXAMPLE TRADING", StringComparison.OrdinalIgnoreCase)
-                    .Replace("{Email}", body.RequestEmail, StringComparison.OrdinalIgnoreCase);
-                templateCheck = new { ok = true, sample };
-            }
-
-            var inbox = await settings.GetAsicKeyInboxSettingsAsync();
-            object emailCheck;
-            if (string.IsNullOrWhiteSpace(body.RequestEmail))
-                emailCheck = new { ok = false, error = "Request email is empty." };
-            else if (string.IsNullOrWhiteSpace(inbox.Username))
-                emailCheck = new { ok = false, error = $"Keys will be sent to {body.RequestEmail}, but no inbox is configured under ASIC key inbox to receive them." };
-            else if (!string.Equals(inbox.Username.Trim(), body.RequestEmail, StringComparison.OrdinalIgnoreCase))
-                emailCheck = new { ok = false, error = $"Keys will be sent to {body.RequestEmail}, but the scanner reads {inbox.Username.Trim()}. Use the same address (or an alias that lands in that inbox)." };
-            else
-                emailCheck = new { ok = true, email = body.RequestEmail };
-
-            return Results.Ok(new { captcha = captchaCheck, proxy = proxyCheck, score = scoreCheck, template = templateCheck, email = emailCheck });
         });
     }
 }

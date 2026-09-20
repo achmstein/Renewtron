@@ -3,6 +3,7 @@
   <Project Path="Renewtron.Server/Renewtron.Server.csproj" />
   <Project Path="Renewtron.ServiceDefaults/Renewtron.ServiceDefaults.csproj" />
   <Project Path="Asic.Client/Asic.Client.csproj" />
+  <Project Path="Asic.KeyTool/Asic.KeyTool.csproj" />
   <Project Path="frontend/frontend.esproj">
     <Build />
     <Deploy />

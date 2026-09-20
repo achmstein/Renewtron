@@ -12,7 +12,6 @@ public interface ISettingsService
     Task<WinBackSettings> GetWinBackSettingsAsync();
     Task<TrackingSettings> GetTrackingSettingsAsync();
     Task<AsicKeyInboxSettings> GetAsicKeyInboxSettingsAsync();
-    Task<AsicKeyRequestSettings> GetAsicKeyRequestSettingsAsync();
 
     Task UpdateSendGridSettingsAsync(SendGridSettings settings);
     Task UpdateStripeSettingsAsync(StripeSettings settings);
@@ -22,5 +21,4 @@ public interface ISettingsService
     Task UpdateWinBackSettingsAsync(WinBackSettings settings);
     Task UpdateTrackingSettingsAsync(TrackingSettings settings);
     Task UpdateAsicKeyInboxSettingsAsync(AsicKeyInboxSettings settings);
-    Task UpdateAsicKeyRequestSettingsAsync(AsicKeyRequestSettings settings);
 }

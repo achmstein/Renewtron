@@ -3,9 +3,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
-using Asic.Client.Abstractions;
 
-namespace Asic.Client;
+namespace Asic.KeyTool;
 
 /// <summary>
 /// ASIC's "Online Enquiry" form is three server-rendered pages sharing a session token in
@@ -51,7 +50,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
     private static readonly Regex ReferenceRegex = new(@"Reference\s+Number:?\s*(\d{4,})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex CaptchaScoreRegex = new(@"Score\s*:\s*([\d.]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private HttpClient _http;
+    private HttpClient _http = null!;
     private readonly HtmlParser _parser = new();
     private readonly ICaptchaSolver _captcha;
 
@@ -62,7 +61,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
 
     // One enquiry = one ASIC session: a fresh cookie jar per call so a service that submits
     // several requests in a row never carries one enquiry's session token into the next.
-    private static HttpClient CreateHttpClient(string proxyUrl)
+    private static HttpClient CreateHttpClient(string? proxyUrl)
     {
         var handler = new HttpClientHandler
         {
@@ -90,7 +89,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
     }
 
     /// <summary>http://user:pass@host:port → WebProxy with credentials; null when blank or unparseable.</summary>
-    private static WebProxy CreateProxy(string proxyUrl)
+    private static WebProxy? CreateProxy(string? proxyUrl)
     {
         if (string.IsNullOrWhiteSpace(proxyUrl)) return null;
         if (!Uri.TryCreate(proxyUrl.Trim(), UriKind.Absolute, out var uri))
@@ -105,7 +104,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
         return proxy;
     }
 
-    public async Task<string> GetEgressIpAsync(string proxyUrl = null, CancellationToken ct = default)
+    public async Task<string> GetEgressIpAsync(string? proxyUrl = null, CancellationToken ct = default)
     {
         using var http = CreateHttpClient(proxyUrl);
         http.Timeout = TimeSpan.FromSeconds(30);
@@ -114,7 +113,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
         return (await response.Content.ReadAsStringAsync(ct)).Trim();
     }
 
-    public async Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, string proxyUrl = null, CancellationToken ct = default)
+    public async Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, double minCaptchaScore, int maxCaptchaAttempts, string? proxyUrl = null, CancellationToken ct = default)
     {
         if (!_captcha.IsConfigured)
             return AsicKeyRequestResult.Failed("No captcha solver API key is configured (Settings → ASIC key requests).", 0, transient: false);
@@ -142,8 +141,8 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
             var siteKey = SiteKeyRegex.Match(landingHtml) is { Success: true } m ? m.Groups[1].Value : DefaultSiteKey;
             var captchaField = page.Form.QuerySelector("input#g-recaptcha-response")?.GetAttribute("name") ?? DefaultCaptchaField;
 
-            ParsedPage detailsPage = null;
-            string lastError = null;
+            ParsedPage? detailsPage = null;
+            string? lastError = null;
             var attempts = Math.Max(1, maxCaptchaAttempts);
             for (var attempt = 1; attempt <= attempts; attempt++)
             {
@@ -153,14 +152,14 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
                 if (!solve.Succeeded)
                     return AsicKeyRequestResult.Failed($"Captcha solve failed: {solve.Error}", captchaAttempts, transient: true);
 
-                var fields = HiddenFields(page.Form);
+                var fields = HiddenFields(page.Form!);
                 fields[FieldType1] = Type1Value;
                 fields[FieldType2] = Type2Value;
                 fields[captchaField] = solve.Token;
                 fields["x"] = "10";
                 fields["y"] = "10";
 
-                var (html, url) = await PostFormAsync(page.Action, new FormUrlEncodedContent(fields), page.Url, ct);
+                var (html, url) = await PostFormAsync(page.Action!, new FormUrlEncodedContent(fields), page.Url, ct);
                 var next = ParsePage(html, url);
 
                 if (next.Action != null && next.Action.Contains("inquiryDetails", StringComparison.OrdinalIgnoreCase))
@@ -200,7 +199,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
 
             // ---- Page 2: enquiry details ---------------------------------------------
             var content = new MultipartFormDataContent();
-            foreach (var (name, value) in HiddenFields(detailsPage.Form))
+            foreach (var (name, value) in HiddenFields(detailsPage.Form!))
                 content.Add(new StringContent(value), name);
             content.Add(new StringContent(Type1Value), FieldType1);
             content.Add(new StringContent(Type2Value), FieldType2);
@@ -228,7 +227,7 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
             content.Add(new StringContent("10"), "x");
             content.Add(new StringContent("10"), "y");
 
-            var (thanksHtml, thanksUrl) = await PostFormAsync(detailsPage.Action, content, detailsPage.Url, ct);
+            var (thanksHtml, thanksUrl) = await PostFormAsync(detailsPage.Action!, content, detailsPage.Url, ct);
             var reference = ReferenceRegex.Match(thanksHtml);
             if (reference.Success)
                 return AsicKeyRequestResult.Succeeded(reference.Groups[1].Value, captchaAttempts);
@@ -265,27 +264,27 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
         using var response = await _http.GetAsync(path, ct);
         response.EnsureSuccessStatusCode();
         var html = await response.Content.ReadAsStringAsync(ct);
-        return (html, (response.RequestMessage?.RequestUri ?? new Uri(_http.BaseAddress, path)).ToString());
+        return (html, (response.RequestMessage?.RequestUri ?? new Uri(_http.BaseAddress!, path)).ToString());
     }
 
     private async Task<(string Html, string Url)> PostFormAsync(string action, HttpContent content, string referer, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_http.BaseAddress, action)) { Content = content };
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(_http.BaseAddress!, action)) { Content = content };
         request.Headers.Referrer = new Uri(referer);
         using var response = await _http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         var html = await response.Content.ReadAsStringAsync(ct);
-        return (html, (response.RequestMessage?.RequestUri ?? request.RequestUri).ToString());
+        return (html, (response.RequestMessage?.RequestUri ?? request.RequestUri)!.ToString());
     }
 
     // ---- Page parsing ---------------------------------------------------------------
 
     private sealed class ParsedPage
     {
-        public IHtmlDocument Document;
-        public IHtmlFormElement Form;
-        public string Action;
-        public string Url;
+        public IHtmlDocument Document = null!;
+        public IHtmlFormElement? Form;
+        public string? Action;
+        public string Url = "";
     }
 
     private ParsedPage ParsePage(string html, string url)
@@ -306,7 +305,10 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
     {
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var input in form.QuerySelectorAll("input[type=hidden][name]").OfType<IHtmlInputElement>())
-            fields[input.Name] = input.Value ?? "";
+        {
+            if (input.Name is not { Length: > 0 } name) continue;
+            fields[name] = input.Value ?? "";
+        }
         return fields;
     }
 
@@ -317,10 +319,10 @@ public sealed class AsicKeyRequestClient : IAsicKeyRequestClient
             .Distinct()
             .ToList();
 
-    private static string DigitsOnly(string value) =>
+    private static string DigitsOnly(string? value) =>
         string.IsNullOrEmpty(value) ? "" : new string(value.Where(char.IsDigit).ToArray());
 
-    private static string Truncate(string value, int max)
+    private static string Truncate(string? value, int max)
     {
         value ??= "";
         return value.Length <= max ? value : value[..max];

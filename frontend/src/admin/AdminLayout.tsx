@@ -46,7 +46,6 @@ const navSections: NavSection[] = [
       { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },
       { to: '/admin/bulk-renewals', label: 'Bulk Renewals', icon: Icon.Bulk },
       { to: '/admin/asic-keys', label: 'ASIC Keys', icon: Icon.Key },
-      { to: '/admin/asic-key-requests', label: 'Key Requests', icon: Icon.Send },
       { to: '/admin/manual-renewal', label: 'Manual Renewal', icon: Icon.Pencil },
     ],
   },

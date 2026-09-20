@@ -1,4 +1,6 @@
-namespace Asic.Client.Abstractions;
+using System.Diagnostics.CodeAnalysis;
+
+namespace Asic.KeyTool;
 
 /// <summary>
 /// Outcome of a CAPTCHA solve: a token on success, or a human-readable reason on failure
@@ -6,8 +8,9 @@ namespace Asic.Client.Abstractions;
 /// </summary>
 public sealed class CaptchaSolveResult
 {
-    public string Token { get; init; }
-    public string Error { get; init; }
+    public string? Token { get; init; }
+    public string? Error { get; init; }
+    [MemberNotNullWhen(true, nameof(Token))]
     public bool Succeeded => !string.IsNullOrEmpty(Token);
 
     public static CaptchaSolveResult Ok(string token) => new() { Token = token };
@@ -16,7 +19,7 @@ public sealed class CaptchaSolveResult
 
 /// <summary>
 /// Produces a g-recaptcha-response token for a page that runs reCAPTCHA v3. Abstracts the
-/// solving provider (2Captcha in production) away from the ASIC clients so it can be
+/// solving provider (2Captcha in production) away from the ASIC client so it can be
 /// swapped or mocked.
 /// </summary>
 public interface ICaptchaSolver
@@ -29,6 +32,6 @@ public interface ICaptchaSolver
     /// <param name="minScore">The score the target site requires (v3 is score-based; providers price by it).</param>
     Task<CaptchaSolveResult> SolveRecaptchaV3Async(string siteKey, string pageUrl, string action, double minScore, CancellationToken ct = default);
 
-    /// <summary>Account balance at the provider, for a settings-page connection test. Throws on a bad key.</summary>
-    Task<decimal> GetBalanceAsync(string apiKeyOverride = null, CancellationToken ct = default);
+    /// <summary>Account balance at the provider, for the tool's connection check. Throws on a bad key.</summary>
+    Task<decimal> GetBalanceAsync(string? apiKeyOverride = null, CancellationToken ct = default);
 }
