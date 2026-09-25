@@ -19,6 +19,7 @@ public class OntraportSalesService : IOntraportSalesService
     private readonly IAsicRenewalClient _asicClient;
     private readonly IOptionsSnapshot<PricingSettings> _pricingSettings;
     private readonly IOptionsMonitor<AsicKeyRequestSettings> _asicKeyRequestSettings;
+    private readonly IOptionsMonitor<AsicKeyInboxSettings> _asicKeyInboxSettings;
     private readonly ILogger<OntraportSalesService> _logger;
 
     // Ontraport custom field IDs for business name renewal data
@@ -51,6 +52,7 @@ public class OntraportSalesService : IOntraportSalesService
         IOptionsSnapshot<OntraportSettings> settings,
         IOptionsSnapshot<PricingSettings> pricingSettings,
         IOptionsMonitor<AsicKeyRequestSettings> asicKeyRequestSettings,
+        IOptionsMonitor<AsicKeyInboxSettings> asicKeyInboxSettings,
         ILogger<OntraportSalesService> logger)
     {
         _httpClient = httpClient;
@@ -59,6 +61,7 @@ public class OntraportSalesService : IOntraportSalesService
         _asicClient = asicClient;
         _pricingSettings = pricingSettings;
         _asicKeyRequestSettings = asicKeyRequestSettings;
+        _asicKeyInboxSettings = asicKeyInboxSettings;
         _logger = logger;
 
         _httpClient.BaseAddress = new Uri("https://api.ontraport.com/1/");
@@ -155,9 +158,13 @@ public class OntraportSalesService : IOntraportSalesService
                     synced.Add(sale);
 
                     // Queue the ASIC key request alongside the sale; the half-hourly run sends it.
-                    // Cancellations/disputes are skipped — no point asking ASIC for a key we
-                    // won't use, and each request is a browser session.
+                    // Skipped when the client already gave us the key on the form (the contact's
+                    // ASIC key field is filled), and for cancellations/disputes — no point asking
+                    // ASIC for a key we won't use, and each request is a browser session.
+                    var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;
+                    var hasKey = asicKeyField.Length > 0 && !string.IsNullOrWhiteSpace(contact.GetValueOrDefault(asicKeyField, null));
                     if (status != OntraportSaleStatus.IneligibleForRenewal
+                        && !hasKey
                         && _asicKeyRequestSettings.CurrentValue is { Enabled: true, AutoRequestOnSync: true })
                     {
                         _dbContext.AsicKeyRequests.Add(AsicKeyRequestService.FromSale(sale, "Sync"));
@@ -520,6 +527,10 @@ public class OntraportSalesService : IOntraportSalesService
         var condition = Uri.EscapeDataString(
             "[{\"field\":{\"field\":\"f5194\"},\"op\":\"=\",\"value\":{\"value\":\"yes\"}}]");
         var fields = $"id,firstname,lastname,email,sms_number,spent,refund,refundtotal,{FieldBusinessName},{FieldAbn},{FieldBusinessNameOwner},{FieldRenewalDueDate},{FieldRenewalTerm},{FieldPaymentReceived},{FieldCancel},{FieldDateOfBirth}";
+        // The contact's ASIC key field (where the inbox scanner writes it) — read so the sync
+        // doesn't ask ASIC for a key the client already supplied.
+        var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;
+        if (!string.IsNullOrWhiteSpace(asicKeyField)) fields += $",{asicKeyField.Trim()}";
 
         // Fetch up to 1000 most recent paid contacts in a single call (sorted by last activity desc)
         // New renewals always appear near the top; already-synced ones are skipped in code
