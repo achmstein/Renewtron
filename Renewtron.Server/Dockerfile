@@ -45,6 +45,8 @@ RUN for i in 1 2 3 4 5; do \
     done \
     && ls -d /ms-playwright/chromium* \
     && chmod -R a+rX /ms-playwright
+# The bundled Node driver arrives root-only executable; the app user must be able to run it.
+RUN chmod -R a+rX /app/.playwright
 
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
