@@ -78,7 +78,7 @@ public static class Program
                       asic-keytool --sync     request a key for every new paid sale in Ontraport
                       asic-keytool --sync N   the same, but stop after N enquiries
                       asic-keytool --check    Ontraport, egress IP, browser and token
-                      asic-keytool --submit --business "NAME" --abn 11111111111 --contact "Given Family" --email who@example.com [[--phone 0412345678]]
+                      asic-keytool --submit --business "NAME" --abn 11111111111 --contact "Given Family" --email who@example.com --phone 0412345678
                                               one enquiry, no prompts, nothing read from Ontraport
 
                     A sale counts as new until ASIC accepts a request for it; that's kept in
@@ -172,7 +172,7 @@ public static class Program
         table.AddColumns("#", "Business name", "ABN", "Contact", "Reply to", "Due", "");
         for (var i = 0; i < candidates.Count; i++)
         {
-            var problem = enquiries[i].Problem();
+            var problem = enquiries[i].Problem(_settings);
             var previous = history.LastFailure(candidates[i]);
             var note = problem != null
                 ? $"[red]{Markup.Escape(problem)}[/]"
@@ -190,7 +190,7 @@ public static class Program
         }
         AnsiConsole.Write(table);
 
-        var sendable = enquiries.Where(e => e.Problem() == null).ToList();
+        var sendable = enquiries.Where(e => e.Problem(_settings) == null).ToList();
         if (sendable.Count == 0)
         {
             AnsiConsole.MarkupLine("[red]Nothing to send — every new sale has a problem with its details.[/]");
@@ -271,9 +271,9 @@ public static class Program
         };
         enquiry.SetContactName(options.GetValueOrDefault("contact", ""));
 
-        if (enquiry.Problem() is { } problem)
+        if (enquiry.Problem(_settings) is { } problem)
         {
-            AnsiConsole.MarkupLine($"[red]{Markup.Escape(problem)}[/] — usage: --submit --business NAME --abn N --contact \"Given Family\" --email E [[--phone P]]");
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(problem)}[/] — usage: --submit --business NAME --abn N --contact \"Given Family\" --email E --phone P (ASIC requires a phone)");
             return false;
         }
 

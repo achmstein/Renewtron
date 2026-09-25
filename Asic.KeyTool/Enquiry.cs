@@ -68,7 +68,13 @@ public sealed class Enquiry
     }
 
     /// <summary>Why this row can't be sent, or null when it's good to go.</summary>
-    public string? Problem()
+    public string? Problem() => Problem(null);
+
+    /// <summary>
+    /// With settings, also checks the phone: ASIC's form makes it mandatory, so a sale
+    /// with no usable number needs the fallback phone (Settings) or it bounces.
+    /// </summary>
+    public string? Problem(KeyToolSettings? settings)
     {
         if (string.IsNullOrWhiteSpace(BusinessName)) return "business name is blank";
         if (string.IsNullOrWhiteSpace(GivenNames) || string.IsNullOrWhiteSpace(FamilyName)) return "contact name is blank";
@@ -76,6 +82,8 @@ public sealed class Enquiry
         if (abn.Length == 0) return "ABN is blank";
         if (abn.Length != 11) return $"ABN has {abn.Length} digits, expected 11";
         if (!LooksLikeEmail(Email)) return Email.Trim().Length == 0 ? "contact has no email address" : "contact email isn't an address";
+        if (settings != null && ResolvePhone(Phone, settings).Number.Length == 0)
+            return DigitsOnly(Phone).Length == 0 ? "contact has no phone number and no fallback phone is set" : "contact phone isn't usable and no fallback phone is set";
         return null;
     }
 
