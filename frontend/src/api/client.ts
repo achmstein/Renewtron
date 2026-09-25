@@ -112,6 +112,8 @@ export interface AsicKeyRequestSettings {
   maxPerRun: number
   maxCaptchaAttempts: number
   maxAutoAttempts: number
+  pauseBetweenRequestsSeconds: number
+  stopRunAfterCaptchaFailures: number
   /** Read-only: the code default, so the UI can offer a way back to it. */
   defaultMessageTemplate?: string
   /** Read-only: which browser the server will drive. */

@@ -105,16 +105,33 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
 
         var submitted = 0;
         var failed = 0;
-        foreach (var request in due)
+        var consecutiveCaptchaFailures = 0;
+        var stoppedEarly = false;
+        for (var i = 0; i < due.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
-            await SubmitCoreAsync(request, settings, ct);
+            if (i > 0) await Task.Delay(TimeSpan.FromSeconds(Math.Max(0, settings.PauseBetweenRequestsSeconds)), ct);
+
+            var request = due[i];
+            var result = await SubmitCoreAsync(request, settings, ct);
             if (request.Status == AsicKeyRequestStatus.Submitted) submitted++; else failed++;
+
+            // A burst of visits from one address is scored progressively lower. Once ASIC has
+            // bounced two in a row, the rest of the queue only makes it worse — leave them for
+            // the next run, when the score has had time to recover.
+            consecutiveCaptchaFailures = result?.CaptchaRejected == true ? consecutiveCaptchaFailures + 1 : 0;
+            if (consecutiveCaptchaFailures >= Math.Max(1, settings.StopRunAfterCaptchaFailures) && i < due.Count - 1)
+            {
+                stoppedEarly = true;
+                _logger.LogWarning("Stopping the ASIC key request run after {Count} consecutive captcha rejections; {Left} left for the next run", consecutiveCaptchaFailures, due.Count - 1 - i);
+                break;
+            }
         }
 
         var message = due.Count == 0
             ? $"Nothing to send. {matched} key(s) matched from the inbox."
-            : $"{submitted} submitted, {failed} failed, {matched} key(s) matched from the inbox.";
+            : $"{submitted} submitted, {failed} failed, {matched} key(s) matched from the inbox." +
+              (stoppedEarly ? " Stopped early: ASIC is scoring this connection low; the rest go out next run." : "");
         _logger.LogInformation("ASIC key request run: {Message}", message);
         return new AsicKeyRequestRunResult(false, message, submitted, failed, matched);
     }
@@ -127,7 +144,7 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
         return request;
     }
 
-    private async Task SubmitCoreAsync(AsicKeyRequest request, AsicKeyRequestSettings settings, CancellationToken ct)
+    private async Task<AsicEnquiryResult?> SubmitCoreAsync(AsicKeyRequest request, AsicKeyRequestSettings settings, CancellationToken ct)
     {
         request.AttemptCount++;
         request.ProcessedAt = DateTime.UtcNow;
@@ -138,7 +155,7 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
             request.ErrorMessage = problem;
             request.CanAutoRetry = false;
             await _db.SaveChangesAsync(ct);
-            return;
+            return null;
         }
 
         var input = ToInput(request, settings);
@@ -167,6 +184,7 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
             _logger.LogWarning("ASIC key request for {BusinessName} failed: {Error}", request.BusinessName, result.ErrorMessage);
         }
         await _db.SaveChangesAsync(ct);
+        return result;
     }
 
     /// <summary>

@@ -435,6 +435,14 @@ export default function Settings() {
                       <input type="number" min={1} max={20} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxAutoAttempts} onChange={(e) => setKeyRequests({ ...keyRequests, maxAutoAttempts: Number(e.target.value) || 5 })} />
                     </Field>
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Pause between requests (seconds)">
+                      <input type="number" min={0} max={3600} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.pauseBetweenRequestsSeconds} onChange={(e) => setKeyRequests({ ...keyRequests, pauseBetweenRequestsSeconds: Number(e.target.value) || 0 })} />
+                    </Field>
+                    <Field label="Stop run after captcha failures">
+                      <input type="number" min={1} max={10} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.stopRunAfterCaptchaFailures} onChange={(e) => setKeyRequests({ ...keyRequests, stopRunAfterCaptchaFailures: Number(e.target.value) || 2 })} />
+                    </Field>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button type="submit" className={submitBtnCls}>Save</button>
                     <button
@@ -483,6 +491,7 @@ function defaultAsicKeyRequest(): AsicKeyRequestSettings {
     enabled: false, autoRequestOnSync: true, requestEmail: 'businessnamerenewals@gmail.com',
     defaultPhonePrefix: '', defaultPhoneNumber: '', messageTemplate: '',
     maxPerRun: 25, maxCaptchaAttempts: 3, maxAutoAttempts: 5,
+    pauseBetweenRequestsSeconds: 120, stopRunAfterCaptchaFailures: 2,
   }
 }
 

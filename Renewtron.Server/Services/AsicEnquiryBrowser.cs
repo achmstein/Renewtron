@@ -30,12 +30,14 @@ public sealed class AsicEnquiryResult
     public int Attempts { get; init; }
     /// <summary>True when a later attempt could plausibly succeed (low captcha score, network blip).</summary>
     public bool Transient { get; init; }
+    /// <summary>True when the failure was ASIC scoring the captcha below its minimum.</summary>
+    public bool CaptchaRejected { get; init; }
 
     public static AsicEnquiryResult Succeeded(string reference, int attempts) =>
         new() { Success = true, ReferenceNumber = reference, Attempts = attempts };
 
-    public static AsicEnquiryResult Failed(string error, int attempts, bool transient) =>
-        new() { Success = false, ErrorMessage = error, Attempts = attempts, Transient = transient };
+    public static AsicEnquiryResult Failed(string error, int attempts, bool transient, bool captchaRejected = false) =>
+        new() { Success = false, ErrorMessage = error, Attempts = attempts, Transient = transient, CaptchaRejected = captchaRejected };
 }
 
 /// <summary>
@@ -186,6 +188,8 @@ public sealed class AsicEnquiryBrowser
                     // "CAPTCHA validation failed, Score :0.3; minimum score require : 0.5" — reload for a fresh token.
                     _logger.LogWarning("ASIC rejected the browser's captcha (attempt {Attempt}): {Error}", attempts, captchaError);
                     lastCaptchaError = captchaError;
+                    // Reloading straight away only adds to the burst; give it half a minute.
+                    if (attempts < Math.Max(1, maxAttempts)) await Task.Delay(TimeSpan.FromSeconds(30), ct);
                     continue;
                 }
 
@@ -199,7 +203,7 @@ public sealed class AsicEnquiryBrowser
                 attempts = Math.Max(1, maxAttempts);
                 return AsicEnquiryResult.Failed(
                     $"ASIC did not accept the browser's captcha after {attempts} attempt(s). ASIC said: {lastCaptchaError ?? "no token accepted"}",
-                    attempts, transient: true);
+                    attempts, transient: true, captchaRejected: true);
             }
 
             // ---- Page 2: enquiry details ---------------------------------------------

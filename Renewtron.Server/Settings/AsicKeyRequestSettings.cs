@@ -39,6 +39,15 @@ public class AsicKeyRequestSettings
     /// <summary>Failed requests are retried on later runs up to this many attempts in total, when the failure looked transient.</summary>
     public int MaxAutoAttempts { get; set; } = 5;
 
+    /// <summary>
+    /// Seconds to wait between two submissions in one run. Eleven back to back from one address
+    /// took ASIC's captcha score from 0.3 to 0.1 within a single run.
+    /// </summary>
+    public int PauseBetweenRequestsSeconds { get; set; } = 120;
+
+    /// <summary>End the run after this many consecutive captcha rejections; the rest wait for the next run.</summary>
+    public int StopRunAfterCaptchaFailures { get; set; } = 2;
+
     public const string DefaultMessageTemplate =
         "My name is {FirstName} {LastName} ABN {Abn} for my business name {BusinessName} please email a copy of my ASIC key to {Email}";
 }

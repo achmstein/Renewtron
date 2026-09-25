@@ -48,6 +48,8 @@ public sealed class SettingsModule : ICarterModule
         if (body.MaxPerRun <= 0) body.MaxPerRun = 25;
         body.MaxCaptchaAttempts = Math.Clamp(body.MaxCaptchaAttempts <= 0 ? 3 : body.MaxCaptchaAttempts, 1, 5);
         if (body.MaxAutoAttempts <= 0) body.MaxAutoAttempts = 5;
+        if (body.PauseBetweenRequestsSeconds < 0) body.PauseBetweenRequestsSeconds = 120;
+        if (body.StopRunAfterCaptchaFailures <= 0) body.StopRunAfterCaptchaFailures = 2;
     }
 
     public void AddRoutes(IEndpointRouteBuilder app)
@@ -116,6 +118,8 @@ public sealed class SettingsModule : ICarterModule
                     maxPerRun = asicKeyRequest.MaxPerRun,
                     maxCaptchaAttempts = asicKeyRequest.MaxCaptchaAttempts,
                     maxAutoAttempts = asicKeyRequest.MaxAutoAttempts,
+                    pauseBetweenRequestsSeconds = asicKeyRequest.PauseBetweenRequestsSeconds,
+                    stopRunAfterCaptchaFailures = asicKeyRequest.StopRunAfterCaptchaFailures,
                     defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
                     browser = Services.AsicEnquiryBrowser.BrowserName,
                 },
