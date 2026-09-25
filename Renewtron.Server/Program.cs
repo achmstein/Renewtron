@@ -96,6 +96,7 @@ builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").
 builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
 builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
 builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyInbox");
+builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKeyRequest");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -118,6 +119,14 @@ builder.Services.AddHttpClient<IAsicKeyInboxService, AsicKeyInboxService>(client
     client.MaxResponseContentBufferSize = 20 * 1024 * 1024;
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Renewtron/1.0");
     client.DefaultRequestHeaders.Accept.ParseAdd("application/pdf,*/*;q=0.8");
+});
+
+// Outbound ASIC key requests: ASIC's enquiry form driven in the image's own Chromium. The
+// HttpClient only reports the egress IP for the Settings test.
+builder.Services.AddTransient<AsicEnquiryBrowser>();
+builder.Services.AddHttpClient<IAsicKeyRequestService, AsicKeyRequestService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
 });
 
 builder.Services.AddHangfire(configuration => configuration
@@ -276,6 +285,13 @@ RecurringJob.AddOrUpdate<IAsicKeyInboxService>(
     Renewtron.Modules.AsicKeysModule.RecurringJobId,
     service => service.ScanAsync(CancellationToken.None),
     "*/15 * * * *");
+
+// Sends queued ASIC key requests through the browser, and closes off the ones whose key has
+// arrived. Offset from the inbox scan so a fresh key is matched on the next tick.
+RecurringJob.AddOrUpdate<IAsicKeyRequestService>(
+    Renewtron.Modules.AsicKeyRequestsModule.RecurringJobId,
+    service => service.ProcessPendingAsync(CancellationToken.None),
+    "7,37 * * * *");
 
 app.MapGroup("/api").MapIdentityApi<AppUser>();
 

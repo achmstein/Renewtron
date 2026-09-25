@@ -39,6 +39,17 @@ public sealed class SettingsModule : ICarterModule
         if (string.IsNullOrWhiteSpace(body.AsicKeyPattern)) body.AsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern;
     }
 
+    private static void NormalizeAsicKeyRequest(AsicKeyRequestSettings body)
+    {
+        body.RequestEmail = (body.RequestEmail ?? "").Trim();
+        body.DefaultPhonePrefix = (body.DefaultPhonePrefix ?? "").Trim();
+        body.DefaultPhoneNumber = (body.DefaultPhoneNumber ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(body.MessageTemplate)) body.MessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate;
+        if (body.MaxPerRun <= 0) body.MaxPerRun = 25;
+        body.MaxCaptchaAttempts = Math.Clamp(body.MaxCaptchaAttempts <= 0 ? 3 : body.MaxCaptchaAttempts, 1, 5);
+        if (body.MaxAutoAttempts <= 0) body.MaxAutoAttempts = 5;
+    }
+
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/settings").RequireAuthorization().WithTags("Admin.Settings");
@@ -50,6 +61,7 @@ public sealed class SettingsModule : ICarterModule
             var asic = await settings.GetAsicSettingsAsync();
             var ontraport = await settings.GetOntraportSettingsAsync();
             var asicKeyInbox = await settings.GetAsicKeyInboxSettingsAsync();
+            var asicKeyRequest = await settings.GetAsicKeyRequestSettingsAsync();
 
             return Results.Ok(new
             {
@@ -92,6 +104,20 @@ public sealed class SettingsModule : ICarterModule
                     asicKeyPattern = asicKeyInbox.AsicKeyPattern,
                     // Saved overrides pin the pattern, so a newer code default needs a way back in.
                     defaultAsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern,
+                },
+                asicKeyRequest = new
+                {
+                    enabled = asicKeyRequest.Enabled,
+                    autoRequestOnSync = asicKeyRequest.AutoRequestOnSync,
+                    requestEmail = asicKeyRequest.RequestEmail,
+                    defaultPhonePrefix = asicKeyRequest.DefaultPhonePrefix,
+                    defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
+                    messageTemplate = asicKeyRequest.MessageTemplate,
+                    maxPerRun = asicKeyRequest.MaxPerRun,
+                    maxCaptchaAttempts = asicKeyRequest.MaxCaptchaAttempts,
+                    maxAutoAttempts = asicKeyRequest.MaxAutoAttempts,
+                    defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
+                    browser = Services.AsicEnquiryBrowser.BrowserName,
                 },
             });
         });
@@ -154,6 +180,29 @@ public sealed class SettingsModule : ICarterModule
             NormalizeAsicKeyInbox(body, current);
             await settings.UpdateAsicKeyInboxSettingsAsync(body);
             return Results.NoContent();
+        });
+
+        group.MapPut("/asic-key-request", async (AsicKeyRequestSettings body, ISettingsService settings) =>
+        {
+            NormalizeAsicKeyRequest(body);
+            await settings.UpdateAsicKeyRequestSettingsAsync(body);
+            return Results.NoContent();
+        });
+
+        // Starts the server's browser, loads ASIC's form and waits for its captcha token — the
+        // check that the container can do this at all. Nothing is submitted to ASIC.
+        group.MapPost("/asic-key-request/test", async (IAsicKeyRequestService service, CancellationToken ct) =>
+        {
+            try
+            {
+                var probe = await service.ProbeAsync(ct);
+                return Results.Ok(new { ok = probe.Ok, browser = probe.Browser, egressIp = probe.EgressIp, error = probe.Error });
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { ok = false, browser = Services.AsicEnquiryBrowser.BrowserName, egressIp = (string?)null, error = ex.Message });
+            }
         });
 
         // Exercises the form's values without saving them: IMAP login + folder + subject search,

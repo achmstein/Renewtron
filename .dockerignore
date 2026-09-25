@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+.git/
+.github/
+.vs/
+.claude/
+frontend/
+Asic.KeyTool/
+caddy/
+Renewtron.AppHost/
+**/*.user
+**/.playwright/

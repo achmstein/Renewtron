@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult } from '../api/client'
+import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type AsicKeyRequestTestResult } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'tracking'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -28,6 +28,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials',  description: 'Card details used at ASIC checkout.' },
   { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport',         description: 'API credentials for sales sync + OTP SMS.' },
   { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox',    description: 'Gmail inbox scanned for ASIC key notifications.' },
+  { key: 'asickeyrequests', group: 'INTEGRATIONS', title: 'ASIC key requests', description: 'Asks ASIC for each sale’s key through its enquiry form.' },
   { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags',     description: 'GA4, GTM and Meta pixel ids.' },
 ]
 
@@ -47,6 +48,8 @@ export default function Settings() {
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
+  const [keyRequests, setKeyRequests] = useState<AsicKeyRequestSettings>(defaultAsicKeyRequest())
+  const [keyRequestsTest, setKeyRequestsTest] = useState<AsicKeyRequestTestResult | null>(null)
 
   const load = async () => {
     const r = await api.admin.settings()
@@ -61,6 +64,7 @@ export default function Settings() {
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
+    setKeyRequests(r.asicKeyRequest ?? defaultAsicKeyRequest())
   }
   useEffect(() => { void load() }, [])
 
@@ -84,6 +88,23 @@ export default function Settings() {
   const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
   const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
   const onAsicKeys  = save('ASIC key inbox', () => api.admin.updateAsicKeyInbox(asicKeys))
+  const onKeyRequests = save('ASIC key requests', () => api.admin.updateAsicKeyRequest(keyRequests))
+
+  // Starts the server's browser against ASIC's form; the check that the container can mint a token.
+  const testRequestsMutation = useMutation({ mutationFn: () => api.admin.testAsicKeyRequest() })
+  const testKeyRequests = () => {
+    setKeyRequestsTest(null)
+    void sileo.promise(testRequestsMutation.mutateAsync(), {
+      loading: { title: 'Starting the browser and loading ASIC’s form…' },
+      success: (r) => {
+        setKeyRequestsTest(r)
+        return r.ok
+          ? { title: 'Browser got a reCAPTCHA token', description: `${r.browser}${r.egressIp ? ` from ${r.egressIp}` : ''}. Whether ASIC accepts its score shows on the first real request.` }
+          : { title: 'Browser check failed', description: r.error ?? undefined }
+      },
+      error: (err) => ({ title: 'Test failed', description: err instanceof Error ? err.message : undefined }),
+    }).catch(() => {})
+  }
 
 
   // Tests the form's current values without saving them; each check reports on its own line.
@@ -131,6 +152,7 @@ export default function Settings() {
       const total = [asicKeys.username, asicKeys.password, asicKeys.ontraportFieldId].filter(isFilled).length
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
+    asickeyrequests: keyRequests.enabled && isFilled(keyRequests.requestEmail) ? 'configured' : isFilled(keyRequests.requestEmail) ? 'partial' : 'empty',
   }
 
   // Group sections for sidebar nav
@@ -369,6 +391,71 @@ export default function Settings() {
                 </form>
               ) : null}
 
+              {activeKey === 'asickeyrequests' ? (
+                <form onSubmit={onKeyRequests} className="space-y-4">
+                  <label className="flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyRequests.enabled} onChange={(e) => setKeyRequests({ ...keyRequests, enabled: e.target.checked })} />
+                    Requests enabled
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyRequests.autoRequestOnSync} onChange={(e) => setKeyRequests({ ...keyRequests, autoRequestOnSync: e.target.checked })} />
+                    Queue a request for every eligible sale the Ontraport sync brings in
+                  </label>
+                  <Field label="Email the key to" hint="Goes in the enquiry text. Must be the inbox the scanner reads. The form’s own reply-to is always the client’s email.">
+                    <input type="email" className={inputCls} value={keyRequests.requestEmail} onChange={(e) => setKeyRequests({ ...keyRequests, requestEmail: e.target.value })} />
+                  </Field>
+                  <div className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-4">
+                    <Field label="Fallback area code">
+                      <input className={`${inputCls} font-mono tabular-nums`} value={keyRequests.defaultPhonePrefix} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhonePrefix: e.target.value })} placeholder="02" />
+                    </Field>
+                    <Field label="Fallback phone" hint="ASIC requires a phone; used when the sale has no usable mobile.">
+                      <input className={`${inputCls} font-mono tabular-nums`} value={keyRequests.defaultPhoneNumber} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhoneNumber: e.target.value })} />
+                    </Field>
+                  </div>
+                  <Field label="Enquiry text" hint="Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} {ClientEmail}">
+                    <textarea rows={3} className={`${inputCls} font-mono text-xs`} value={keyRequests.messageTemplate} onChange={(e) => setKeyRequests({ ...keyRequests, messageTemplate: e.target.value })} />
+                    {keyRequests.defaultMessageTemplate && keyRequests.messageTemplate !== keyRequests.defaultMessageTemplate ? (
+                      <button
+                        type="button"
+                        onClick={() => setKeyRequests({ ...keyRequests, messageTemplate: keyRequests.defaultMessageTemplate! })}
+                        className="mt-1 text-xxs font-mono text-brand-700 hover:underline"
+                      >
+                        Use the default wording
+                      </button>
+                    ) : null}
+                  </Field>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Max per run" hint="Each is a browser session of about a minute.">
+                      <input type="number" min={1} max={200} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxPerRun} onChange={(e) => setKeyRequests({ ...keyRequests, maxPerRun: Number(e.target.value) || 25 })} />
+                    </Field>
+                    <Field label="Captcha attempts" hint="Page reloads when ASIC rejects the token.">
+                      <input type="number" min={1} max={5} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxCaptchaAttempts} onChange={(e) => setKeyRequests({ ...keyRequests, maxCaptchaAttempts: Number(e.target.value) || 3 })} />
+                    </Field>
+                    <Field label="Auto-retries" hint="Runs a failed request is retried on before it waits for you.">
+                      <input type="number" min={1} max={20} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxAutoAttempts} onChange={(e) => setKeyRequests({ ...keyRequests, maxAutoAttempts: Number(e.target.value) || 5 })} />
+                    </Field>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="submit" className={submitBtnCls}>Save</button>
+                    <button
+                      type="button"
+                      onClick={testKeyRequests}
+                      disabled={testRequestsMutation.isPending}
+                      className="inline-flex justify-center rounded-md bg-white text-zinc-800 px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                      {testRequestsMutation.isPending ? 'Testing…' : `Test browser${keyRequests.browser ? ` (${keyRequests.browser})` : ''}`}
+                    </button>
+                  </div>
+                  {keyRequestsTest ? (
+                    <div className={`rounded-md px-3 py-2 text-xs font-mono ring-1 ${keyRequestsTest.ok ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-red-50 text-red-800 ring-red-100'}`}>
+                      {keyRequestsTest.ok
+                        ? `✔ ${keyRequestsTest.browser} loaded ASIC’s form and got a reCAPTCHA token${keyRequestsTest.egressIp ? ` · egress IP ${keyRequestsTest.egressIp}` : ''}`
+                        : `✘ ${keyRequestsTest.error ?? 'failed'}${keyRequestsTest.egressIp ? ` · egress IP ${keyRequestsTest.egressIp}` : ''}`}
+                    </div>
+                  ) : null}
+                </form>
+              ) : null}
+
               {activeKey === 'tracking' ? (
                 <form onSubmit={onTracking} className="space-y-4">
                   <Field label="Google Tag Manager container">
@@ -389,6 +476,14 @@ export default function Settings() {
       </div>
     </div>
   )
+}
+
+function defaultAsicKeyRequest(): AsicKeyRequestSettings {
+  return {
+    enabled: false, autoRequestOnSync: true, requestEmail: 'businessnamerenewals@gmail.com',
+    defaultPhonePrefix: '', defaultPhoneNumber: '', messageTemplate: '',
+    maxPerRun: 25, maxCaptchaAttempts: 3, maxAutoAttempts: 5,
+  }
 }
 
 function defaultAsicKeyInbox(): AsicKeyInboxSettings {

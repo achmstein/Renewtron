@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, useDebouncedValue } from './_components'
@@ -73,6 +73,19 @@ export default function OntraportSales() {
     placeholderData: keepPreviousData,
   })
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sales'] })
+
+  // Queues the sale's ASIC key request and sends it straight away as a background job;
+  // progress and the outcome live on the ASIC Key Requests page.
+  const keyRequestMutation = useMutation({
+    mutationFn: (saleId: string) => api.admin.requestAsicKeyForSale(saleId, true),
+  })
+  const requestKey = (saleId: string, businessName: string) => {
+    void sileo.promise(keyRequestMutation.mutateAsync(saleId), {
+      loading: { title: `Queuing ASIC key request for ${businessName}…` },
+      success: () => ({ title: `${businessName} is on its way to ASIC`, description: 'Watch it under ASIC Key Requests.' }),
+      error: (e) => ({ title: 'Could not queue the request', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
 
   const stats: Stats = data?.stats ?? defaultStats()
   const facets: Facets = data?.facets ?? { status: [] }
@@ -207,6 +220,14 @@ export default function OntraportSales() {
         const isFailed = s.status === 'RenewalFailed'
         return (
           <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+            <Button
+              variant="ghost" size="sm" className="h-7 px-2 text-xs"
+              disabled={keyRequestMutation.isPending}
+              onClick={(e) => { e.stopPropagation(); requestKey(s.id, s.businessName) }}
+              title="Ask ASIC for this business name's key now"
+            >
+              <KeyRound className="h-3.5 w-3.5" /> Request key
+            </Button>
             {s.renewalRequestId ? (
               <Link
                 to={`/admin/renewals/${s.renewalRequestId}`}
@@ -219,7 +240,8 @@ export default function OntraportSales() {
         )
       },
     },
-  ], [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [keyRequestMutation.isPending])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
