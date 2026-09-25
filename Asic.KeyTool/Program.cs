@@ -158,7 +158,7 @@ public static class Program
 
         var enquiries = candidates.Select(s => s.ToEnquiry()).ToList();
         var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
-        table.AddColumns("#", "Business name", "ABN", "Contact", "Due", "");
+        table.AddColumns("#", "Business name", "ABN", "Contact", "Reply to", "Due", "");
         for (var i = 0; i < candidates.Count; i++)
         {
             var problem = enquiries[i].Problem();
@@ -173,6 +173,7 @@ public static class Program
                 Markup.Escape(candidates[i].BusinessName),
                 Markup.Escape(candidates[i].Abn),
                 Markup.Escape(candidates[i].ContactName),
+                candidates[i].Email.Length > 0 ? Markup.Escape(candidates[i].Email) : "[grey]—[/]",
                 candidates[i].RenewalDueDate?.ToLocalTime().ToString("d MMM yyyy") ?? "[grey]—[/]",
                 note);
         }
@@ -247,6 +248,8 @@ public static class Program
             .Validate(v => v.Trim().Contains(' ')
                 ? ValidationResult.Success()
                 : ValidationResult.Error("[red]Given and family name, e.g. Jane Smith[/]"))));
+        enquiry.Email = AnsiConsole.Prompt(new TextPrompt<string>("Client's email (ASIC replies here):")
+            .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
         enquiry.Phone = AnsiConsole.Prompt(new TextPrompt<string>("Phone:")
             .AllowEmpty()
             .DefaultValue(_settings.DefaultPhoneNumber.Length > 0
@@ -261,6 +264,7 @@ public static class Program
                 Field("Contact", $"{input.GivenNames} {input.FamilyName}"),
                 Field("Phone", $"{input.PhonePrefix} {input.PhoneNumber}".Trim()),
                 Field("Reply to", input.Email),
+                Field("Key emailed to", _settings.RequestEmail),
                 new Text(""),
                 new Markup($"[grey]{Markup.Escape(input.Question)}[/]")))
             .Header(" This goes to ASIC ")
@@ -410,7 +414,7 @@ public static class Program
             }
         });
 
-        table.AddRow("[grey]Reply to[/]", Markup.Escape(_settings.RequestEmail));
+        table.AddRow("[grey]Key emailed to[/]", Markup.Escape(_settings.RequestEmail));
         table.AddRow("[grey]Settings file[/]", Markup.Escape(KeyToolSettings.UserSettingsPath));
         AnsiConsole.Write(table);
     }
@@ -429,7 +433,7 @@ public static class Program
             table.AddRow("2Captcha API key", Mask(_settings.TwoCaptchaApiKey));
             table.AddRow("Captcha score", _settings.MinCaptchaScore.ToString("0.0#"));
             table.AddRow("Captcha attempts", _settings.MaxCaptchaAttempts.ToString());
-            table.AddRow("Reply-to email", Markup.Escape(_settings.RequestEmail));
+            table.AddRow("Key delivery email", Markup.Escape(_settings.RequestEmail));
             table.AddRow("Fallback phone", Markup.Escape($"{_settings.DefaultPhonePrefix} {_settings.DefaultPhoneNumber}".Trim()));
             table.AddRow("Enquiry text", Markup.Escape(Shorten(_settings.MessageTemplate, 60)));
             table.AddRow("Proxy", _settings.ProxyUrl.Length == 0 ? "[grey]none (this machine's own connection)[/]" : Mask(_settings.ProxyUrl));
@@ -439,7 +443,7 @@ public static class Program
                 .Title("Change what?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
                 .AddChoices("Ontraport App ID", "Ontraport API key", "Minimum amount paid", "2Captcha API key",
-                            "Captcha score", "Captcha attempts", "Reply-to email", "Fallback phone",
+                            "Captcha score", "Captcha attempts", "Key delivery email", "Fallback phone",
                             "Enquiry text", "Proxy", "Back"));
 
             switch (choice)
@@ -478,10 +482,11 @@ public static class Program
                         .Validate(v => v is >= 1 and <= 5 ? ValidationResult.Success() : ValidationResult.Error("[red]1 to 5[/]")));
                     break;
 
-                case "Reply-to email":
-                    _settings.RequestEmail = AnsiConsole.Prompt(new TextPrompt<string>("Where ASIC emails the key:")
+                case "Key delivery email":
+                    AnsiConsole.MarkupLine("[grey]Goes in the enquiry text as {Email}. The form's reply-to is always the client's own address from Ontraport.[/]");
+                    _settings.RequestEmail = AnsiConsole.Prompt(new TextPrompt<string>("Inbox ASIC should email the key to:")
                         .DefaultValue(_settings.RequestEmail)
-                        .Validate(v => v.Contains('@') ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
+                        .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
                     break;
 
                 case "Fallback phone":
@@ -492,7 +497,7 @@ public static class Program
                     break;
 
                 case "Enquiry text":
-                    AnsiConsole.MarkupLine("[grey]Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email}[/]");
+                    AnsiConsole.MarkupLine("[grey]Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} (key delivery inbox) {ClientEmail}[/]");
                     _settings.MessageTemplate = AnsiConsole.Prompt(new TextPrompt<string>("Enquiry:")
                         .DefaultValue(_settings.MessageTemplate).ShowDefaultValue(false)).Trim();
                     break;

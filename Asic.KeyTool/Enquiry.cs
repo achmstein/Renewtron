@@ -15,6 +15,12 @@ public sealed class Enquiry
     public string FamilyName { get; set; } = "";
     public string Abn { get; set; } = "";
     public string BusinessName { get; set; } = "";
+    /// <summary>
+    /// The client's email. It goes in the form's contact email box, so ASIC's reply about
+    /// the enquiry reaches the client, not us. Where the key itself should be sent is
+    /// <see cref="KeyToolSettings.RequestEmail"/>, which only appears in the enquiry text.
+    /// </summary>
+    public string Email { get; set; } = "";
     /// <summary>Contact phone as it arrived; normalised at submit time.</summary>
     public string Phone { get; set; } = "";
 
@@ -44,7 +50,7 @@ public sealed class Enquiry
     /// <summary>What ASIC's form needs: fields trimmed, phone split, enquiry text rendered.</summary>
     public AsicKeyRequestInput ToInput(KeyToolSettings settings)
     {
-        var email = (settings.RequestEmail ?? "").Trim();
+        var keyEmail = (settings.RequestEmail ?? "").Trim();
         var (prefix, number) = ResolvePhone(Phone, settings);
         return new AsicKeyRequestInput
         {
@@ -52,12 +58,12 @@ public sealed class Enquiry
             FamilyName = FamilyName.Trim(),
             Abn = DigitsOnly(Abn),
             BusinessName = BusinessName.Trim(),
-            Email = email,
+            Email = Email.Trim(),
             PhonePrefix = prefix,
             PhoneNumber = number,
             Question = Render(string.IsNullOrWhiteSpace(settings.MessageTemplate)
                 ? KeyToolSettings.DefaultMessageTemplate
-                : settings.MessageTemplate, email),
+                : settings.MessageTemplate, keyEmail),
         };
     }
 
@@ -69,6 +75,7 @@ public sealed class Enquiry
         var abn = DigitsOnly(Abn);
         if (abn.Length == 0) return "ABN is blank";
         if (abn.Length != 11) return $"ABN has {abn.Length} digits, expected 11";
+        if (!LooksLikeEmail(Email)) return Email.Trim().Length == 0 ? "contact has no email address" : "contact email isn't an address";
         return null;
     }
 
@@ -101,7 +108,8 @@ public sealed class Enquiry
         return ((settings.DefaultPhonePrefix ?? "").Trim(), DigitsOnly(settings.DefaultPhoneNumber));
     }
 
-    public string Render(string template, string email)
+    /// <summary>{Email} is where the key should be sent; {ClientEmail} is the client's own address.</summary>
+    public string Render(string template, string keyEmail)
     {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -109,10 +117,18 @@ public sealed class Enquiry
             ["LastName"] = FamilyName.Trim(),
             ["Abn"] = DigitsOnly(Abn),
             ["BusinessName"] = BusinessName.Trim(),
-            ["Email"] = email,
+            ["Email"] = keyEmail,
+            ["ClientEmail"] = Email.Trim(),
         };
         var text = Regex.Replace(template, @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
         return Regex.Replace(text, @"[ \t]+", " ").Trim();
+    }
+
+    public static bool LooksLikeEmail(string? value)
+    {
+        var v = (value ?? "").Trim();
+        var at = v.IndexOf('@');
+        return at > 0 && at < v.Length - 1 && !v.Contains(' ') && v.IndexOf('.', at) > at + 1;
     }
 
     public static string DigitsOnly(string? value) =>

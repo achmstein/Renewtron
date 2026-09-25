@@ -6,7 +6,7 @@ namespace Asic.KeyTool;
 /// <summary>
 /// Everything the tool needs to fill in ASIC's enquiry form. Defaults here match what
 /// Renewtron used to send, so a request typed on this machine reads the same as one the
-/// server sent: same reply-to inbox, same wording.
+/// server sent: same key delivery inbox, same wording.
 /// </summary>
 public sealed class KeyToolSettings
 {
@@ -39,8 +39,10 @@ public sealed class KeyToolSettings
     public int MaxCaptchaAttempts { get; set; } = 3;
 
     /// <summary>
-    /// Where ASIC should email the key. Must be the inbox Renewtron's scanner reads
-    /// (AsicKeyInbox:Username on the server), or the key never reaches Ontraport.
+    /// Where the enquiry text asks ASIC to email the key ({Email} in the template). Must be
+    /// the inbox Renewtron's scanner reads (AsicKeyInbox:Username on the server), or the key
+    /// never reaches Ontraport. This is not the form's reply-to address — that's the
+    /// client's own email, which comes with each sale from Ontraport.
     /// </summary>
     public string RequestEmail { get; set; } = "businessnamerenewals@gmail.com";
 
@@ -132,7 +134,7 @@ public sealed class KeyToolSettings
     public string? Problem()
     {
         if (string.IsNullOrWhiteSpace(TwoCaptchaApiKey)) return "No 2Captcha API key — Settings → 2Captcha API key.";
-        if (string.IsNullOrWhiteSpace(RequestEmail)) return "No reply-to email — ASIC needs somewhere to send the key.";
+        if (string.IsNullOrWhiteSpace(RequestEmail)) return "No key delivery email — the enquiry has to say where ASIC should send the key.";
         return null;
     }
 }

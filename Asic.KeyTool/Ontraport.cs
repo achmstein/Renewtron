@@ -7,6 +7,8 @@ public sealed class Sale
 {
     public string ContactId { get; init; } = "";
     public string ContactName { get; init; } = "";
+    /// <summary>The client's own email — ASIC's form asks where to reply, and that's them.</summary>
+    public string Email { get; init; } = "";
     public string Phone { get; init; } = "";
     public string BusinessName { get; init; } = "";
     public string Abn { get; init; } = "";
@@ -23,6 +25,7 @@ public sealed class Sale
             ContactId = ContactId,
             BusinessName = BusinessName,
             Abn = Abn,
+            Email = Email,
             Phone = Phone,
             RenewalDueDate = RenewalDueDate,
         };
@@ -69,7 +72,7 @@ public sealed class OntraportClient
         var condition = Uri.EscapeDataString(
             "[{\"field\":{\"field\":\"" + FieldPaymentReceived + "\"},\"op\":\"=\",\"value\":{\"value\":\"yes\"}}]");
         var fields = string.Join(',',
-            "id", "firstname", "lastname", "sms_number", "spent", "refund",
+            "id", "firstname", "lastname", "email", "sms_number", "spent", "refund",
             FieldBusinessName, FieldAbn, FieldRenewalDueDate, FieldPaymentReceived, FieldCancel);
 
         // The most recent 1000 paid contacts in one call; anything already requested is
@@ -109,6 +112,7 @@ public sealed class OntraportClient
             {
                 ContactId = Value(contact, "id"),
                 ContactName = $"{Value(contact, "firstname")} {Value(contact, "lastname")}".Trim(),
+                Email = Value(contact, "email"),
                 Phone = Value(contact, "sms_number"),
                 BusinessName = businessName,
                 Abn = abn,

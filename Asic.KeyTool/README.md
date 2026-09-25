@@ -34,10 +34,25 @@ The exe lands in `Asic.KeyTool/bin/Release/net10.0/win-x64/publish/asic-keytool.
 Menu → **Settings** → the Ontraport App ID and API key, then the 2Captcha API key. Those
 three are the only things the tool can't work out for itself — copy them from the server's
 own configuration, since `/api/admin/settings` masks every secret to its last four
-characters. Everything else already matches production: the reply-to address is the inbox
-the scanner reads, the captcha score is 0.9 over three attempts, and the enquiry wording is
-the one Renewtron used. Leaving the proxy blank means "use this machine's connection",
-which is the point.
+characters. Everything else already matches production: the key delivery address in the
+enquiry text is the inbox the scanner reads, the captcha score is 0.9 over three attempts,
+and the enquiry wording is the one Renewtron used. Leaving the proxy blank means "use this
+machine's connection", which is the point.
+
+## Two email addresses
+
+ASIC's form has a contact email box, and the enquiry text separately says where to send the
+key. The tool fills them differently:
+
+- **Reply to** (the form's contact email) is the **client's own address**, read from the
+  Ontraport contact with each sale. ASIC's acknowledgement and any questions about the
+  enquiry go to them. **Type in one enquiry** asks for it.
+- **Key delivery email** (Settings) is `businessnamerenewals@gmail.com`, the inbox Renewtron
+  scans. It only appears inside the enquiry text as `{Email}`, so the key itself still lands
+  where the pipeline can pick it up.
+
+A sale whose Ontraport contact has no email address is held back and marked
+*contact has no email address* in the list, since ASIC won't accept the form without one.
 
 Settings are saved to `%APPDATA%\Renewtron\asic-keytool.json`, not into the install folder,
 so publishing over the top never clobbers the keys. `appsettings.json` beside the exe holds
@@ -53,7 +68,8 @@ refused, so either run the tool somewhere else or put a residential proxy in Set
 
 **New sales from Ontraport** pulls the most recent paid contacts — `Stripe Payment Recieved`
 (`f5194`) = `yes`, newest activity first, the same query Renewtron's sales sync uses — and
-keeps the ones that have a business name (`f5062`) and an ABN (`f5063`).
+keeps the ones that have a business name (`f5062`) and an ABN (`f5063`). The contact's email
+becomes the form's reply-to address (see above).
 
 Held back, with the reason shown in the count line:
 
