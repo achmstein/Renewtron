@@ -401,18 +401,18 @@ export default function Settings() {
                     <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyRequests.autoRequestOnSync} onChange={(e) => setKeyRequests({ ...keyRequests, autoRequestOnSync: e.target.checked })} />
                     Queue a request for every eligible sale the Ontraport sync brings in
                   </label>
-                  <Field label="Email the key to" hint="Goes in the enquiry text. Must be the inbox the scanner reads. The form’s own reply-to is always the client’s email.">
+                  <Field label="Email the key to">
                     <input type="email" className={inputCls} value={keyRequests.requestEmail} onChange={(e) => setKeyRequests({ ...keyRequests, requestEmail: e.target.value })} />
                   </Field>
-                  <div className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-4">
-                    <Field label="Fallback area code">
+                  <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-4">
+                    <Field label="Area code">
                       <input className={`${inputCls} font-mono tabular-nums`} value={keyRequests.defaultPhonePrefix} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhonePrefix: e.target.value })} placeholder="02" />
                     </Field>
-                    <Field label="Fallback phone" hint="ASIC requires a phone; used when the sale has no usable mobile.">
+                    <Field label="Fallback phone">
                       <input className={`${inputCls} font-mono tabular-nums`} value={keyRequests.defaultPhoneNumber} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhoneNumber: e.target.value })} />
                     </Field>
                   </div>
-                  <Field label="Enquiry text" hint="Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} {ClientEmail}">
+                  <Field label="Enquiry text">
                     <textarea rows={3} className={`${inputCls} font-mono text-xs`} value={keyRequests.messageTemplate} onChange={(e) => setKeyRequests({ ...keyRequests, messageTemplate: e.target.value })} />
                     {keyRequests.defaultMessageTemplate && keyRequests.messageTemplate !== keyRequests.defaultMessageTemplate ? (
                       <button
@@ -425,13 +425,13 @@ export default function Settings() {
                     ) : null}
                   </Field>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Field label="Max per run" hint="Each is a browser session of about a minute.">
+                    <Field label="Max per run">
                       <input type="number" min={1} max={200} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxPerRun} onChange={(e) => setKeyRequests({ ...keyRequests, maxPerRun: Number(e.target.value) || 25 })} />
                     </Field>
-                    <Field label="Captcha attempts" hint="Page reloads when ASIC rejects the token.">
+                    <Field label="Captcha attempts">
                       <input type="number" min={1} max={5} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxCaptchaAttempts} onChange={(e) => setKeyRequests({ ...keyRequests, maxCaptchaAttempts: Number(e.target.value) || 3 })} />
                     </Field>
-                    <Field label="Auto-retries" hint="Runs a failed request is retried on before it waits for you.">
+                    <Field label="Auto-retries">
                       <input type="number" min={1} max={20} className={`${inputCls} font-mono tabular-nums`} value={keyRequests.maxAutoAttempts} onChange={(e) => setKeyRequests({ ...keyRequests, maxAutoAttempts: Number(e.target.value) || 5 })} />
                     </Field>
                   </div>
