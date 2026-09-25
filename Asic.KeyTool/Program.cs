@@ -4,29 +4,27 @@ using Spectre.Console.Rendering;
 namespace Asic.KeyTool;
 
 /// <summary>
-/// ASIC key requests, run by hand from a residential connection.
+/// ASIC key requests, sent from a person's machine through a visible browser.
 ///
-/// ASIC's enquiry form sits behind reCAPTCHA v3 and hands the submitting IP to Google, so
-/// the same 0.9-tier 2Captcha token that passes from a home line scores 0.1 from a
-/// datacenter and ASIC rejects it ("minimum score require : 0.5"). That is why this is a
-/// desktop tool and not a server job: run it where the IP is residential.
-///
-/// New sales come from Ontraport directly — the same paid contacts Renewtron's sales sync
-/// reads — and what's already been asked for is remembered in a local history file.
+/// ASIC's enquiry form sits behind reCAPTCHA v3 and hands the submitting IP to Google. The
+/// server's datacenter address scores 0.1 against ASIC's 0.5 minimum, so Renewtron only keeps
+/// the list of requests; this tool fetches that list, opens Chrome (or Edge) in front of the
+/// operator, fills in and submits the form, and records ASIC's reference back on the server.
+/// The captcha is invisible — a real browser on a home connection mints a token that passes,
+/// nothing is solved or bought.
 /// </summary>
 public static class Program
 {
+    /// <summary>Two captcha refusals in a row mean the address is being scored down; more only pushes it lower.</summary>
+    private const int StopAfterCaptchaRefusals = 2;
+
     private static KeyToolSettings _settings = new();
-    private static TwoCaptchaSolver _solver = null!;
-    private static OntraportClient _ontraport = null!;
     private static RenewtronServer _server = null!;
 
     public static async Task<int> Main(string[] args)
     {
         Console.OutputEncoding = System.Text.Encoding.UTF8;
         _settings = KeyToolSettings.Load();
-        _solver = new TwoCaptchaSolver(_settings);
-        _ontraport = new OntraportClient(_settings);
         _server = new RenewtronServer(_settings);
 
         using var cts = new CancellationTokenSource();
@@ -58,10 +56,9 @@ public static class Program
         {
             case "sync":
                 Header();
-                // "--sync 3" caps how many enquiries this run sends (newest first); each one
-                // buys at least one captcha token, so a first run should be small.
+                // "--sync 3" caps how many enquiries this run sends.
                 int? limit = args.Length > 1 && int.TryParse(args[1], out var n) && n > 0 ? n : null;
-                return await SyncAsync(pick: false, ct, limit) ? 0 : 1;
+                return await SendAllFromServerAsync(limit, ct) ? 0 : 1;
 
             case "check":
                 Header();
@@ -74,17 +71,17 @@ public static class Program
 
             case var help:
                 AnsiConsole.MarkupLine("""
-                    [bold]asic-keytool[/] — ask ASIC for a business name's ASIC key.
+                    [bold]asic-keytool[/] — ask ASIC for a business name's ASIC key, through a browser on this machine.
 
                       asic-keytool            interactive menu
-                      asic-keytool --sync     request a key for every new paid sale in Ontraport
+                      asic-keytool --sync     send everything on Renewtron's list, no prompts
                       asic-keytool --sync N   the same, but stop after N enquiries
-                      asic-keytool --check    Ontraport, egress IP, browser and token
+                      asic-keytool --check    Renewtron login, egress IP, browser and token
                       asic-keytool --submit --business "NAME" --abn 11111111111 --contact "Given Family" --email who@example.com --phone 0412345678
-                                              one enquiry, no prompts, nothing read from Ontraport
+                                              one enquiry, no prompts, nothing recorded on the server
 
-                    A sale counts as new until ASIC accepts a request for it; that's kept in
-                    %APPDATA%\Renewtron\asic-keytool-history.json.
+                    Renewtron keeps the list (one request per paid sale whose contact has no key)
+                    and records what ASIC said; the admin site shows the same list.
                     """);
                 return help is "help" or "h" or "?" ? 0 : 2;
         }
@@ -100,24 +97,21 @@ public static class Program
             var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
                 .Title("What would you like to do?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
-                .AddChoices("To do from Renewtron", "New sales from Ontraport", "Type in one enquiry", "Recent requests", "Check connection", "Settings", "Quit"));
+                .AddChoices("To do from Renewtron", "Type in one enquiry", "Check connection", "Sign in to Google", "Settings", "Quit"));
 
             switch (choice)
             {
                 case "To do from Renewtron":
-                    await ManualQueueAsync(ct);
-                    break;
-                case "New sales from Ontraport":
-                    await SyncAsync(pick: true, ct);
+                    await ServerQueueAsync(ct);
                     break;
                 case "Type in one enquiry":
                     await SingleAsync(ct);
                     break;
-                case "Recent requests":
-                    ShowHistory();
-                    break;
                 case "Check connection":
                     await CheckAsync(ct);
+                    break;
+                case "Sign in to Google":
+                    await SignInToGoogleAsync(ct);
                     break;
                 case "Settings":
                     EditSettings();
@@ -130,243 +124,286 @@ public static class Program
         return 0;
     }
 
-    // ---- Ontraport → ASIC ---------------------------------------------------------------
+    // ---- Renewtron's list → ASIC ----------------------------------------------------------
 
-    /// <param name="pick">Interactive: show the list and let the operator choose. Off: send them all.</param>
-    /// <param name="limit">Non-interactive cap on how many to send this run; null = all.</param>
-    private static async Task<bool> SyncAsync(bool pick, CancellationToken ct, int? limit = null)
+    /// <summary>
+    /// The requests Renewtron is waiting on. Pick one and the browser opens and sends it;
+    /// pick "Do them all" and it works through the list with a pause between each. Either
+    /// way ASIC's reference goes straight back to the server, where the inbox scanner takes
+    /// it from there when the key email lands.
+    /// </summary>
+    private static async Task ServerQueueAsync(CancellationToken ct)
     {
-        if (!Configured()) return false;
-        if (!_ontraport.IsConfigured)
+        if (!Configured() || !ServerConfigured()) return;
+
+        while (!ct.IsCancellationRequested)
         {
-            AnsiConsole.MarkupLine("[red]No Ontraport API credentials — Settings → Ontraport App ID / API key.[/]");
-            return false;
+            var rows = await FetchQueueAsync(ct);
+            if (rows == null) return;
+            if (rows.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[green]Nothing waiting.[/]");
+                return;
+            }
+            ShowQueue(rows);
+
+            var labels = rows.Select((r, i) => $"{i + 1}. {r.BusinessName} · {r.Abn}").ToList();
+            var choices = labels.ToList();
+            if (rows.Count > 1) choices.Add($"Do them all ({rows.Count})");
+            choices.Add("Back");
+
+            var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                .Title("Which one? [grey](the browser opens and sends it)[/]")
+                .PageSize(15)
+                .MoreChoicesText("[grey](move up and down for more)[/]")
+                .HighlightStyle(new Style(foreground: Color.SpringGreen3))
+                .AddChoices(choices));
+            if (choice == "Back") return;
+
+            if (choice.StartsWith("Do them all", StringComparison.Ordinal))
+            {
+                await SendBatchAsync(rows, ct);
+                continue;
+            }
+
+            await SendServerRequestAsync(rows[labels.IndexOf(choice)], label: null, manualFallback: true, ct);
+            AnsiConsole.WriteLine();
         }
+    }
 
-        List<Sale> sales = [];
-        Exception? failure = null;
-        await AnsiConsole.Status().StartAsync("Reading new sales from Ontraport…", async _ =>
+    /// <summary>--sync: everything on the list, newest last, no prompts.</summary>
+    private static async Task<bool> SendAllFromServerAsync(int? limit, CancellationToken ct)
+    {
+        if (!Configured() || !ServerConfigured()) return false;
+        var rows = await FetchQueueAsync(ct);
+        if (rows == null) return false;
+        if (rows.Count == 0)
         {
-            try { sales = await _ontraport.FetchPaidSalesAsync(ct); }
-            catch (Exception ex) when (ex is not OperationCanceledException) { failure = ex; }
-        });
-        if (failure != null)
-        {
-            AnsiConsole.MarkupLine($"[red]{Markup.Escape(failure.Message)}[/]");
-            return false;
-        }
-
-        var history = History.Load();
-        var heldBack = sales.Count(s => s.IneligibleReason != null);
-        var candidates = sales
-            .Where(s => s.IneligibleReason == null && !history.AlreadyRequested(s))
-            .ToList();
-
-        AnsiConsole.MarkupLine(
-            $"[grey]{sales.Count} paid sale(s) in Ontraport · {heldBack} held back (cancelled, refunded or disputed) · " +
-            $"{sales.Count - heldBack - candidates.Count} already requested[/]");
-
-        if (candidates.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[green]Nothing new to ask ASIC for.[/]");
+            AnsiConsole.MarkupLine("[green]Nothing waiting.[/]");
             return true;
         }
-
-        var enquiries = candidates.Select(s => s.ToEnquiry()).ToList();
-        var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
-        table.AddColumns("#", "Business name", "ABN", "Contact", "Reply to", "Due", "");
-        for (var i = 0; i < candidates.Count; i++)
+        ShowQueue(rows);
+        if (limit is { } cap && rows.Count > cap)
         {
-            var problem = enquiries[i].Problem(_settings);
-            var previous = history.LastFailure(candidates[i]);
+            AnsiConsole.MarkupLine($"[grey]Sending the first {cap} of {rows.Count}.[/]");
+            rows = rows.Take(cap).ToList();
+        }
+        return await SendBatchAsync(rows, ct);
+    }
+
+    private static async Task<List<ServerRequest>?> FetchQueueAsync(CancellationToken ct)
+    {
+        List<ServerRequest> rows = [];
+        Exception? failure = null;
+        await AnsiConsole.Status().StartAsync($"Asking {Markup.Escape(_server.Host)} what needs doing…", async _ =>
+        {
+            try { rows = await _server.ListAsync(200, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { failure = ex; }
+        });
+        if (failure == null) return rows;
+        AnsiConsole.MarkupLine($"[red]{Markup.Escape(failure.Message)}[/]");
+        return null;
+    }
+
+    private static void ShowQueue(List<ServerRequest> rows)
+    {
+        var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
+        table.AddColumns("#", "Business name", "ABN", "Contact", "Status", "Note");
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            var problem = ToEnquiry(r).Problem(_settings);
             var note = problem != null
                 ? $"[red]{Markup.Escape(problem)}[/]"
-                : previous != null
-                    ? $"[yellow]tried {previous.At.ToLocalTime():d MMM}[/]"
-                    : "";
+                : r.ErrorMessage == null ? "" : $"[grey]{Markup.Escape(Shorten(r.ErrorMessage, 44))}[/]";
             table.AddRow(
                 $"[grey]{i + 1}[/]",
-                Markup.Escape(candidates[i].BusinessName),
-                Markup.Escape(candidates[i].Abn),
-                Markup.Escape(candidates[i].ContactName),
-                candidates[i].Email.Length > 0 ? Markup.Escape(candidates[i].Email) : "[grey]—[/]",
-                candidates[i].RenewalDueDate?.ToLocalTime().ToString("d MMM yyyy") ?? "[grey]—[/]",
+                Markup.Escape(r.BusinessName),
+                Markup.Escape(r.Abn),
+                Markup.Escape(r.ContactName),
+                Markup.Escape(r.Status),
                 note);
         }
         AnsiConsole.Write(table);
+    }
 
-        var sendable = enquiries.Where(e => e.Problem(_settings) == null).ToList();
-        if (sendable.Count == 0)
+    /// <summary>
+    /// Works through the rows with the configured pause between each, and stops after two
+    /// captcha refusals in a row — the rest keep for a later run, when the score has recovered.
+    /// </summary>
+    private static async Task<bool> SendBatchAsync(List<ServerRequest> rows, CancellationToken ct)
+    {
+        var sent = 0;
+        var failed = 0;
+        var skipped = 0;
+        var started = 0;
+        var refusals = 0;
+        for (var i = 0; i < rows.Count; i++)
         {
-            AnsiConsole.MarkupLine("[red]Nothing to send — every new sale has a problem with its details.[/]");
-            return false;
-        }
-
-        if (pick)
-        {
-            // Numbered so two contacts holding the same business name can't collide.
-            var labels = sendable
-                .Select((e, i) => (Label: $"{i + 1}. {e.BusinessName} · {e.Abn}", Enquiry: e))
-                .ToDictionary(x => x.Label, x => x.Enquiry, StringComparer.Ordinal);
-            var prompt = new MultiSelectionPrompt<string>()
-                .Title($"Send which? [grey](space to toggle, enter to send — each buys at least one captcha token)[/]")
-                .NotRequired()
-                .PageSize(15)
-                .MoreChoicesText("[grey](move up and down for more)[/]")
-                .HighlightStyle(new Style(foreground: Color.SpringGreen3));
-            foreach (var label in labels.Keys)
-                prompt.AddChoice(label).Select();
-
-            var chosen = AnsiConsole.Prompt(prompt);
-            sendable = chosen.Select(l => labels[l]).ToList();
-            if (sendable.Count == 0)
+            if (ct.IsCancellationRequested) break;
+            var row = rows[i];
+            var label = $"[{i + 1}/{rows.Count}] ";
+            if (ToEnquiry(row).Problem(_settings) is { } problem)
             {
-                AnsiConsole.MarkupLine("[grey]Nothing selected.[/]");
-                return true;
+                AnsiConsole.MarkupLine($"[yellow]•[/] {Markup.Escape(label)}{Markup.Escape(row.BusinessName)} [grey]skipped — {Markup.Escape(problem)}[/]");
+                skipped++;
+                continue;
+            }
+
+            if (started++ > 0 && !await PauseAsync(ct)) break;
+            var result = await SendServerRequestAsync(row, label, manualFallback: false, ct);
+            if (result == null) { failed++; continue; }
+            if (result.Success) sent++; else failed++;
+
+            refusals = result.CaptchaRejected ? refusals + 1 : 0;
+            if (refusals >= StopAfterCaptchaRefusals && i < rows.Count - 1)
+            {
+                AnsiConsole.MarkupLine($"[yellow]{refusals} captcha refusals in a row — stopping here; {rows.Count - i - 1} left for later.[/]");
+                break;
             }
         }
 
-        if (limit is { } cap && sendable.Count > cap)
-        {
-            AnsiConsole.MarkupLine($"[grey]Sending the first {cap} of {sendable.Count}.[/]");
-            sendable = sendable.Take(cap).ToList();
-        }
-
-        var sent = 0;
-        foreach (var (enquiry, index) in sendable.Select((e, i) => (e, i)))
-        {
-            if (ct.IsCancellationRequested) break;
-            await SubmitAsync(enquiry, $"[{index + 1}/{sendable.Count}] ", ct);
-            Report(enquiry);
-            if (enquiry.Submitted) sent++;
-
-            // Written after every request, not at the end: a crash (or Ctrl+C) must not lose
-            // the record of something ASIC has already accepted.
-            history.Record(enquiry);
-            TrySave(history);
-        }
-
-        var failed = sendable.Count - sent;
-        AnsiConsole.MarkupLine(
-            $"[bold]{sent}[/] submitted, [bold]{failed}[/] failed · " +
-            $"[grey]{sendable.Sum(e => e.CaptchaSolves)} {(_settings.UsesBrowser ? "page load(s)" : "captcha token(s) spent")}[/]");
+        AnsiConsole.MarkupLine($"[bold]{sent}[/] submitted, [bold]{failed}[/] failed, [bold]{skipped}[/] skipped");
         return failed == 0;
     }
 
     /// <summary>
-    /// The requests Renewtron couldn't get through, for a person to do by hand: pick one, see
-    /// exactly what goes in each box of ASIC's form, fill it in, and type the reference number
-    /// from the receipt. The server records it and the inbox scanner takes it from there.
+    /// One row: claim it on the server, send it through the browser, record the outcome.
+    /// With <paramref name="manualFallback"/>, a failure prints the form values so the person
+    /// can fill ASIC's page in themselves and type the reference. Returns null when the row
+    /// never got as far as the browser.
     /// </summary>
-    private static async Task ManualQueueAsync(CancellationToken ct)
+    private static async Task<AsicKeyRequestResult?> SendServerRequestAsync(ServerRequest row, string? label, bool manualFallback, CancellationToken ct)
     {
-        if (!_server.IsConfigured)
+        var enquiry = ToEnquiry(row);
+        if (enquiry.Problem(_settings) is { } problem)
         {
-            AnsiConsole.MarkupLine("[red]No Renewtron login — Settings → Renewtron server (URL, email, password).[/]");
-            return;
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(row.BusinessName)}: {Markup.Escape(problem)}[/]");
+            return null;
         }
 
-        while (!ct.IsCancellationRequested)
+        try
         {
-            List<ServerRequest> rows = [];
-            Exception? failure = null;
-            await AnsiConsole.Status().StartAsync($"Asking {Markup.Escape(_server.Host)} what needs doing…", async _ =>
-            {
-                try { rows = await _server.ListAsync(200, ct); }
-                catch (Exception ex) when (ex is not OperationCanceledException) { failure = ex; }
-            });
-            if (failure != null)
-            {
-                AnsiConsole.MarkupLine($"[red]{Markup.Escape(failure.Message)}[/]");
-                return;
-            }
-            if (rows.Count == 0)
-            {
-                AnsiConsole.MarkupLine("[green]Nothing waiting — the server got everything through on its own.[/]");
-                return;
-            }
+            await _server.ClaimAsync(row.Id, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(row.BusinessName)}: {Markup.Escape(ex.Message)}[/]");
+            return null;
+        }
 
-            var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
-            table.AddColumns("#", "Business name", "ABN", "Contact", "Status", "Last note");
-            for (var i = 0; i < rows.Count; i++)
-            {
-                var r = rows[i];
-                table.AddRow(
-                    $"[grey]{i + 1}[/]",
-                    Markup.Escape(r.BusinessName),
-                    Markup.Escape(r.Abn),
-                    Markup.Escape(r.ContactName),
-                    Markup.Escape(r.Status),
-                    r.ErrorMessage == null ? "" : $"[grey]{Markup.Escape(Shorten(r.ErrorMessage, 44))}[/]");
-            }
-            AnsiConsole.Write(table);
+        AsicKeyRequestResult result;
+        try
+        {
+            result = await SubmitAsync(enquiry, label, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Ctrl+C mid-form: give the row back rather than leave it "being handled" by nobody.
+            await TryRequeueAsync(row);
+            throw;
+        }
+        Report(enquiry);
 
-            var labels = rows.Select((r, i) => $"{i + 1}. {r.BusinessName} · {r.Abn}").ToList();
-            var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
-                .Title("Which one will you do now?")
-                .PageSize(15)
-                .MoreChoicesText("[grey](move up and down for more)[/]")
-                .HighlightStyle(new Style(foreground: Color.SpringGreen3))
-                .AddChoices(labels.Append("Back")));
-            if (choice == "Back") return;
-            var row = rows[labels.IndexOf(choice)];
+        if (result.Success)
+        {
+            await RecordAsync(row, enquiry.ReferenceNumber!, null, ct);
+            return result;
+        }
 
-            try
+        if (manualFallback)
+        {
+            AnsiConsole.MarkupLine("[grey]The browser didn't get it through. To do it by hand, fill in ASIC's form with this and type the reference number:[/]");
+            ShowFormValues(enquiry.ToInput(_settings));
+            var reference = AnsiConsole.Prompt(new TextPrompt<string>("Reference number from ASIC's receipt [grey](blank = record the failure)[/]:").AllowEmpty()).Trim();
+            if (reference.Length > 0)
             {
-                await _server.ClaimAsync(row.Id, ct);
+                await RecordAsync(row, reference, null, ct);
+                return AsicKeyRequestResult.Succeeded(reference, result.Attempts);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(ex.Message)}[/]");
-                continue;
-            }
+        }
 
-            // Everything for the form, box by box, in the order ASIC's page shows them.
-            var enquiry = new Enquiry { BusinessName = row.BusinessName, Abn = row.Abn, Email = row.Email, Phone = row.Phone ?? "", GivenNames = row.GivenNames, FamilyName = row.FamilyName };
-            var input = enquiry.ToInput(_settings);
-            AnsiConsole.Write(new Panel(new Rows(
-                    new Markup("[grey]My question is about a:[/] Business Name"),
-                    new Markup("[grey]I would like to know how to:[/] Maintain information"),
-                    new Text(""),
-                    Field("My question is", input.Question),
-                    Field("Entity number", input.Abn),
-                    Field("Entity name", input.BusinessName),
-                    Field("Your given names", input.GivenNames),
-                    Field("Your family name", input.FamilyName),
-                    Field("Your telephone number", $"{input.PhonePrefix} {input.PhoneNumber}".Trim()),
-                    Field("Your email address", input.Email),
-                    new Markup("[grey]Attach any documents:[/] No · tick both declarations")))
-                .Header(" Fill in ASIC's form with this ")
-                .BorderColor(Color.Grey));
-            AnsiConsole.MarkupLine($"[grey]{AsicKeyRequestClient.BaseUrl}{AsicKeyRequestClient.LandingPath}[/]\n");
+        await RecordAsync(row, null, enquiry.Error ?? "failed", ct);
+        return result;
+    }
 
-            var reference = AnsiConsole.Prompt(new TextPrompt<string>("Reference number from ASIC's receipt [grey](blank = not submitted)[/]:").AllowEmpty()).Trim();
-            var note = AnsiConsole.Prompt(new TextPrompt<string>("Note [grey](optional)[/]:").AllowEmpty()).Trim();
-
-            if (reference.Length == 0 && note.Length == 0 && !AnsiConsole.Confirm("Nothing entered — mark it as not submitted?", defaultValue: false))
-            {
-                try { await _server.ReleaseAsync(row.Id, ct); } catch (Exception ex) when (ex is not OperationCanceledException) { AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(ex.Message)}[/]"); }
-                AnsiConsole.MarkupLine("[grey]Put back in the queue.[/]\n");
-                continue;
-            }
-
-            try
-            {
-                await _server.RecordAsync(row.Id, reference.Length == 0 ? null : reference, note.Length == 0 ? null : note, ct);
-                AnsiConsole.MarkupLine(reference.Length > 0
-                    ? $"[green]✔[/] {Markup.Escape(row.BusinessName)} recorded as sent — reference [bold]{Markup.Escape(reference)}[/]\n"
-                    : $"[yellow]•[/] {Markup.Escape(row.BusinessName)} recorded as not submitted\n");
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                AnsiConsole.MarkupLine($"[red]Could not record it on the server: {Markup.Escape(ex.Message)} — keep reference {Markup.Escape(reference)} and enter it on the admin page.[/]\n");
-            }
+    private static async Task RecordAsync(ServerRequest row, string? reference, string? note, CancellationToken ct)
+    {
+        try
+        {
+            await _server.RecordAsync(row.Id, reference, note, ct);
+            AnsiConsole.MarkupLine(reference != null
+                ? $"  [grey]recorded on {Markup.Escape(_server.Host)}[/]"
+                : $"  [grey]recorded as not sent on {Markup.Escape(_server.Host)}; it stays on the list[/]");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AnsiConsole.MarkupLine(reference != null
+                ? $"  [red]Could not record it on the server: {Markup.Escape(ex.Message)} — keep reference {Markup.Escape(reference)} and enter it on the admin page.[/]"
+                : $"  [red]Could not record the failure on the server: {Markup.Escape(ex.Message)}[/]");
         }
     }
 
+    private static async Task TryRequeueAsync(ServerRequest row)
+    {
+        try { await _server.ReleaseAsync(row.Id, CancellationToken.None); }
+        catch (Exception ex) { AnsiConsole.MarkupLine($"[yellow]Could not put {Markup.Escape(row.BusinessName)} back in the queue: {Markup.Escape(ex.Message)}[/]"); }
+    }
+
+    private static Enquiry ToEnquiry(ServerRequest row) => new()
+    {
+        BusinessName = row.BusinessName,
+        Abn = row.Abn,
+        Email = row.Email,
+        Phone = row.Phone ?? "",
+        GivenNames = row.GivenNames,
+        FamilyName = row.FamilyName,
+    };
+
+    /// <summary>Everything for the form, box by box, in the order ASIC's page shows them.</summary>
+    private static void ShowFormValues(AsicKeyRequestInput input)
+    {
+        AnsiConsole.Write(new Panel(new Rows(
+                new Markup("[grey]My question is about a:[/] Business Name"),
+                new Markup("[grey]I would like to know how to:[/] Maintain information"),
+                new Text(""),
+                Field("My question is", input.Question),
+                Field("Entity number", input.Abn),
+                Field("Entity name", input.BusinessName),
+                Field("Your given names", input.GivenNames),
+                Field("Your family name", input.FamilyName),
+                Field("Your telephone number", $"{input.PhonePrefix} {input.PhoneNumber}".Trim()),
+                Field("Your email address", input.Email),
+                new Markup("[grey]Attach any documents:[/] No · tick both declarations")))
+            .Header(" Fill in ASIC's form with this ")
+            .BorderColor(Color.Grey));
+        AnsiConsole.MarkupLine($"[grey]{BrowserAsicKeyRequestClient.LandingUrl}[/]\n");
+    }
+
+    /// <summary>The pause between two enquiries in a run. False when Ctrl+C ended the wait.</summary>
+    private static async Task<bool> PauseAsync(CancellationToken ct)
+    {
+        var seconds = _settings.PauseBetweenRequestsSeconds;
+        if (seconds <= 0) return true;
+        try
+        {
+            await AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .SpinnerStyle(new Style(foreground: Color.Grey))
+                .StartAsync($"[grey]Waiting {seconds} s before the next one…[/]", _ => Task.Delay(TimeSpan.FromSeconds(seconds), ct));
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    // ---- one-off enquiries ----------------------------------------------------------------
+
     /// <summary>
-    /// One enquiry from the command line, for scripted tests (a container, a CI job) where
-    /// there is no one to answer prompts and no Ontraport credentials to hand.
+    /// One enquiry from the command line, for a scripted test where there is no one to
+    /// answer prompts. Nothing is recorded on the server.
     /// </summary>
     private static async Task<bool> SubmitFromArgsAsync(string[] args, CancellationToken ct)
     {
@@ -398,13 +435,10 @@ public static class Program
 
         await SubmitAsync(enquiry, label: null, ct);
         Report(enquiry);
-
-        var history = History.Load();
-        history.Record(enquiry);
-        TrySave(history);
         return enquiry.Submitted;
     }
 
+    /// <summary>A name that isn't on Renewtron's list. Nothing is recorded on the server.</summary>
     private static async Task SingleAsync(CancellationToken ct)
     {
         if (!Configured()) return;
@@ -431,6 +465,12 @@ public static class Program
                 : "")
             .ShowDefaultValue(_settings.DefaultPhoneNumber.Length > 0));
 
+        if (enquiry.Problem(_settings) is { } problem)
+        {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(problem)}[/]");
+            return;
+        }
+
         var input = enquiry.ToInput(_settings);
         AnsiConsole.Write(new Panel(new Rows(
                 Field("Entity name", input.BusinessName),
@@ -448,17 +488,14 @@ public static class Program
 
         await SubmitAsync(enquiry, label: null, ct);
         Report(enquiry);
-
-        var history = History.Load();
-        history.Record(enquiry);
-        TrySave(history);
     }
 
-    /// <summary>One enquiry = one client = one ASIC session, so nothing carries between rows.</summary>
-    private static async Task SubmitAsync(Enquiry enquiry, string? label, CancellationToken ct)
+    /// <summary>One enquiry = one browser window = one ASIC session, so nothing carries between rows.</summary>
+    private static async Task<AsicKeyRequestResult> SubmitAsync(Enquiry enquiry, string? label, CancellationToken ct)
     {
         // The label is "[1/50] " — square brackets are Spectre markup, so it must be escaped too.
         var title = $"{Markup.Escape(label ?? "")}{Markup.Escape(enquiry.BusinessName)}";
+        AsicKeyRequestResult result = null!;
 
         await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
@@ -466,74 +503,54 @@ public static class Program
             .StartAsync($"{title} — starting…", async ctx =>
             {
                 void OnProgress(string message) => ctx.Status($"{title} — {Markup.Escape(message)}…");
-                _solver.Progress += OnProgress;
-                try
-                {
-                    var result = _settings.UsesBrowser
-                        ? await new BrowserAsicKeyRequestClient(_settings.BrowserChannel, OnProgress).SubmitAsync(
-                            enquiry.ToInput(_settings),
-                            _settings.MaxCaptchaAttempts,
-                            ct)
-                        : await new AsicKeyRequestClient(_solver).SubmitAsync(
-                            enquiry.ToInput(_settings),
-                            _settings.MinCaptchaScore,
-                            _settings.MaxCaptchaAttempts,
-                            _settings.ProxyUrl,
-                            ct);
-
-                    enquiry.Submitted = result.Success;
-                    enquiry.ReferenceNumber = result.ReferenceNumber;
-                    enquiry.Error = result.ErrorMessage;
-                    enquiry.CaptchaSolves += result.CaptchaAttempts;
-                }
-                finally
-                {
-                    _solver.Progress -= OnProgress;
-                }
+                result = await new BrowserAsicKeyRequestClient(_settings.BrowserChannel, OnProgress)
+                    .SubmitAsync(enquiry.ToInput(_settings), _settings.MaxTokenAttempts, ct);
             });
+
+        enquiry.Submitted = result.Success;
+        enquiry.ReferenceNumber = result.ReferenceNumber;
+        enquiry.Error = result.ErrorMessage;
+        enquiry.Attempts += result.Attempts;
+        return result;
     }
 
     private static void Report(Enquiry enquiry)
     {
-        var unit = _settings.UsesBrowser ? "attempt" : "token";
-        var solves = enquiry.CaptchaSolves == 1 ? $"1 {unit}" : $"{enquiry.CaptchaSolves} {unit}s";
+        var attempts = enquiry.Attempts == 1 ? "1 attempt" : $"{enquiry.Attempts} attempts";
         if (enquiry.Submitted)
         {
             AnsiConsole.MarkupLine(
-                $"[green]✔[/] {Markup.Escape(enquiry.BusinessName)} — reference [bold]{Markup.Escape(enquiry.ReferenceNumber ?? "")}[/] [grey]({solves})[/]");
+                $"[green]✔[/] {Markup.Escape(enquiry.BusinessName)} — reference [bold]{Markup.Escape(enquiry.ReferenceNumber ?? "")}[/] [grey]({attempts})[/]");
             return;
         }
 
-        AnsiConsole.MarkupLine($"[red]✘[/] {Markup.Escape(enquiry.BusinessName)} [grey]({solves})[/]");
+        AnsiConsole.MarkupLine($"[red]✘[/] {Markup.Escape(enquiry.BusinessName)} [grey]({attempts})[/]");
         AnsiConsole.MarkupLine($"  [red]{Markup.Escape(enquiry.Error ?? "failed")}[/]");
 
-        // ASIC's own wording says which problem this is: a low score can pass on a retry,
-        // a refused token means the connection (or the key) is what needs fixing.
+        // ASIC's own wording says which problem this is: a low score is about this browser
+        // and this connection, not about the data.
         if (enquiry.Error?.Contains("minimum score", StringComparison.OrdinalIgnoreCase) == true)
-            AnsiConsole.MarkupLine(_settings.UsesBrowser
-                ? "  [yellow]Google scored the browser as a bot. Try again from a home connection with no VPN; signing the browser profile into a Google account also helps.[/]"
-                : "  [yellow]Bought tokens are scoring too low. Switch Settings → Submit via to Browser, which uses this machine's own Chrome.[/]");
+            AnsiConsole.MarkupLine("  [yellow]Google scored the browser as a bot. Sign the tool's browser into Google (menu → Sign in to Google), turn off any VPN, and try again from a home connection.[/]");
     }
 
-    private static void ShowHistory()
+    // ---- browser profile ------------------------------------------------------------------
+
+    /// <summary>
+    /// Google's score is about the browser it sees. A profile that is signed into a Google
+    /// account is one it knows; this opens the tool's profile on the sign-in page once.
+    /// </summary>
+    private static async Task SignInToGoogleAsync(CancellationToken ct)
     {
-        var history = History.Load();
-        if (history.Entries.Count == 0)
+        AnsiConsole.MarkupLine("[grey]A browser window opens on Google's sign-in page. Sign in with any Google account, then close the window. This is the browser the tool uses for ASIC's form, not your everyday one.[/]");
+        var (browser, signedIn, error) = await new BrowserAsicKeyRequestClient(_settings.BrowserChannel).SignInAsync(ct);
+        if (error != null)
         {
-            AnsiConsole.MarkupLine("[grey]Nothing requested from this machine yet.[/]");
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(error)}[/]");
             return;
         }
-
-        var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
-        table.AddColumns("When", "Business name", "Reference", "");
-        foreach (var entry in history.Entries.OrderByDescending(e => e.At).Take(15))
-            table.AddRow(
-                entry.At.ToLocalTime().ToString("d MMM HH:mm"),
-                Markup.Escape(entry.BusinessName),
-                entry.Submitted ? $"[green]{Markup.Escape(entry.ReferenceNumber ?? "")}[/]" : "[red]—[/]",
-                entry.Submitted ? "" : $"[red]{Markup.Escape(Shorten(entry.Error ?? "failed", 60))}[/]");
-        AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine($"[grey]{history.Entries.Count} in total · {Markup.Escape(History.Path)}[/]");
+        AnsiConsole.MarkupLine(signedIn
+            ? $"[green]✔[/] {Markup.Escape(browser)} window closed — whatever you signed into is kept in the tool's profile."
+            : $"[yellow]•[/] {Markup.Escape(browser)} window closed.");
     }
 
     private static async Task CheckAsync(CancellationToken ct)
@@ -541,74 +558,52 @@ public static class Program
         var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey).HideHeaders();
         table.AddColumns("", "");
 
-        var client = new AsicKeyRequestClient(_solver);
         await AnsiConsole.Status().StartAsync("Checking…", async ctx =>
         {
-            ctx.Status("Asking Ontraport for paid sales…");
-            if (_ontraport.IsConfigured)
+            ctx.Status($"Logging in to {Markup.Escape(_server.Host)}…");
+            if (_server.IsConfigured)
             {
                 try
                 {
-                    var sales = await _ontraport.FetchPaidSalesAsync(ct);
-                    var history = History.Load();
-                    var fresh = sales.Count(s => s.IneligibleReason == null && !history.AlreadyRequested(s));
-                    table.AddRow("[green]✔[/] Ontraport", $"{sales.Count} paid sale(s), [bold]{fresh}[/] not yet requested");
+                    var rows = await _server.ListAsync(200, ct);
+                    table.AddRow("[green]✔[/] Renewtron", $"{Markup.Escape(_server.Host)} · [bold]{rows.Count}[/] request(s) waiting");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    table.AddRow("[red]✘[/] Ontraport", $"[red]{Markup.Escape(ex.Message)}[/]");
+                    table.AddRow("[red]✘[/] Renewtron", $"[red]{Markup.Escape(ex.Message)}[/]");
                 }
             }
             else
             {
-                table.AddRow("[yellow]•[/] Ontraport", "[yellow]no API credentials set (Settings)[/]");
+                table.AddRow("[yellow]•[/] Renewtron", "[yellow]no admin login set (Settings)[/]");
             }
 
             ctx.Status("Asking what IP ASIC will see…");
             try
             {
-                var ip = await client.GetEgressIpAsync(_settings.ProxyUrl, ct);
-                var via = string.IsNullOrWhiteSpace(_settings.ProxyUrl) ? "this machine" : "the proxy";
-                table.AddRow("[green]✔[/] Egress IP", $"{Markup.Escape(ip)} [grey](via {via})[/]");
+                var ip = await BrowserAsicKeyRequestClient.GetEgressIpAsync(ct);
+                table.AddRow("[green]✔[/] Egress IP", $"{Markup.Escape(ip)} [grey](a home address passes; a datacenter or VPN address is refused)[/]");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 table.AddRow("[red]✘[/] Egress IP", $"[red]{Markup.Escape(ex.Message)}[/]");
             }
 
-            if (_settings.UsesBrowser)
-            {
-                ctx.Status("Starting the browser and loading ASIC's form…");
-                var (browser, token, error) = await new BrowserAsicKeyRequestClient(_settings.BrowserChannel).ProbeAsync(ct);
+            ctx.Status("Starting the browser and loading ASIC's form…");
+            var (browser, token, signedIn, error) = await new BrowserAsicKeyRequestClient(_settings.BrowserChannel).ProbeAsync(ct);
+            table.AddRow(
+                token ? "[green]✔[/] Browser" : "[red]✘[/] Browser",
+                token
+                    ? $"{Markup.Escape(browser)} [grey]opened ASIC's form and got a reCAPTCHA token[/]"
+                    : $"[red]{Markup.Escape(error ?? "failed")}[/]");
+            if (browser.Length > 0)
                 table.AddRow(
-                    token ? "[green]✔[/] Browser" : "[red]✘[/] Browser",
-                    token
-                        ? $"{Markup.Escape(browser)} [grey]opened ASIC's form and got a reCAPTCHA token[/]"
-                        : $"[red]{Markup.Escape(error ?? "failed")}[/]");
-            }
-            else if (_solver.IsConfigured)
-            {
-                ctx.Status("Checking the 2Captcha balance…");
-                try
-                {
-                    var balance = await _solver.GetBalanceAsync(ct: ct);
-                    var style = balance < 1m ? "yellow" : "green";
-                    table.AddRow($"[{style}]✔[/] 2Captcha", $"[{style}]${balance:0.00}[/] [grey]balance[/]");
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    table.AddRow("[red]✘[/] 2Captcha", $"[red]{Markup.Escape(ex.Message)}[/]");
-                }
-            }
-            else
-            {
-                table.AddRow("[yellow]•[/] 2Captcha", "[yellow]no API key set (Settings)[/]");
-            }
+                    signedIn ? "[green]✔[/] Google" : "[yellow]•[/] Google",
+                    signedIn ? "[grey]the tool's browser is signed in[/]" : "[yellow]not signed in — menu → Sign in to Google lifts the captcha score[/]");
         });
 
-        table.AddRow("[grey]Submit via[/]", _settings.UsesBrowser ? "a visible browser on this machine" : "2Captcha tokens");
         table.AddRow("[grey]Key emailed to[/]", Markup.Escape(_settings.RequestEmail));
-        table.AddRow("[grey]Settings file[/]", Markup.Escape(KeyToolSettings.UserSettingsPath));
+        table.AddRow("[grey]Settings file[/]", Markup.Escape(KeyToolSettings.DevelopmentSettingsInUse ? KeyToolSettings.DevelopmentSettingsPath : KeyToolSettings.UserSettingsPath));
         AnsiConsole.Write(table);
     }
 
@@ -616,32 +611,28 @@ public static class Program
 
     private static void EditSettings()
     {
+        if (KeyToolSettings.DevelopmentSettingsInUse)
+            AnsiConsole.MarkupLine($"[yellow]appsettings.Development.json is in use and wins over anything saved here:[/] [grey]{Markup.Escape(KeyToolSettings.DevelopmentSettingsPath)}[/]");
+
         while (true)
         {
             var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
             table.AddColumns("Setting", "Value");
-            table.AddRow("Ontraport App ID", Mask(_settings.OntraportApiAppId));
-            table.AddRow("Ontraport API key", Mask(_settings.OntraportApiKey));
-            table.AddRow("Minimum amount paid", _settings.MinimumAmountPaid > 0 ? _settings.MinimumAmountPaid.ToString("0.00") : "[grey]no guard[/]");
             table.AddRow("Renewtron server", Markup.Escape(_settings.ServerUrl));
             table.AddRow("Renewtron login", _settings.ServerEmail.Length == 0 ? "[grey]not set[/]" : $"{Markup.Escape(_settings.ServerEmail)} / {Mask(_settings.ServerPassword)}");
-            table.AddRow("Submit via", _settings.UsesBrowser ? "Browser (Chrome/Edge on this machine)" : "2Captcha tokens");
             table.AddRow("Browser", _settings.BrowserChannel.Length == 0 ? "[grey]Chrome, then Edge[/]" : BrowserAsicKeyRequestClient.Describe(_settings.BrowserChannel));
-            table.AddRow("2Captcha API key", _settings.UsesBrowser ? "[grey]not used[/]" : Mask(_settings.TwoCaptchaApiKey));
-            table.AddRow("Captcha score", _settings.UsesBrowser ? "[grey]not used[/]" : _settings.MinCaptchaScore.ToString("0.0#"));
-            table.AddRow("Captcha attempts", _settings.MaxCaptchaAttempts.ToString());
+            table.AddRow("Token attempts", _settings.MaxTokenAttempts.ToString());
+            table.AddRow("Pause between requests", $"{_settings.PauseBetweenRequestsSeconds} s");
             table.AddRow("Key delivery email", Markup.Escape(_settings.RequestEmail));
             table.AddRow("Fallback phone", Markup.Escape($"{_settings.DefaultPhonePrefix} {_settings.DefaultPhoneNumber}".Trim()));
             table.AddRow("Enquiry text", Markup.Escape(Shorten(_settings.MessageTemplate, 60)));
-            table.AddRow("Proxy", _settings.ProxyUrl.Length == 0 ? "[grey]none (this machine's own connection)[/]" : Mask(_settings.ProxyUrl));
             AnsiConsole.Write(table);
 
             var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
                 .Title("Change what?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
-                .AddChoices("Renewtron server", "Ontraport App ID", "Ontraport API key", "Minimum amount paid", "Submit via", "Browser",
-                            "2Captcha API key", "Captcha score", "Captcha attempts", "Key delivery email", "Fallback phone",
-                            "Enquiry text", "Proxy", "Back"));
+                .AddChoices("Renewtron server", "Browser", "Token attempts", "Pause between requests",
+                            "Key delivery email", "Fallback phone", "Enquiry text", "Back"));
 
             switch (choice)
             {
@@ -649,29 +640,7 @@ public static class Program
                     _settings.ServerUrl = AnsiConsole.Prompt(new TextPrompt<string>("Renewtron URL:").DefaultValue(_settings.ServerUrl)).Trim();
                     _settings.ServerEmail = AnsiConsole.Prompt(new TextPrompt<string>("Admin email:").DefaultValue(_settings.ServerEmail).AllowEmpty()).Trim();
                     _settings.ServerPassword = AnsiConsole.Prompt(new TextPrompt<string>("Admin password:").Secret().AllowEmpty());
-                    break;
-
-                case "Ontraport App ID":
-                    _settings.OntraportApiAppId = AnsiConsole.Prompt(
-                        new TextPrompt<string>("Ontraport App ID:").Secret().AllowEmpty()).Trim();
-                    break;
-
-                case "Ontraport API key":
-                    _settings.OntraportApiKey = AnsiConsole.Prompt(
-                        new TextPrompt<string>("Ontraport API key:").Secret().AllowEmpty()).Trim();
-                    break;
-
-                case "Minimum amount paid":
-                    AnsiConsole.MarkupLine("[grey]Sales paying less than this are held back. 0 turns the guard off.[/]");
-                    _settings.MinimumAmountPaid = AnsiConsole.Prompt(new TextPrompt<decimal>("Minimum:")
-                        .DefaultValue(_settings.MinimumAmountPaid)
-                        .Validate(v => v >= 0 ? ValidationResult.Success() : ValidationResult.Error("[red]Can't be negative[/]")));
-                    break;
-
-                case "Submit via":
-                    AnsiConsole.MarkupLine("[grey]Browser opens Chrome/Edge on this machine and lets it mint its own captcha token. 2Captcha buys tokens, which ASIC has been scoring 0.1.[/]");
-                    _settings.SubmitVia = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("Submit via:")
-                        .AddChoices(KeyToolSettings.SubmitViaBrowser, KeyToolSettings.SubmitVia2Captcha));
+                    _server = new RenewtronServer(_settings);
                     break;
 
                 case "Browser":
@@ -680,25 +649,22 @@ public static class Program
                     _settings.BrowserChannel = pick switch { "Google Chrome" => "chrome", "Microsoft Edge" => "msedge", _ => "" };
                     break;
 
-                case "2Captcha API key":
-                    _settings.TwoCaptchaApiKey = AnsiConsole.Prompt(
-                        new TextPrompt<string>("2Captcha API key:").Secret().AllowEmpty()).Trim();
-                    break;
-
-                case "Captcha score":
-                    // ASIC needs ≥ 0.5 and 2Captcha prices by score; 0.9 is what passes.
-                    _settings.MinCaptchaScore = double.Parse(AnsiConsole.Prompt(
-                        new SelectionPrompt<string>().Title("Score to buy:").AddChoices("0.9", "0.7", "0.5", "0.3")));
-                    break;
-
-                case "Captcha attempts":
-                    _settings.MaxCaptchaAttempts = AnsiConsole.Prompt(new TextPrompt<int>("Tokens to try per enquiry:")
-                        .DefaultValue(_settings.MaxCaptchaAttempts)
+                case "Token attempts":
+                    AnsiConsole.MarkupLine("[grey]Page reloads to try when ASIC scores the token too low, half a minute apart.[/]");
+                    _settings.MaxTokenAttempts = AnsiConsole.Prompt(new TextPrompt<int>("Attempts per enquiry:")
+                        .DefaultValue(_settings.MaxTokenAttempts)
                         .Validate(v => v is >= 1 and <= 5 ? ValidationResult.Success() : ValidationResult.Error("[red]1 to 5[/]")));
                     break;
 
+                case "Pause between requests":
+                    AnsiConsole.MarkupLine("[grey]Seconds between two enquiries in one run. Back-to-back submissions drag the captcha score down; 0 = none.[/]");
+                    _settings.PauseBetweenRequestsSeconds = AnsiConsole.Prompt(new TextPrompt<int>("Seconds:")
+                        .DefaultValue(_settings.PauseBetweenRequestsSeconds)
+                        .Validate(v => v is >= 0 and <= 3600 ? ValidationResult.Success() : ValidationResult.Error("[red]0 to 3600[/]")));
+                    break;
+
                 case "Key delivery email":
-                    AnsiConsole.MarkupLine("[grey]Goes in the enquiry text as {Email}. The form's reply-to is always the client's own address from Ontraport.[/]");
+                    AnsiConsole.MarkupLine("[grey]Goes in the enquiry text as {Email}. The form's reply-to is always the client's own address from Renewtron.[/]");
                     _settings.RequestEmail = AnsiConsole.Prompt(new TextPrompt<string>("Inbox ASIC should email the key to:")
                         .DefaultValue(_settings.RequestEmail)
                         .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
@@ -715,12 +681,6 @@ public static class Program
                     AnsiConsole.MarkupLine("[grey]Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} (key delivery inbox) {ClientEmail}[/]");
                     _settings.MessageTemplate = AnsiConsole.Prompt(new TextPrompt<string>("Enquiry:")
                         .DefaultValue(_settings.MessageTemplate).ShowDefaultValue(false)).Trim();
-                    break;
-
-                case "Proxy":
-                    AnsiConsole.MarkupLine("[grey]Only needed if this machine's IP is scored as a datacenter. Blank = direct.[/]");
-                    _settings.ProxyUrl = AnsiConsole.Prompt(
-                        new TextPrompt<string>("http://user:pass@host:port").Secret().AllowEmpty()).Trim();
                     break;
 
                 default:
@@ -744,12 +704,13 @@ public static class Program
     private static void Header()
     {
         AnsiConsole.Write(new Rule("[bold]ASIC key requests[/]").LeftJustified().RuleStyle(Style.Parse("grey")));
-        AnsiConsole.MarkupLine("[grey]ASIC's enquiry form, asked from this machine's connection.[/]\n");
+        AnsiConsole.MarkupLine("[grey]ASIC's enquiry form, sent through a browser on this machine.[/]\n");
     }
 
     private static void WarnIfUnconfigured()
     {
-        if (_settings.Problem() is { } problem)
+        var problem = _settings.Problem() ?? (_server.IsConfigured ? null : "No Renewtron login — Settings → Renewtron server (URL, email, password).");
+        if (problem != null)
             AnsiConsole.Write(new Panel($"[yellow]{Markup.Escape(problem)}[/]").BorderColor(Color.Yellow).Header(" Not ready "));
     }
 
@@ -760,16 +721,11 @@ public static class Program
         return false;
     }
 
-    private static void TrySave(History history)
+    private static bool ServerConfigured()
     {
-        try
-        {
-            history.Save();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            AnsiConsole.MarkupLine($"[red]Could not update the history file: {Markup.Escape(ex.Message)}[/]");
-        }
+        if (_server.IsConfigured) return true;
+        AnsiConsole.MarkupLine("[red]No Renewtron login — Settings → Renewtron server (URL, email, password).[/]");
+        return false;
     }
 
     private static IRenderable Field(string label, string value) =>

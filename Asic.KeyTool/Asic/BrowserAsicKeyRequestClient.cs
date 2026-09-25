@@ -4,18 +4,23 @@ using Microsoft.Playwright;
 namespace Asic.KeyTool;
 
 /// <summary>
-/// Drives ASIC's enquiry form in a real, visible Chrome (or Edge) instead of buying captcha
-/// tokens. ASIC scores its reCAPTCHA v3 server-side and needs 0.5; tokens bought from a
-/// solving farm score 0.1 whatever machine submits them, while the token a real browser
-/// mints on a home connection passes. So the browser does the whole thing: load the page,
-/// let it generate its token, pick the enquiry type, fill in the details, read the receipt.
+/// Drives ASIC's enquiry form in a visible Google Chrome (or Microsoft Edge) on this machine,
+/// in front of the operator. ASIC's reCAPTCHA v3 is invisible: the page mints its own token
+/// when a real browser loads it and ASIC scores that token server-side (minimum 0.5). There is
+/// nothing to solve — the browser does the whole thing: load the page, let it generate its
+/// token, pick the enquiry type, fill in the details, read the reference off the receipt.
 ///
-/// The browser gets its own profile under %APPDATA%\Renewtron so it never touches the
-/// operator's everyday Chrome, and so cookies and reputation build up between runs.
+/// The browser runs with the tool's own profile under %APPDATA%\Renewtron. It can't borrow
+/// the operator's everyday profile — Chromium (136 and later) refuses remote control of the
+/// default profile — so the operator signs this profile into Google once (<see cref="SignInAsync"/>)
+/// and its cookies and reputation build up between runs.
 /// </summary>
 public sealed class BrowserAsicKeyRequestClient
 {
-    private const string LandingUrl = AsicKeyRequestClient.BaseUrl + AsicKeyRequestClient.LandingPath;
+    public const string BaseUrl = "https://www.edge.asic.gov.au/008/";
+    public const string LandingPath = "inquiryV001?start/landingPage";
+    public const string LandingUrl = BaseUrl + LandingPath;
+    private const string GoogleSignInUrl = "https://accounts.google.com/";
 
     private const string Prefix = "message-1-formData-1-inquiryDetails-1-";
     private const string FieldType1 = Prefix + "inquiry-1-inquiryType1-1";
@@ -39,6 +44,9 @@ public sealed class BrowserAsicKeyRequestClient
     private const string SubmitButton = "form[name='inquiryv001'] input[type='image']";
     private const string TokenReady = "() => { const t = document.getElementById('g-recaptcha-response'); return !!t && t.value.length > 0; }";
 
+    /// <summary>Reloading straight after a refusal only adds to the burst Google is scoring.</summary>
+    private static readonly TimeSpan RetryBackoff = TimeSpan.FromSeconds(30);
+
     private static readonly Regex ReferenceRegex = new(@"Reference\s+Number:?\s*(\d{4,})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>Which browsers to try, in order, when no channel is configured.</summary>
@@ -46,27 +54,11 @@ public sealed class BrowserAsicKeyRequestClient
 
     public static string ProfileDirectory => Path.Combine(DataDirectory, "asic-keytool-browser");
 
-    /// <summary>ASIC_KEYTOOL_DATA_DIR (a mounted volume in a container) or %APPDATA%\Renewtron.</summary>
+    /// <summary>ASIC_KEYTOOL_DATA_DIR or %APPDATA%\Renewtron.</summary>
     public static string DataDirectory =>
         Environment.GetEnvironmentVariable("ASIC_KEYTOOL_DATA_DIR") is { Length: > 0 } dir
             ? dir
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Renewtron");
-
-    /// <summary>
-    /// Headless, bundled-Chromium mode for a container (DOTNET_RUNNING_IN_CONTAINER=true or
-    /// ASIC_KEYTOOL_HEADLESS=true). PATH_TO_CHROMIUM points at a system Chromium instead of
-    /// Playwright's download. This is the experiment: whether a datacenter IP plus a headless
-    /// browser still clears ASIC's 0.5, which bought tokens never did.
-    /// </summary>
-    public static bool Headless =>
-        Environment.GetEnvironmentVariable("ASIC_KEYTOOL_HEADLESS") == "true" ||
-        Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
-
-    private static string? ChromiumPath =>
-        Environment.GetEnvironmentVariable("PATH_TO_CHROMIUM") is { Length: > 0 } p ? p : null;
-
-    private const string FallbackUserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
     /// <summary>Where the last unexpected page is written so a failure can be looked at.</summary>
     public static string LastPagePath => Path.Combine(DataDirectory, "asic-keytool-last-page.html");
@@ -85,29 +77,62 @@ public sealed class BrowserAsicKeyRequestClient
     {
         "chrome" => "Google Chrome",
         "msedge" => "Microsoft Edge",
-        "chromium" => "headless Chromium",
         _ => channel,
     };
 
+    /// <summary>The public IP ASIC (and Google) will see for this machine's traffic.</summary>
+    public static async Task<string> GetEgressIpAsync(CancellationToken ct = default)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var response = await http.GetAsync("https://api.ipify.org", ct);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadAsStringAsync(ct)).Trim();
+    }
+
     /// <summary>
     /// Opens the landing page and waits for it to mint a token — proves the browser launches,
-    /// the page loads and reCAPTCHA isn't blocked, without submitting anything.
+    /// the page loads and reCAPTCHA isn't blocked, without submitting anything. Also says
+    /// whether the profile is signed into Google, which is what lifts the score.
     /// </summary>
-    public async Task<(string Browser, bool TokenObtained, string? Error)> ProbeAsync(CancellationToken ct = default)
+    public async Task<(string Browser, bool TokenObtained, bool SignedInToGoogle, string? Error)> ProbeAsync(CancellationToken ct = default)
     {
         await using var session = await LaunchAsync(ct);
-        if (session.Error != null) return ("", false, session.Error);
+        if (session.Error != null) return ("", false, false, session.Error);
+        var signedIn = await SignedInToGoogleAsync(session.Context!);
         try
         {
             var page = session.Page!;
             await page.GotoAsync(LandingUrl, new() { WaitUntil = WaitUntilState.Load, Timeout = 60_000 });
             await page.WaitForFunctionAsync(TokenReady, null, new() { Timeout = 90_000 });
-            return (Describe(session.Channel), true, null);
+            return (Describe(session.Channel), true, signedIn, null);
         }
         catch (TimeoutException)
         {
             var diag = await DiagnoseAsync(session.Page!, session.ConsoleErrors);
-            return (Describe(session.Channel), false, $"the page loaded but reCAPTCHA never produced a token (is google.com reachable from this connection?). {diag}");
+            return (Describe(session.Channel), false, signedIn, $"the page loaded but reCAPTCHA never produced a token (is google.com reachable from this connection?). {diag}");
+        }
+        catch (PlaywrightException ex)
+        {
+            return (Describe(session.Channel), false, signedIn, Tidy(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Opens the tool's browser on Google's sign-in page and waits for the operator to close
+    /// the window. Whatever they signed into stays in the profile, so from then on Google sees
+    /// a browser it knows when ASIC's page asks it for a token.
+    /// </summary>
+    public async Task<(string Browser, bool SignedInToGoogle, string? Error)> SignInAsync(CancellationToken ct = default)
+    {
+        await using var session = await LaunchAsync(ct);
+        if (session.Error != null) return ("", false, session.Error);
+        try
+        {
+            var closed = new TaskCompletionSource();
+            session.Context!.Close += (_, _) => closed.TrySetResult();
+            await session.Page!.GotoAsync(GoogleSignInUrl, new() { WaitUntil = WaitUntilState.Load, Timeout = 60_000 });
+            await closed.Task.WaitAsync(ct);
+            return (Describe(session.Channel), true, null);
         }
         catch (PlaywrightException ex)
         {
@@ -118,7 +143,7 @@ public sealed class BrowserAsicKeyRequestClient
     /// <summary>
     /// One enquiry, start to finish. <paramref name="maxAttempts"/> caps how many times the
     /// landing page is reloaded for a fresh token after ASIC rejects one; each attempt is a
-    /// page load, not a purchase.
+    /// page load, half a minute apart.
     /// </summary>
     public async Task<AsicKeyRequestResult> SubmitAsync(AsicKeyRequestInput input, int maxAttempts, CancellationToken ct = default)
     {
@@ -171,6 +196,11 @@ public sealed class BrowserAsicKeyRequestClient
                 {
                     // "CAPTCHA validation failed, Score :0.3; minimum score require : 0.5" — reload for a fresh token.
                     lastCaptchaError = captchaError;
+                    if (attempts < Math.Max(1, maxAttempts))
+                    {
+                        Report($"ASIC scored the token too low; waiting {RetryBackoff.TotalSeconds:0} s before a fresh one");
+                        await Task.Delay(RetryBackoff, ct);
+                    }
                     continue;
                 }
 
@@ -184,7 +214,7 @@ public sealed class BrowserAsicKeyRequestClient
                 attempts = Math.Max(1, maxAttempts);
                 return AsicKeyRequestResult.Failed(
                     $"ASIC did not accept the browser's captcha after {attempts} attempt(s). ASIC said: {lastCaptchaError ?? "no token accepted"}",
-                    attempts, transient: true);
+                    attempts, transient: true, captchaRejected: true);
             }
 
             // ---- Page 2: enquiry details ---------------------------------------------
@@ -259,7 +289,7 @@ public sealed class BrowserAsicKeyRequestClient
 
         public async ValueTask DisposeAsync()
         {
-            try { if (Context != null) await Context.CloseAsync(); } catch { /* closing */ }
+            try { if (Context != null) await Context.CloseAsync(); } catch { /* closing, or already closed by the operator */ }
             Playwright?.Dispose();
         }
     }
@@ -282,32 +312,20 @@ public sealed class BrowserAsicKeyRequestClient
         }
 
         Directory.CreateDirectory(ProfileDirectory);
-        var headless = Headless;
-        // Headless/container: Playwright's own Chromium (or PATH_TO_CHROMIUM), no channel.
-        var channels = headless ? ["chromium"] : _channel != null ? [_channel] : DefaultChannels;
+        var channels = _channel != null ? [_channel] : DefaultChannels;
         var failures = new List<string>();
         foreach (var channel in channels)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                var args = new List<string> { "--disable-blink-features=AutomationControlled", "--window-size=1100,900", "--no-first-run", "--no-default-browser-check" };
-                if (headless) args.AddRange(["--no-sandbox", "--disable-dev-shm-usage"]);
-
-                // Bundled Chromium announces itself as "HeadlessChrome"; Google scores that as a
-                // bot before it looks at anything else. Read the real UA and clean it.
-                string? userAgent = null;
-                if (headless) userAgent = await ResolveCleanUserAgentAsync(session.Playwright, args);
-
                 session.Context = await session.Playwright.Chromium.LaunchPersistentContextAsync(ProfileDirectory, new()
                 {
-                    Channel = headless ? null : channel,
-                    ExecutablePath = headless ? ChromiumPath : null,
-                    Headless = headless,
-                    UserAgent = userAgent,
+                    Channel = channel,
+                    Headless = false,
                     IgnoreDefaultArgs = ["--enable-automation"],
-                    Args = args,
-                    ViewportSize = headless ? new ViewportSize { Width = 1100, Height = 900 } : ViewportSize.NoViewport,
+                    Args = ["--disable-blink-features=AutomationControlled", "--window-size=1100,900", "--no-first-run", "--no-default-browser-check"],
+                    ViewportSize = ViewportSize.NoViewport,
                     Locale = "en-AU",
                     TimezoneId = "Australia/Sydney",
                 });
@@ -332,18 +350,17 @@ public sealed class BrowserAsicKeyRequestClient
 
     // ---- helpers --------------------------------------------------------------------
 
-    private static async Task<string> ResolveCleanUserAgentAsync(IPlaywright playwright, List<string> args)
+    /// <summary>Google's session cookie is only there once someone has signed in on this profile.</summary>
+    private static async Task<bool> SignedInToGoogleAsync(IBrowserContext context)
     {
         try
         {
-            await using var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true, ExecutablePath = ChromiumPath, Args = args });
-            var page = await browser.NewPageAsync();
-            var ua = await page.EvaluateAsync<string>("() => navigator.userAgent");
-            return string.IsNullOrWhiteSpace(ua) ? FallbackUserAgent : ua.Replace("HeadlessChrome", "Chrome");
+            var cookies = await context.CookiesAsync([GoogleSignInUrl]);
+            return cookies.Any(c => c.Name is "SID" or "__Secure-1PSID" or "__Secure-3PSID");
         }
         catch (PlaywrightException)
         {
-            return FallbackUserAgent;
+            return false;
         }
     }
 

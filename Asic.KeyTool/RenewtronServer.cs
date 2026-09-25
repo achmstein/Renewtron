@@ -22,10 +22,10 @@ public sealed class ServerRequest
 }
 
 /// <summary>
-/// The desktop end of the manual queue. Renewtron keeps the list of ASIC key requests it
-/// couldn't get through; this shows them to the person who fills in ASIC's form by hand and
-/// records what came back. Logs in with the admin's own Renewtron account (a cookie session,
-/// the same as the browser).
+/// The desktop end of the queue. Renewtron keeps the list of ASIC key requests (one per paid
+/// sale whose contact has no key) and never submits them itself; this fetches the list, sends
+/// each one through the browser and records what came back. Logs in with the admin's own
+/// Renewtron account (a cookie session, the same as the browser).
 /// </summary>
 public sealed class RenewtronServer
 {
@@ -100,7 +100,7 @@ public sealed class RenewtronServer
     public async Task ReleaseAsync(Guid id, CancellationToken ct)
     {
         await EnsureLoggedInAsync(ct);
-        using var response = await _http.PostAsync($"api/admin/asic-key-requests/{id}/release", null, ct);
+        using var response = await _http.PostAsync($"api/admin/asic-key-requests/{id}/requeue", null, ct);
         response.EnsureSuccessStatusCode();
     }
 }

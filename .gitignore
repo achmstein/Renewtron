@@ -489,3 +489,6 @@ settings.overrides.json
 Asic.Client/*.har
 Asic.Client/*_har.ps1
 Asic.Client/temp_matches.txt
+
+# asic-keytool: the developer's own login, never committed or published
+Asic.KeyTool/appsettings.Development.json

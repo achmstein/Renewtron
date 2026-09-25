@@ -4,13 +4,11 @@ namespace Asic.KeyTool;
 
 /// <summary>
 /// One business name to ask ASIC about, plus what came back. This is the unit the console
-/// works in: typed in by hand, or read from a CSV row, then submitted and written back out
-/// with ASIC's reference number.
+/// works in: a row from Renewtron's list or typed in by hand, then submitted through the
+/// browser and reported with ASIC's reference number.
 /// </summary>
 public sealed class Enquiry
 {
-    /// <summary>Ontraport contact this came from; empty when it was typed in by hand.</summary>
-    public string ContactId { get; set; } = "";
     public string GivenNames { get; set; } = "";
     public string FamilyName { get; set; } = "";
     public string Abn { get; set; } = "";
@@ -19,27 +17,22 @@ public sealed class Enquiry
     /// The client's email. It goes in the form's contact email box, so ASIC's reply about
     /// the enquiry reaches the client, not us. Where the key itself should be sent is
     /// <see cref="KeyToolSettings.RequestEmail"/>, which only appears in the enquiry text.
+    /// The client's details come with each row from Renewtron.
     /// </summary>
     public string Email { get; set; } = "";
     /// <summary>Contact phone as it arrived; normalised at submit time.</summary>
     public string Phone { get; set; } = "";
 
-    /// <summary>
-    /// The renewal this request belongs to. A business name comes up for renewal every
-    /// year against the same contact, so the due date is what separates this year's
-    /// request from last year's in the history.
-    /// </summary>
-    public DateTime? RenewalDueDate { get; set; }
-
     // ---- outcome ---------------------------------------------------------------------
     public bool Submitted { get; set; }
     public string? ReferenceNumber { get; set; }
     public string? Error { get; set; }
-    public int CaptchaSolves { get; set; }
+    /// <summary>Page loads spent getting a token ASIC would accept.</summary>
+    public int Attempts { get; set; }
 
     public string ContactName => $"{GivenNames} {FamilyName}".Trim();
 
-    /// <summary>Where a full name is all we have (CSV "contactName", Ontraport's shape).</summary>
+    /// <summary>Where a full name is all we have (the --submit switch, the typed-in prompt).</summary>
     public void SetContactName(string? fullName)
     {
         var (given, family) = SplitName(fullName);

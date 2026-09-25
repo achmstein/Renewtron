@@ -11,13 +11,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="AngleSharp" Version="1.4.0" />
 		<PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
 		<PackageReference Include="Spectre.Console" Version="0.57.2" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Update="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" Condition="Exists('appsettings.Development.json')" />
 	</ItemGroup>
 
 </Project>
