@@ -29,9 +29,7 @@ public sealed class History
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    public static string Path => System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Renewtron", "asic-keytool-history.json");
+    public static string Path => System.IO.Path.Combine(BrowserAsicKeyRequestClient.DataDirectory, "asic-keytool-history.json");
 
     public static History Load()
     {

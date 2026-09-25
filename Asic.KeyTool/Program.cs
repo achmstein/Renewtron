@@ -66,6 +66,10 @@ public static class Program
                 await CheckAsync(ct);
                 return 0;
 
+            case "submit":
+                Header();
+                return await SubmitFromArgsAsync(args, ct) ? 0 : 1;
+
             case var help:
                 AnsiConsole.MarkupLine("""
                     [bold]asic-keytool[/] — ask ASIC for a business name's ASIC key.
@@ -73,7 +77,9 @@ public static class Program
                       asic-keytool            interactive menu
                       asic-keytool --sync     request a key for every new paid sale in Ontraport
                       asic-keytool --sync N   the same, but stop after N enquiries
-                      asic-keytool --check    Ontraport, egress IP and 2Captcha balance
+                      asic-keytool --check    Ontraport, egress IP, browser and token
+                      asic-keytool --submit --business "NAME" --abn 11111111111 --contact "Given Family" --email who@example.com [[--phone 0412345678]]
+                                              one enquiry, no prompts, nothing read from Ontraport
 
                     A sale counts as new until ASIC accepts a request for it; that's kept in
                     %APPDATA%\Renewtron\asic-keytool-history.json.
@@ -240,6 +246,47 @@ public static class Program
             $"[bold]{sent}[/] submitted, [bold]{failed}[/] failed · " +
             $"[grey]{sendable.Sum(e => e.CaptchaSolves)} {(_settings.UsesBrowser ? "page load(s)" : "captcha token(s) spent")}[/]");
         return failed == 0;
+    }
+
+    /// <summary>
+    /// One enquiry from the command line, for scripted tests (a container, a CI job) where
+    /// there is no one to answer prompts and no Ontraport credentials to hand.
+    /// </summary>
+    private static async Task<bool> SubmitFromArgsAsync(string[] args, CancellationToken ct)
+    {
+        if (!Configured()) return false;
+
+        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 1; i < args.Length - 1; i++)
+        {
+            if (args[i].StartsWith("--", StringComparison.Ordinal)) options[args[i][2..]] = args[++i];
+        }
+
+        var enquiry = new Enquiry
+        {
+            BusinessName = options.GetValueOrDefault("business", ""),
+            Abn = options.GetValueOrDefault("abn", ""),
+            Email = options.GetValueOrDefault("email", ""),
+            Phone = options.GetValueOrDefault("phone", ""),
+        };
+        enquiry.SetContactName(options.GetValueOrDefault("contact", ""));
+
+        if (enquiry.Problem() is { } problem)
+        {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(problem)}[/] — usage: --submit --business NAME --abn N --contact \"Given Family\" --email E [[--phone P]]");
+            return false;
+        }
+
+        var input = enquiry.ToInput(_settings);
+        AnsiConsole.MarkupLine($"[grey]{Markup.Escape(input.BusinessName)} · ABN {input.Abn} · {Markup.Escape(input.GivenNames)} {Markup.Escape(input.FamilyName)} · reply to {Markup.Escape(input.Email)}[/]");
+
+        await SubmitAsync(enquiry, label: null, ct);
+        Report(enquiry);
+
+        var history = History.Load();
+        history.Record(enquiry);
+        TrySave(history);
+        return enquiry.Submitted;
     }
 
     private static async Task SingleAsync(CancellationToken ct)

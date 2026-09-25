@@ -92,9 +92,7 @@ public sealed class KeyToolSettings
     /// %APPDATA%\Renewtron\asic-keytool.json — outside the install folder so an update (or a
     /// published single file) can't clobber the API key, and so it never lands in git.
     /// </summary>
-    public static string UserSettingsPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Renewtron", "asic-keytool.json");
+    public static string UserSettingsPath => Path.Combine(BrowserAsicKeyRequestClient.DataDirectory, "asic-keytool.json");
 
     private static string ShippedSettingsPath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 

@@ -44,14 +44,32 @@ public sealed class BrowserAsicKeyRequestClient
     /// <summary>Which browsers to try, in order, when no channel is configured.</summary>
     public static readonly string[] DefaultChannels = ["chrome", "msedge"];
 
-    public static string ProfileDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Renewtron", "asic-keytool-browser");
+    public static string ProfileDirectory => Path.Combine(DataDirectory, "asic-keytool-browser");
+
+    /// <summary>ASIC_KEYTOOL_DATA_DIR (a mounted volume in a container) or %APPDATA%\Renewtron.</summary>
+    public static string DataDirectory =>
+        Environment.GetEnvironmentVariable("ASIC_KEYTOOL_DATA_DIR") is { Length: > 0 } dir
+            ? dir
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Renewtron");
+
+    /// <summary>
+    /// Headless, bundled-Chromium mode for a container (DOTNET_RUNNING_IN_CONTAINER=true or
+    /// ASIC_KEYTOOL_HEADLESS=true). PATH_TO_CHROMIUM points at a system Chromium instead of
+    /// Playwright's download. This is the experiment: whether a datacenter IP plus a headless
+    /// browser still clears ASIC's 0.5, which bought tokens never did.
+    /// </summary>
+    public static bool Headless =>
+        Environment.GetEnvironmentVariable("ASIC_KEYTOOL_HEADLESS") == "true" ||
+        Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") == "true";
+
+    private static string? ChromiumPath =>
+        Environment.GetEnvironmentVariable("PATH_TO_CHROMIUM") is { Length: > 0 } p ? p : null;
+
+    private const string FallbackUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
     /// <summary>Where the last unexpected page is written so a failure can be looked at.</summary>
-    public static string LastPagePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Renewtron", "asic-keytool-last-page.html");
+    public static string LastPagePath => Path.Combine(DataDirectory, "asic-keytool-last-page.html");
 
     private readonly string? _channel;
     private readonly Action<string>? _progress;
@@ -67,6 +85,7 @@ public sealed class BrowserAsicKeyRequestClient
     {
         "chrome" => "Google Chrome",
         "msedge" => "Microsoft Edge",
+        "chromium" => "headless Chromium",
         _ => channel,
     };
 
@@ -263,20 +282,32 @@ public sealed class BrowserAsicKeyRequestClient
         }
 
         Directory.CreateDirectory(ProfileDirectory);
-        var channels = _channel != null ? [_channel] : DefaultChannels;
+        var headless = Headless;
+        // Headless/container: Playwright's own Chromium (or PATH_TO_CHROMIUM), no channel.
+        var channels = headless ? ["chromium"] : _channel != null ? [_channel] : DefaultChannels;
         var failures = new List<string>();
         foreach (var channel in channels)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
+                var args = new List<string> { "--disable-blink-features=AutomationControlled", "--window-size=1100,900", "--no-first-run", "--no-default-browser-check" };
+                if (headless) args.AddRange(["--no-sandbox", "--disable-dev-shm-usage"]);
+
+                // Bundled Chromium announces itself as "HeadlessChrome"; Google scores that as a
+                // bot before it looks at anything else. Read the real UA and clean it.
+                string? userAgent = null;
+                if (headless) userAgent = await ResolveCleanUserAgentAsync(session.Playwright, args);
+
                 session.Context = await session.Playwright.Chromium.LaunchPersistentContextAsync(ProfileDirectory, new()
                 {
-                    Channel = channel,
-                    Headless = false,
+                    Channel = headless ? null : channel,
+                    ExecutablePath = headless ? ChromiumPath : null,
+                    Headless = headless,
+                    UserAgent = userAgent,
                     IgnoreDefaultArgs = ["--enable-automation"],
-                    Args = ["--disable-blink-features=AutomationControlled", "--window-size=1100,900", "--no-first-run", "--no-default-browser-check"],
-                    ViewportSize = ViewportSize.NoViewport,
+                    Args = args,
+                    ViewportSize = headless ? new ViewportSize { Width = 1100, Height = 900 } : ViewportSize.NoViewport,
                     Locale = "en-AU",
                     TimezoneId = "Australia/Sydney",
                 });
@@ -300,6 +331,21 @@ public sealed class BrowserAsicKeyRequestClient
     }
 
     // ---- helpers --------------------------------------------------------------------
+
+    private static async Task<string> ResolveCleanUserAgentAsync(IPlaywright playwright, List<string> args)
+    {
+        try
+        {
+            await using var browser = await playwright.Chromium.LaunchAsync(new() { Headless = true, ExecutablePath = ChromiumPath, Args = args });
+            var page = await browser.NewPageAsync();
+            var ua = await page.EvaluateAsync<string>("() => navigator.userAgent");
+            return string.IsNullOrWhiteSpace(ua) ? FallbackUserAgent : ua.Replace("HeadlessChrome", "Chrome");
+        }
+        catch (PlaywrightException)
+        {
+            return FallbackUserAgent;
+        }
+    }
 
     private void Report(string message) => _progress?.Invoke(message);
 
