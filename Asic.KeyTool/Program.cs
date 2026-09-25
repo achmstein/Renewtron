@@ -56,7 +56,10 @@ public static class Program
         {
             case "sync":
                 Header();
-                return await SyncAsync(pick: false, ct) ? 0 : 1;
+                // "--sync 3" caps how many enquiries this run sends (newest first); each one
+                // buys at least one captcha token, so a first run should be small.
+                int? limit = args.Length > 1 && int.TryParse(args[1], out var n) && n > 0 ? n : null;
+                return await SyncAsync(pick: false, ct, limit) ? 0 : 1;
 
             case "check":
                 Header();
@@ -69,6 +72,7 @@ public static class Program
 
                       asic-keytool            interactive menu
                       asic-keytool --sync     request a key for every new paid sale in Ontraport
+                      asic-keytool --sync N   the same, but stop after N enquiries
                       asic-keytool --check    Ontraport, egress IP and 2Captcha balance
 
                     A sale counts as new until ASIC accepts a request for it; that's kept in
@@ -118,7 +122,8 @@ public static class Program
     // ---- Ontraport → ASIC ---------------------------------------------------------------
 
     /// <param name="pick">Interactive: show the list and let the operator choose. Off: send them all.</param>
-    private static async Task<bool> SyncAsync(bool pick, CancellationToken ct)
+    /// <param name="limit">Non-interactive cap on how many to send this run; null = all.</param>
+    private static async Task<bool> SyncAsync(bool pick, CancellationToken ct, int? limit = null)
     {
         if (!Configured()) return false;
         if (!_ontraport.IsConfigured)
@@ -210,6 +215,12 @@ public static class Program
             }
         }
 
+        if (limit is { } cap && sendable.Count > cap)
+        {
+            AnsiConsole.MarkupLine($"[grey]Sending the first {cap} of {sendable.Count}.[/]");
+            sendable = sendable.Take(cap).ToList();
+        }
+
         var sent = 0;
         foreach (var (enquiry, index) in sendable.Select((e, i) => (e, i)))
         {
@@ -284,7 +295,8 @@ public static class Program
     private static async Task SubmitAsync(Enquiry enquiry, string? label, CancellationToken ct)
     {
         var client = new AsicKeyRequestClient(_solver);
-        var title = $"{label}{Markup.Escape(enquiry.BusinessName)}";
+        // The label is "[1/50] " — square brackets are Spectre markup, so it must be escaped too.
+        var title = $"{Markup.Escape(label ?? "")}{Markup.Escape(enquiry.BusinessName)}";
 
         await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
