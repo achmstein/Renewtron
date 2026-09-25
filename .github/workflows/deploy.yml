@@ -42,20 +42,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Restore (with GitHub Packages auth)
-        run: dotnet restore Renewtron.Server/Renewtron.Server.csproj
-
-      - name: Build & push Renewtron.Server
-        run: |
-          dotnet publish Renewtron.Server/Renewtron.Server.csproj \
-            --no-restore \
-            -c Release \
-            /t:PublishContainer \
-            /p:ContainerRegistry=${{ env.REGISTRY }} \
-            /p:ContainerRepository=${{ env.IMAGE_NAMESPACE }}/renewtron-server \
-            /p:ContainerImageTags='"${{ steps.tag.outputs.tag }};latest"'
-
       - uses: docker/setup-buildx-action@v3
+
+      # A hand-written Dockerfile rather than /t:PublishContainer: the server drives ASIC's
+      # enquiry form in Playwright's Chromium, which the SDK container build can't install.
+      - name: Build & push Renewtron.Server
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Renewtron.Server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/renewtron-server:${{ steps.tag.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/renewtron-server:latest
+          cache-from: type=gha,scope=renewtron-server
+          cache-to: type=gha,mode=max,scope=renewtron-server
 
       - name: Build & push renewtron-web
         uses: docker/build-push-action@v6
