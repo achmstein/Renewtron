@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
-# Renewtron server image, hand-written rather than the SDK's /t:PublishContainer because the
-# ASIC key requests drive ASIC's enquiry form in a real browser (Playwright's Chromium), and the
-# SDK container build can't install one. Same recipe as PracticeManager.Api's Dockerfile.
+# Renewtron server image. Hand-written rather than the SDK's /t:PublishContainer so the
+# workflow can build it with docker/build-push-action; there is nothing in it the SDK build
+# couldn't produce today (the browser it once carried is gone).
 #
 # Build context is the repository root:
 #   docker build -f Renewtron.Server/Dockerfile -t renewtron-server .
@@ -30,23 +30,6 @@ RUN dotnet publish Renewtron.Server/Renewtron.Server.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish ./
-
-# Playwright's own Chromium plus its OS dependencies. The base image is Ubuntu, where the apt
-# 'chromium' package is only a snap stub, so use the Node driver bundled with the published app.
-# Installed to a world-readable path because the app runs as the non-root 'app' user (uid 1654,
-# the same user the SDK container build used, so the /data bind mount keeps its ownership).
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ENV DOTNET_RUNNING_IN_CONTAINER=true
-RUN /app/.playwright/node/linux-x64/node /app/.playwright/package/cli.js install-deps chromium \
-    && rm -rf /var/lib/apt/lists/*
-RUN for i in 1 2 3 4 5; do \
-        /app/.playwright/node/linux-x64/node /app/.playwright/package/cli.js install chromium && break; \
-        echo "chromium download attempt $i failed; retrying in 10s..."; sleep 10; \
-    done \
-    && ls -d /ms-playwright/chromium* \
-    && chmod -R a+rX /ms-playwright
-# The bundled Node driver arrives root-only executable; the app user must be able to run it.
-RUN chmod -R a+rX /app/.playwright
 
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080

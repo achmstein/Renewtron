@@ -20,6 +20,17 @@ never touches your everyday Chrome and its cookies build up between runs. A wind
 for each enquiry and closes when it's done; leave it alone while it works. The old 2Captcha
 path is still there under **Settings → Submit via** in case it ever starts scoring again.
 
+## To do from Renewtron
+
+Renewtron keeps its own list of ASIC key requests (one per paid sale whose contact has no
+key) and never submits them itself — ASIC's captcha refuses the server's address. Menu →
+**To do from Renewtron** logs in with your admin account (Settings → Renewtron server), shows
+what's waiting, and for the one you pick prints every value for ASIC's form, box by box.
+Fill the form in, then type the reference number from the receipt; the server records it and
+the inbox scanner closes the request when the key email lands. Leave the reference blank to
+mark it as not sent, with a note. The same list, with the same "Do it" dialog, is on the
+admin site under ASIC Key Requests.
+
 ## Running it
 
 ```

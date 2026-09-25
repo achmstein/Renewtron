@@ -157,17 +157,17 @@ public class OntraportSalesService : IOntraportSalesService
                     _dbContext.OntraportSales.Add(sale);
                     synced.Add(sale);
 
-                    // Queue the ASIC key request alongside the sale; the half-hourly run sends it.
-                    // Skipped when the client already gave us the key on the form (the contact's
-                    // ASIC key field is filled), and for cancellations/disputes — no point asking
-                    // ASIC for a key we won't use, and each request is a browser session.
+                    // Queue the ASIC key request alongside the sale, for a person to send from ASIC's
+                    // form. Skipped when the client already gave us the key (the contact's ASIC key
+                    // field is filled), and for cancellations/disputes — no point asking for a key
+                    // we won't use.
                     var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;
                     var hasKey = asicKeyField.Length > 0 && !string.IsNullOrWhiteSpace(contact.GetValueOrDefault(asicKeyField, null));
                     if (status != OntraportSaleStatus.IneligibleForRenewal
                         && !hasKey
                         && _asicKeyRequestSettings.CurrentValue is { Enabled: true, AutoRequestOnSync: true })
                     {
-                        _dbContext.AsicKeyRequests.Add(AsicKeyRequestService.FromSale(sale, "Sync"));
+                        _dbContext.AsicKeyRequests.Add(AsicKeyRequestService.FromSale(sale, "Sync", _asicKeyRequestSettings.CurrentValue));
                     }
 
                     _logger.LogInformation("Synced Ontraport sale: {BusinessName} (ABN: {Abn}), due: {DueDate}, contact: {ContactName}",

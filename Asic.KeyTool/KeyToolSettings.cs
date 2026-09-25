@@ -38,6 +38,14 @@ public sealed class KeyToolSettings
     /// <summary>"chrome", "msedge", or blank to try Chrome then Edge.</summary>
     public string BrowserChannel { get; set; } = "";
 
+    /// <summary>
+    /// Renewtron's admin login, for the "To do from Renewtron" list: the requests the server
+    /// couldn't get through, for a person to fill in on ASIC's form and record the result.
+    /// </summary>
+    public string ServerUrl { get; set; } = "https://businessnames.applyforanabn.au";
+    public string ServerEmail { get; set; } = "";
+    public string ServerPassword { get; set; } = "";
+
     /// <summary>2Captcha API key. Only used when SubmitVia is "2Captcha"; each submission buys at least one token.</summary>
     public string TwoCaptchaApiKey { get; set; } = "";
 
@@ -111,6 +119,11 @@ public sealed class KeyToolSettings
         if (!string.IsNullOrWhiteSpace(key)) settings.TwoCaptchaApiKey = key.Trim();
         var proxy = Environment.GetEnvironmentVariable("ASIC_KEYTOOL_PROXY_URL");
         if (!string.IsNullOrWhiteSpace(proxy)) settings.ProxyUrl = proxy.Trim();
+
+        var serverEmail = Environment.GetEnvironmentVariable("ASIC_KEYTOOL_SERVER_EMAIL");
+        if (!string.IsNullOrWhiteSpace(serverEmail)) settings.ServerEmail = serverEmail.Trim();
+        var serverPassword = Environment.GetEnvironmentVariable("ASIC_KEYTOOL_SERVER_PASSWORD");
+        if (!string.IsNullOrWhiteSpace(serverPassword)) settings.ServerPassword = serverPassword;
 
         var appId = Environment.GetEnvironmentVariable("ASIC_KEYTOOL_ONTRAPORT_APPID");
         if (!string.IsNullOrWhiteSpace(appId)) settings.OntraportApiAppId = appId.Trim();

@@ -19,6 +19,7 @@ public static class Program
     private static KeyToolSettings _settings = new();
     private static TwoCaptchaSolver _solver = null!;
     private static OntraportClient _ontraport = null!;
+    private static RenewtronServer _server = null!;
 
     public static async Task<int> Main(string[] args)
     {
@@ -26,6 +27,7 @@ public static class Program
         _settings = KeyToolSettings.Load();
         _solver = new TwoCaptchaSolver(_settings);
         _ontraport = new OntraportClient(_settings);
+        _server = new RenewtronServer(_settings);
 
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) =>
@@ -98,10 +100,13 @@ public static class Program
             var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
                 .Title("What would you like to do?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
-                .AddChoices("New sales from Ontraport", "Type in one enquiry", "Recent requests", "Check connection", "Settings", "Quit"));
+                .AddChoices("To do from Renewtron", "New sales from Ontraport", "Type in one enquiry", "Recent requests", "Check connection", "Settings", "Quit"));
 
             switch (choice)
             {
+                case "To do from Renewtron":
+                    await ManualQueueAsync(ct);
+                    break;
                 case "New sales from Ontraport":
                     await SyncAsync(pick: true, ct);
                     break;
@@ -246,6 +251,117 @@ public static class Program
             $"[bold]{sent}[/] submitted, [bold]{failed}[/] failed · " +
             $"[grey]{sendable.Sum(e => e.CaptchaSolves)} {(_settings.UsesBrowser ? "page load(s)" : "captcha token(s) spent")}[/]");
         return failed == 0;
+    }
+
+    /// <summary>
+    /// The requests Renewtron couldn't get through, for a person to do by hand: pick one, see
+    /// exactly what goes in each box of ASIC's form, fill it in, and type the reference number
+    /// from the receipt. The server records it and the inbox scanner takes it from there.
+    /// </summary>
+    private static async Task ManualQueueAsync(CancellationToken ct)
+    {
+        if (!_server.IsConfigured)
+        {
+            AnsiConsole.MarkupLine("[red]No Renewtron login — Settings → Renewtron server (URL, email, password).[/]");
+            return;
+        }
+
+        while (!ct.IsCancellationRequested)
+        {
+            List<ServerRequest> rows = [];
+            Exception? failure = null;
+            await AnsiConsole.Status().StartAsync($"Asking {Markup.Escape(_server.Host)} what needs doing…", async _ =>
+            {
+                try { rows = await _server.ListAsync(200, ct); }
+                catch (Exception ex) when (ex is not OperationCanceledException) { failure = ex; }
+            });
+            if (failure != null)
+            {
+                AnsiConsole.MarkupLine($"[red]{Markup.Escape(failure.Message)}[/]");
+                return;
+            }
+            if (rows.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[green]Nothing waiting — the server got everything through on its own.[/]");
+                return;
+            }
+
+            var table = new Table().Border(TableBorder.Rounded).BorderColor(Color.Grey);
+            table.AddColumns("#", "Business name", "ABN", "Contact", "Status", "Last note");
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var r = rows[i];
+                table.AddRow(
+                    $"[grey]{i + 1}[/]",
+                    Markup.Escape(r.BusinessName),
+                    Markup.Escape(r.Abn),
+                    Markup.Escape(r.ContactName),
+                    Markup.Escape(r.Status),
+                    r.ErrorMessage == null ? "" : $"[grey]{Markup.Escape(Shorten(r.ErrorMessage, 44))}[/]");
+            }
+            AnsiConsole.Write(table);
+
+            var labels = rows.Select((r, i) => $"{i + 1}. {r.BusinessName} · {r.Abn}").ToList();
+            var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                .Title("Which one will you do now?")
+                .PageSize(15)
+                .MoreChoicesText("[grey](move up and down for more)[/]")
+                .HighlightStyle(new Style(foreground: Color.SpringGreen3))
+                .AddChoices(labels.Append("Back")));
+            if (choice == "Back") return;
+            var row = rows[labels.IndexOf(choice)];
+
+            try
+            {
+                await _server.ClaimAsync(row.Id, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(ex.Message)}[/]");
+                continue;
+            }
+
+            // Everything for the form, box by box, in the order ASIC's page shows them.
+            var enquiry = new Enquiry { BusinessName = row.BusinessName, Abn = row.Abn, Email = row.Email, Phone = row.Phone ?? "", GivenNames = row.GivenNames, FamilyName = row.FamilyName };
+            var input = enquiry.ToInput(_settings);
+            AnsiConsole.Write(new Panel(new Rows(
+                    new Markup("[grey]My question is about a:[/] Business Name"),
+                    new Markup("[grey]I would like to know how to:[/] Maintain information"),
+                    new Text(""),
+                    Field("My question is", input.Question),
+                    Field("Entity number", input.Abn),
+                    Field("Entity name", input.BusinessName),
+                    Field("Your given names", input.GivenNames),
+                    Field("Your family name", input.FamilyName),
+                    Field("Your telephone number", $"{input.PhonePrefix} {input.PhoneNumber}".Trim()),
+                    Field("Your email address", input.Email),
+                    new Markup("[grey]Attach any documents:[/] No · tick both declarations")))
+                .Header(" Fill in ASIC's form with this ")
+                .BorderColor(Color.Grey));
+            AnsiConsole.MarkupLine($"[grey]{AsicKeyRequestClient.BaseUrl}{AsicKeyRequestClient.LandingPath}[/]\n");
+
+            var reference = AnsiConsole.Prompt(new TextPrompt<string>("Reference number from ASIC's receipt [grey](blank = not submitted)[/]:").AllowEmpty()).Trim();
+            var note = AnsiConsole.Prompt(new TextPrompt<string>("Note [grey](optional)[/]:").AllowEmpty()).Trim();
+
+            if (reference.Length == 0 && note.Length == 0 && !AnsiConsole.Confirm("Nothing entered — mark it as not submitted?", defaultValue: false))
+            {
+                try { await _server.ReleaseAsync(row.Id, ct); } catch (Exception ex) when (ex is not OperationCanceledException) { AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(ex.Message)}[/]"); }
+                AnsiConsole.MarkupLine("[grey]Put back in the queue.[/]\n");
+                continue;
+            }
+
+            try
+            {
+                await _server.RecordAsync(row.Id, reference.Length == 0 ? null : reference, note.Length == 0 ? null : note, ct);
+                AnsiConsole.MarkupLine(reference.Length > 0
+                    ? $"[green]✔[/] {Markup.Escape(row.BusinessName)} recorded as sent — reference [bold]{Markup.Escape(reference)}[/]\n"
+                    : $"[yellow]•[/] {Markup.Escape(row.BusinessName)} recorded as not submitted\n");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AnsiConsole.MarkupLine($"[red]Could not record it on the server: {Markup.Escape(ex.Message)} — keep reference {Markup.Escape(reference)} and enter it on the admin page.[/]\n");
+            }
+        }
     }
 
     /// <summary>
@@ -507,6 +623,8 @@ public static class Program
             table.AddRow("Ontraport App ID", Mask(_settings.OntraportApiAppId));
             table.AddRow("Ontraport API key", Mask(_settings.OntraportApiKey));
             table.AddRow("Minimum amount paid", _settings.MinimumAmountPaid > 0 ? _settings.MinimumAmountPaid.ToString("0.00") : "[grey]no guard[/]");
+            table.AddRow("Renewtron server", Markup.Escape(_settings.ServerUrl));
+            table.AddRow("Renewtron login", _settings.ServerEmail.Length == 0 ? "[grey]not set[/]" : $"{Markup.Escape(_settings.ServerEmail)} / {Mask(_settings.ServerPassword)}");
             table.AddRow("Submit via", _settings.UsesBrowser ? "Browser (Chrome/Edge on this machine)" : "2Captcha tokens");
             table.AddRow("Browser", _settings.BrowserChannel.Length == 0 ? "[grey]Chrome, then Edge[/]" : BrowserAsicKeyRequestClient.Describe(_settings.BrowserChannel));
             table.AddRow("2Captcha API key", _settings.UsesBrowser ? "[grey]not used[/]" : Mask(_settings.TwoCaptchaApiKey));
@@ -521,12 +639,18 @@ public static class Program
             var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
                 .Title("Change what?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
-                .AddChoices("Ontraport App ID", "Ontraport API key", "Minimum amount paid", "Submit via", "Browser",
+                .AddChoices("Renewtron server", "Ontraport App ID", "Ontraport API key", "Minimum amount paid", "Submit via", "Browser",
                             "2Captcha API key", "Captcha score", "Captcha attempts", "Key delivery email", "Fallback phone",
                             "Enquiry text", "Proxy", "Back"));
 
             switch (choice)
             {
+                case "Renewtron server":
+                    _settings.ServerUrl = AnsiConsole.Prompt(new TextPrompt<string>("Renewtron URL:").DefaultValue(_settings.ServerUrl)).Trim();
+                    _settings.ServerEmail = AnsiConsole.Prompt(new TextPrompt<string>("Admin email:").DefaultValue(_settings.ServerEmail).AllowEmpty()).Trim();
+                    _settings.ServerPassword = AnsiConsole.Prompt(new TextPrompt<string>("Admin password:").Secret().AllowEmpty());
+                    break;
+
                 case "Ontraport App ID":
                     _settings.OntraportApiAppId = AnsiConsole.Prompt(
                         new TextPrompt<string>("Ontraport App ID:").Secret().AllowEmpty()).Trim();

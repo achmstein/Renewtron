@@ -45,11 +45,6 @@ public sealed class SettingsModule : ICarterModule
         body.DefaultPhonePrefix = (body.DefaultPhonePrefix ?? "").Trim();
         body.DefaultPhoneNumber = (body.DefaultPhoneNumber ?? "").Trim();
         if (string.IsNullOrWhiteSpace(body.MessageTemplate)) body.MessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate;
-        if (body.MaxPerRun <= 0) body.MaxPerRun = 25;
-        body.MaxCaptchaAttempts = Math.Clamp(body.MaxCaptchaAttempts <= 0 ? 3 : body.MaxCaptchaAttempts, 1, 5);
-        if (body.MaxAutoAttempts <= 0) body.MaxAutoAttempts = 5;
-        if (body.PauseBetweenRequestsSeconds < 0) body.PauseBetweenRequestsSeconds = 120;
-        if (body.StopRunAfterCaptchaFailures <= 0) body.StopRunAfterCaptchaFailures = 2;
     }
 
     public void AddRoutes(IEndpointRouteBuilder app)
@@ -115,13 +110,7 @@ public sealed class SettingsModule : ICarterModule
                     defaultPhonePrefix = asicKeyRequest.DefaultPhonePrefix,
                     defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
                     messageTemplate = asicKeyRequest.MessageTemplate,
-                    maxPerRun = asicKeyRequest.MaxPerRun,
-                    maxCaptchaAttempts = asicKeyRequest.MaxCaptchaAttempts,
-                    maxAutoAttempts = asicKeyRequest.MaxAutoAttempts,
-                    pauseBetweenRequestsSeconds = asicKeyRequest.PauseBetweenRequestsSeconds,
-                    stopRunAfterCaptchaFailures = asicKeyRequest.StopRunAfterCaptchaFailures,
                     defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
-                    browser = Services.AsicEnquiryBrowser.BrowserName,
                 },
             });
         });
@@ -191,22 +180,6 @@ public sealed class SettingsModule : ICarterModule
             NormalizeAsicKeyRequest(body);
             await settings.UpdateAsicKeyRequestSettingsAsync(body);
             return Results.NoContent();
-        });
-
-        // Starts the server's browser, loads ASIC's form and waits for its captcha token — the
-        // check that the container can do this at all. Nothing is submitted to ASIC.
-        group.MapPost("/asic-key-request/test", async (IAsicKeyRequestService service, CancellationToken ct) =>
-        {
-            try
-            {
-                var probe = await service.ProbeAsync(ct);
-                return Results.Ok(new { ok = probe.Ok, browser = probe.Browser, egressIp = probe.EgressIp, error = probe.Error });
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                return Results.Ok(new { ok = false, browser = Services.AsicEnquiryBrowser.BrowserName, egressIp = (string?)null, error = ex.Message });
-            }
         });
 
         // Exercises the form's values without saving them: IMAP login + folder + subject search,

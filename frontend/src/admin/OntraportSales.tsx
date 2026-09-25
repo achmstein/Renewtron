@@ -74,15 +74,15 @@ export default function OntraportSales() {
   })
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sales'] })
 
-  // Queues the sale's ASIC key request and sends it straight away as a background job;
-  // progress and the outcome live on the ASIC Key Requests page.
+  // Puts the sale on the ASIC key to-do list; the form is filled in by hand from the
+  // ASIC Key Requests page, where the reference number is recorded.
   const keyRequestMutation = useMutation({
-    mutationFn: (saleId: string) => api.admin.requestAsicKeyForSale(saleId, true),
+    mutationFn: (saleId: string) => api.admin.requestAsicKeyForSale(saleId),
   })
   const requestKey = (saleId: string, businessName: string) => {
     void sileo.promise(keyRequestMutation.mutateAsync(saleId), {
-      loading: { title: `Queuing ASIC key request for ${businessName}…` },
-      success: () => ({ title: `${businessName} is on its way to ASIC`, description: 'Watch it under ASIC Key Requests.' }),
+      loading: { title: `Adding ${businessName} to the ASIC key list…` },
+      success: () => ({ title: `${businessName} is on the ASIC key to-do list`, description: 'Fill it in from the ASIC Key Requests page.' }),
       error: (e) => ({ title: 'Could not queue the request', description: e instanceof Error ? e.message : undefined }),
     }).catch(() => {})
   }
@@ -224,7 +224,7 @@ export default function OntraportSales() {
               variant="ghost" size="sm" className="h-7 px-2 text-xs"
               disabled={keyRequestMutation.isPending}
               onClick={(e) => { e.stopPropagation(); requestKey(s.id, s.businessName) }}
-              title="Ask ASIC for this business name's key now"
+              title="Add this business name to the ASIC key to-do list"
             >
               <KeyRound className="h-3.5 w-3.5" /> Request key
             </Button>

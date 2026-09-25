@@ -121,13 +121,8 @@ builder.Services.AddHttpClient<IAsicKeyInboxService, AsicKeyInboxService>(client
     client.DefaultRequestHeaders.Accept.ParseAdd("application/pdf,*/*;q=0.8");
 });
 
-// Outbound ASIC key requests: ASIC's enquiry form driven in the image's own Chromium. The
-// HttpClient only reports the egress IP for the Settings test.
-builder.Services.AddTransient<AsicEnquiryBrowser>();
-builder.Services.AddHttpClient<IAsicKeyRequestService, AsicKeyRequestService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(20);
-});
+// Outbound ASIC key requests: the queue a person works through on ASIC's enquiry form.
+builder.Services.AddScoped<IAsicKeyRequestService, AsicKeyRequestService>();
 
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -286,8 +281,8 @@ RecurringJob.AddOrUpdate<IAsicKeyInboxService>(
     service => service.ScanAsync(CancellationToken.None),
     "*/15 * * * *");
 
-// Sends queued ASIC key requests through the browser, and closes off the ones whose key has
-// arrived. Offset from the inbox scan so a fresh key is matched on the next tick.
+// Closes off sent ASIC key requests whose key has arrived, and puts back any a person took
+// and never finished. Offset from the inbox scan so a fresh key is matched on the next tick.
 RecurringJob.AddOrUpdate<IAsicKeyRequestService>(
     Renewtron.Modules.AsicKeyRequestsModule.RecurringJobId,
     service => service.ProcessPendingAsync(CancellationToken.None),

@@ -109,22 +109,8 @@ export interface AsicKeyRequestSettings {
   defaultPhonePrefix: string
   defaultPhoneNumber: string
   messageTemplate: string
-  maxPerRun: number
-  maxCaptchaAttempts: number
-  maxAutoAttempts: number
-  pauseBetweenRequestsSeconds: number
-  stopRunAfterCaptchaFailures: number
   /** Read-only: the code default, so the UI can offer a way back to it. */
   defaultMessageTemplate?: string
-  /** Read-only: which browser the server will drive. */
-  browser?: string
-}
-
-export interface AsicKeyRequestTestResult {
-  ok: boolean
-  browser: string
-  egressIp: string | null
-  error: string | null
 }
 
 export interface AsicKeyRequestDto {
@@ -134,32 +120,24 @@ export interface AsicKeyRequestDto {
   businessName: string
   abn: string
   contactName: string
+  givenNames: string
+  familyName: string
   email: string
   phone: string | null
+  phonePrefix: string
+  phoneNumber: string
   question: string | null
   source: string
   status: string
   asicReferenceNumber: string | null
   errorMessage: string | null
   canAutoRetry: boolean
-  captchaSolves: number
   asicKeyNotificationId: string | null
   attemptCount: number
   createdAt: string
   processedAt: string | null
   submittedAt: string | null
   keyReceivedAt: string | null
-}
-
-export interface AsicKeyRequestJobStatus {
-  jobId: string
-  state: string
-  done: boolean
-  result:
-    | { skipped: boolean; message: string; submitted: number; failed: number; keysMatched: number }
-    | AsicKeyRequestDto
-    | null
-  error: string | null
 }
 
 export interface AsicKeyNotificationDto {
@@ -717,10 +695,10 @@ export const api = {
       return apiFetch<{
         totalCount: number
         pendingCount: number
+        manualCount: number
         submittedCount: number
         keyReceivedCount: number
         failedCount: number
-        stuckCount: number
         items: AsicKeyRequestDto[]
         facets: {
           status: Facet
@@ -738,12 +716,12 @@ export const api = {
         }
       }>(`/api/admin/asic-key-requests${suffix}`)
     },
-    runAsicKeyRequests: () => apiFetch<{ jobId: string; message: string }>('/api/admin/asic-key-requests/run', { method: 'POST' }),
-    submitAsicKeyRequest: (id: string) => apiFetch<{ jobId: string; message: string }>(`/api/admin/asic-key-requests/${id}/submit`, { method: 'POST' }),
+    runAsicKeyRequests: () => apiFetch<{ skipped: boolean; message: string; keysMatched: number; requeued: number }>('/api/admin/asic-key-requests/run', { method: 'POST' }),
     requeueAsicKeyRequest: (id: string) => apiFetch<AsicKeyRequestDto>(`/api/admin/asic-key-requests/${id}/requeue`, { method: 'POST' }),
-    requestAsicKeyForSale: (saleId: string, submitNow: boolean) =>
-      apiFetch<{ request: AsicKeyRequestDto; jobId: string | null }>(`/api/admin/asic-key-requests/for-sale/${saleId}?submitNow=${submitNow}`, { method: 'POST' }),
-    asicKeyRequestJob: (jobId: string) => apiFetch<AsicKeyRequestJobStatus>(`/api/admin/asic-key-requests/jobs/${encodeURIComponent(jobId)}`),
+    requestAsicKeyForSale: (saleId: string) =>
+      apiFetch<{ request: AsicKeyRequestDto }>(`/api/admin/asic-key-requests/for-sale/${saleId}`, { method: 'POST' }),
+    recordAsicKeyRequestOutcome: (id: string, body: { referenceNumber: string; note: string }) =>
+      apiFetch<AsicKeyRequestDto>(`/api/admin/asic-key-requests/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }),
     bulkRenewals: (params: { status?: string; batch?: string } = {}) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
@@ -787,7 +765,6 @@ export const api = {
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),
     testAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<AsicKeyInboxTestResult>('/api/admin/settings/asic-key-inbox/test', { method: 'POST', body: JSON.stringify(body) }),
     updateAsicKeyRequest: (body: AsicKeyRequestSettings) => apiFetch<void>('/api/admin/settings/asic-key-request', { method: 'PUT', body: JSON.stringify(body) }),
-    testAsicKeyRequest: () => apiFetch<AsicKeyRequestTestResult>('/api/admin/settings/asic-key-request/test', { method: 'POST' }),
 
     funnel: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
       const qs = new URLSearchParams()
