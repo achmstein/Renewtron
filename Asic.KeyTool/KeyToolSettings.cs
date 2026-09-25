@@ -26,7 +26,19 @@ public sealed class KeyToolSettings
     /// </summary>
     public decimal MinimumAmountPaid { get; set; }
 
-    /// <summary>2Captcha API key. Each submission buys at least one token.</summary>
+    /// <summary>
+    /// How the form is submitted. "Browser" (default) drives a visible Chrome/Edge on this
+    /// machine, whose own reCAPTCHA token passes ASIC's 0.5 minimum; "2Captcha" posts the
+    /// form directly with a bought token, which has been scoring 0.1 since Sept 2026.
+    /// </summary>
+    public string SubmitVia { get; set; } = SubmitViaBrowser;
+    public const string SubmitViaBrowser = "Browser";
+    public const string SubmitVia2Captcha = "2Captcha";
+
+    /// <summary>"chrome", "msedge", or blank to try Chrome then Edge.</summary>
+    public string BrowserChannel { get; set; } = "";
+
+    /// <summary>2Captcha API key. Only used when SubmitVia is "2Captcha"; each submission buys at least one token.</summary>
     public string TwoCaptchaApiKey { get; set; } = "";
 
     /// <summary>
@@ -35,7 +47,10 @@ public sealed class KeyToolSettings
     /// </summary>
     public double MinCaptchaScore { get; set; } = 0.9;
 
-    /// <summary>Fresh tokens to try per submission before giving up (each one is billed).</summary>
+    /// <summary>
+    /// Fresh tokens to try per submission before giving up. In browser mode that's page
+    /// reloads; in 2Captcha mode each one is billed.
+    /// </summary>
     public int MaxCaptchaAttempts { get; set; } = 3;
 
     /// <summary>
@@ -105,6 +120,7 @@ public sealed class KeyToolSettings
         if (!string.IsNullOrWhiteSpace(ontraportKey)) settings.OntraportApiKey = ontraportKey.Trim();
 
         if (string.IsNullOrWhiteSpace(settings.MessageTemplate)) settings.MessageTemplate = DefaultMessageTemplate;
+        settings.SubmitVia = settings.UsesBrowser ? SubmitViaBrowser : SubmitVia2Captcha;
         settings.MaxCaptchaAttempts = Math.Clamp(settings.MaxCaptchaAttempts, 1, 5);
         settings.OntraportFetchLimit = Math.Clamp(settings.OntraportFetchLimit <= 0 ? 200 : settings.OntraportFetchLimit, 1, 1000);
         return settings;
@@ -130,10 +146,12 @@ public sealed class KeyToolSettings
         }
     }
 
+    public bool UsesBrowser => !string.Equals(SubmitVia?.Trim(), SubmitVia2Captcha, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>What's missing before a submission can go out, for the UI to nag about.</summary>
     public string? Problem()
     {
-        if (string.IsNullOrWhiteSpace(TwoCaptchaApiKey)) return "No 2Captcha API key — Settings → 2Captcha API key.";
+        if (!UsesBrowser && string.IsNullOrWhiteSpace(TwoCaptchaApiKey)) return "No 2Captcha API key — Settings → 2Captcha API key (or switch Submit via to Browser).";
         if (string.IsNullOrWhiteSpace(RequestEmail)) return "No key delivery email — the enquiry has to say where ASIC should send the key.";
         return null;
     }

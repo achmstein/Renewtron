@@ -5,39 +5,53 @@ through its public [online enquiry form](https://www.edge.asic.gov.au/008/inquir
 ASIC emails the key to the inbox Renewtron scans, and the existing inbox → PDF → Ontraport
 half of the pipeline takes it from there.
 
-## Why it's a desktop tool
+## Why it's a desktop tool that opens a browser
 
-The form is behind reCAPTCHA v3 and ASIC hands the submitting IP to Google when it verifies
-the token. The same 0.9-tier 2Captcha token that passes from a home connection scores 0.1
-from a datacenter — ASIC bounces it with *"CAPTCHA validation failed, Score :0.1; minimum
-score require : 0.5"*. Renewtron runs on Lightsail, so it could never submit these itself
-without renting a residential proxy. Run this where the IP is already residential.
+The form is behind reCAPTCHA v3 and ASIC insists on a score of 0.5. Tokens bought from a
+solving service (2Captcha, 0.9 tier) score 0.1 whichever machine submits them — ASIC
+bounces every one with *"CAPTCHA validation failed, Score :0.1; minimum score require :
+0.5"* — and Renewtron's Lightsail host scores as a datacenter on top of that. The token a
+real browser mints on a home connection passes. So the tool drives a visible Google Chrome
+(or Microsoft Edge) on the machine it runs on: the page generates its own token, the tool
+picks the enquiry type, fills in the details and reads the reference number off the receipt.
+
+The browser runs with its own profile in `%APPDATA%\Renewtron\asic-keytool-browser`, so it
+never touches your everyday Chrome and its cookies build up between runs. A window opens
+for each enquiry and closes when it's done; leave it alone while it works. The old 2Captcha
+path is still there under **Settings → Submit via** in case it ever starts scoring again.
 
 ## Running it
 
 ```
-dotnet run --project Asic.KeyTool            # interactive menu
-dotnet run --project Asic.KeyTool -- --check # Ontraport, egress IP, 2Captcha balance
-dotnet run --project Asic.KeyTool -- --sync  # request a key for every new sale, no prompts
+dotnet run --project Asic.KeyTool              # interactive menu
+dotnet run --project Asic.KeyTool -- --check   # Ontraport, egress IP, browser + token
+dotnet run --project Asic.KeyTool -- --sync    # request a key for every new sale, no prompts
+dotnet run --project Asic.KeyTool -- --sync 1  # the same, but stop after one enquiry
 ```
 
-To hand someone a single file instead:
+To hand someone a folder to run:
 
 ```
 dotnet publish Asic.KeyTool -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
-The exe lands in `Asic.KeyTool/bin/Release/net10.0/win-x64/publish/asic-keytool.exe`.
+That gives `Asic.KeyTool/bin/Release/net10.0/win-x64/publish/` with `asic-keytool.exe`,
+`appsettings.json` and a `.playwright` folder. **Ship the whole folder** — the browser driver
+lives in `.playwright` and the exe won't start a browser without it. The machine needs the
+.NET 10 runtime and Google Chrome or Microsoft Edge installed.
 
 ## First run
 
-Menu → **Settings** → the Ontraport App ID and API key, then the 2Captcha API key. Those
-three are the only things the tool can't work out for itself — copy them from the server's
-own configuration, since `/api/admin/settings` masks every secret to its last four
-characters. Everything else already matches production: the key delivery address in the
-enquiry text is the inbox the scanner reads, the captcha score is 0.9 over three attempts,
-and the enquiry wording is the one Renewtron used. Leaving the proxy blank means "use this
-machine's connection", which is the point.
+Menu → **Settings** → the Ontraport App ID and API key. Those two are the only things the
+tool can't work out for itself — copy them from the server's own configuration, since
+`/api/admin/settings` masks every secret to its last four characters. Everything else
+already matches production: the key delivery address in the enquiry text is the inbox the
+scanner reads, and the enquiry wording is the one Renewtron used. Leaving the proxy blank
+means "use this machine's connection", which is the point.
+
+Run **Check connection** first. The browser row starts Chrome (or Edge), loads ASIC's form
+and waits for it to mint a token — the first launch creates the profile and can take a
+minute, so give it that. No 2Captcha key is needed in browser mode.
 
 ## Two email addresses
 
@@ -88,14 +102,21 @@ next time, tagged with when it was last tried. **Recent requests** shows the las
 The list is pre-selected: press enter to send them all, or space to deselect. **Type in one
 enquiry** is there for a name that isn't in Ontraport.
 
-## Costs and failures
+## Failures
 
-Each submission buys at least one 2Captcha token (`MaxCaptchaAttempts`, default 3, caps how
-many it will try per enquiry). Failures keep ASIC's own wording, which tells you which
-problem you have:
+If ASIC rejects the browser's token the tool reloads the page for a fresh one, up to
+`MaxCaptchaAttempts` (default 3) times. Failures keep ASIC's own wording, which tells you
+which problem you have:
 
 | ASIC says | What it means |
 | --- | --- |
-| `Score :0.1; minimum score require : 0.5` | The token was weak — usually the IP. Retrying may work; changing connection definitely does. |
-| `The response parameter is invalid` / score `0.0` | The token was refused outright. Retrying only spends credit. |
+| `Score :0.1; minimum score require : 0.5` | Google scored the browser as a bot. Turn off any VPN, run from a home connection, and consider signing the tool's browser profile into a Google account once. |
+| `never produced a reCAPTCHA token` | google.com isn't reachable from the browser, or the first launch was slow — run Check connection again. |
 | A field validation message | Our data — check the ABN and business name against ASIC's register. |
+
+When something unexpected comes back, the page is saved as
+`%APPDATA%\Renewtron\asic-keytool-last-page.html` with a screenshot beside it.
+
+In 2Captcha mode each attempt buys a token instead (`TwoCaptchaApiKey`, `MinCaptchaScore`),
+and a `The response parameter is invalid` / score `0.0` reply means the token was refused
+outright, so retrying only spends credit.

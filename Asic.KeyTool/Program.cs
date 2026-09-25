@@ -238,7 +238,7 @@ public static class Program
         var failed = sendable.Count - sent;
         AnsiConsole.MarkupLine(
             $"[bold]{sent}[/] submitted, [bold]{failed}[/] failed · " +
-            $"[grey]{sendable.Sum(e => e.CaptchaSolves)} captcha token(s) spent[/]");
+            $"[grey]{sendable.Sum(e => e.CaptchaSolves)} {(_settings.UsesBrowser ? "page load(s)" : "captcha token(s) spent")}[/]");
         return failed == 0;
     }
 
@@ -294,7 +294,6 @@ public static class Program
     /// <summary>One enquiry = one client = one ASIC session, so nothing carries between rows.</summary>
     private static async Task SubmitAsync(Enquiry enquiry, string? label, CancellationToken ct)
     {
-        var client = new AsicKeyRequestClient(_solver);
         // The label is "[1/50] " — square brackets are Spectre markup, so it must be escaped too.
         var title = $"{Markup.Escape(label ?? "")}{Markup.Escape(enquiry.BusinessName)}";
 
@@ -307,12 +306,17 @@ public static class Program
                 _solver.Progress += OnProgress;
                 try
                 {
-                    var result = await client.SubmitAsync(
-                        enquiry.ToInput(_settings),
-                        _settings.MinCaptchaScore,
-                        _settings.MaxCaptchaAttempts,
-                        _settings.ProxyUrl,
-                        ct);
+                    var result = _settings.UsesBrowser
+                        ? await new BrowserAsicKeyRequestClient(_settings.BrowserChannel, OnProgress).SubmitAsync(
+                            enquiry.ToInput(_settings),
+                            _settings.MaxCaptchaAttempts,
+                            ct)
+                        : await new AsicKeyRequestClient(_solver).SubmitAsync(
+                            enquiry.ToInput(_settings),
+                            _settings.MinCaptchaScore,
+                            _settings.MaxCaptchaAttempts,
+                            _settings.ProxyUrl,
+                            ct);
 
                     enquiry.Submitted = result.Success;
                     enquiry.ReferenceNumber = result.ReferenceNumber;
@@ -328,7 +332,8 @@ public static class Program
 
     private static void Report(Enquiry enquiry)
     {
-        var solves = enquiry.CaptchaSolves == 1 ? "1 token" : $"{enquiry.CaptchaSolves} tokens";
+        var unit = _settings.UsesBrowser ? "attempt" : "token";
+        var solves = enquiry.CaptchaSolves == 1 ? $"1 {unit}" : $"{enquiry.CaptchaSolves} {unit}s";
         if (enquiry.Submitted)
         {
             AnsiConsole.MarkupLine(
@@ -342,7 +347,9 @@ public static class Program
         // ASIC's own wording says which problem this is: a low score can pass on a retry,
         // a refused token means the connection (or the key) is what needs fixing.
         if (enquiry.Error?.Contains("minimum score", StringComparison.OrdinalIgnoreCase) == true)
-            AnsiConsole.MarkupLine("  [yellow]Google scored this connection as a bot. Run the tool from a residential line, or set a proxy in Settings.[/]");
+            AnsiConsole.MarkupLine(_settings.UsesBrowser
+                ? "  [yellow]Google scored the browser as a bot. Try again from a home connection with no VPN; signing the browser profile into a Google account also helps.[/]"
+                : "  [yellow]Bought tokens are scoring too low. Switch Settings → Submit via to Browser, which uses this machine's own Chrome.[/]");
     }
 
     private static void ShowHistory()
@@ -406,7 +413,17 @@ public static class Program
                 table.AddRow("[red]✘[/] Egress IP", $"[red]{Markup.Escape(ex.Message)}[/]");
             }
 
-            if (_solver.IsConfigured)
+            if (_settings.UsesBrowser)
+            {
+                ctx.Status("Starting the browser and loading ASIC's form…");
+                var (browser, token, error) = await new BrowserAsicKeyRequestClient(_settings.BrowserChannel).ProbeAsync(ct);
+                table.AddRow(
+                    token ? "[green]✔[/] Browser" : "[red]✘[/] Browser",
+                    token
+                        ? $"{Markup.Escape(browser)} [grey]opened ASIC's form and got a reCAPTCHA token[/]"
+                        : $"[red]{Markup.Escape(error ?? "failed")}[/]");
+            }
+            else if (_solver.IsConfigured)
             {
                 ctx.Status("Checking the 2Captcha balance…");
                 try
@@ -426,6 +443,7 @@ public static class Program
             }
         });
 
+        table.AddRow("[grey]Submit via[/]", _settings.UsesBrowser ? "a visible browser on this machine" : "2Captcha tokens");
         table.AddRow("[grey]Key emailed to[/]", Markup.Escape(_settings.RequestEmail));
         table.AddRow("[grey]Settings file[/]", Markup.Escape(KeyToolSettings.UserSettingsPath));
         AnsiConsole.Write(table);
@@ -442,8 +460,10 @@ public static class Program
             table.AddRow("Ontraport App ID", Mask(_settings.OntraportApiAppId));
             table.AddRow("Ontraport API key", Mask(_settings.OntraportApiKey));
             table.AddRow("Minimum amount paid", _settings.MinimumAmountPaid > 0 ? _settings.MinimumAmountPaid.ToString("0.00") : "[grey]no guard[/]");
-            table.AddRow("2Captcha API key", Mask(_settings.TwoCaptchaApiKey));
-            table.AddRow("Captcha score", _settings.MinCaptchaScore.ToString("0.0#"));
+            table.AddRow("Submit via", _settings.UsesBrowser ? "Browser (Chrome/Edge on this machine)" : "2Captcha tokens");
+            table.AddRow("Browser", _settings.BrowserChannel.Length == 0 ? "[grey]Chrome, then Edge[/]" : BrowserAsicKeyRequestClient.Describe(_settings.BrowserChannel));
+            table.AddRow("2Captcha API key", _settings.UsesBrowser ? "[grey]not used[/]" : Mask(_settings.TwoCaptchaApiKey));
+            table.AddRow("Captcha score", _settings.UsesBrowser ? "[grey]not used[/]" : _settings.MinCaptchaScore.ToString("0.0#"));
             table.AddRow("Captcha attempts", _settings.MaxCaptchaAttempts.ToString());
             table.AddRow("Key delivery email", Markup.Escape(_settings.RequestEmail));
             table.AddRow("Fallback phone", Markup.Escape($"{_settings.DefaultPhonePrefix} {_settings.DefaultPhoneNumber}".Trim()));
@@ -454,8 +474,8 @@ public static class Program
             var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
                 .Title("Change what?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
-                .AddChoices("Ontraport App ID", "Ontraport API key", "Minimum amount paid", "2Captcha API key",
-                            "Captcha score", "Captcha attempts", "Key delivery email", "Fallback phone",
+                .AddChoices("Ontraport App ID", "Ontraport API key", "Minimum amount paid", "Submit via", "Browser",
+                            "2Captcha API key", "Captcha score", "Captcha attempts", "Key delivery email", "Fallback phone",
                             "Enquiry text", "Proxy", "Back"));
 
             switch (choice)
@@ -475,6 +495,18 @@ public static class Program
                     _settings.MinimumAmountPaid = AnsiConsole.Prompt(new TextPrompt<decimal>("Minimum:")
                         .DefaultValue(_settings.MinimumAmountPaid)
                         .Validate(v => v >= 0 ? ValidationResult.Success() : ValidationResult.Error("[red]Can't be negative[/]")));
+                    break;
+
+                case "Submit via":
+                    AnsiConsole.MarkupLine("[grey]Browser opens Chrome/Edge on this machine and lets it mint its own captcha token. 2Captcha buys tokens, which ASIC has been scoring 0.1.[/]");
+                    _settings.SubmitVia = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("Submit via:")
+                        .AddChoices(KeyToolSettings.SubmitViaBrowser, KeyToolSettings.SubmitVia2Captcha));
+                    break;
+
+                case "Browser":
+                    var pick = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("Browser to drive:")
+                        .AddChoices("Chrome, then Edge", "Google Chrome", "Microsoft Edge"));
+                    _settings.BrowserChannel = pick switch { "Google Chrome" => "chrome", "Microsoft Edge" => "msedge", _ => "" };
                     break;
 
                 case "2Captcha API key":
