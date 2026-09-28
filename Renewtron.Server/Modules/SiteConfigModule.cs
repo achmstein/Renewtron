@@ -16,13 +16,16 @@ public sealed class SiteConfigModule : ICarterModule
         app.MapGet("/api/site-config", (
             IOptionsSnapshot<TrackingSettings> tracking,
             IOptionsSnapshot<StripeSettings> stripe,
-            IOptionsSnapshot<PricingSettings> pricing) =>
+            IOptionsSnapshot<PricingSettings> pricing,
+            IOptionsSnapshot<PortalSettings> portal) =>
         {
             var t = tracking.Value;
             return Results.Ok(new
             {
                 stripePublishableKey = stripe.Value.PublishableKey ?? string.Empty,
                 pricing = new { oneYearFee = pricing.Value.OneYearFee, threeYearFee = pricing.Value.ThreeYearFee },
+                // Business Portal root, for "back to your portal" links; null when not configured.
+                portalUrl = string.IsNullOrWhiteSpace(portal.Value.BaseUrl) ? null : portal.Value.BaseUrl.Trim().TrimEnd('/'),
                 tracking = new
                 {
                     gtmContainerId = t.GtmContainerId,

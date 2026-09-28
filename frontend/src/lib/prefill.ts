@@ -173,6 +173,20 @@ export function capturePrefill(search: string): Prefill {
   return merged
 }
 
+/**
+ * Keeps what the customer typed on the details step for later steps in this tab — the
+ * lead endpoint returns masked values only, so e.g. the payment step's cardholder name
+ * comes from here.
+ */
+export function rememberDetails(details: Partial<Prefill>) {
+  const merged = { ...read() }
+  for (const key of Object.keys(EMPTY) as Array<keyof Prefill>) {
+    const value = details[key]
+    if (value) merged[key] = value
+  }
+  write(merged)
+}
+
 export function getPrefill(): Prefill {
   return read()
 }

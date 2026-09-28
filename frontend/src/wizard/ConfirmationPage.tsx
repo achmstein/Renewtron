@@ -3,6 +3,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, type LeadDto, type RenewalStatusItem } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
+import { getPrefill } from '../lib/prefill'
+import { loadSiteConfig } from '../lib/siteConfig'
 import { FunnelStep, trackStep } from '../lib/tracking'
 
 export default function ConfirmationPage() {
@@ -14,6 +16,13 @@ export default function ConfirmationPage() {
   const [renewals, setRenewals] = useState<RenewalStatusItem[]>([])
   const [loading, setLoading] = useState(true)
   const pollRef = useRef<number | undefined>(undefined)
+  // Customers sent here from the Business Portal get a way back to it.
+  const [portalUrl, setPortalUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (getPrefill().source.toLowerCase() !== 'portal') return
+    void loadSiteConfig().then((config) => setPortalUrl(config.portalUrl ?? null))
+  }, [])
 
   useEffect(() => {
     if (!leadId) return
@@ -228,6 +237,17 @@ export default function ConfirmationPage() {
                   )}
                 </ul>
               </div>
+
+              {portalUrl ? (
+                <div className="mt-6 text-center">
+                  <a
+                    href={portalUrl}
+                    className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark"
+                  >
+                    Back to your Business Portal
+                  </a>
+                </div>
+              ) : null}
 
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-500">

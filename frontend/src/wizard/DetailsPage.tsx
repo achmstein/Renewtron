@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
-import { capturePrefill, normalizeAbn } from '../lib/prefill'
+import { capturePrefill, normalizeAbn, rememberDetails } from '../lib/prefill'
 import { FunnelStep, getVisitorId, trackStep } from '../lib/tracking'
 
 const steps = [
@@ -78,6 +78,7 @@ export default function DetailsPage() {
         ontraportContactId: prefill.contactId || undefined,
         visitorId: getVisitorId(),
       })
+      rememberDetails({ fullName: fullName.trim() })
       trackStep(FunnelStep.DetailsSubmitted, { abn, leadId: result.leadId })
       navigate(`/checking/${result.leadId}`)
     } catch (err) {

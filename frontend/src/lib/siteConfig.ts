@@ -11,6 +11,8 @@ export interface SiteConfig {
     ga4MeasurementId: string
     metaPixelId: string
   }
+  /** Business Portal root for "back to your portal" links; null when not configured. */
+  portalUrl?: string | null
 }
 
 const EMPTY: SiteConfig = {

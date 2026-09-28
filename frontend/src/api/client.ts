@@ -31,13 +31,15 @@ export interface MeResponse { email: string; name: string }
 export interface PricingResponse { oneYearFee: number; threeYearFee: number }
 export interface BusinessNameDto { id: string; businessName: string; accountNumber: string; registrationDate: string }
 
+/** Contact fields are masked by the server for display ("d•••@example.com"); never
+ *  send them back. Date of birth is not returned. */
 export interface LeadDto {
   id: string
   abn: string
   fullName: string
   email: string
   mobileNumber: string
-  dateOfBirth: string
+  dateOfBirth?: string | null
   outcome: string
   outcomeMessage?: string | null
   businessNames: BusinessNameDto[]
@@ -64,7 +66,8 @@ export interface RenewalStatusItem {
   businessName: string
   accountNumber: string
   transactionReference?: string | null
-  errorMessage?: string | null
+  /** Customer-safe explanation when a renewal is delayed or failed. */
+  customerMessage?: string | null
 }
 
 export interface AsicKeyInboxSettings {

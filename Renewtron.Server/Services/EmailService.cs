@@ -10,10 +10,12 @@ public class EmailService : IEmailService
 {
     private readonly SendGridClient _client;
     private readonly SendGridSettings _settings;
+    private readonly PortalSettings _portal;
 
-    public EmailService(IOptionsSnapshot<SendGridSettings> settings)
+    public EmailService(IOptionsSnapshot<SendGridSettings> settings, IOptionsSnapshot<PortalSettings> portal)
     {
         _settings = settings.Value;
+        _portal = portal.Value;
         _client = new SendGridClient(_settings.ApiKey);
     }
 
@@ -28,6 +30,15 @@ public class EmailService : IEmailService
         var from = new EmailAddress(_settings.FromEmail, _settings.FromName);
         var to = new EmailAddress(toEmail);
         var subject = $"Business Name Renewal Confirmation - {businessName}";
+
+        // Customers keep an account in the Business Portal: their names, renewal history and
+        // ASIC keys. Only linked when the portal is configured.
+        var portalUrl = _portal.LoginUrl(toEmail);
+        var portalHtml = portalUrl is null ? "" : $@"
+            <p style='margin-top: 24px; text-align: center;'>
+                <a href='{System.Net.WebUtility.HtmlEncode(portalUrl)}' style='background-color: #4F46E5; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: bold;'>View your business names in your Business Portal</a>
+            </p>";
+        var portalText = portalUrl is null ? "" : $"\nView your business names in your Business Portal: {portalUrl}\n";
 
         var htmlContent = $@"
 <!DOCTYPE html>
@@ -88,7 +99,7 @@ public class EmailService : IEmailService
                 <strong>What's Next?</strong><br>
                 Your business name registration has been extended and is now active with ASIC. 
                 Please keep this email for your records.
-            </p>
+            </p>{portalHtml}
         </div>
         <div class='footer'>
             <p>This is an automated email from Renewtron. Please do not reply to this email.</p>
@@ -111,7 +122,7 @@ Transaction Reference: {transactionReference}
 Date: {DateTime.UtcNow:MMMM dd, yyyy 'at' hh:mm tt} UTC
 
 Please keep this email for your records.
-
+{portalText}
 ---
 This is an automated email from Renewtron.
 ";

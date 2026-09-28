@@ -6,6 +6,7 @@ import { api, type LeadDto, type PricingResponse } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
 import WizardProgress from '../components/WizardProgress'
+import { getPrefill } from '../lib/prefill'
 import { loadSiteConfig } from '../lib/siteConfig'
 import { FunnelStep, trackStep } from '../lib/tracking'
 
@@ -153,7 +154,7 @@ export default function PaymentPage() {
                       ids={ids}
                       years={years}
                       total={total}
-                      cardholderDefault={lead.fullName}
+                      cardholderDefault={getPrefill().fullName}
                       onComplete={(renewalIds) => navigate(`/confirmation/${leadId}?ids=${renewalIds.join(',')}`)}
                     />
                   </Elements>

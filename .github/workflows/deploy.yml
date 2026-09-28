@@ -98,6 +98,8 @@ jobs:
           SQL_PASSWORD=${{ secrets.SQL_PASSWORD }}
           ATO_API_URL=${{ vars.ATO_API_URL }}
           SECURITY_API_KEY=${{ secrets.SECURITY_API_KEY }}
+          SECURITY_PARTNER_API_KEY=${{ secrets.SECURITY_PARTNER_API_KEY }}
+          PORTAL_BASE_URL=${{ vars.PORTAL_BASE_URL }}
           STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
           SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
           ONTRAPORT_API_APP_ID=${{ secrets.ONTRAPORT_API_APP_ID }}

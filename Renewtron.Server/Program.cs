@@ -65,15 +65,22 @@ authentication.AddIdentityCookies();
 authentication.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
     ApiKeyAuthenticationHandler.SchemeName, null);
 
-// Default policy accepts either the SPA's Identity cookie or the X-Api-Key header,
-// so every existing RequireAuthorization() endpoint works for both callers.
+// Default policy accepts either the SPA's Identity cookie or the admin X-Api-Key, so
+// every existing RequireAuthorization() endpoint works for both callers. The partner key
+// (Business Portal) is rejected here: it may only use the "Partner" policy's endpoints.
 builder.Services.AddAuthorization(options =>
 {
     options.DefaultPolicy = new AuthorizationPolicyBuilder(
             IdentityConstants.ApplicationScheme,
             ApiKeyAuthenticationHandler.SchemeName)
         .RequireAuthenticatedUser()
+        .RequireAssertion(ctx => !ApiKeyAuthenticationHandler.IsPartner(ctx.User))
         .Build();
+
+    // /api/partner/*: the partner key, or the full admin key (for diagnostics).
+    options.AddPolicy(ApiKeyAuthenticationHandler.PartnerPolicy, policy => policy
+        .AddAuthenticationSchemes(ApiKeyAuthenticationHandler.SchemeName)
+        .RequireAuthenticatedUser());
 });
 
 builder.Services.AddIdentityCore<AppUser>(options => options.SignIn.RequireConfirmedAccount = false)
@@ -95,6 +102,7 @@ builder.Services.AddOptions<PricingSettings>().BindConfiguration("Pricing").Vali
 builder.Services.AddOptions<OntraportSettings>().BindConfiguration("Ontraport").ValidateDataAnnotations();
 builder.Services.AddOptions<WinBackSettings>().BindConfiguration("WinBack");
 builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
+builder.Services.AddOptions<PortalSettings>().BindConfiguration("Portal");
 builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyInbox");
 builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKeyRequest");
 

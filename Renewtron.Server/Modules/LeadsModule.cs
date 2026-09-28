@@ -89,14 +89,16 @@ public sealed class LeadsModule : ICarterModule
 
             if (lead is null) return Results.NotFound();
 
+            // Anyone holding the lead id can call this, and the id sits in wizard URLs that
+            // analytics tags see — so contact details come back masked, for display only.
+            // Date of birth is not returned at all.
             return Results.Ok(new
             {
                 id = lead.Id,
                 abn = lead.Abn,
-                fullName = lead.FullName,
-                email = lead.Email,
-                mobileNumber = lead.MobileNumber,
-                dateOfBirth = lead.DateOfBirth,
+                fullName = PiiMask.Name(lead.FullName),
+                email = PiiMask.Email(lead.Email),
+                mobileNumber = PiiMask.Mobile(lead.MobileNumber),
                 outcome = lead.Outcome.ToString(),
                 outcomeMessage = lead.OutcomeMessage,
                 businessNames = lead.SearchLog?.Results.Select(r => new
@@ -233,7 +235,7 @@ public sealed class LeadsModule : ICarterModule
                     registrationDate = r.RegistrationDate,
                 }),
             });
-        }).WithTags("Wizard");
+        }).WithTags("Wizard").RequireRateLimiting("asic-search"); // live ASIC lookup + outcome email per call
 
         var admin = app.MapGroup("/api/admin/leads").RequireAuthorization().WithTags("Admin.Leads");
 

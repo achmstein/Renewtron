@@ -324,7 +324,8 @@ public sealed class RenewalsModule : ICarterModule
                 businessName = r.SearchResult?.BusinessName,
                 accountNumber = r.SearchResult?.AccountNumber,
                 transactionReference = r.TransactionReference,
-                errorMessage = r.ErrorMessage,
+                // Public endpoint: the customer-safe explanation, never ASIC's raw error text.
+                customerMessage = RenewalErrorClassifier.CustomerMessage(r.Status, r.ErrorCategory, r.NextRetryAt),
             }));
         }).WithTags("Wizard");
 
@@ -347,7 +348,7 @@ public sealed class RenewalsModule : ICarterModule
                 amount = renewal.Amount,
                 completedAt = renewal.CompletedAt,
                 transactionReference = renewal.TransactionReference,
-                errorMessage = renewal.ErrorMessage,
+                customerMessage = RenewalErrorClassifier.CustomerMessage(renewal.Status, renewal.ErrorCategory, renewal.NextRetryAt),
             });
         }).WithTags("Wizard");
 

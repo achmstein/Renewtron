@@ -24,6 +24,24 @@ public static class RenewalErrorCategories
 
 public static class RenewalErrorClassifier
 {
+    /// <summary>
+    /// A short explanation that is safe to show the customer (wizard confirmation, Business
+    /// Portal). Never the raw ErrorMessage, which carries ASIC page text and step names.
+    /// Null while the renewal is on track.
+    /// </summary>
+    public static string? CustomerMessage(RenewalStatus status, string? category, DateTime? nextRetryAt)
+    {
+        if (status == RenewalStatus.Completed) return null;
+        return category switch
+        {
+            RenewalErrorCategories.NotDueYet => "ASIC isn't accepting this renewal yet — we'll retry automatically.",
+            RenewalErrorCategories.AlreadyInProgress => "ASIC shows a renewal already in progress for this name.",
+            RenewalErrorCategories.Transient when nextRetryAt != null => "We hit a temporary problem at ASIC and will retry automatically.",
+            _ when status == RenewalStatus.Failed => "This renewal needs attention from our team — we'll be in touch.",
+            _ => null,
+        };
+    }
+
     public static string Classify(string? failedAtStep, string? errorMessage)
     {
         var message = errorMessage ?? "";
