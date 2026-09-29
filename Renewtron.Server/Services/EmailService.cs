@@ -11,11 +11,16 @@ public class EmailService : IEmailService
     private readonly SendGridClient _client;
     private readonly SendGridSettings _settings;
     private readonly PortalSettings _portal;
+    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IOptionsSnapshot<SendGridSettings> settings, IOptionsSnapshot<PortalSettings> portal)
+    public EmailService(
+        IOptionsSnapshot<SendGridSettings> settings,
+        IOptionsSnapshot<PortalSettings> portal,
+        ILogger<EmailService> logger)
     {
         _settings = settings.Value;
         _portal = portal.Value;
+        _logger = logger;
         _client = new SendGridClient(_settings.ApiKey);
     }
 
@@ -141,6 +146,6 @@ This is an automated email from Renewtron.
 ";
 
         var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
-        await _client.SendEmailAsync(msg);
+        await SendGridDelivery.SendAsync(_client, msg, _settings.ApiKey, "renewal confirmation", toEmail, _logger);
     }
 }

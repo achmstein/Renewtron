@@ -21,11 +21,16 @@ public class LeadEmailService : ILeadEmailService
     private readonly SendGridClient _client;
     private readonly SendGridSettings _settings;
     private readonly IOptionsMonitor<WinBackSettings> _winBack;
+    private readonly ILogger<LeadEmailService> _logger;
 
-    public LeadEmailService(IOptionsSnapshot<SendGridSettings> settings, IOptionsMonitor<WinBackSettings> winBack)
+    public LeadEmailService(
+        IOptionsSnapshot<SendGridSettings> settings,
+        IOptionsMonitor<WinBackSettings> winBack,
+        ILogger<LeadEmailService> logger)
     {
         _settings = settings.Value;
         _winBack = winBack;
+        _logger = logger;
         _client = new SendGridClient(_settings.ApiKey);
     }
 
@@ -35,7 +40,7 @@ public class LeadEmailService : ILeadEmailService
         var htmlContent = GetLeadCapturedHtml(lead);
         var plainContent = GetLeadCapturedPlain(lead);
 
-        await SendEmailAsync(lead.Email, subject, plainContent, htmlContent);
+        await SendEmailAsync("lead captured", lead.Email, subject, plainContent, htmlContent);
     }
 
     public async Task SendNotDueForRenewalEmailAsync(Lead lead)
@@ -44,7 +49,7 @@ public class LeadEmailService : ILeadEmailService
         var htmlContent = GetNotDueForRenewalHtml(lead);
         var plainContent = GetNotDueForRenewalPlain(lead);
 
-        await SendEmailAsync(lead.Email, subject, plainContent, htmlContent);
+        await SendEmailAsync("not due for renewal", lead.Email, subject, plainContent, htmlContent);
     }
 
     public async Task SendNoBusinessNamesEmailAsync(Lead lead)
@@ -53,7 +58,7 @@ public class LeadEmailService : ILeadEmailService
         var htmlContent = GetNoBusinessNamesHtml(lead);
         var plainContent = GetNoBusinessNamesPlain(lead);
 
-        await SendEmailAsync(lead.Email, subject, plainContent, htmlContent);
+        await SendEmailAsync("no business names", lead.Email, subject, plainContent, htmlContent);
     }
 
     public async Task SendRenewalInProgressEmailAsync(Lead lead)
@@ -62,7 +67,7 @@ public class LeadEmailService : ILeadEmailService
         var htmlContent = GetRenewalInProgressHtml(lead);
         var plainContent = GetRenewalInProgressPlain(lead);
 
-        await SendEmailAsync(lead.Email, subject, plainContent, htmlContent);
+        await SendEmailAsync("renewal in progress", lead.Email, subject, plainContent, htmlContent);
     }
 
     public async Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null)
@@ -74,7 +79,7 @@ public class LeadEmailService : ILeadEmailService
         var html = string.IsNullOrWhiteSpace(template.BodyHtml)
             ? WrapPlainAsHtml(plain)
             : MergeTags(template.BodyHtml, lead, firstBusinessName, EmailText.Html);
-        await SendEmailAsync(lead.Email, subject, plain, html);
+        await SendEmailAsync("win-back", lead.Email, subject, plain, html);
     }
 
     private static string MergeTags(string source, Lead lead, string? firstBusinessName, Func<string?, string>? encode = null)
@@ -95,12 +100,12 @@ public class LeadEmailService : ILeadEmailService
 <body><div class=""container""><div class=""content""><p style=""white-space: pre-wrap;"">{html}</p></div></div></body></html>";
     }
 
-    private async Task SendEmailAsync(string toEmail, string subject, string plainContent, string htmlContent)
+    private async Task SendEmailAsync(string kind, string toEmail, string subject, string plainContent, string htmlContent)
     {
         var from = new EmailAddress(_settings.FromEmail, _settings.FromName);
         var to = new EmailAddress(toEmail);
         var msg = MailHelper.CreateSingleEmail(from, to, subject, plainContent, htmlContent);
-        await _client.SendEmailAsync(msg);
+        await SendGridDelivery.SendAsync(_client, msg, _settings.ApiKey, kind, toEmail, _logger);
     }
 
     private string FormatAbn(string abn)
