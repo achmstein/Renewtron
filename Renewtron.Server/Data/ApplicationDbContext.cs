@@ -127,6 +127,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
             entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
             entity.Property(e => e.BusinessNameOwner).HasMaxLength(200);
+            entity.Property(e => e.Address).HasMaxLength(200);
+            entity.Property(e => e.Suburb).HasMaxLength(100);
+            entity.Property(e => e.State).HasMaxLength(50);
+            entity.Property(e => e.Postcode).HasMaxLength(10);
+            entity.Property(e => e.TfnEncrypted).HasMaxLength(200);
             entity.Property(e => e.AmountPaid).HasPrecision(18, 2);
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
 

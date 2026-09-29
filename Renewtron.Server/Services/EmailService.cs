@@ -29,16 +29,29 @@ public class EmailService : IEmailService
     {
         var from = new EmailAddress(_settings.FromEmail, _settings.FromName);
         var to = new EmailAddress(toEmail);
-        var subject = $"Business Name Renewal Confirmation - {businessName}";
+        var subject = $"Business Name Renewal Confirmation - {EmailText.SubjectSafe(businessName)}";
+
+        // Values below come from customers and ASIC — encode everything that lands in HTML.
+        static string h(string? v) => EmailText.Html(v);
 
         // Customers keep an account in the Business Portal: their names, renewal history and
-        // ASIC keys. Only linked when the portal is configured.
-        var portalUrl = _portal.LoginUrl(toEmail);
+        // ASIC keys. With a signing key the button signs them straight in (once, for 72 hours);
+        // otherwise it opens the sign-in page with their email filled in.
+        var signInUrl = _portal.SignInUrl(toEmail, DateTimeOffset.UtcNow);
+        var loginUrl = _portal.LoginUrl(null);
+        var portalUrl = signInUrl ?? _portal.LoginUrl(toEmail);
+        var portalLabel = signInUrl is null ? "View your business names in your Business Portal" : "Open your Business Portal";
+        var portalNote = signInUrl is null ? "" : $@"
+            <p style='margin-top: 8px; text-align: center; font-size: 12px; color: #6B7280;'>
+                This link signs you in and works once, for 72 hours. After that, sign in with your email at {h(loginUrl)}.
+            </p>";
         var portalHtml = portalUrl is null ? "" : $@"
             <p style='margin-top: 24px; text-align: center;'>
-                <a href='{System.Net.WebUtility.HtmlEncode(portalUrl)}' style='background-color: #4F46E5; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: bold;'>View your business names in your Business Portal</a>
-            </p>";
-        var portalText = portalUrl is null ? "" : $"\nView your business names in your Business Portal: {portalUrl}\n";
+                <a href='{h(portalUrl)}' style='background-color: #4F46E5; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: bold;'>{portalLabel}</a>
+            </p>{portalNote}";
+        var portalText = portalUrl is null ? "" : signInUrl is null
+            ? $"\nView your business names in your Business Portal: {portalUrl}\n"
+            : $"\nOpen your Business Portal: {portalUrl}\nThis link signs you in and works once, for 72 hours. After that, sign in with your email at {loginUrl}.\n";
 
         var htmlContent = $@"
 <!DOCTYPE html>
@@ -67,12 +80,12 @@ public class EmailService : IEmailService
             
             <div class='detail-row'>
                 <div class='label'>Business Name:</div>
-                <div class='value'>{businessName}</div>
+                <div class='value'>{h(businessName)}</div>
             </div>
             
             <div class='detail-row'>
                 <div class='label'>ABN:</div>
-                <div class='value'>{abn}</div>
+                <div class='value'>{h(abn)}</div>
             </div>
             
             <div class='detail-row'>
@@ -87,7 +100,7 @@ public class EmailService : IEmailService
             
             <div class='detail-row'>
                 <div class='label'>Transaction Reference:</div>
-                <div class='value'>{transactionReference}</div>
+                <div class='value'>{h(transactionReference)}</div>
             </div>
             
             <div class='detail-row'>

@@ -196,6 +196,17 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // Lead capture sends a "lead captured" email per call — cap it per IP so the form
+    // can't be used to spam inboxes.
+    options.AddPolicy("lead-capture", ctx =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(ctx),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
     // The ASIC search screen-scrapes a slow upstream — much tighter than the global cap.
     options.AddPolicy("asic-search", ctx =>
         System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(ctx),

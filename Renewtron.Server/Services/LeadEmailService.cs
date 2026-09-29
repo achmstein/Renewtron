@@ -68,22 +68,24 @@ public class LeadEmailService : ILeadEmailService
     public async Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null)
     {
         var template = _winBack.CurrentValue;
-        var subject = MergeTags(template.Subject, lead, firstBusinessName);
+        var subject = EmailText.SubjectSafe(MergeTags(template.Subject, lead, firstBusinessName));
         var plain = MergeTags(template.BodyPlain, lead, firstBusinessName);
+        // The admin writes the template's markup; the merged values are customer data.
         var html = string.IsNullOrWhiteSpace(template.BodyHtml)
             ? WrapPlainAsHtml(plain)
-            : MergeTags(template.BodyHtml, lead, firstBusinessName);
+            : MergeTags(template.BodyHtml, lead, firstBusinessName, EmailText.Html);
         await SendEmailAsync(lead.Email, subject, plain, html);
     }
 
-    private static string MergeTags(string source, Lead lead, string? firstBusinessName)
+    private static string MergeTags(string source, Lead lead, string? firstBusinessName, Func<string?, string>? encode = null)
     {
         if (string.IsNullOrEmpty(source)) return source;
+        encode ??= v => v ?? string.Empty;
         return source
-            .Replace("{{FullName}}", lead.FullName ?? string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("{{Abn}}", lead.Abn ?? string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("{{Email}}", lead.Email ?? string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("{{BusinessName}}", firstBusinessName ?? "your business name", StringComparison.OrdinalIgnoreCase);
+            .Replace("{{FullName}}", encode(lead.FullName), StringComparison.OrdinalIgnoreCase)
+            .Replace("{{Abn}}", encode(lead.Abn), StringComparison.OrdinalIgnoreCase)
+            .Replace("{{Email}}", encode(lead.Email), StringComparison.OrdinalIgnoreCase)
+            .Replace("{{BusinessName}}", encode(firstBusinessName ?? "your business name"), StringComparison.OrdinalIgnoreCase);
     }
 
     private string WrapPlainAsHtml(string plain)
@@ -140,13 +142,13 @@ public class LeadEmailService : ILeadEmailService
             <h1>Thank You for Using Renewtron</h1>
         </div>
         <div class=""content"">
-            <p>Hi {lead.FullName},</p>
+            <p>Hi {EmailText.Html(lead.FullName)},</p>
             <p>Thank you for using Renewtron for your business name renewal needs.</p>
 
             <div class=""info-box"">
                 <div class=""info-row"">
                     <span class=""label"">ABN:</span>
-                    <span class=""value"">{FormatAbn(lead.Abn)}</span>
+                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
                 </div>
                 <div class=""info-row"">
                     <span class=""label"">Date:</span>
@@ -197,7 +199,7 @@ This is an automated email from Renewtron.
             <h1>Your Business Name Registration Status</h1>
         </div>
         <div class=""content"">
-            <p>Hi {lead.FullName},</p>
+            <p>Hi {EmailText.Html(lead.FullName)},</p>
             <p>Thank you for checking your business name renewal status with Renewtron.</p>
 
             <div class=""warning"">
@@ -208,7 +210,7 @@ This is an automated email from Renewtron.
             <div class=""info-box"">
                 <div class=""info-row"">
                     <span class=""label"">ABN:</span>
-                    <span class=""value"">{FormatAbn(lead.Abn)}</span>
+                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
                 </div>
             </div>
 
@@ -271,7 +273,7 @@ This is an automated email from Renewtron.
             <h1>ABN Search Results</h1>
         </div>
         <div class=""content"">
-            <p>Hi {lead.FullName},</p>
+            <p>Hi {EmailText.Html(lead.FullName)},</p>
             <p>Thank you for using Renewtron to check your business name status.</p>
 
             <div class=""info-box"">
@@ -282,7 +284,7 @@ This is an automated email from Renewtron.
             <div class=""info-box"">
                 <div class=""info-row"">
                     <span class=""label"">ABN Searched:</span>
-                    <span class=""value"">{FormatAbn(lead.Abn)}</span>
+                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
                 </div>
             </div>
 
@@ -343,7 +345,7 @@ This is an automated email from Renewtron.
             <h1>Your Business Name Renewal Status</h1>
         </div>
         <div class=""content"">
-            <p>Hi {lead.FullName},</p>
+            <p>Hi {EmailText.Html(lead.FullName)},</p>
             <p>Thank you for checking your business name renewal status with Renewtron.</p>
 
             <div class=""highlight"">
@@ -354,7 +356,7 @@ This is an automated email from Renewtron.
             <div class=""info-box"">
                 <div class=""info-row"">
                     <span class=""label"">ABN:</span>
-                    <span class=""value"">{FormatAbn(lead.Abn)}</span>
+                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
                 </div>
             </div>
 

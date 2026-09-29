@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Carter;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Renewtron.Abstractions;
 using Renewtron.Data;
 using Renewtron.Identity;
 using Renewtron.Services;
@@ -16,7 +17,10 @@ namespace Renewtron.Modules;
 /// of what the portal can reach. Renewtron stays the system of record for renewals, the
 /// Ontraport sync and ASIC keys; the portal reads renewals (every status, so customers see
 /// "in progress" and failures, not just completions), queues ASIC key requests, and pulls
-/// keys back. No TFN, IP or card data leaves through here.
+/// keys back. It also reads paid Ontraport sales, so a customer gets a portal login when
+/// they pay rather than when the renewal window opens. Sales carry the contact's TFN
+/// (decrypted here, stored encrypted) for the portal profile; no IP or card data leaves
+/// through here, and renewals carry no TFN.
 /// </summary>
 public sealed class PartnerModule : ICarterModule
 {
@@ -173,6 +177,54 @@ public sealed class PartnerModule : ICarterModule
             });
         });
 
+        // ---- Ontraport sales -----------------------------------------------------------
+        // Paid sales synced since a date — the portal provisions a login and shows the name
+        // as "scheduled" until the renewal is created (RenewalRequestId links the two).
+        group.MapGet("/sales", async (ApplicationDbContext db, IServiceProvider services, ILoggerFactory loggers, string? since) =>
+        {
+            if (!DateOnly.TryParseExact(since, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var sinceDate))
+                return Results.BadRequest(new { error = "since (yyyy-MM-dd) is required." });
+            var from = sinceDate.ToDateTime(TimeOnly.MinValue);
+
+            // Refunds, cancellations and underpayments are stored as IneligibleForRenewal
+            // (the sync never deletes them), so they're filtered out here.
+            var sales = await db.OntraportSales.AsNoTracking()
+                .Where(s => s.SyncedAt >= from && s.Status != OntraportSaleStatus.IneligibleForRenewal)
+                .OrderBy(s => s.SyncedAt)
+                .Take(1000)
+                .ToListAsync();
+
+            IEncryptionService? encryption = null;
+            if (sales.Any(s => !string.IsNullOrEmpty(s.TfnEncrypted)))
+            {
+                try { encryption = services.GetService<IEncryptionService>(); }
+                catch (InvalidOperationException) { encryption = null; }
+            }
+            var log = loggers.CreateLogger<PartnerModule>();
+
+            return Results.Ok(sales.Select(s => new
+            {
+                id = s.Id,
+                status = s.Status.ToString(),
+                contactName = s.ContactName,
+                email = s.Email,
+                mobileNumber = s.MobileNumber,
+                dateOfBirth = NormaliseDate(s.DateOfBirth),
+                businessName = s.BusinessName,
+                abn = s.Abn,
+                renewalDueDate = s.RenewalDueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                renewalYears = s.RenewalYears,
+                amountPaid = s.AmountPaid,
+                renewalRequestId = s.RenewalRequestId,
+                syncedAt = s.SyncedAt,
+                address = s.Address,
+                suburb = s.Suburb,
+                state = s.State,
+                postcode = s.Postcode,
+                tfn = DecryptTfn(s, encryption, log),
+            }));
+        });
+
         // Keys that arrived in the inbox since a point in time. The portal matches them to its
         // own business names by name / ABN, whether or not the portal asked for them.
         group.MapGet("/asic-keys", async (ApplicationDbContext db, DateTime? since) =>
@@ -196,6 +248,21 @@ public sealed class PartnerModule : ICarterModule
                 .ToListAsync();
             return Results.Ok(keys);
         });
+    }
+
+    private static string? DecryptTfn(OntraportSale sale, IEncryptionService? encryption, ILogger log)
+    {
+        if (string.IsNullOrEmpty(sale.TfnEncrypted) || encryption is null) return null;
+        try
+        {
+            var tfn = new string(encryption.Decrypt(sale.TfnEncrypted).Where(char.IsDigit).ToArray());
+            return tfn.Length > 0 ? tfn : null;
+        }
+        catch (Exception ex) when (ex is FormatException or System.Security.Cryptography.CryptographicException)
+        {
+            log.LogWarning("Couldn't decrypt the TFN on sale {SaleId}", sale.Id);
+            return null;
+        }
     }
 
     private static string? FirstNonEmpty(params string?[] values)

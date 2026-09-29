@@ -78,7 +78,7 @@ public sealed class LeadsModule : ICarterModule
             try { await leadEmail.SendLeadCapturedEmailAsync(lead); } catch { }
 
             return Results.Ok(new { leadId = lead.Id });
-        }).WithTags("Wizard");
+        }).WithTags("Wizard").RequireRateLimiting("lead-capture"); // each call sends a lead email
 
         app.MapGet("/api/leads/{id:guid}", async (Guid id, ApplicationDbContext db) =>
         {

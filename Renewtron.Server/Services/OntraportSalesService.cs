@@ -21,6 +21,7 @@ public class OntraportSalesService : IOntraportSalesService
     private readonly IOptionsMonitor<AsicKeyRequestSettings> _asicKeyRequestSettings;
     private readonly IOptionsMonitor<AsicKeyInboxSettings> _asicKeyInboxSettings;
     private readonly ILogger<OntraportSalesService> _logger;
+    private readonly IServiceProvider _services;
 
     // Ontraport custom field IDs for business name renewal data
     private const string FieldBusinessName = "f5062";
@@ -53,8 +54,10 @@ public class OntraportSalesService : IOntraportSalesService
         IOptionsSnapshot<PricingSettings> pricingSettings,
         IOptionsMonitor<AsicKeyRequestSettings> asicKeyRequestSettings,
         IOptionsMonitor<AsicKeyInboxSettings> asicKeyInboxSettings,
-        ILogger<OntraportSalesService> logger)
+        ILogger<OntraportSalesService> logger,
+        IServiceProvider services)
     {
+        _services = services;
         _httpClient = httpClient;
         _dbContext = dbContext;
         _backgroundJobClient = backgroundJobClient;
@@ -82,18 +85,27 @@ public class OntraportSalesService : IOntraportSalesService
             var contacts = await FetchPaidContactsAsync();
             _logger.LogInformation("Fetched {Count} paid contacts from Ontraport", contacts.Count);
 
-            // Get already-synced contact IDs to skip duplicates
-            var syncedContactIds = await _dbContext.OntraportSales
-                .Select(s => s.OntraportContactId)
-                .ToHashSetAsync();
+            // Already-synced contacts aren't re-created, but their profile fields are
+            // refreshed so the Business Portal sees the contact's current details.
+            var existingByContact = (await _dbContext.OntraportSales.ToListAsync())
+                .GroupBy(s => s.OntraportContactId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            var syncedContactIds = existingByContact.Keys.ToHashSet();
+            var encryption = TryGetEncryption();
 
             foreach (var contact in contacts)
             {
                 try
                 {
                     var contactId = contact.GetValueOrDefault("id", "");
-                    if (string.IsNullOrEmpty(contactId) || syncedContactIds.Contains(contactId))
+                    if (string.IsNullOrEmpty(contactId))
                         continue;
+                    if (syncedContactIds.Contains(contactId))
+                    {
+                        foreach (var existing in existingByContact[contactId])
+                            ApplyProfile(existing, contact, encryption);
+                        continue;
+                    }
 
                     // Skip contacts without business name data
                     var businessName = contact.GetValueOrDefault(FieldBusinessName, "");
@@ -153,6 +165,7 @@ public class OntraportSalesService : IOntraportSalesService
                         ErrorMessage = errorMessage,
                         SyncedAt = DateTime.UtcNow
                     };
+                    ApplyProfile(sale, contact, encryption);
 
                     _dbContext.OntraportSales.Add(sale);
                     synced.Add(sale);
@@ -520,13 +533,67 @@ public class OntraportSalesService : IOntraportSalesService
         }
     }
 
+    // Contact fields copied onto the sale for the Business Portal's profile (first non-empty wins).
+    private static readonly string[] AddressFields = ["address"];
+    private static readonly string[] SuburbFields = ["Registered_208", "city"];
+    private static readonly string[] StateFields = ["State_234", "state"];
+    private static readonly string[] PostcodeFields = ["Postcode_236", "zip"];
+    private const string FieldTfn = "TaxFileNum_269";
+    private static readonly string[] ProfileFieldKeys =
+        [.. AddressFields, .. SuburbFields, .. StateFields, .. PostcodeFields, FieldTfn];
+
+    /// <summary>The encryption service throws on construction when Encryption:Key/IV
+    /// aren't configured; without it the TFN is simply not captured.</summary>
+    private IEncryptionService? TryGetEncryption()
+    {
+        try
+        {
+            return _services.GetService<IEncryptionService>();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Encryption isn't configured — TFNs from Ontraport won't be captured");
+            return null;
+        }
+    }
+
+    private static string? PickField(Dictionary<string, string?> contact, string[] keys, int maxLength = 200)
+    {
+        foreach (var key in keys)
+            if (contact.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v))
+            {
+                var value = v.Trim();
+                return value.Length > maxLength ? value[..maxLength] : value;
+            }
+        return null;
+    }
+
+    private static string Digits(string value) => new(value.Where(char.IsDigit).ToArray());
+
+    /// <summary>Copy address + TFN from the contact onto the sale. The TFN is only ever
+    /// stored encrypted. Empty Ontraport values never wipe what we already hold.</summary>
+    private static void ApplyProfile(OntraportSale sale, Dictionary<string, string?> contact, IEncryptionService? encryption)
+    {
+        sale.Address = PickField(contact, AddressFields) ?? sale.Address;
+        sale.Suburb = PickField(contact, SuburbFields, 100) ?? sale.Suburb;
+        sale.State = PickField(contact, StateFields, 50) ?? sale.State;
+        var postcode = PickField(contact, PostcodeFields, 10);
+        if (postcode is not null)
+            sale.Postcode = Digits(postcode) is { Length: > 0 } d ? d : postcode;
+
+        var tfn = Digits(PickField(contact, [FieldTfn]) ?? "");
+        if (tfn.Length > 0 && encryption is not null)
+            sale.TfnEncrypted = encryption.Encrypt(tfn);
+    }
+
     private async Task<List<Dictionary<string, string?>>> FetchPaidContactsAsync()
     {
         // Query contacts where f5194 (payment received) = "yes", sorted by most recent activity
         // Condition format: value must be wrapped in {"value":"..."} for Ontraport API
         var condition = Uri.EscapeDataString(
             "[{\"field\":{\"field\":\"f5194\"},\"op\":\"=\",\"value\":{\"value\":\"yes\"}}]");
-        var fields = $"id,firstname,lastname,email,sms_number,spent,refund,refundtotal,{FieldBusinessName},{FieldAbn},{FieldBusinessNameOwner},{FieldRenewalDueDate},{FieldRenewalTerm},{FieldPaymentReceived},{FieldCancel},{FieldDateOfBirth}";
+        var fields = $"id,firstname,lastname,email,sms_number,spent,refund,refundtotal,{FieldBusinessName},{FieldAbn},{FieldBusinessNameOwner},{FieldRenewalDueDate},{FieldRenewalTerm},{FieldPaymentReceived},{FieldCancel},{FieldDateOfBirth}"
+                     + "," + string.Join(",", ProfileFieldKeys);
         // The contact's ASIC key field (where the inbox scanner writes it) — read so the sync
         // doesn't ask ASIC for a key the client already supplied.
         var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;

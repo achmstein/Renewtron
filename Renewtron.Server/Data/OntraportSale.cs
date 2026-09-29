@@ -19,6 +19,15 @@ public class OntraportSale
     public string Abn { get; set; } = string.Empty;
     public string? BusinessNameOwner { get; set; }
 
+    // Profile details for the Business Portal (refreshed on every sync)
+    public string? Address { get; set; }
+    public string? Suburb { get; set; }
+    public string? State { get; set; }
+    public string? Postcode { get; set; }
+
+    /// <summary>TFN, encrypted with IEncryptionService — never stored in plain text.</summary>
+    public string? TfnEncrypted { get; set; }
+
     // Renewal details
     public DateTime? RenewalDueDate { get; set; }
     public int RenewalYears { get; set; }

@@ -20,6 +20,7 @@ var atoApiUrl = builder.AddParameter("ato-api-url");
 var securityApiKey = builder.AddParameter("security-api-key", secret: true, value: ""); // empty = auth not enforced
 var securityPartnerApiKey = builder.AddParameter("security-partner-api-key", secret: true, value: ""); // Business Portal; empty = partner API off
 var portalBaseUrl = builder.AddParameter("portal-base-url", value: ""); // Business Portal site; empty = no portal links
+var portalMagicLinkSigningKey = builder.AddParameter("portal-magic-link-signing-key", secret: true, value: ""); // shared with the portal; empty = plain login link
 var stripeSecretKey = builder.AddParameter("stripe-secret-key", secret: true, value: "");
 var sendGridApiKey = builder.AddParameter("sendgrid-api-key", secret: true, value: "");
 var ontraportApiAppId = builder.AddParameter("ontraport-api-app-id", secret: true, value: "");
@@ -47,6 +48,7 @@ var server = builder.AddProject<Projects.Renewtron_Server>("renewtron-server")
     .WithEnvironment("Security__ApiKey", securityApiKey)
     .WithEnvironment("Security__PartnerApiKey", securityPartnerApiKey)
     .WithEnvironment("Portal__BaseUrl", portalBaseUrl)
+    .WithEnvironment("Portal__MagicLinkSigningKey", portalMagicLinkSigningKey)
     .WithEnvironment("Stripe__SecretKey", stripeSecretKey)
     .WithEnvironment("SendGrid__ApiKey", sendGridApiKey)
     .WithEnvironment("Ontraport__ApiAppId", ontraportApiAppId)

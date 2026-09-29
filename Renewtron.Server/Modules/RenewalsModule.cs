@@ -14,14 +14,6 @@ namespace Renewtron.Modules;
 
 public sealed class RenewalsModule : ICarterModule
 {
-    public record CreateRenewalRequest(
-        Guid SearchResultId,
-        Guid? LeadId,
-        int RenewalYears,
-        string? Email,
-        string? MobileNumber,
-        DateOnly? DateOfBirth,
-        string PaymentMethodId);
 
     public record BatchRenewalRequest(
         Guid LeadId,
@@ -57,98 +49,12 @@ public sealed class RenewalsModule : ICarterModule
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/renewals", async (
-            CreateRenewalRequest request,
-            ApplicationDbContext db,
-            IStripePaymentService stripe,
-            IBackgroundJobClient jobs,
-            ILeadService leadService,
-            IOptionsSnapshot<PricingSettings> pricing) =>
-        {
-            var searchResult = await db.SearchResults
-                .Include(r => r.SearchLog)
-                .FirstOrDefaultAsync(r => r.Id == request.SearchResultId);
-
-            if (searchResult is null)
-                return Results.NotFound(new { error = "Search result not found." });
-
-            if (request.RenewalYears != 1 && request.RenewalYears != 3)
-                return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
-
-            var existing = await db.RenewalRequests
-                .FirstOrDefaultAsync(r => r.SearchResultId == searchResult.Id);
-            if (existing is not null)
-                return Results.Conflict(new { error = "A renewal already exists for this business name.", renewalId = existing.Id });
-
-            var amount = pricing.Value.GetCustomerPrice(request.RenewalYears);
-
-            var renewal = new RenewalRequest
-            {
-                Id = Guid.NewGuid(),
-                SearchResultId = searchResult.Id,
-                LeadId = request.LeadId,
-                InitiatedAt = DateTime.UtcNow,
-                RenewalYears = request.RenewalYears,
-                Email = request.Email,
-                MobileNumber = request.MobileNumber,
-                DateOfBirth = request.DateOfBirth,
-                Source = RenewalSource.Renewtron,
-                PaymentType = PaymentType.Stripe,
-                Amount = amount,
-                Status = RenewalStatus.Pending,
-            };
-            db.RenewalRequests.Add(renewal);
-            await db.SaveChangesAsync();
-
-            var confirm = await stripe.ConfirmPaymentAsync(
-                amount,
-                request.Email ?? string.Empty,
-                $"Business name renewal: {searchResult.BusinessName} ({searchResult.SearchLog.Abn})",
-                new Dictionary<string, string>
-                {
-                    ["renewalRequestId"] = renewal.Id.ToString(),
-                    ["abn"] = searchResult.SearchLog.Abn,
-                    ["businessName"] = searchResult.BusinessName,
-                    ["renewalYears"] = renewal.RenewalYears.ToString(),
-                },
-                request.PaymentMethodId);
-
-            if (!confirm.Success)
-            {
-                // This legacy endpoint has no browser round-trip, so a 3DS request is a dead end here.
-                var stripeError = confirm.RequiresAction
-                    ? "This card requires 3D Secure authentication, which this checkout does not support. Please pay via the website."
-                    : confirm.ErrorMessage;
-                renewal.Status = RenewalStatus.Failed;
-                renewal.ErrorMessage = stripeError;
-                renewal.FailedAtStep = "StripePayment";
-                await db.SaveChangesAsync();
-                return Results.UnprocessableEntity(new { error = stripeError ?? "Payment failed.", renewalId = renewal.Id });
-            }
-
-            db.StripePayments.Add(new StripePayment
-            {
-                Id = Guid.NewGuid(),
-                RenewalRequestId = renewal.Id,
-                PaymentIntentId = confirm.PaymentIntentId!,
-                PaymentStatus = "succeeded",
-                PaidAt = DateTime.UtcNow,
-                CardBrand = confirm.Card?.Brand,
-                CardLast4 = confirm.Card?.Last4,
-                CardExpMonth = confirm.Card?.ExpMonth,
-                CardExpYear = confirm.Card?.ExpYear,
-            });
-            await db.SaveChangesAsync();
-
-            jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
-
-            if (request.LeadId is { } leadId)
-            {
-                try { await leadService.MarkConvertedAsync(leadId); } catch { }
-            }
-
-            return Results.Ok(new { renewalId = renewal.Id, status = renewal.Status.ToString(), amount });
-        }).WithTags("Wizard");
+        // The original single-name charge confirmed a card PaymentIntent with no 3DS leg.
+        // The wizard moved to /api/renewals/batch (+ /batch/complete for 3DS); nothing calls
+        // this any more, and leaving a public card-charging endpoint around is only risk.
+        app.MapPost("/api/renewals", () =>
+            Results.Json(new { error = "Use /api/renewals/batch" }, statusCode: StatusCodes.Status410Gone))
+            .WithTags("Wizard");
 
         app.MapPost("/api/renewals/batch", async (
             BatchRenewalRequest request,
