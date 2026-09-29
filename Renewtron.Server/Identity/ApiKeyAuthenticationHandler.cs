@@ -82,8 +82,12 @@ public sealed class ApiKeyAuthenticationHandler(
     public static bool IsPartner(ClaimsPrincipal user)
         => user.HasClaim(ScopeClaim, PartnerScope);
 
-    // Leave challenges to the cookie scheme so the SPA's unauthenticated behaviour
-    // is unchanged; API clients simply see the authorization failure.
     protected override Task HandleChallengeAsync(AuthenticationProperties properties)
-        => Task.CompletedTask;
+    {
+        // The API-key-only Partner policy challenges here; doing nothing left an
+        // empty 200. Answer 401 unless another scheme (the cookie) already did.
+        if (!Response.HasStarted && Response.StatusCode == StatusCodes.Status200OK)
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    }
 }
