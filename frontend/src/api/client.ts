@@ -28,6 +28,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 export interface MeResponse { email: string; name: string }
+export interface OntraportSettingsBody {
+  apiAppId: string
+  apiKey: string
+  conversationId: string
+  pushWizardContacts: boolean
+  wizardLeadTagId: string | null
+  wizardPaidTagId: string | null
+}
 export interface PricingResponse { oneYearFee: number; threeYearFee: number }
 export interface BusinessNameDto { id: string; businessName: string; accountNumber: string; registrationDate: string }
 
@@ -57,6 +65,8 @@ export interface BatchRenewalResponse {
   /** True when the card wants 3D Secure — run stripe.handleNextAction(clientSecret), then completeBatchRenewal. */
   requiresAction?: boolean
   clientSecret?: string | null
+  /** One-click Business Portal sign-in for this customer; null when the portal isn't configured. */
+  portalSignInUrl?: string | null
 }
 export interface RenewalStatusItem {
   id: string
@@ -253,7 +263,7 @@ export const api = {
   createBatchRenewal: (input: { leadId: string; searchResultIds: string[]; renewalYears: 1 | 3; paymentMethodId: string; cardholderName?: string }) =>
     apiFetch<BatchRenewalResponse>('/api/renewals/batch', { method: 'POST', body: JSON.stringify(input) }),
   completeBatchRenewal: (input: { leadId: string; searchResultIds: string[]; renewalYears: 1 | 3; paymentIntentId: string; cardholderName?: string }) =>
-    apiFetch<{ renewalIds: string[]; total: number }>('/api/renewals/batch/complete', { method: 'POST', body: JSON.stringify(input) }),
+    apiFetch<{ renewalIds: string[]; total: number; portalSignInUrl?: string | null }>('/api/renewals/batch/complete', { method: 'POST', body: JSON.stringify(input) }),
   batchStatus: (ids: string[]) => apiFetch<RenewalStatusItem[]>(`/api/renewals/batch?ids=${ids.join(',')}`),
 
   admin: {
@@ -263,7 +273,7 @@ export const api = {
       stripe: { secretKey: string; publishableKey: string }
       pricing: { oneYearFee: number; threeYearFee: number }
       asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean }
-      ontraport: { apiAppId: string; apiKey: string; conversationId: string }
+      ontraport: OntraportSettingsBody
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
       asicKeyInbox: AsicKeyInboxSettings
@@ -763,7 +773,7 @@ export const api = {
     updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
     updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
-    updateOntraport: (body: { apiAppId: string; apiKey: string; conversationId: string }) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
+    updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),
     testAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<AsicKeyInboxTestResult>('/api/admin/settings/asic-key-inbox/test', { method: 'POST', body: JSON.stringify(body) }),

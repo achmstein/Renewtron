@@ -176,36 +176,25 @@ public class RenewalProcessingService : IRenewalProcessingService
                             ontraportSale.RenewalDueDate = newRenewalDueDate;
                         }
 
-                        // Sync the outcome back onto the Ontraport contact (f5481, and f5135 on
-                        // success) through an outbox row: the row is committed first, so if the
-                        // write fails (or we crash), the recurring outbox job retries it instead
-                        // of the contact's due date silently never advancing.
-                        var outboxEntry = new OntraportSyncOutbox
-                        {
-                            Id = Guid.NewGuid(),
-                            OntraportContactId = ontraportSale.OntraportContactId,
-                            Outcome = OntraportRenewalOutcomeExtensions.FromSaleStatus(ontraportSale.Status),
-                            NewRenewalDueDate = newRenewalDueDate,
-                            CreatedAt = DateTime.UtcNow,
-                        };
-                        _dbContext.OntraportSyncOutbox.Add(outboxEntry);
-                        await _dbContext.SaveChangesAsync();
-
-                        outboxEntry.AttemptCount = 1;
-                        outboxEntry.LastAttemptAt = DateTime.UtcNow;
-                        var synced = await _ontraportSalesService.SyncRenewalOutcomeAsync(
-                            outboxEntry.OntraportContactId, outboxEntry.Outcome, outboxEntry.NewRenewalDueDate);
-                        if (synced)
-                            outboxEntry.SentAt = DateTime.UtcNow;
-                        else
-                            outboxEntry.LastError = "Immediate sync failed; the outbox job will retry.";
-                        await _dbContext.SaveChangesAsync();
+                        await SyncOutcomeToOntraportAsync(
+                            ontraportSale.OntraportContactId,
+                            OntraportRenewalOutcomeExtensions.FromSaleStatus(ontraportSale.Status),
+                            newRenewalDueDate);
                     }
                 }
                 catch (Exception opEx)
                 {
                     _logger.LogError(opEx, "Failed to update Ontraport sale status for renewal {RenewalRequestId}", renewalRequestId);
                 }
+            }
+            else if (renewalRequest.Source == RenewalSource.Renewtron && renewalRequest.LeadId is { } leadId)
+            {
+                // Wizard renewal: record the outcome on the customer's Ontraport contact too.
+                // The push service works out which contact (never trusting an id off the URL).
+                var outcome = result.IsSuccess
+                    ? OntraportRenewalOutcome.Successful
+                    : OntraportRenewalOutcomeExtensions.FromSaleStatus(OntraportSaleStatusClassifier.ClassifyError(result.Message));
+                _backgroundJobClient.Enqueue<IOntraportContactPushService>(s => s.PushRenewalOutcomeAsync(leadId, outcome));
             }
 
             if (result.IsSuccess)
@@ -274,6 +263,35 @@ public class RenewalProcessingService : IRenewalProcessingService
     /// never retries terminal categories, and leaves Ontraport timing states
     /// (not-due / in-progress) to the daily sale processor, which owns that loop.
     /// </summary>
+    /// <summary>
+    /// Writes a renewal outcome onto an Ontraport contact (f5481, and f5135 when a due date is
+    /// given) through an outbox row: the row is committed first, so if the write fails (or we
+    /// crash), the recurring outbox job retries it instead of the contact silently never updating.
+    /// </summary>
+    private async Task SyncOutcomeToOntraportAsync(string contactId, OntraportRenewalOutcome outcome, DateTime? newRenewalDueDate)
+    {
+        var outboxEntry = new OntraportSyncOutbox
+        {
+            Id = Guid.NewGuid(),
+            OntraportContactId = contactId,
+            Outcome = outcome,
+            NewRenewalDueDate = newRenewalDueDate,
+            CreatedAt = DateTime.UtcNow,
+        };
+        _dbContext.OntraportSyncOutbox.Add(outboxEntry);
+        await _dbContext.SaveChangesAsync();
+
+        outboxEntry.AttemptCount = 1;
+        outboxEntry.LastAttemptAt = DateTime.UtcNow;
+        var synced = await _ontraportSalesService.SyncRenewalOutcomeAsync(
+            outboxEntry.OntraportContactId, outboxEntry.Outcome, outboxEntry.NewRenewalDueDate);
+        if (synced)
+            outboxEntry.SentAt = DateTime.UtcNow;
+        else
+            outboxEntry.LastError = "Immediate sync failed; the outbox job will retry.";
+        await _dbContext.SaveChangesAsync();
+    }
+
     private void ScheduleAutoRetryIfEligible(RenewalRequest renewalRequest)
     {
         var category = renewalRequest.ErrorCategory;

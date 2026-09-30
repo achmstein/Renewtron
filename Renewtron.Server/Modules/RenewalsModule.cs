@@ -62,7 +62,8 @@ public sealed class RenewalsModule : ICarterModule
             IStripePaymentService stripe,
             IBackgroundJobClient jobs,
             ILeadService leadService,
-            IOptionsSnapshot<PricingSettings> pricing) =>
+            IOptionsSnapshot<PricingSettings> pricing,
+            IOptionsSnapshot<PortalSettings> portal) =>
         {
             if (request.RenewalYears != 1 && request.RenewalYears != 3)
                 return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
@@ -137,11 +138,17 @@ public sealed class RenewalsModule : ICarterModule
                 confirm.PaymentIntentId!, request.CardholderName, confirm.Card);
 
             try { await leadService.MarkConvertedAsync(lead.Id); } catch { }
+            jobs.Enqueue<IOntraportContactPushService>(s => s.PushPaymentAsync(lead.Id, request.RenewalYears));
 
             foreach (var rid in renewalIds)
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
 
-            return Results.Ok(new { renewalIds, total, requiresAction = false, clientSecret = (string?)null });
+            // Signs the customer straight into the Business Portal from the confirmation page.
+            return Results.Ok(new
+            {
+                renewalIds, total, requiresAction = false, clientSecret = (string?)null,
+                portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt),
+            });
         }).WithTags("Wizard");
 
         // Second leg of the 3DS flow: the browser has finished the challenge, we verify the
@@ -153,7 +160,8 @@ public sealed class RenewalsModule : ICarterModule
             IStripePaymentService stripe,
             IBackgroundJobClient jobs,
             ILeadService leadService,
-            IOptionsSnapshot<PricingSettings> pricing) =>
+            IOptionsSnapshot<PricingSettings> pricing,
+            IOptionsSnapshot<PortalSettings> portal) =>
         {
             if (request.RenewalYears != 1 && request.RenewalYears != 3)
                 return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
@@ -197,18 +205,19 @@ public sealed class RenewalsModule : ICarterModule
                 .Select(p => p.RenewalRequestId)
                 .ToListAsync();
             if (alreadyRecorded.Count > 0)
-                return Results.Ok(new { renewalIds = alreadyRecorded, total });
+                return Results.Ok(new { renewalIds = alreadyRecorded, total, portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt) });
 
             var renewalIds = await UpsertPaidRenewalsAsync(
                 db, lead, searchResults, request.RenewalYears, pricePer,
                 intent.PaymentIntentId, request.CardholderName, intent.Card);
 
             try { await leadService.MarkConvertedAsync(lead.Id); } catch { }
+            jobs.Enqueue<IOntraportContactPushService>(s => s.PushPaymentAsync(lead.Id, request.RenewalYears));
 
             foreach (var rid in renewalIds)
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
 
-            return Results.Ok(new { renewalIds, total });
+            return Results.Ok(new { renewalIds, total, portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt) });
         }).WithTags("Wizard");
 
         app.MapGet("/api/renewals/batch", async (string ids, ApplicationDbContext db) =>

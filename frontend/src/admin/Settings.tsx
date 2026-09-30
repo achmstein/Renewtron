@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings } from '../api/client'
+import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 
@@ -43,7 +43,7 @@ export default function Settings() {
   const [asic, setAsic] = useState({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '' })
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
-  const [ontraport, setOntraport] = useState({ apiAppId: '', apiKey: '', conversationId: '' })
+  const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
   const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
@@ -305,6 +305,16 @@ export default function Settings() {
                   </Field>
                   <Field label="Conversation ID" hint="Used to retrieve OTP SMS messages from ASIC.">
                     <input className={`${inputCls} font-mono`} value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
+                  </Field>
+                  <label className="flex items-center gap-2 text-sm text-zinc-700">
+                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={ontraport.pushWizardContacts} onChange={(e) => setOntraport({ ...ontraport, pushWizardContacts: e.target.checked })} />
+                    Create or update an Ontraport contact for everyone who uses the renewal wizard
+                  </label>
+                  <Field label="Wizard form tag ID" hint="Added when someone fills in the wizard form. Blank = no tag.">
+                    <input className={`${inputCls} font-mono`} value={ontraport.wizardLeadTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardLeadTagId: e.target.value })} placeholder="1908" />
+                  </Field>
+                  <Field label="Wizard paid tag ID" hint="Added when a wizard renewal is paid for. Blank = no tag.">
+                    <input className={`${inputCls} font-mono`} value={ontraport.wizardPaidTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardPaidTagId: e.target.value })} placeholder="1737" />
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
                 </form>

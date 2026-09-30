@@ -155,7 +155,8 @@ export default function PaymentPage() {
                       years={years}
                       total={total}
                       cardholderDefault={getPrefill().fullName}
-                      onComplete={(renewalIds) => navigate(`/confirmation/${leadId}?ids=${renewalIds.join(',')}`)}
+                      onComplete={(renewalIds, portalSignInUrl) =>
+                        navigate(`/confirmation/${leadId}?ids=${renewalIds.join(',')}`, { state: { portalSignInUrl } })}
                     />
                   </Elements>
                 ) : (
@@ -188,7 +189,7 @@ interface FormProps {
   years: 1 | 3
   total: number
   cardholderDefault: string
-  onComplete: (renewalIds: string[]) => void
+  onComplete: (renewalIds: string[], portalSignInUrl?: string | null) => void
 }
 
 function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComplete }: FormProps) {
@@ -246,7 +247,7 @@ function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComp
         // The card is charged at this point. The completion call is idempotent
         // server-side, so retry transient failures instead of telling the customer
         // to pay again.
-        let completed: { renewalIds: string[] } | null = null
+        let completed: { renewalIds: string[]; portalSignInUrl?: string | null } | null = null
         let completeError: unknown = null
         for (let attempt = 0; attempt < 3 && !completed; attempt++) {
           try {
@@ -270,12 +271,12 @@ function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComp
           )
         }
         setProcessingStatus('Scheduling renewal processing...')
-        onComplete(completed.renewalIds)
+        onComplete(completed.renewalIds, completed.portalSignInUrl)
         return
       }
 
       setProcessingStatus('Scheduling renewal processing...')
-      onComplete(result.renewalIds)
+      onComplete(result.renewalIds, result.portalSignInUrl)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred.'
       trackStep(FunnelStep.PaymentFailed, { leadId, abn, detail: message, value: total })

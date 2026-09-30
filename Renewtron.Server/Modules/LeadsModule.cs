@@ -1,6 +1,7 @@
 using Asic.Client.Abstractions;
 using Asic.Client.Models;
 using Carter;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
@@ -45,6 +46,7 @@ public sealed class LeadsModule : ICarterModule
             CreateLeadRequest request,
             ILeadService leadService,
             ILeadEmailService leadEmail,
+            IBackgroundJobClient jobs,
             HttpContext httpContext) =>
         {
             if (!Helpers.IsValidAbn(request.Abn))
@@ -76,6 +78,7 @@ public sealed class LeadsModule : ICarterModule
                 await leadService.LinkSearchLogAsync(lead.Id, sid);
 
             try { await leadEmail.SendLeadCapturedEmailAsync(lead); } catch { }
+            jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
 
             return Results.Ok(new { leadId = lead.Id });
         }).WithTags("Wizard").RequireRateLimiting("lead-capture"); // each call sends a lead email
@@ -119,7 +122,8 @@ public sealed class LeadsModule : ICarterModule
             IAsicRenewalClient asic,
             IBusinessNameFallbackService fallback,
             IOptionsSnapshot<AsicSettings> asicSettings,
-            IMemoryCache cache) =>
+            IMemoryCache cache,
+            IBackgroundJobClient jobs) =>
         {
             var lead = await leadService.GetLeadAsync(id);
             if (lead is null) return Results.NotFound();
@@ -223,6 +227,8 @@ public sealed class LeadsModule : ICarterModule
             await db.SaveChangesAsync();
             await leadService.LinkSearchLogAsync(lead.Id, searchLog.Id);
             await leadService.UpdateLeadOutcomeAsync(lead.Id, LeadOutcome.RenewalAvailable, null);
+            // Now the business names are known, send them to the lead's Ontraport contact.
+            jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
 
             return Results.Ok(new
             {

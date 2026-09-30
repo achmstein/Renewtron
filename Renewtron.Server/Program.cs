@@ -115,6 +115,7 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
+builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
 

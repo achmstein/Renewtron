@@ -53,7 +53,9 @@ public sealed class PartnerModule : ICarterModule
                     r.Id, r.Status, r.Source, r.RenewalYears, r.Amount, r.Email, r.MobileNumber, r.DateOfBirth,
                     r.InitiatedAt, r.CompletedAt, r.TransactionReference, r.ErrorCategory, r.NextRetryAt,
                     BusinessName = r.SearchResult.BusinessName,
+                    RegistrationDate = r.SearchResult.RegistrationDate,
                     Abn = r.SearchResult.SearchLog.Abn,
+                    r.LeadId,
                     LeadName = r.Lead != null ? r.Lead.FullName : null,
                     LeadMobile = r.Lead != null ? r.Lead.MobileNumber : null,
                     LeadDob = r.Lead != null ? (DateOnly?)r.Lead.DateOfBirth : null,
@@ -71,6 +73,16 @@ public sealed class PartnerModule : ICarterModule
                 .Select(b => new { Id = b.RenewalRequestId!.Value, b.OwnerName })
                 .ToListAsync();
             var saleBy = sales.GroupBy(s => s.Id).ToDictionary(g => g.Key, g => g.First());
+
+            // Every name the wizard found on the customer's ABN, so the portal can list the
+            // ones they didn't renew this time as well.
+            var leadIds = rows.Where(r => r.LeadId != null).Select(r => r.LeadId!.Value).Distinct().ToList();
+            var namesByLead = (await db.Leads.AsNoTracking()
+                    .Where(l => leadIds.Contains(l.Id) && l.SearchLog != null)
+                    .SelectMany(l => l.SearchLog!.Results.Select(sr => new { LeadId = l.Id, sr.BusinessName, sr.RegistrationDate }))
+                    .ToListAsync())
+                .GroupBy(x => x.LeadId)
+                .ToDictionary(g => g.Key, g => g.ToList());
             var uploadBy = uploads.GroupBy(b => b.Id).ToDictionary(g => g.Key, g => g.First());
 
             var items = rows.Select(r =>
@@ -83,7 +95,11 @@ public sealed class PartnerModule : ICarterModule
                     status = r.Status.ToString(),
                     source = r.Source.ToString(),
                     businessName = r.BusinessName,
+                    registrationDate = NullIfEmpty(r.RegistrationDate),
                     abn = r.Abn,
+                    abnBusinessNames = r.LeadId is { } lid && namesByLead.TryGetValue(lid, out var found)
+                        ? found.Select(n => new { name = n.BusinessName, registrationDate = NullIfEmpty(n.RegistrationDate) }).ToList()
+                        : null,
                     renewalYears = r.RenewalYears,
                     amount = r.Amount,
                     email = r.Email,
@@ -264,6 +280,8 @@ public sealed class PartnerModule : ICarterModule
             return null;
         }
     }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim();

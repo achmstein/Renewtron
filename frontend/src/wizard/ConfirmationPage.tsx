@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { api, type LeadDto, type RenewalStatusItem } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
@@ -18,6 +18,18 @@ export default function ConfirmationPage() {
   const pollRef = useRef<number | undefined>(undefined)
   // Customers sent here from the Business Portal get a way back to it.
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
+
+  // Straight after payment the server hands back a one-click portal sign-in link: take the
+  // customer into the portal (their account and names are set up there) after a short pause.
+  const location = useLocation()
+  const signInUrl = (location.state as { portalSignInUrl?: string | null } | null)?.portalSignInUrl ?? null
+  const [redirectIn, setRedirectIn] = useState<number | null>(signInUrl ? 8 : null)
+  useEffect(() => {
+    if (!signInUrl || redirectIn === null) return
+    if (redirectIn <= 0) { window.location.assign(signInUrl); return }
+    const t = window.setTimeout(() => setRedirectIn(redirectIn - 1), 1000)
+    return () => window.clearTimeout(t)
+  }, [signInUrl, redirectIn])
 
   useEffect(() => {
     if (getPrefill().source.toLowerCase() !== 'portal') return
@@ -95,6 +107,25 @@ export default function ConfirmationPage() {
           </div>
         ) : (
           <>
+            {signInUrl ? (
+              <div className="mx-auto mb-6 max-w-2xl rounded-xl bg-brand/5 p-4 ring-1 ring-brand/20 sm:flex sm:items-center sm:justify-between sm:gap-4">
+                <p className="text-sm text-gray-700">
+                  Your Business Portal account is ready. Track this renewal and all your business names there.
+                  {redirectIn !== null ? <> Taking you there in {redirectIn}s…</> : null}
+                </p>
+                <div className="mt-3 flex shrink-0 items-center gap-3 sm:mt-0">
+                  {redirectIn !== null ? (
+                    <button type="button" onClick={() => setRedirectIn(null)} className="text-sm font-medium text-gray-600 hover:text-gray-500">
+                      Stay here
+                    </button>
+                  ) : null}
+                  <a href={signInUrl} className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark">
+                    Go to my portal
+                  </a>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mx-auto max-w-2xl">
               <UserDetailsSummary abn={lead.abn} fullName={lead.fullName} email={lead.email} mobileNumber={lead.mobileNumber} dateOfBirth={lead.dateOfBirth} />
             </div>
