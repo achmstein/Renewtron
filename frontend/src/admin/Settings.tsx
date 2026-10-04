@@ -17,19 +17,18 @@ type SectionDef = {
   key: SectionKey
   group: string
   title: string
-  description: string
 }
 
 const SECTIONS: SectionDef[] = [
-  { key: 'sendgrid',  group: 'EMAIL & COMMS', title: 'SendGrid',          description: 'Outbound transactional email.' },
-  { key: 'winback',   group: 'EMAIL & COMMS', title: 'Win-back template', description: 'Subject + body for the lead win-back email.' },
-  { key: 'stripe',    group: 'PAYMENTS',      title: 'Stripe',            description: 'Customer payment processing.' },
-  { key: 'pricing',   group: 'PAYMENTS',      title: 'Pricing',           description: 'Customer-facing renewal prices.' },
-  { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials',  description: 'Card details used at ASIC checkout.' },
-  { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport',         description: 'API credentials for sales sync + OTP SMS.' },
-  { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox',    description: 'Gmail inbox scanned for ASIC key notifications.' },
-  { key: 'asickeyrequests', group: 'INTEGRATIONS', title: 'ASIC key requests', description: 'The list of keys to ask ASIC for, sent by hand.' },
-  { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags',     description: 'GA4, GTM and Meta pixel ids.' },
+  { key: 'sendgrid',  group: 'EMAIL & COMMS', title: 'SendGrid' },
+  { key: 'winback',   group: 'EMAIL & COMMS', title: 'Win-back template' },
+  { key: 'stripe',    group: 'PAYMENTS',      title: 'Stripe' },
+  { key: 'pricing',   group: 'PAYMENTS',      title: 'Pricing' },
+  { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials' },
+  { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport' },
+  { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox' },
+  { key: 'asickeyrequests', group: 'INTEGRATIONS', title: 'ASIC key requests' },
+  { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags' },
 ]
 
 export default function Settings() {
@@ -45,7 +44,7 @@ export default function Settings() {
   const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
   const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
-  const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
+  const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
   const [keyRequests, setKeyRequests] = useState<AsicKeyRequestSettings>(defaultAsicKeyRequest())
@@ -61,7 +60,7 @@ export default function Settings() {
     setAsicHasCvc(hasCvc)
     setOntraport(r.ontraport)
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
-    setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '' })
+    setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
     setKeyRequests(r.asicKeyRequest ?? defaultAsicKeyRequest())
   }
@@ -127,8 +126,8 @@ export default function Settings() {
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
     tracking: (() => {
-      const total = [tracking.gtmContainerId, tracking.ga4MeasurementId, tracking.metaPixelId].filter(isFilled).length
-      return total === 0 ? 'empty' : total === 3 ? 'configured' : 'partial'
+      const total = [tracking.gtmContainerId, tracking.ga4MeasurementId, tracking.metaPixelId, tracking.clarityProjectId].filter(isFilled).length
+      return total === 0 ? 'empty' : total === 4 ? 'configured' : 'partial'
     })(),
     asickeys: (() => {
       const total = [asicKeys.username, asicKeys.password, asicKeys.ontraportFieldId].filter(isFilled).length
@@ -175,7 +174,6 @@ export default function Settings() {
                         {isActive ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r bg-brand-500" /> : null}
                         <div className="min-w-0 flex-1">
                           <div className={`text-sm font-medium ${isActive ? 'text-zinc-900' : 'text-zinc-700 group-hover:text-zinc-900'}`}>{s.title}</div>
-                          <div className="text-xxs font-mono text-zinc-400 truncate">{s.description}</div>
                         </div>
                         <ConfiguredDot status={status[s.key]} />
                       </button>
@@ -192,7 +190,7 @@ export default function Settings() {
           {!data ? (
             <p className="text-sm text-zinc-500">Loading…</p>
           ) : (
-            <Section title={active.title} subtitle={active.description} status={status[active.key]}>
+            <Section title={active.title} status={status[active.key]}>
               {activeKey === 'sendgrid' ? (
                 <form onSubmit={onSendGrid} className="space-y-4">
                   <Field label="API key">
@@ -223,7 +221,7 @@ export default function Settings() {
                       onChange={(e) => setWinBack({ ...winBack, bodyPlain: e.target.value })}
                     />
                   </Field>
-                  <Field label="Body (HTML, optional)" hint="Leave blank to auto-wrap the plain-text body.">
+                  <Field label="Body (HTML, optional)">
                     <textarea
                       rows={6}
                       className={`${inputCls} font-mono text-xs leading-relaxed`}
@@ -303,17 +301,17 @@ export default function Settings() {
                   <Field label="API key">
                     <input className={`${inputCls} font-mono`} value={ontraport.apiKey} onChange={(e) => setOntraport({ ...ontraport, apiKey: e.target.value })} />
                   </Field>
-                  <Field label="Conversation ID" hint="Used to retrieve OTP SMS messages from ASIC.">
+                  <Field label="Conversation ID">
                     <input className={`${inputCls} font-mono`} value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
                   </Field>
                   <label className="flex items-center gap-2 text-sm text-zinc-700">
                     <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={ontraport.pushWizardContacts} onChange={(e) => setOntraport({ ...ontraport, pushWizardContacts: e.target.checked })} />
                     Create or update an Ontraport contact for everyone who uses the renewal wizard
                   </label>
-                  <Field label="Wizard form tag ID" hint="Added when someone fills in the wizard form. Blank = no tag.">
+                  <Field label="Wizard form tag ID">
                     <input className={`${inputCls} font-mono`} value={ontraport.wizardLeadTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardLeadTagId: e.target.value })} placeholder="1908" />
                   </Field>
-                  <Field label="Wizard paid tag ID" hint="Added when a wizard renewal is paid for. Blank = no tag.">
+                  <Field label="Wizard paid tag ID">
                     <input className={`${inputCls} font-mono`} value={ontraport.wizardPaidTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardPaidTagId: e.target.value })} placeholder="1737" />
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
@@ -338,7 +336,7 @@ export default function Settings() {
                     <Field label="Gmail address">
                       <input type="email" className={inputCls} value={asicKeys.username} onChange={(e) => setAsicKeys({ ...asicKeys, username: e.target.value })} />
                     </Field>
-                    <Field label="App password" hint="A Google app password, not the account password.">
+                    <Field label="App password">
                       <input type="password" className={`${inputCls} font-mono`} value={asicKeys.password} onChange={(e) => setAsicKeys({ ...asicKeys, password: e.target.value })} />
                     </Field>
                   </div>
@@ -349,14 +347,14 @@ export default function Settings() {
                     <Field label="Subject contains">
                       <input className={inputCls} value={asicKeys.subjectFilter} onChange={(e) => setAsicKeys({ ...asicKeys, subjectFilter: e.target.value })} />
                     </Field>
-                    <Field label="Lookback (days)" hint="ASIC download links expire after 30 days.">
+                    <Field label="Lookback (days)">
                       <input type="number" min={1} max={365} className={`${inputCls} font-mono tabular-nums`} value={asicKeys.lookbackDays} onChange={(e) => setAsicKeys({ ...asicKeys, lookbackDays: Number(e.target.value) || 30 })} />
                     </Field>
                   </div>
-                  <Field label="Ontraport ASIC key field" hint="Contact custom field ID, e.g. f5xxx.">
+                  <Field label="Ontraport ASIC key field">
                     <input className={`${inputCls} font-mono`} value={asicKeys.ontraportFieldId} onChange={(e) => setAsicKeys({ ...asicKeys, ontraportFieldId: e.target.value })} placeholder="f5xxx" />
                   </Field>
-                  <Field label="ASIC key pattern" hint="Regex over the PDF text; group 1 is the key.">
+                  <Field label="ASIC key pattern">
                     <input className={`${inputCls} font-mono text-xs`} value={asicKeys.asicKeyPattern} onChange={(e) => setAsicKeys({ ...asicKeys, asicKeyPattern: e.target.value })} />
                     {asicKeys.defaultAsicKeyPattern && asicKeys.asicKeyPattern !== asicKeys.defaultAsicKeyPattern ? (
                       <button
@@ -430,6 +428,9 @@ export default function Settings() {
                   </Field>
                   <Field label="Meta pixel ID">
                     <input className={`${inputCls} font-mono`} value={tracking.metaPixelId} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} placeholder="1234567890" />
+                  </Field>
+                  <Field label="Microsoft Clarity project ID">
+                    <input className={`${inputCls} font-mono`} value={tracking.clarityProjectId} onChange={(e) => setTracking({ ...tracking, clarityProjectId: e.target.value.trim() })} placeholder="abcd1234ef" />
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
                 </form>

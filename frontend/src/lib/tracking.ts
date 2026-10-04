@@ -41,6 +41,7 @@ declare global {
     dataLayer?: unknown[]
     gtag?: (...args: unknown[]) => void
     fbq?: (...args: unknown[]) => void
+    clarity?: (...args: unknown[]) => void
   }
 }
 

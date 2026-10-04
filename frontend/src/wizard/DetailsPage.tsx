@@ -116,7 +116,7 @@ export default function DetailsPage() {
         </div>
 
         <div className="mx-auto mt-10 max-w-md">
-          <form onSubmit={submit}>
+          <form onSubmit={submit} data-clarity-mask="true">
             <div className="space-y-5">
               <div>
                 <label htmlFor="fullName" className="block text-sm font-medium leading-6 text-gray-900">

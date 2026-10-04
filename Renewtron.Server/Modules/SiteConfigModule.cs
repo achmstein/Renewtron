@@ -31,6 +31,7 @@ public sealed class SiteConfigModule : ICarterModule
                     gtmContainerId = t.GtmContainerId,
                     ga4MeasurementId = t.Ga4MeasurementId,
                     metaPixelId = t.MetaPixelId,
+                    clarityProjectId = t.ClarityProjectId,
                 },
             });
         }).WithTags("Wizard");

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
@@ -11,6 +11,7 @@ import PaymentPage from './wizard/PaymentPage'
 import ConfirmationPage from './wizard/ConfirmationPage'
 import NotAvailablePage from './wizard/NotAvailablePage'
 import RequireAuth from './auth/RequireAuth'
+import { isPrivatePath, syncClarityWithPath } from './lib/siteConfig'
 
 const AdminRoutes = lazy(() => import('./admin/AdminRoutes'))
 
@@ -33,7 +34,9 @@ export default function App() {
   const { pathname } = useLocation()
   // The original Blazor /Account/Login used EmptyLayout — no header, no footer.
   // Admin uses its own AdminLayout (gray-800 nav), so no public chrome there either.
-  const chromeless = pathname === '/login' || pathname.startsWith('/admin')
+  const chromeless = isPrivatePath(pathname)
+
+  useEffect(() => syncClarityWithPath(pathname), [pathname])
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F9FC]">

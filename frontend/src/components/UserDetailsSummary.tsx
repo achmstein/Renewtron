@@ -25,7 +25,7 @@ function formatDob(value?: string | null) {
 
 export default function UserDetailsSummary({ abn, fullName, email, mobileNumber, dateOfBirth, showEditButton, onEditClick }: Props) {
   return (
-    <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 mb-6">
+    <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 mb-6" data-clarity-mask="true">
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-light">

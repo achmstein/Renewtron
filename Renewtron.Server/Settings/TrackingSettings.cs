@@ -14,4 +14,7 @@ public class TrackingSettings
 
     /// <summary>Meta (Facebook) pixel id.</summary>
     public string MetaPixelId { get; set; } = string.Empty;
+
+    /// <summary>Microsoft Clarity project id (heatmaps + session recordings). Not loaded on admin pages.</summary>
+    public string ClarityProjectId { get; set; } = string.Empty;
 }

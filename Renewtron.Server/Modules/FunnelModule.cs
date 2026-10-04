@@ -191,18 +191,33 @@ public sealed class FunnelModule : ICarterModule
                 .OrderByDescending(s => s.visitors)
                 .ToList();
 
-            var fourteenDaysAgo = now.Date.AddDays(-13).ToUniversalTime();
-            var dailyRaw = await db.FunnelEvents.AsNoTracking()
-                .Where(e => e.CreatedAt >= fourteenDaysAgo && e.Step == FunnelSteps.AbnViewed)
-                .GroupBy(e => new { e.CreatedAt.Year, e.CreatedAt.Month, e.CreatedAt.Day })
-                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Select(e => e.VisitorId).Distinct().Count() })
+            // Visitors and renewals per day across the selected range (capped at 90 days),
+            // so the trend chart matches the numbers above it.
+            var chartFrom = from < to.AddDays(-90) ? to.AddDays(-90) : from;
+            var dailyRaw = await query
+                .Where(e => e.CreatedAt >= chartFrom && (e.Step == FunnelSteps.AbnViewed || e.Step == FunnelSteps.RenewalComplete))
+                .GroupBy(e => new { e.CreatedAt.Year, e.CreatedAt.Month, e.CreatedAt.Day, e.Step })
+                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, g.Key.Step, Count = g.Select(e => e.VisitorId).Distinct().Count() })
                 .ToListAsync();
-            var dailyMap = dailyRaw.ToDictionary(d => new DateOnly(d.Year, d.Month, d.Day), d => d.Count);
-            var daily14d = Enumerable.Range(0, 14).Select(i =>
+            var lastDay = DateOnly.FromDateTime((to > now ? now : to.AddTicks(-1)).Date);
+            var firstDay = DateOnly.FromDateTime(chartFrom.Date);
+            var daily = Enumerable.Range(0, lastDay.DayNumber - firstDay.DayNumber + 1).Select(i =>
             {
-                var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
-                return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
+                var date = firstDay.AddDays(i);
+                int CountFor(string step) => dailyRaw
+                    .Where(d => d.Step == step && d.Year == date.Year && d.Month == date.Month && d.Day == date.Day)
+                    .Sum(d => d.Count);
+                return new { date = date.ToString("yyyy-MM-dd"), visitors = CountFor(FunnelSteps.AbnViewed), renewed = CountFor(FunnelSteps.RenewalComplete) };
             }).ToList();
+
+            // The same headline numbers for the window just before this one, for "vs previous period".
+            var span = (to > now ? now : to) - from;
+            IQueryable<FunnelEvent> previousQuery = db.FunnelEvents.AsNoTracking()
+                .Where(e => e.CreatedAt >= from - span && e.CreatedAt < from);
+            if (!string.IsNullOrWhiteSpace(source))
+                previousQuery = previousQuery.Where(e => e.Source == source);
+            var previousVisitors = await previousQuery.Select(e => e.VisitorId).Distinct().CountAsync();
+            var previousCompleted = await previousQuery.Where(e => e.Step == FunnelSteps.RenewalComplete).Select(e => e.VisitorId).Distinct().CountAsync();
 
             return Results.Ok(new
             {
@@ -213,7 +228,13 @@ public sealed class FunnelModule : ICarterModule
                 exits,
                 stoppedAt,
                 bySource,
-                daily14d,
+                daily,
+                previous = new
+                {
+                    totalVisitors = previousVisitors,
+                    completedVisitors = previousCompleted,
+                    conversionPct = previousVisitors > 0 ? Math.Round((decimal)previousCompleted * 100m / previousVisitors, 1) : 0m,
+                },
             });
         });
     }

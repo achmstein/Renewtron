@@ -10,6 +10,7 @@ export interface SiteConfig {
     gtmContainerId: string
     ga4MeasurementId: string
     metaPixelId: string
+    clarityProjectId?: string
   }
   /** Business Portal root for "back to your portal" links; null when not configured. */
   portalUrl?: string | null
@@ -39,12 +40,36 @@ function addScript(src: string) {
 
 let installed = false
 
+/** Admin and login pages show customer PII, so Clarity must never record them. */
+export const isPrivatePath = (pathname: string) => pathname === '/login' || pathname.startsWith('/admin')
+
+type Clarity = ((...args: unknown[]) => void) & { q?: unknown[] }
+let clarityLoaded = false
+
+/**
+ * Pauses Clarity while on admin/login pages and resumes on the public ones. The SPA shares
+ * one page load, so an admin who signs in after visiting the wizard would otherwise be recorded.
+ */
+export function syncClarityWithPath(pathname: string) {
+  if (clarityLoaded) window.clarity?.(isPrivatePath(pathname) ? 'stop' : 'start')
+}
+
 /** Injects whichever marketing tags are configured. Safe to call more than once. */
 export function installTrackingTags(config: SiteConfig) {
   if (installed) return
   installed = true
 
-  const { gtmContainerId, ga4MeasurementId, metaPixelId } = config.tracking
+  const { gtmContainerId, ga4MeasurementId, metaPixelId, clarityProjectId } = config.tracking
+
+  if (clarityProjectId && /^[a-z0-9]+$/i.test(clarityProjectId) && !isPrivatePath(window.location.pathname)) {
+    // Clarity's own stub: queue calls until the tag loads.
+    const clarity: Clarity = function (...args: unknown[]) {
+      (clarity.q = clarity.q ?? []).push(args)
+    }
+    window.clarity = window.clarity ?? clarity
+    addScript(`https://www.clarity.ms/tag/${clarityProjectId}`)
+    clarityLoaded = true
+  }
 
   if (gtmContainerId) {
     window.dataLayer = window.dataLayer ?? []

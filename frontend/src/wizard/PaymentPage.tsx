@@ -9,6 +9,7 @@ import WizardProgress from '../components/WizardProgress'
 import { getPrefill } from '../lib/prefill'
 import { loadSiteConfig } from '../lib/siteConfig'
 import { FunnelStep, trackStep } from '../lib/tracking'
+import { useLead } from '../lib/useLead'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -21,13 +22,12 @@ export default function PaymentPage() {
   const years = (Number(params.get('years')) || 1) as 1 | 3
   const navigate = useNavigate()
 
-  const [lead, setLead] = useState<LeadDto | null>(null)
+  const { lead, waitUntilVerified } = useLead(leadId, () => navigate('/'))
   const [pricing, setPricing] = useState<PricingResponse | null>(null)
   const [stripeKey, setStripeKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!leadId) return
-    void api.getLead(leadId).then(setLead).catch(() => navigate('/'))
     void api.pricing().then(setPricing).catch(() => {})
     void loadSiteConfig().then((config) => {
       // The publishable key is public by design — it comes from /api/site-config so the
@@ -45,6 +45,12 @@ export default function PaymentPage() {
   )
 
   const selectedNames = (lead?.businessNames ?? []).filter((b) => ids.includes(b.id))
+  // Names from our copy of the register that ASIC then said it won't renew.
+  const droppedCount = lead?.verified ? ids.length - selectedNames.length : 0
+
+  useEffect(() => {
+    if (lead?.verified && lead.outcome !== 'RenewalAvailable') navigate(`/not-available/${lead.id}`)
+  }, [lead, navigate])
   const pricePerItem = pricing ? (years === 1 ? pricing.oneYearFee : pricing.threeYearFee) : 0
   const total = pricePerItem * selectedNames.length
 
@@ -116,6 +122,13 @@ export default function PaymentPage() {
             <p className="mt-2 text-sm text-gray-600">Secure payment powered by Stripe</p>
           </div>
 
+          {droppedCount > 0 ? (
+            <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
+              ASIC can't renew {droppedCount} of the business names you picked right now, so {droppedCount === 1 ? "it's" : "they've"} been
+              taken off this order. Your total has been updated.
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             <div className="lg:col-span-2 order-2 lg:order-1">
               <div className="rounded-lg bg-gray-50 border border-gray-200 p-5 sticky top-6">
@@ -151,9 +164,10 @@ export default function PaymentPage() {
                     <PaymentForm
                       leadId={leadId}
                       abn={lead.abn}
-                      ids={ids}
+                      ids={selectedNames.map((b) => b.id)}
                       years={years}
                       total={total}
+                      waitUntilVerified={waitUntilVerified}
                       cardholderDefault={getPrefill().fullName}
                       onComplete={(renewalIds, portalSignInUrl) =>
                         navigate(`/confirmation/${leadId}?ids=${renewalIds.join(',')}`, { state: { portalSignInUrl } })}
@@ -188,11 +202,13 @@ interface FormProps {
   ids: string[]
   years: 1 | 3
   total: number
+  /** Resolves once ASIC has confirmed the names; payment must not be taken before. */
+  waitUntilVerified: () => Promise<LeadDto>
   cardholderDefault: string
   onComplete: (renewalIds: string[], portalSignInUrl?: string | null) => void
 }
 
-function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComplete }: FormProps) {
+function PaymentForm({ leadId, abn, ids, years, total, waitUntilVerified, cardholderDefault, onComplete }: FormProps) {
   const stripe = useStripe()
   const elements = useElements()
   const [cardHolder, setCardHolder] = useState(cardholderDefault)
@@ -219,6 +235,18 @@ function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComp
       if (pmResult.error) throw new Error(pmResult.error.message ?? 'Card error.')
 
       setProcessing(true)
+      // Names listed from our copy of the register are confirmed with ASIC in the
+      // background; usually done by now, otherwise wait here before charging.
+      setProcessingStatus('Confirming your business names with ASIC...')
+      const confirmed = await waitUntilVerified()
+      const stillAvailable = new Set(confirmed.businessNames.map((b) => b.id))
+      if (confirmed.outcome !== 'RenewalAvailable' || ids.some((id) => !stillAvailable.has(id))) {
+        throw new Error(
+          "ASIC can't renew one or more of these business names right now, so you haven't been charged. " +
+          'Please go back to your selection to review it.',
+        )
+      }
+
       setProcessingStatus('Creating renewal requests...')
       trackStep(FunnelStep.PaymentSubmitted, {
         leadId,
@@ -317,6 +345,7 @@ function PaymentForm({ leadId, abn, ids, years, total, cardholderDefault, onComp
         <input
           id="cardHolder"
           type="text"
+          data-clarity-mask="true"
           value={cardHolder}
           onChange={(e) => setCardHolder(e.target.value)}
           required

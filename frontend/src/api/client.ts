@@ -50,12 +50,15 @@ export interface LeadDto {
   dateOfBirth?: string | null
   outcome: string
   outcomeMessage?: string | null
+  /** False while names listed from our copy of the register wait on ASIC's confirmation. */
+  verified: boolean
   businessNames: BusinessNameDto[]
 }
 
 export interface CheckResponse {
   outcome: 'RenewalAvailable' | 'NotDueForRenewal' | 'RenewalInProgress' | 'NoBusinessNames'
   message?: string
+  verified: boolean
   businessNames: BusinessNameDto[]
 }
 
@@ -175,6 +178,7 @@ export interface TrackingSettings {
   gtmContainerId: string
   ga4MeasurementId: string
   metaPixelId: string
+  clarityProjectId: string
 }
 
 export interface FunnelResponse {
@@ -193,7 +197,10 @@ export interface FunnelResponse {
   exits: Array<{ step: string; label: string; visitors: number }>
   stoppedAt: Array<{ step: string; label: string; visitors: number; rank: number }>
   bySource: Array<{ source: string; visitors: number; completed: number; conversionPct: number }>
-  daily14d: Array<{ date: string; count: number }>
+  /** One point per day of the selected range (max 90). */
+  daily: Array<{ date: string; visitors: number; renewed: number }>
+  /** The same headline numbers for the equally long window just before. */
+  previous: { totalVisitors: number; completedVisitors: number; conversionPct: number }
 }
 
 export type ActivityKind = 'paid' | 'lead-warm'
@@ -259,6 +266,8 @@ export const api = {
   createLead: (input: { abn: string; fullName: string; email: string; mobileNumber: string; dateOfBirth: string; tfn?: string; source?: string; ontraportContactId?: string; visitorId?: string }) =>
     apiFetch<{ leadId: string }>('/api/leads', { method: 'POST', body: JSON.stringify(input) }),
   getLead: (id: string) => apiFetch<LeadDto>(`/api/leads/${id}`),
+  /** Starts ASIC's search for this ABN early; the answer is reused by the check step. */
+  prefetchSearch: (abn: string) => apiFetch<void>('/api/search/prefetch', { method: 'POST', body: JSON.stringify({ abn }) }),
   checkLead: (id: string) => apiFetch<CheckResponse>(`/api/leads/${id}/check`, { method: 'POST' }),
   createBatchRenewal: (input: { leadId: string; searchResultIds: string[]; renewalYears: 1 | 3; paymentMethodId: string; cardholderName?: string }) =>
     apiFetch<BatchRenewalResponse>('/api/renewals/batch', { method: 'POST', body: JSON.stringify(input) }),
