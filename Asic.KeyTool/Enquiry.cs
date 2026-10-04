@@ -20,8 +20,14 @@ public sealed class Enquiry
     /// The client's details come with each row from Renewtron.
     /// </summary>
     public string Email { get; set; } = "";
-    /// <summary>Contact phone as it arrived; normalised at submit time.</summary>
+    /// <summary>Contact phone as typed in; split for ASIC's boxes at submit time.</summary>
     public string Phone { get; set; } = "";
+    /// <summary>
+    /// Already split, from Renewtron: the server applies its fallback phone (admin Settings)
+    /// when the contact has none, so a row from the list arrives with these filled in.
+    /// </summary>
+    public string PhonePrefix { get; set; } = "";
+    public string PhoneNumber { get; set; } = "";
 
     // ---- outcome ---------------------------------------------------------------------
     public bool Submitted { get; set; }
@@ -44,7 +50,7 @@ public sealed class Enquiry
     public AsicKeyRequestInput ToInput(KeyToolSettings settings)
     {
         var keyEmail = (settings.RequestEmail ?? "").Trim();
-        var (prefix, number) = ResolvePhone(Phone, settings);
+        var (prefix, number) = ResolvedPhone;
         return new AsicKeyRequestInput
         {
             GivenNames = GivenNames.Trim(),
@@ -60,14 +66,12 @@ public sealed class Enquiry
         };
     }
 
-    /// <summary>Why this row can't be sent, or null when it's good to go.</summary>
-    public string? Problem() => Problem(null);
-
     /// <summary>
-    /// With settings, also checks the phone: ASIC's form makes it mandatory, so a sale
-    /// with no usable number needs the fallback phone (Settings) or it bounces.
+    /// Why this row can't be sent, or null when it's good to go. ASIC's form makes the phone
+    /// mandatory; a row from Renewtron with no usable number needs the fallback phone set on
+    /// the server's admin Settings page, or it bounces.
     /// </summary>
-    public string? Problem(KeyToolSettings? settings)
+    public string? Problem()
     {
         if (string.IsNullOrWhiteSpace(BusinessName)) return "business name is blank";
         if (string.IsNullOrWhiteSpace(GivenNames) || string.IsNullOrWhiteSpace(FamilyName)) return "contact name is blank";
@@ -75,10 +79,14 @@ public sealed class Enquiry
         if (abn.Length == 0) return "ABN is blank";
         if (abn.Length != 11) return $"ABN has {abn.Length} digits, expected 11";
         if (!LooksLikeEmail(Email)) return Email.Trim().Length == 0 ? "contact has no email address" : "contact email isn't an address";
-        if (settings != null && ResolvePhone(Phone, settings).Number.Length == 0)
-            return DigitsOnly(Phone).Length == 0 ? "contact has no phone number and no fallback phone is set" : "contact phone isn't usable and no fallback phone is set";
+        if (ResolvedPhone.Number.Length == 0)
+            return DigitsOnly(Phone).Length == 0 ? "contact has no phone number and no fallback phone is set in Renewtron's settings" : "contact phone isn't usable";
         return null;
     }
+
+    /// <summary>The server's split when it sent one, otherwise the typed-in phone split here.</summary>
+    private (string Prefix, string Number) ResolvedPhone =>
+        DigitsOnly(PhoneNumber).Length > 0 ? (PhonePrefix.Trim(), DigitsOnly(PhoneNumber)) : SplitPhone(Phone);
 
     // ---- helpers (ported from Renewtron's AsicKeyRequestService) ----------------------
 
@@ -96,17 +104,17 @@ public sealed class Enquiry
     /// <summary>
     /// ASIC wants an area/prefix box (max 4) and a number box (max 15). Australian numbers
     /// arrive as "0412 345 678", "+61412345678" or "61412345678"; anything that doesn't
-    /// normalise to ten digits falls back to the configured office number.
+    /// normalise to eight to ten digits is unusable.
     /// </summary>
-    public static (string Prefix, string Number) ResolvePhone(string? raw, KeyToolSettings settings)
+    public static (string Prefix, string Number) SplitPhone(string? raw)
     {
         var digits = DigitsOnly(raw);
         if (digits.StartsWith("61") && digits.Length == 11) digits = "0" + digits[2..];
         if (digits.Length == 10 && digits[0] == '0')
             return (digits[..2], digits[2..]);
         if (digits.Length is 8 or 9)
-            return ((settings.DefaultPhonePrefix ?? "").Trim(), digits);
-        return ((settings.DefaultPhonePrefix ?? "").Trim(), DigitsOnly(settings.DefaultPhoneNumber));
+            return ("", digits);
+        return ("", "");
     }
 
     /// <summary>{Email} is where the key should be sent; {ClientEmail} is the client's own address.</summary>

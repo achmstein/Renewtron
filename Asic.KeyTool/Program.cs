@@ -212,7 +212,7 @@ public static class Program
         for (var i = 0; i < rows.Count; i++)
         {
             var r = rows[i];
-            var problem = ToEnquiry(r).Problem(_settings);
+            var problem = ToEnquiry(r).Problem();
             var note = problem != null
                 ? $"[red]{Markup.Escape(problem)}[/]"
                 : r.ErrorMessage == null ? "" : $"[grey]{Markup.Escape(Shorten(r.ErrorMessage, 44))}[/]";
@@ -243,7 +243,7 @@ public static class Program
             if (ct.IsCancellationRequested) break;
             var row = rows[i];
             var label = $"[{i + 1}/{rows.Count}] ";
-            if (ToEnquiry(row).Problem(_settings) is { } problem)
+            if (ToEnquiry(row).Problem() is { } problem)
             {
                 AnsiConsole.MarkupLine($"[yellow]•[/] {Markup.Escape(label)}{Markup.Escape(row.BusinessName)} [grey]skipped — {Markup.Escape(problem)}[/]");
                 skipped++;
@@ -276,7 +276,7 @@ public static class Program
     private static async Task<AsicKeyRequestResult?> SendServerRequestAsync(ServerRequest row, string? label, bool manualFallback, CancellationToken ct)
     {
         var enquiry = ToEnquiry(row);
-        if (enquiry.Problem(_settings) is { } problem)
+        if (enquiry.Problem() is { } problem)
         {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(row.BusinessName)}: {Markup.Escape(problem)}[/]");
             return null;
@@ -356,6 +356,8 @@ public static class Program
         Abn = row.Abn,
         Email = row.Email,
         Phone = row.Phone ?? "",
+        PhonePrefix = row.PhonePrefix,
+        PhoneNumber = row.PhoneNumber,
         GivenNames = row.GivenNames,
         FamilyName = row.FamilyName,
     };
@@ -424,7 +426,7 @@ public static class Program
         };
         enquiry.SetContactName(options.GetValueOrDefault("contact", ""));
 
-        if (enquiry.Problem(_settings) is { } problem)
+        if (enquiry.Problem() is { } problem)
         {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(problem)}[/] — usage: --submit --business NAME --abn N --contact \"Given Family\" --email E --phone P (ASIC requires a phone)");
             return false;
@@ -458,14 +460,10 @@ public static class Program
                 : ValidationResult.Error("[red]Given and family name, e.g. Jane Smith[/]"))));
         enquiry.Email = AnsiConsole.Prompt(new TextPrompt<string>("Client's email (ASIC replies here):")
             .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
-        enquiry.Phone = AnsiConsole.Prompt(new TextPrompt<string>("Phone:")
-            .AllowEmpty()
-            .DefaultValue(_settings.DefaultPhoneNumber.Length > 0
-                ? $"{_settings.DefaultPhonePrefix}{_settings.DefaultPhoneNumber}"
-                : "")
-            .ShowDefaultValue(_settings.DefaultPhoneNumber.Length > 0));
+        enquiry.Phone = AnsiConsole.Prompt(new TextPrompt<string>("Phone [grey](ASIC requires one)[/]:")
+            .Validate(v => Enquiry.SplitPhone(v).Number.Length > 0 ? ValidationResult.Success() : ValidationResult.Error("[red]An Australian number, e.g. 0412 345 678[/]"))).Trim();
 
-        if (enquiry.Problem(_settings) is { } problem)
+        if (enquiry.Problem() is { } problem)
         {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(problem)}[/]");
             return;
@@ -624,7 +622,6 @@ public static class Program
             table.AddRow("Token attempts", _settings.MaxTokenAttempts.ToString());
             table.AddRow("Pause between requests", $"{_settings.PauseBetweenRequestsSeconds} s");
             table.AddRow("Key delivery email", Markup.Escape(_settings.RequestEmail));
-            table.AddRow("Fallback phone", Markup.Escape($"{_settings.DefaultPhonePrefix} {_settings.DefaultPhoneNumber}".Trim()));
             table.AddRow("Enquiry text", Markup.Escape(Shorten(_settings.MessageTemplate, 60)));
             AnsiConsole.Write(table);
 
@@ -632,7 +629,7 @@ public static class Program
                 .Title("Change what?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
                 .AddChoices("Renewtron server", "Browser", "Token attempts", "Pause between requests",
-                            "Key delivery email", "Fallback phone", "Enquiry text", "Back"));
+                            "Key delivery email", "Enquiry text", "Back"));
 
             switch (choice)
             {
@@ -668,13 +665,6 @@ public static class Program
                     _settings.RequestEmail = AnsiConsole.Prompt(new TextPrompt<string>("Inbox ASIC should email the key to:")
                         .DefaultValue(_settings.RequestEmail)
                         .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
-                    break;
-
-                case "Fallback phone":
-                    _settings.DefaultPhonePrefix = AnsiConsole.Prompt(
-                        new TextPrompt<string>("Area code:").DefaultValue(_settings.DefaultPhonePrefix).AllowEmpty()).Trim();
-                    _settings.DefaultPhoneNumber = AnsiConsole.Prompt(
-                        new TextPrompt<string>("Number:").DefaultValue(_settings.DefaultPhoneNumber).AllowEmpty()).Trim();
                     break;
 
                 case "Enquiry text":

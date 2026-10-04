@@ -91,8 +91,10 @@ key. The tool fills them differently:
   scans. It only appears inside the enquiry text as `{Email}`, so the key itself still lands
   where the pipeline can pick it up.
 
-ASIC's form also requires a phone number. A row with no usable mobile number uses **Fallback
-phone** (Settings); with neither, the row is skipped and the list says why.
+ASIC's form also requires a phone number. Each row arrives from Renewtron with the contact's
+number already split for ASIC's two boxes, and the server puts in its **fallback phone**
+(admin site → Settings → ASIC key requests) when the contact has none. With neither, the row
+is skipped and the list says why. The tool has no phone setting of its own.
 
 ## Failures
 

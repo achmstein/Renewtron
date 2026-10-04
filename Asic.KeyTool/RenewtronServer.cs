@@ -15,6 +15,9 @@ public sealed class ServerRequest
     public string FamilyName { get; set; } = "";
     public string Email { get; set; } = "";
     public string? Phone { get; set; }
+    /// <summary>The phone split for ASIC's two boxes, with the server's fallback phone applied when the contact has none.</summary>
+    public string PhonePrefix { get; set; } = "";
+    public string PhoneNumber { get; set; } = "";
     public string Status { get; set; } = "";
     public string? ErrorMessage { get; set; }
     public int AttemptCount { get; set; }

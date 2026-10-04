@@ -43,10 +43,6 @@ public sealed class KeyToolSettings
     /// </summary>
     public string RequestEmail { get; set; } = "businessnamerenewals@gmail.com";
 
-    /// <summary>Phone to put on the form when the row has no usable mobile number.</summary>
-    public string DefaultPhonePrefix { get; set; } = "";
-    public string DefaultPhoneNumber { get; set; } = "";
-
     /// <summary>Free-text enquiry. Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email}.</summary>
     public string MessageTemplate { get; set; } = DefaultMessageTemplate;
 
