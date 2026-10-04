@@ -8,9 +8,14 @@
       "Bash(dotnet build:*)",
       "Bash(git mv:*)",
       "Bash(git commit:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(gh workflow *)",
+      "Bash(gh run *)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "disabledMcpjsonServers": [
+    "aidesigner"
+  ]
 }
