@@ -15,9 +15,9 @@ public sealed class Enquiry
     public string BusinessName { get; set; } = "";
     /// <summary>
     /// The client's email. It goes in the form's contact email box, so ASIC's reply about
-    /// the enquiry reaches the client, not us. Where the key itself should be sent is
-    /// <see cref="KeyToolSettings.RequestEmail"/>, which only appears in the enquiry text.
-    /// The client's details come with each row from Renewtron.
+    /// the enquiry reaches the client, not us. Where the key itself should be sent only
+    /// appears in the enquiry text (<see cref="Question"/>). The client's details come with
+    /// each row from Renewtron.
     /// </summary>
     public string Email { get; set; } = "";
     /// <summary>Contact phone as typed in; split for ASIC's boxes at submit time.</summary>
@@ -28,6 +28,11 @@ public sealed class Enquiry
     /// </summary>
     public string PhonePrefix { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
+    /// <summary>
+    /// The enquiry text, from Renewtron: rendered there from the admin Settings page's key
+    /// delivery email and template. Blank for a typed-in enquiry, which uses the tool's own.
+    /// </summary>
+    public string Question { get; set; } = "";
 
     // ---- outcome ---------------------------------------------------------------------
     public bool Submitted { get; set; }
@@ -49,7 +54,6 @@ public sealed class Enquiry
     /// <summary>What ASIC's form needs: fields trimmed, phone split, enquiry text rendered.</summary>
     public AsicKeyRequestInput ToInput(KeyToolSettings settings)
     {
-        var keyEmail = (settings.RequestEmail ?? "").Trim();
         var (prefix, number) = ResolvedPhone;
         return new AsicKeyRequestInput
         {
@@ -60,9 +64,11 @@ public sealed class Enquiry
             Email = Email.Trim(),
             PhonePrefix = prefix,
             PhoneNumber = number,
-            Question = Render(string.IsNullOrWhiteSpace(settings.MessageTemplate)
-                ? KeyToolSettings.DefaultMessageTemplate
-                : settings.MessageTemplate, keyEmail),
+            Question = Question.Trim().Length > 0
+                ? Question.Trim()
+                : Render(string.IsNullOrWhiteSpace(settings.MessageTemplate)
+                    ? KeyToolSettings.DefaultMessageTemplate
+                    : settings.MessageTemplate, (settings.RequestEmail ?? "").Trim()),
         };
     }
 

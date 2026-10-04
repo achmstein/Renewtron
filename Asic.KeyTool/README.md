@@ -87,9 +87,11 @@ key. The tool fills them differently:
 - **Reply to** (the form's contact email) is the **client's own address**, which comes with
   each row from Renewtron. ASIC's acknowledgement and any questions about the enquiry go to
   them.
-- **Key delivery email** (Settings) is `businessnamerenewals@gmail.com`, the inbox Renewtron
-  scans. It only appears inside the enquiry text as `{Email}`, so the key itself still lands
-  where the pipeline can pick it up.
+- **Key delivery email** is the inbox Renewtron scans. It only appears inside the enquiry
+  text as `{Email}`, so the key itself still lands where the pipeline can pick it up. Rows
+  from Renewtron's list arrive with the enquiry text already written from the **admin
+  Settings page** (key delivery email and template); the tool's own Key delivery email and
+  Enquiry text settings are only used for enquiries typed in by hand.
 
 ASIC's form also requires a phone number. Each row arrives from Renewtron with the contact's
 number already split for ASIC's two boxes, and the server puts in its **fallback phone**

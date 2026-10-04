@@ -358,6 +358,7 @@ public static class Program
         Phone = row.Phone ?? "",
         PhonePrefix = row.PhonePrefix,
         PhoneNumber = row.PhoneNumber,
+        Question = row.Question ?? "",
         GivenNames = row.GivenNames,
         FamilyName = row.FamilyName,
     };
@@ -600,7 +601,7 @@ public static class Program
                     signedIn ? "[grey]the tool's browser is signed in[/]" : "[yellow]not signed in — menu → Sign in to Google lifts the captcha score[/]");
         });
 
-        table.AddRow("[grey]Key emailed to[/]", Markup.Escape(_settings.RequestEmail));
+        table.AddRow("[grey]Key emailed to[/]", $"[grey]Renewtron's Settings page for queued rows; {Markup.Escape(_settings.RequestEmail)} for typed-in ones[/]");
         table.AddRow("[grey]Settings file[/]", Markup.Escape(KeyToolSettings.DevelopmentSettingsInUse ? KeyToolSettings.DevelopmentSettingsPath : KeyToolSettings.UserSettingsPath));
         AnsiConsole.Write(table);
     }
@@ -621,8 +622,8 @@ public static class Program
             table.AddRow("Browser", _settings.BrowserChannel.Length == 0 ? "[grey]Chrome, then Edge[/]" : BrowserAsicKeyRequestClient.Describe(_settings.BrowserChannel));
             table.AddRow("Token attempts", _settings.MaxTokenAttempts.ToString());
             table.AddRow("Pause between requests", $"{_settings.PauseBetweenRequestsSeconds} s");
-            table.AddRow("Key delivery email", Markup.Escape(_settings.RequestEmail));
-            table.AddRow("Enquiry text", Markup.Escape(Shorten(_settings.MessageTemplate, 60)));
+            table.AddRow("Key delivery email [grey](typed-in only)[/]", Markup.Escape(_settings.RequestEmail));
+            table.AddRow("Enquiry text [grey](typed-in only)[/]", Markup.Escape(Shorten(_settings.MessageTemplate, 60)));
             AnsiConsole.Write(table);
 
             var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
@@ -661,14 +662,14 @@ public static class Program
                     break;
 
                 case "Key delivery email":
-                    AnsiConsole.MarkupLine("[grey]Goes in the enquiry text as {Email}. The form's reply-to is always the client's own address from Renewtron.[/]");
+                    AnsiConsole.MarkupLine("[grey]Only for enquiries typed in here. Rows from Renewtron's list use the key delivery email on Renewtron's Settings page.[/]");
                     _settings.RequestEmail = AnsiConsole.Prompt(new TextPrompt<string>("Inbox ASIC should email the key to:")
                         .DefaultValue(_settings.RequestEmail)
                         .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
                     break;
 
                 case "Enquiry text":
-                    AnsiConsole.MarkupLine("[grey]Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} (key delivery inbox) {ClientEmail}[/]");
+                    AnsiConsole.MarkupLine("[grey]Only for enquiries typed in here; rows from Renewtron's list use the server's text. Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} (key delivery inbox) {ClientEmail}[/]");
                     _settings.MessageTemplate = AnsiConsole.Prompt(new TextPrompt<string>("Enquiry:")
                         .DefaultValue(_settings.MessageTemplate).ShowDefaultValue(false)).Trim();
                     break;

@@ -18,6 +18,8 @@ public sealed class ServerRequest
     /// <summary>The phone split for ASIC's two boxes, with the server's fallback phone applied when the contact has none.</summary>
     public string PhonePrefix { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
+    /// <summary>The enquiry text, rendered from the server's Settings (key delivery email, template).</summary>
+    public string? Question { get; set; }
     public string Status { get; set; } = "";
     public string? ErrorMessage { get; set; }
     public int AttemptCount { get; set; }

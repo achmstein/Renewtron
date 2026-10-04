@@ -154,6 +154,7 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             if (!string.IsNullOrWhiteSpace(body.ReferenceNumber))
             {
                 row.Status = AsicKeyRequestStatus.Submitted;
+                row.Question = AsicKeyRequestService.Render(row, settings.CurrentValue);
                 row.AsicReferenceNumber = Truncate(body.ReferenceNumber.Trim(), 50);
                 row.SubmittedAt = DateTime.UtcNow;
                 row.ErrorMessage = string.IsNullOrWhiteSpace(body.Note) ? null : Truncate(body.Note, 1000);
@@ -228,7 +229,7 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             phone = r.Phone,
             phonePrefix = prefix,
             phoneNumber = number,
-            question = string.IsNullOrWhiteSpace(r.Question) ? AsicKeyRequestService.Render(r, settings) : r.Question,
+            question = Question(r, settings),
             source = r.Source,
             status = r.Status.ToString(),
             asicReferenceNumber = r.AsicReferenceNumber,
@@ -242,6 +243,15 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             keyReceivedAt = r.KeyReceivedAt,
         };
     }
+
+    /// <summary>
+    /// The enquiry text. Until it's sent it follows the current Settings (key delivery email,
+    /// template), so a change there reaches rows already queued; once sent, it's what went out.
+    /// </summary>
+    private static string Question(AsicKeyRequest r, AsicKeyRequestSettings settings) =>
+        (r.Status is AsicKeyRequestStatus.Submitted or AsicKeyRequestStatus.KeyReceived) && !string.IsNullOrWhiteSpace(r.Question)
+            ? r.Question
+            : AsicKeyRequestService.Render(r, settings);
 
     private static RecurringJobDto? RunJobInfo()
     {
