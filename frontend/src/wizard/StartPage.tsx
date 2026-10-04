@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
 import { capturePrefill } from '../lib/prefill'
@@ -42,6 +43,8 @@ export default function StartPage() {
     }
     const clean = abn.replace(/\s+/g, '')
     trackStep(FunnelStep.AbnSubmitted, { abn: clean })
+    // ASIC takes ~20s; start it now so it's done by the time the details are filled in.
+    void api.prefetchSearch(clean).catch(() => {})
     navigate(`/details?abn=${clean}`)
   }
 

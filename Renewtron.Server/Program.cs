@@ -109,7 +109,14 @@ builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKey
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
-builder.Services.AddHttpClient<IBusinessNameFallbackService, DataGovBusinessNameService>();
+builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
+builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportService>(client =>
+{
+    client.Timeout = TimeSpan.FromMinutes(10);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) Renewtron/1.0");
+});
+builder.Services.AddSingleton<IAsicSearchCoordinator, AsicSearchCoordinator>();
+builder.Services.AddScoped<ISearchVerificationService, SearchVerificationService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
@@ -307,6 +314,29 @@ RecurringJob.AddOrUpdate<IAsicKeyRequestService>(
     Renewtron.Modules.AsicKeyRequestsModule.RecurringJobId,
     service => service.ProcessPendingAsync(CancellationToken.None),
     "7,37 * * * *");
+
+// Our copy of ASIC's public business names register (data.gov.au), used to list a customer's
+// names instantly. Skips quietly when the published file hasn't changed since the last import.
+RecurringJob.AddOrUpdate<IBusinessNameImportService>(
+    BusinessNameImportService.RecurringJobId,
+    service => service.ImportIfChangedAsync(false, CancellationToken.None),
+    "0 3 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// First deploy: load the register now rather than waiting for 3am.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        if (!db.BusinessNameImports.Any(i => i.IsActive || i.CompletedAt == null))
+            BackgroundJob.Enqueue<IBusinessNameImportService>(s => s.ImportIfChangedAsync(false, CancellationToken.None));
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not check for a business names import");
+    }
+}
 
 app.MapGroup("/api").MapIdentityApi<AppUser>();
 

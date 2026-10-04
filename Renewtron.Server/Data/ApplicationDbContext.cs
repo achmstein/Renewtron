@@ -18,6 +18,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<OntraportSyncOutbox> OntraportSyncOutbox { get; set; }
     public DbSet<AsicKeyNotification> AsicKeyNotifications { get; set; }
     public DbSet<AsicKeyRequest> AsicKeyRequests { get; set; }
+    public DbSet<RegisteredBusinessName> RegisteredBusinessNames { get; set; }
+    public DbSet<BusinessNameImport> BusinessNameImports { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -40,6 +42,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.UserAgent).HasMaxLength(500);
             entity.HasIndex(e => e.SearchedAt);
             entity.HasIndex(e => e.Abn);
+            entity.Property(e => e.VerificationError).HasMaxLength(500);
+            entity.Ignore(e => e.IsVerified);
         });
 
         modelBuilder.Entity<SearchResult>(entity =>
@@ -49,11 +53,31 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.AccountNumber).IsRequired().HasMaxLength(50);
             entity.Property(e => e.RegistrationDate).IsRequired().HasMaxLength(50);
             entity.HasIndex(e => e.SearchLogId);
+            entity.Property(e => e.IsAvailable).HasDefaultValue(true);
 
             entity.HasOne(e => e.SearchLog)
                 .WithMany(s => s.Results)
                 .HasForeignKey(e => e.SearchLogId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RegisteredBusinessName>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.RegistrationDate).IsRequired().HasMaxLength(10).IsUnicode(false);
+            entity.HasIndex(e => new { e.Abn, e.ImportId }).IncludeProperties(e => new { e.Name, e.RegistrationDate });
+            // Old imports are cleared in batches by ImportId.
+            entity.HasIndex(e => e.ImportId);
+        });
+
+        modelBuilder.Entity<BusinessNameImport>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.SourceUrl).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.SourceModified).HasMaxLength(64);
+            entity.Property(e => e.Error).HasMaxLength(1000);
         });
 
         modelBuilder.Entity<RenewalRequest>(entity =>

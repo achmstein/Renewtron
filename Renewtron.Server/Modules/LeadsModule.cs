@@ -3,7 +3,6 @@ using Asic.Client.Models;
 using Carter;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Data;
@@ -104,7 +103,10 @@ public sealed class LeadsModule : ICarterModule
                 mobileNumber = PiiMask.Mobile(lead.MobileNumber),
                 outcome = lead.Outcome.ToString(),
                 outcomeMessage = lead.OutcomeMessage,
-                businessNames = lead.SearchLog?.Results.Select(r => new
+                // False while names from our copy of the register wait on ASIC's confirmation;
+                // the wizard polls this and payment is refused until it flips.
+                verified = lead.SearchLog?.IsVerified ?? true,
+                businessNames = lead.SearchLog?.Results.Where(r => r.IsAvailable).OrderBy(r => r.BusinessName).Select(r => new
                 {
                     id = r.Id,
                     businessName = r.BusinessName,
@@ -119,39 +121,48 @@ public sealed class LeadsModule : ICarterModule
             ApplicationDbContext db,
             ILeadService leadService,
             ILeadEmailService leadEmailService,
-            IAsicRenewalClient asic,
-            IBusinessNameFallbackService fallback,
+            IAsicSearchCoordinator asic,
+            IBusinessNameFallbackService localNames,
             IOptionsSnapshot<AsicSettings> asicSettings,
-            IMemoryCache cache,
-            IBackgroundJobClient jobs) =>
+            IServiceScopeFactory scopes,
+            IBackgroundJobClient jobs,
+            ILogger<LeadsModule> logger) =>
         {
             var lead = await leadService.GetLeadAsync(id);
             if (lead is null) return Results.NotFound();
 
             var cleanAbn = Helpers.NormalizeAbn(lead.Abn);
-            var cacheKey = $"abn_search_{cleanAbn}";
 
+            // Fastest path that is still ASIC's answer: the search the ABN step started is done.
+            // Otherwise list the names from our copy of the register straight away and confirm
+            // them with ASIC in the background; payment waits for that. Only an ABN our copy
+            // doesn't know (e.g. registered since the last import) waits on ASIC here.
+            SearchSource source;
             BusinessNamesResult searchResult;
-            if (!cache.TryGetValue(cacheKey, out BusinessNamesResult? cached) || cached is null)
+            if (!asicSettings.Value.ForceFallback && asic.TryGetRecent(cleanAbn, out var recent))
             {
-                if (asicSettings.Value.ForceFallback)
-                {
-                    searchResult = await fallback.SearchByAbnAsync(cleanAbn);
-                }
-                else
-                {
-                    searchResult = await asic.SearchByAbnAsync(cleanAbn);
-                    if (!searchResult.Success)
-                    {
-                        var fb = await fallback.SearchByAbnAsync(cleanAbn);
-                        if (fb.Success) searchResult = fb;
-                    }
-                }
-                cache.Set(cacheKey, searchResult, new MemoryCacheEntryOptions().SetAbsoluteExpiration(TimeSpan.FromMinutes(15)));
+                source = SearchSource.Asic;
+                searchResult = recent;
             }
             else
             {
-                searchResult = cached;
+                if (!asicSettings.Value.ForceFallback) asic.Prefetch(cleanAbn);
+                var local = await localNames.SearchByAbnAsync(cleanAbn);
+                if (local.Success && local.BusinessNames.Count > 0)
+                {
+                    source = SearchSource.Local;
+                    searchResult = local;
+                }
+                else if (asicSettings.Value.ForceFallback)
+                {
+                    source = SearchSource.Local;
+                    searchResult = local;
+                }
+                else
+                {
+                    source = SearchSource.Asic;
+                    searchResult = await asic.SearchAsync(cleanAbn);
+                }
             }
 
             if (!searchResult.Success || searchResult.BusinessNames.Count == 0)
@@ -166,6 +177,7 @@ public sealed class LeadsModule : ICarterModule
                     SessionId = lead.SessionId,
                     Success = searchResult.Success,
                     InitiatedBy = SearchInitiator.Customer,
+                    Source = source,
                     ErrorMessage = searchResult.ErrorMessage ?? (searchResult.Success ? "No business names found" : "Search failed"),
                     ResultsCount = 0,
                 };
@@ -174,31 +186,13 @@ public sealed class LeadsModule : ICarterModule
                 await leadService.LinkSearchLogAsync(lead.Id, failedLog.Id);
 
                 var errorMsg = searchResult.ErrorMessage ?? "";
-                LeadOutcome outcome;
-                if (errorMsg.Contains("already in progress", StringComparison.OrdinalIgnoreCase))
-                    outcome = LeadOutcome.RenewalInProgress;
-                else if (errorMsg.Contains("not due for renewal", StringComparison.OrdinalIgnoreCase))
-                    outcome = LeadOutcome.NotDueForRenewal;
-                else
-                    outcome = LeadOutcome.NoBusinessNames;
-
+                var outcome = LeadOutcomes.FromAsicError(errorMsg);
                 await leadService.UpdateLeadOutcomeAsync(lead.Id, outcome, errorMsg);
-                try
-                {
-                    var updated = await leadService.GetLeadAsync(lead.Id);
-                    if (updated is not null)
-                    {
-                        switch (outcome)
-                        {
-                            case LeadOutcome.NotDueForRenewal: await leadEmailService.SendNotDueForRenewalEmailAsync(updated); break;
-                            case LeadOutcome.RenewalInProgress: await leadEmailService.SendRenewalInProgressEmailAsync(updated); break;
-                            case LeadOutcome.NoBusinessNames: await leadEmailService.SendNoBusinessNamesEmailAsync(updated); break;
-                        }
-                    }
-                }
-                catch { }
+                var updated = await leadService.GetLeadAsync(lead.Id);
+                if (updated is not null)
+                    await LeadOutcomes.SendEmailAsync(leadEmailService, updated, outcome, logger);
 
-                return Results.Ok(new { outcome = outcome.ToString(), message = errorMsg, businessNames = Array.Empty<object>() });
+                return Results.Ok(new { outcome = outcome.ToString(), message = errorMsg, verified = true, businessNames = Array.Empty<object>() });
             }
 
             // Successful search
@@ -212,6 +206,7 @@ public sealed class LeadsModule : ICarterModule
                 SessionId = lead.SessionId,
                 Success = true,
                 InitiatedBy = SearchInitiator.Customer,
+                Source = source,
                 ResultsCount = searchResult.BusinessNames.Count,
             };
             var savedResults = searchResult.BusinessNames.Select(b => new SearchResult
@@ -227,12 +222,18 @@ public sealed class LeadsModule : ICarterModule
             await db.SaveChangesAsync();
             await leadService.LinkSearchLogAsync(lead.Id, searchLog.Id);
             await leadService.UpdateLeadOutcomeAsync(lead.Id, LeadOutcome.RenewalAvailable, null);
-            // Now the business names are known, send them to the lead's Ontraport contact.
-            jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
+
+            if (source == SearchSource.Asic)
+                // The business names are ASIC's — send them to the lead's Ontraport contact.
+                jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
+            else if (!asicSettings.Value.ForceFallback)
+                // Pushes to Ontraport once ASIC has confirmed the names.
+                SearchVerificationService.Start(scopes, jobs, searchLog.Id);
 
             return Results.Ok(new
             {
                 outcome = LeadOutcome.RenewalAvailable.ToString(),
+                verified = searchLog.IsVerified,
                 businessNames = savedResults.Select(r => new
                 {
                     id = r.Id,
@@ -241,7 +242,7 @@ public sealed class LeadsModule : ICarterModule
                     registrationDate = r.RegistrationDate,
                 }),
             });
-        }).WithTags("Wizard").RequireRateLimiting("asic-search"); // live ASIC lookup + outcome email per call
+        }).WithTags("Wizard").RequireRateLimiting("asic-search"); // may run a live ASIC lookup + outcome email per call
 
         var admin = app.MapGroup("/api/admin/leads").RequireAuthorization().WithTags("Admin.Leads");
 

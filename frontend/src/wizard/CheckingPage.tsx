@@ -114,7 +114,7 @@ export default function CheckingPage() {
             </div>
 
             <h2 className="text-xl font-semibold text-gray-900">Checking your renewal status</h2>
-            <p className="mt-2 text-sm text-gray-600">This typically takes 20-25 seconds. Please don't close this page.</p>
+            <p className="mt-2 text-sm text-gray-600">This usually takes a few seconds. Please don't close this page.</p>
 
             <div className="mt-8">
               <div className="flex items-center justify-center gap-2 text-sm text-gray-600">

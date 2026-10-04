@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { api, type BusinessNameDto, type LeadDto, type PricingResponse } from '../api/client'
+import { api, type BusinessNameDto, type PricingResponse } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
 import WizardProgress from '../components/WizardProgress'
 import { FunnelStep, trackStep } from '../lib/tracking'
+import { useLead } from '../lib/useLead'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -13,22 +14,38 @@ const steps = [
 export default function SelectNamesPage() {
   const navigate = useNavigate()
   const { leadId } = useParams<{ leadId: string }>()
-  const [lead, setLead] = useState<LeadDto | null>(null)
-  const [businessNames, setBusinessNames] = useState<BusinessNameDto[]>([])
+  const { lead } = useLead(leadId, () => navigate('/'))
   const [pricing, setPricing] = useState<PricingResponse | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [years, setYears] = useState<1 | 3>(1)
+  const seenIds = useRef<Set<string>>(new Set())
+  const trackedView = useRef(false)
+  const businessNames = useMemo<BusinessNameDto[]>(() => lead?.businessNames ?? [], [lead])
 
   useEffect(() => {
-    if (!leadId) return
-    void api.getLead(leadId).then((l) => {
-      setLead(l)
-      setBusinessNames(l.businessNames)
-      setSelected(new Set(l.businessNames.map((b) => b.id)))
-      trackStep(FunnelStep.SelectViewed, { leadId, abn: l.abn, detail: `${l.businessNames.length} name(s)` })
-    }).catch(() => navigate('/'))
     void api.pricing().then(setPricing).catch(() => {})
-  }, [leadId, navigate])
+  }, [])
+
+  // Names arrive from our copy of the register first and can change once ASIC confirms
+  // them: new names start selected, names ASIC won't renew drop out of the selection.
+  useEffect(() => {
+    if (!lead) return
+    if (lead.verified && lead.outcome !== 'RenewalAvailable') {
+      navigate(`/not-available/${lead.id}`)
+      return
+    }
+    const ids = new Set(lead.businessNames.map((b) => b.id))
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => ids.has(id)))
+      for (const id of ids) if (!seenIds.current.has(id)) next.add(id)
+      return next
+    })
+    seenIds.current = new Set([...seenIds.current, ...ids])
+    if (!trackedView.current) {
+      trackedView.current = true
+      trackStep(FunnelStep.SelectViewed, { leadId, abn: lead.abn, detail: `${lead.businessNames.length} name(s)` })
+    }
+  }, [lead, leadId, navigate])
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -88,6 +105,12 @@ export default function SelectNamesPage() {
               <div className="text-center mb-8">
                 <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Select business names to renew</h1>
                 <p className="mt-2 text-sm text-gray-600">Choose which business names you'd like to renew</p>
+                {!lead.verified ? (
+                  <p className="mt-2 inline-flex items-center gap-2 text-xs text-gray-500">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
+                    Confirming renewal details with ASIC in the background — you can carry on.
+                  </p>
+                ) : null}
               </div>
 
               {businessNames.length > 0 ? (
@@ -123,7 +146,7 @@ export default function SelectNamesPage() {
                               <div className="flex-1 min-w-0">
                                 <h3 className="text-base font-semibold text-gray-900 truncate">{b.businessName}</h3>
                                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                                  <span>Account: {b.accountNumber}</span>
+                                  {b.accountNumber ? <span>Account: {b.accountNumber}</span> : null}
                                   <span>Registered: {b.registrationDate}</span>
                                 </div>
                               </div>

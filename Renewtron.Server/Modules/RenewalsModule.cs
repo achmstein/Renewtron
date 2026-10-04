@@ -63,7 +63,8 @@ public sealed class RenewalsModule : ICarterModule
             IBackgroundJobClient jobs,
             ILeadService leadService,
             IOptionsSnapshot<PricingSettings> pricing,
-            IOptionsSnapshot<PortalSettings> portal) =>
+            IOptionsSnapshot<PortalSettings> portal,
+            IOptionsSnapshot<AsicSettings> asicSettings) =>
         {
             if (request.RenewalYears != 1 && request.RenewalYears != 3)
                 return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
@@ -80,6 +81,13 @@ public sealed class RenewalsModule : ICarterModule
 
             if (searchResults.Count == 0)
                 return Results.NotFound(new { error = "Search results not found." });
+
+            // Names listed from our copy of the register are only payable once ASIC has
+            // confirmed them (account numbers in, names it won't renew struck out).
+            if (!asicSettings.Value.ForceFallback && searchResults.Any(sr => !sr.SearchLog.IsVerified))
+                return Results.Conflict(new { error = "We're still confirming your business names with ASIC. Please wait a moment and try again.", code = "verifying" });
+            if (searchResults.Any(sr => !sr.IsAvailable))
+                return Results.Conflict(new { error = "ASIC can't renew one or more of the selected business names right now. Please go back and review your selection.", code = "unavailable" });
 
             // A double-submit (double-click, client retry) must never charge twice: refuse
             // names that already have a succeeded payment, and pin the Stripe call with an
@@ -698,6 +706,7 @@ public sealed class RenewalsModule : ICarterModule
             var (ip, ua) = Helpers.ClientInfo(httpContext);
 
             BusinessNamesResult result;
+            var source = asicSettings.Value.ForceFallback ? SearchSource.Local : SearchSource.Asic;
             try
             {
                 result = asicSettings.Value.ForceFallback
@@ -706,8 +715,9 @@ public sealed class RenewalsModule : ICarterModule
 
                 if (!result.Success && !asicSettings.Value.ForceFallback)
                 {
+                    // Names from our copy of the register — no ASIC account numbers.
                     var fb = await fallback.SearchByAbnAsync(abn);
-                    if (fb.Success) result = fb;
+                    if (fb.Success) { result = fb; source = SearchSource.Local; }
                 }
             }
             catch (Exception ex)
@@ -758,6 +768,7 @@ public sealed class RenewalsModule : ICarterModule
                 Id = Guid.NewGuid(),
                 Abn = abn,
                 SearchedAt = DateTime.UtcNow,
+                Source = source,
                 IpAddress = ip,
                 UserAgent = ua,
                 SessionId = httpContext.TraceIdentifier,

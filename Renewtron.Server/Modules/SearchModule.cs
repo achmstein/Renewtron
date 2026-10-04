@@ -4,6 +4,7 @@ using Carter;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Data;
+using Renewtron.Services;
 using Renewtron.Settings;
 
 namespace Renewtron.Modules;
@@ -37,6 +38,7 @@ public sealed class SearchModule : ICarterModule
                 UserAgent = ua,
                 SessionId = httpContext.TraceIdentifier,
                 InitiatedBy = SearchInitiator.Customer,
+                Source = asicSettings.Value.ForceFallback ? SearchSource.Local : SearchSource.Asic,
             };
 
             BusinessNamesResult result;
@@ -85,6 +87,20 @@ public sealed class SearchModule : ICarterModule
                     registrationDate = r.RegistrationDate,
                 }),
             });
+        }).WithTags("Wizard").RequireRateLimiting("asic-search");
+
+        // Fired from the ABN step so ASIC's answer is (usually) ready by the time the customer
+        // has filled in their details. Returns immediately; nothing is recorded.
+        app.MapPost("/api/search/prefetch", (
+            SearchRequest request,
+            IAsicSearchCoordinator asic,
+            IOptionsSnapshot<AsicSettings> asicSettings) =>
+        {
+            if (!Helpers.IsValidAbn(request.Abn))
+                return Results.BadRequest(new { error = "ABN must be 11 digits." });
+            if (!asicSettings.Value.ForceFallback)
+                asic.Prefetch(Helpers.NormalizeAbn(request.Abn));
+            return Results.Accepted();
         }).WithTags("Wizard").RequireRateLimiting("asic-search");
     }
 }
