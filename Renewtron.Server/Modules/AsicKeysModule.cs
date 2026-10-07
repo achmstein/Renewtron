@@ -5,6 +5,7 @@ using Hangfire.Storage;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Abstractions;
 using Renewtron.Data;
+using Renewtron.Services;
 
 namespace Renewtron.Modules;
 
@@ -14,6 +15,8 @@ public sealed class AsicKeysModule : ICarterModule
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
+        MapPublicForm(app);
+
         var group = app.MapGroup("/api/admin/asic-keys").RequireAuthorization().WithTags("Admin.AsicKeys");
 
         group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? search = null) =>
@@ -204,6 +207,39 @@ public sealed class AsicKeysModule : ICarterModule
     }
 
     public sealed record ApplyRequest(string ContactId);
+    public sealed record SubmitKeyRequest(string? BusinessName, string? Abn, string? AsicKey);
+
+    private static void MapPublicForm(IEndpointRouteBuilder app)
+    {
+        // The public "Update ASIC Key" page. The reply never says whether a contact matched —
+        // that would let anyone probe which business names are clients; unmatched rows wait
+        // on the admin page for a hand-picked contact.
+        app.MapPost("/api/asic-key", async (SubmitKeyRequest body, HttpContext http, IAsicKeyInboxService service, CancellationToken ct) =>
+        {
+            var name = body.BusinessName?.Trim() ?? "";
+            var abn = Helpers.NormalizeAbn(body.Abn);
+            var key = string.Concat((body.AsicKey ?? "").Where(c => !char.IsWhiteSpace(c)));
+
+            if (name.Length == 0 || name.Length > 200)
+                return Results.Problem(detail: "Please enter your business name.", statusCode: 400);
+            if (!Helpers.IsValidAbn(abn))
+                return Results.Problem(detail: "Please enter your 11-digit ABN.", statusCode: 400);
+            if (!AsicKeyInboxService.AsicKeyFormat.IsMatch(key))
+                return Results.Problem(detail: "That isn't an ASIC key. An ASIC key is 1- followed by 11 numbers, like 1-80129865318.", statusCode: 400);
+
+            try
+            {
+                var (ip, _) = Helpers.ClientInfo(http);
+                await service.SubmitFromFormAsync(name, abn, key, ip, ct);
+                return Results.Ok(new { ok = true });
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception)
+            {
+                return Results.Problem(detail: "We couldn't save your ASIC key just now. Please try again in a few minutes.", statusCode: 500);
+            }
+        }).WithTags("Wizard").RequireRateLimiting("lead-capture");
+    }
 
     private static object ToDetail(AsicKeyNotification n) => new
     {

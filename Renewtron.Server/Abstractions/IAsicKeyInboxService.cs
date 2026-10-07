@@ -32,4 +32,10 @@ public interface IAsicKeyInboxService
     /// the escape hatch when automatic business-name matching finds nothing.
     /// </summary>
     Task<AsicKeyNotification?> ApplyToContactAsync(Guid id, string contactId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a key a client typed into the public Update ASIC Key form and writes it to their
+    /// Ontraport contact (business name, then ABN). The key must already be validated.
+    /// </summary>
+    Task<AsicKeyNotification> SubmitFromFormAsync(string businessName, string abn, string asicKey, string? ip, CancellationToken ct = default);
 }

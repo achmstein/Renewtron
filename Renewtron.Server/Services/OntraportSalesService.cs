@@ -422,11 +422,19 @@ public class OntraportSalesService : IOntraportSalesService
         {
             new { field = new { field = fieldId }, op = "=", value = new { value } },
         }));
+        return await QueryContactsAsync($"condition={condition}", $"{fieldId}='{value}'", max);
+    }
+
+    public Task<List<Dictionary<string, string?>>> SearchContactsAsync(string text, int max = 50) =>
+        QueryContactsAsync($"search={Uri.EscapeDataString(text)}", $"search '{text}'", max);
+
+    private async Task<List<Dictionary<string, string?>>> QueryContactsAsync(string filter, string description, int max)
+    {
         var fields = $"id,firstname,lastname,email,{FieldBusinessName},{FieldAbn}";
-        var response = await _httpClient.GetAsync($"Contacts?condition={condition}&range={max}&listFields={fields}");
+        var response = await _httpClient.GetAsync($"Contacts?{filter}&range={max}&listFields={fields}");
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("Ontraport contact search on {Field}='{Value}' returned {StatusCode}", fieldId, value, response.StatusCode);
+            _logger.LogWarning("Ontraport contact lookup {Description} returned {StatusCode}", description, response.StatusCode);
             var hint = (int)response.StatusCode is 401 or 403 ? " — check the Ontraport API app ID and key in Settings" : "";
             throw new InvalidOperationException($"Ontraport contact search returned HTTP {(int)response.StatusCode}{hint}.");
         }

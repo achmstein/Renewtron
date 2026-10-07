@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from 'react-router-dom'
 import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import LoginPage from './pages/LoginPage'
+import UpdateAsicKeyPage from './pages/UpdateAsicKeyPage'
 import StartPage from './wizard/StartPage'
 import DetailsPage from './wizard/DetailsPage'
 import CheckingPage from './wizard/CheckingPage'
@@ -52,6 +53,10 @@ export default function App() {
           <Route path="/payment/:leadId" element={<PaymentPage />} />
           <Route path="/confirmation/:leadId" element={<ConfirmationPage />} />
           <Route path="/not-available/:leadId" element={<NotAvailablePage />} />
+
+          {/* Same path as the old Ontraport page (idealbusiness.au/updateasickey) so links carry over. */}
+          <Route path="/updateasickey" element={<UpdateAsicKeyPage />} />
+          <Route path="/update-asic-key" element={<UpdateAsicKeyPage />} />
 
           <Route path="/login" element={<LoginPage />} />
 

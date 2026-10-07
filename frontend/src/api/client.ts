@@ -273,6 +273,8 @@ export const api = {
     apiFetch<BatchRenewalResponse>('/api/renewals/batch', { method: 'POST', body: JSON.stringify(input) }),
   completeBatchRenewal: (input: { leadId: string; searchResultIds: string[]; renewalYears: 1 | 3; paymentIntentId: string; cardholderName?: string }) =>
     apiFetch<{ renewalIds: string[]; total: number; portalSignInUrl?: string | null }>('/api/renewals/batch/complete', { method: 'POST', body: JSON.stringify(input) }),
+  submitAsicKey: (input: { businessName: string; abn: string; asicKey: string }) =>
+    apiFetch<{ ok: boolean }>('/api/asic-key', { method: 'POST', body: JSON.stringify(input) }),
   batchStatus: (ids: string[]) => apiFetch<RenewalStatusItem[]>(`/api/renewals/batch?ids=${ids.join(',')}`),
 
   admin: {

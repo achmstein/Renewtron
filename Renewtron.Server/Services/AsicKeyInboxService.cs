@@ -34,6 +34,12 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
     private const int MaxAutoAttempts = 5;
     private const int PdfExcerptLength = 2000;
 
+    /// <summary>MessageId prefix for rows typed in on the public Update ASIC Key form.</summary>
+    public const string FormMessageIdPrefix = "form:";
+
+    /// <summary>An ASIC key is "1-" and eleven digits; ASIC's reference numbers carry letters ("1-TG355").</summary>
+    public static readonly Regex AsicKeyFormat = new(@"^1-\d{11}$", RegexOptions.Compiled);
+
     // "You have requested a copy of a notification for BRM BUILDING REPAIRS & MAINTENANCE."
     // The name may itself contain periods, so the sentence only ends at a period that is
     // followed by a line break, the end of text, or the next sentence's "Please".
@@ -172,6 +178,32 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
         return row;
     }
 
+    public async Task<AsicKeyNotification> SubmitFromFormAsync(string businessName, string abn, string asicKey, string? ip, CancellationToken ct = default)
+    {
+        // A client-typed key rides the same row and pipeline as an emailed one: the key is
+        // already known so processing goes straight to the contact match, and anything that
+        // doesn't match lands on the admin page for a hand-picked contact.
+        var row = new AsicKeyNotification
+        {
+            Id = Guid.NewGuid(),
+            MessageId = FormMessageIdPrefix + Guid.NewGuid().ToString("N"),
+            Subject = "Update ASIC Key form",
+            From = Truncate(string.IsNullOrWhiteSpace(ip) ? "Website form" : $"Website form ({ip})", 300),
+            ReceivedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow,
+            BusinessName = Truncate(Regex.Replace(businessName, @"\s+", " ").Trim(), 200),
+            Abn = new string(abn.Where(char.IsDigit).ToArray()),
+            AsicKey = asicKey,
+            Status = AsicKeyNotificationStatus.Pending,
+        };
+        _db.AsicKeyNotifications.Add(row);
+        await _db.SaveChangesAsync(ct);
+
+        await ProcessRowAsync(row, _settings.CurrentValue, ct);
+        await _db.SaveChangesAsync(ct);
+        return row;
+    }
+
     private async Task ProcessRowAsync(AsicKeyNotification row, AsicKeyInboxSettings settings, CancellationToken ct)
     {
         row.AttemptCount++;
@@ -273,25 +305,44 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
 
     private async Task<List<string>> FindContactsAsync(AsicKeyNotification row)
     {
+        var fromForm = IsFormSubmission(row);
+        var abnDigits = new string((row.Abn ?? "").Where(char.IsDigit).ToArray());
         var matches = new List<Dictionary<string, string?>>();
         if (!string.IsNullOrWhiteSpace(row.BusinessName))
-            matches = await _ontraport.FindContactsByFieldAsync(FieldBusinessName, row.BusinessName.Trim());
+        {
+            var name = row.BusinessName.Trim();
+            matches = await _ontraport.FindContactsByFieldAsync(FieldBusinessName, name);
+
+            // Ontraport's "=" is case-sensitive and ASIC writes names in capitals, so
+            // "CAROUSEL INTERIORS" misses a contact saved as "Carousel Interiors". The free-text
+            // search ignores case; keep only contacts whose business name really is this one.
+            if (matches.Count == 0)
+                matches = (await _ontraport.SearchContactsAsync(name))
+                    .Where(c => SameBusinessName(c.GetValueOrDefault(FieldBusinessName), name))
+                    .ToList();
+
+            // Anyone can type any business name into the public form, so a contact that
+            // carries a different ABN from the one typed in isn't theirs to write to.
+            if (fromForm)
+                matches = matches.Where(c => AbnAgrees(c, abnDigits)).ToList();
+        }
 
         // Fall back to the ABN, but only accept contacts whose business name agrees — one ABN
         // can hold several business names and the key belongs to exactly one of them.
-        if (matches.Count == 0 && !string.IsNullOrWhiteSpace(row.Abn))
+        if (matches.Count == 0 && abnDigits.Length > 0)
         {
-            var digits = new string(row.Abn.Where(char.IsDigit).ToArray());
-            var byAbn = await _ontraport.FindContactsByFieldAsync(FieldAbn, digits);
-            if (byAbn.Count == 0 && digits.Length == 11)
-                byAbn = await _ontraport.FindContactsByFieldAsync(FieldAbn, $"{digits[..2]} {digits[2..5]} {digits[5..8]} {digits[8..]}");
+            var byAbn = await _ontraport.FindContactsByFieldAsync(FieldAbn, abnDigits);
+            if (byAbn.Count == 0 && abnDigits.Length == 11)
+                byAbn = await _ontraport.FindContactsByFieldAsync(FieldAbn, $"{abnDigits[..2]} {abnDigits[2..5]} {abnDigits[5..8]} {abnDigits[8..]}");
 
             matches = string.IsNullOrWhiteSpace(row.BusinessName)
                 ? byAbn
-                : byAbn.Where(c => string.Equals(
-                        (c.GetValueOrDefault(FieldBusinessName) ?? "").Trim(),
-                        row.BusinessName.Trim(),
-                        StringComparison.OrdinalIgnoreCase)).ToList();
+                : byAbn.Where(c => SameBusinessName(c.GetValueOrDefault(FieldBusinessName), row.BusinessName)).ToList();
+
+            // A client typing their own name may spell it a little differently from the CRM;
+            // when their ABN belongs to exactly one contact, that contact is them.
+            if (matches.Count == 0 && fromForm && byAbn.Count == 1)
+                matches = byAbn;
         }
 
         return matches
@@ -461,6 +512,23 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
         var name = Regex.Replace(raw, @"\s+", " ").Trim();
         return name.Length == 0 ? null : Truncate(name, 200);
     }
+
+    // Case, runs of spaces, a trailing full stop and curly apostrophes are all noise between
+    // ASIC's spelling of a name and whoever typed it into Ontraport.
+    private static string NormaliseName(string? name) =>
+        Regex.Replace(name ?? "", @"\s+", " ").Replace('’', '\'').Trim().TrimEnd('.').Trim().ToUpperInvariant();
+
+    private static bool SameBusinessName(string? a, string? b) =>
+        NormaliseName(a) is { Length: > 0 } left && left == NormaliseName(b);
+
+    private static bool AbnAgrees(Dictionary<string, string?> contact, string abnDigits)
+    {
+        var contactAbn = new string((contact.GetValueOrDefault(FieldAbn) ?? "").Where(char.IsDigit).ToArray());
+        return contactAbn.Length == 0 || contactAbn == abnDigits;
+    }
+
+    private static bool IsFormSubmission(AsicKeyNotification row) =>
+        row.MessageId.StartsWith(FormMessageIdPrefix, StringComparison.Ordinal);
 
     private static string? Truncate(string? value, int max) =>
         value == null ? null : value.Length <= max ? value : value[..max];
