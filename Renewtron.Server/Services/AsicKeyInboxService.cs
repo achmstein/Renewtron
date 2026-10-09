@@ -147,9 +147,12 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
             if (row.Status == AsicKeyNotificationStatus.Completed) completed++; else failed++;
         }
 
+        var recovered = await BackfillPdfsAsync(since, ct);
+
         var summary = discovered == 0 && processed == 0
             ? "Nothing new in the inbox."
             : $"{discovered} new email(s); processed {processed}: {completed} completed, {failed} need attention.";
+        if (recovered > 0) summary += $" Kept {recovered} earlier PDF(s) for the portal.";
         _logger.LogInformation("ASIC key inbox scan: {Summary}", summary);
         return new AsicKeyScanResult(false, summary, discovered, processed, completed, failed);
     }
@@ -234,6 +237,7 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
                     Fail(row, AsicKeyNotificationStatus.DownloadFailed, downloadError);
                     return;
                 }
+                KeepPdf(row, pdf);
 
                 string text;
                 try
@@ -246,6 +250,7 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
                     return;
                 }
                 row.PdfTextExcerpt = Truncate(text, PdfExcerptLength);
+                row.DocumentKind = ClassifyDocument(text);
 
                 string? key;
                 try
@@ -389,6 +394,59 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
         row.ErrorMessage = null;
         _logger.LogInformation("ASIC key {AsicKey} for '{BusinessName}' written to Ontraport contact(s) {Contacts}",
             row.AsicKey, row.BusinessName, row.OntraportContactIds);
+    }
+
+    /// <summary>
+    /// Rows whose key was read before PDFs were kept: fetch the PDF once more while ASIC's
+    /// link still works, so the portal can offer it. One try per row — a dead link stays dead.
+    /// </summary>
+    private async Task<int> BackfillPdfsAsync(DateTime since, CancellationToken ct)
+    {
+        var rows = await _db.AsicKeyNotifications
+            .Where(n => n.AsicKey != null && n.AsicKey != "" && n.PdfSavedAt == null && n.PdfCheckedAt == null
+                        && n.DownloadUrl != null && n.ReceivedAt >= since)
+            .OrderByDescending(n => n.ReceivedAt)
+            .Take(25)
+            .ToListAsync(ct);
+
+        var recovered = 0;
+        foreach (var row in rows)
+        {
+            ct.ThrowIfCancellationRequested();
+            row.PdfCheckedAt = DateTime.UtcNow;
+            var (pdf, error) = await DownloadPdfAsync(row.DownloadUrl!, ct);
+            if (error == null)
+            {
+                KeepPdf(row, pdf);
+                try { row.DocumentKind = ClassifyDocument(ExtractPdfText(pdf)); }
+                catch (Exception ex) { _logger.LogWarning(ex, "ASIC key notification {Id}: kept PDF could not be read", row.Id); }
+                recovered++;
+            }
+            else
+            {
+                _logger.LogInformation("ASIC key notification {Id}: couldn't keep the PDF: {Error}", row.Id, error);
+            }
+            await _db.SaveChangesAsync(ct);
+        }
+        return recovered;
+    }
+
+    private void KeepPdf(AsicKeyNotification row, byte[] pdf)
+    {
+        var now = DateTime.UtcNow;
+        row.PdfCheckedAt = now;
+        if (row.PdfSavedAt != null) return;
+        _db.AsicKeyNotificationPdfs.Add(new AsicKeyNotificationPdf { NotificationId = row.Id, Content = pdf, SavedAt = now });
+        row.PdfSavedAt = now;
+    }
+
+    // Wording from ASIC's letters; see the samples in SettingsModule's pattern test.
+    internal static AsicDocumentKind ClassifyDocument(string text)
+    {
+        if (Regex.IsMatch(text, @"\brenewed\s+for\b", RegexOptions.IgnoreCase)) return AsicDocumentKind.RenewalConfirmation;
+        if (Regex.IsMatch(text, @"\brenewal\s+notice\b", RegexOptions.IgnoreCase)) return AsicDocumentKind.RenewalNotice;
+        if (Regex.IsMatch(text, @"\bASIC\s*key\s+for\b", RegexOptions.IgnoreCase)) return AsicDocumentKind.KeyLetter;
+        return AsicDocumentKind.Other;
     }
 
     private void Fail(AsicKeyNotification row, AsicKeyNotificationStatus status, string error)

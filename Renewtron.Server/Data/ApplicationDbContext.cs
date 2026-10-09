@@ -17,6 +17,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<FunnelEvent> FunnelEvents { get; set; }
     public DbSet<OntraportSyncOutbox> OntraportSyncOutbox { get; set; }
     public DbSet<AsicKeyNotification> AsicKeyNotifications { get; set; }
+    public DbSet<AsicKeyNotificationPdf> AsicKeyNotificationPdfs { get; set; }
     public DbSet<AsicKeyRequest> AsicKeyRequests { get; set; }
     public DbSet<RegisteredBusinessName> RegisteredBusinessNames { get; set; }
     public DbSet<BusinessNameImport> BusinessNameImports { get; set; }
@@ -268,6 +269,16 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.ReceivedAt);
             entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.AsicKey);
+        });
+
+        modelBuilder.Entity<AsicKeyNotificationPdf>(entity =>
+        {
+            entity.HasKey(e => e.NotificationId);
+            entity.HasOne<AsicKeyNotification>()
+                .WithOne()
+                .HasForeignKey<AsicKeyNotificationPdf>(e => e.NotificationId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<FunnelEvent>(entity =>

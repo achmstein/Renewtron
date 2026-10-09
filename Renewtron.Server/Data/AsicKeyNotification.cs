@@ -31,6 +31,13 @@ public class AsicKeyNotification
     /// <summary>Head of the PDF text, kept so a failed key match can be diagnosed from the admin.</summary>
     public string? PdfTextExcerpt { get; set; }
 
+    /// <summary>Which letter the PDF is, read from its text.</summary>
+    public AsicDocumentKind DocumentKind { get; set; }
+    /// <summary>Set once the PDF is stored in <see cref="AsicKeyNotificationPdf"/>.</summary>
+    public DateTime? PdfSavedAt { get; set; }
+    /// <summary>When the PDF was last fetched to be kept — stops the backfill retrying dead links.</summary>
+    public DateTime? PdfCheckedAt { get; set; }
+
     public int AttemptCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }

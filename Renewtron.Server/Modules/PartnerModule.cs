@@ -17,7 +17,7 @@ namespace Renewtron.Modules;
 /// of what the portal can reach. Renewtron stays the system of record for renewals, the
 /// Ontraport sync and ASIC keys; the portal reads renewals (every status, so customers see
 /// "in progress" and failures, not just completions), queues ASIC key requests, and pulls
-/// keys back. It also reads paid Ontraport sales, so a customer gets a portal login when
+/// keys back — and, for a name whose key it holds, ASIC's letters as PDFs. It also reads paid Ontraport sales, so a customer gets a portal login when
 /// they pay rather than when the renewal window opens. Sales carry the contact's TFN
 /// (decrypted here, stored encrypted) for the portal profile; no IP or card data leaves
 /// through here, and renewals carry no TFN.
@@ -264,6 +264,53 @@ public sealed class PartnerModule : ICarterModule
                 .ToListAsync();
             return Results.Ok(keys);
         });
+
+        // ---- ASIC letters -------------------------------------------------------------
+        // The kept PDFs of ASIC's letters (key letters, renewal notices, renewal confirmations).
+        // Every letter prints the ASIC key, so the key is what unlocks them: the portal passes
+        // the key it has verified for the customer's name and gets only that name's letters.
+        // POST so the key travels in the body, not in URLs and access logs.
+        group.MapPost("/asic-documents/search", async (AsicDocumentsBody body, ApplicationDbContext db) =>
+        {
+            var key = NormaliseAsicKey(body.AsicKey);
+            if (key is null) return Results.BadRequest(new { error = "asicKey is required." });
+
+            var documents = await db.AsicKeyNotifications.AsNoTracking()
+                .Where(n => n.AsicKey == key && n.PdfSavedAt != null)
+                .OrderByDescending(n => n.ReceivedAt)
+                .Select(n => new
+                {
+                    id = n.Id,
+                    kind = n.DocumentKind.ToString(),
+                    businessName = n.BusinessName,
+                    receivedAt = n.ReceivedAt,
+                })
+                .ToListAsync();
+            return Results.Ok(documents);
+        });
+
+        group.MapPost("/asic-documents/{id:guid}/pdf", async (Guid id, AsicDocumentsBody body, ApplicationDbContext db) =>
+        {
+            var key = NormaliseAsicKey(body.AsicKey);
+            if (key is null) return Results.BadRequest(new { error = "asicKey is required." });
+
+            // A wrong key reads as not found, so ids can't be probed.
+            var pdf = await db.AsicKeyNotificationPdfs.AsNoTracking()
+                .Where(p => p.NotificationId == id
+                            && db.AsicKeyNotifications.Any(n => n.Id == id && n.AsicKey == key))
+                .Select(p => p.Content)
+                .FirstOrDefaultAsync();
+            return pdf is null ? Results.NotFound() : Results.File(pdf, "application/pdf");
+        });
+    }
+
+    public sealed record AsicDocumentsBody(string? AsicKey);
+
+    /// <summary>Keys are stored without whitespace (see AsicKeyInboxService.MatchKey).</summary>
+    private static string? NormaliseAsicKey(string? value)
+    {
+        var key = string.Concat((value ?? "").Where(c => !char.IsWhiteSpace(c)));
+        return key.Length == 0 ? null : key;
     }
 
     private static string? DecryptTfn(OntraportSale sale, IEncryptionService? encryption, ILogger log)
