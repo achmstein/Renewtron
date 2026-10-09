@@ -399,14 +399,16 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
     /// <summary>
     /// Rows whose key was read before PDFs were kept: fetch the PDF once more while ASIC's
     /// link still works, so the portal can offer it. One try per row — a dead link stays dead.
+    /// Oldest first, since those links expire soonest; the batch covers a whole 30-day window
+    /// in one scan (each fetch is a small PDF).
     /// </summary>
     private async Task<int> BackfillPdfsAsync(DateTime since, CancellationToken ct)
     {
         var rows = await _db.AsicKeyNotifications
             .Where(n => n.AsicKey != null && n.AsicKey != "" && n.PdfSavedAt == null && n.PdfCheckedAt == null
                         && n.DownloadUrl != null && n.ReceivedAt >= since)
-            .OrderByDescending(n => n.ReceivedAt)
-            .Take(25)
+            .OrderBy(n => n.ReceivedAt)
+            .Take(500)
             .ToListAsync(ct);
 
         var recovered = 0;
