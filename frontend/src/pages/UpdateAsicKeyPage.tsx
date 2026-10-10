@@ -123,21 +123,7 @@ export default function UpdateAsicKeyPage() {
             </div>
           ) : (
             <>
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-5">
-                <p className="text-sm font-bold uppercase tracking-wide text-amber-800">Important</p>
-                <p className="mt-2 text-sm font-medium text-amber-900">
-                  You did not complete your ASIC key during the renewal process.
-                </p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
-                  <li>A copy has been emailed to the email address attached to your business name.</li>
-                  <li>
-                    If you have not received the ASIC key within 10 minutes, email{' '}
-                    <a href="mailto:asickey@asicconnect.com.au" className="font-medium underline">asickey@asicconnect.com.au</a>.
-                  </li>
-                </ul>
-              </div>
-
-              <form onSubmit={submit} noValidate className="mt-8 rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-8">
+              <form onSubmit={submit} noValidate className="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 sm:p-8">
                 <h2 className="text-base font-semibold text-gray-900">Business name details</h2>
                 <div className="mt-6 space-y-6">
                   <div>
