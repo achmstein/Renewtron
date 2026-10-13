@@ -33,8 +33,9 @@ public class OntraportSmsProvider : ISmsProvider
 
         // SMS-forwarding to Ontraport has been observed to take up to ~9 minutes end-to-end, so the
         // total window must comfortably exceed that. 60 polls × 10s = 10 minutes.
+        // A conversation that no longer exists won't come back by waiting, so that one fails at once.
         _retryPolicy = Policy<string>
-            .Handle<OntraportException>()
+            .Handle<OntraportException>(ex => ex is not OtpConversationMissingException)
             .OrResult(sms => string.IsNullOrWhiteSpace(sms))
             .WaitAndRetryAsync(
                 retryCount: 60,
@@ -110,6 +111,21 @@ public class OntraportSmsProvider : ISmsProvider
         }
     }
 
+    public async Task<string?> CheckAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_settings.ConversationId))
+            return "No Ontraport OTP conversation is set. Set ConversationId on the Settings page.";
+        try
+        {
+            await GetConversationMessagesAsync(_settings.ConversationId);
+            return null;
+        }
+        catch (OntraportException ex)
+        {
+            return ex.Message;
+        }
+    }
+
     private async Task<List<ConversationMessage>> GetConversationMessagesAsync(string conversationId)
     {
         try
@@ -117,13 +133,21 @@ public class OntraportSmsProvider : ISmsProvider
             // Use the date parameter to filter messages from the start timestamp
             var url = $"Conversation/getMessages?id={conversationId}&date=&direction=0";
             var response = await _httpClient.GetAsync(url);
+            var content = await response.Content.ReadAsStringAsync();
 
             if (!response.IsSuccessStatusCode)
             {
+                // Ontraport answers 400 "Object not found." once the conversation is deleted or
+                // recreated (it has happened to 915, 925, 957 and 965). Say so plainly.
+                if (content.Contains("Object not found", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new OtpConversationMissingException(
+                        $"Ontraport OTP conversation {conversationId} no longer exists. " +
+                        "Find the conversation that receives ASIC's SMS codes and update ConversationId on the Settings page.");
+                }
                 throw new OntraportException($"Failed to fetch conversation messages: {response.StatusCode}");
             }
 
-            var content = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<OntraportConversationResponse>(content);
 
             if (result?.Code != 0 || result?.Data == null)
@@ -208,6 +232,12 @@ public class OntraportException : Exception
     public OntraportException(string message) : base(message) { }
     public OntraportException(string message, Exception innerException)
         : base(message, innerException) { }
+}
+
+/// <summary>The configured OTP conversation is gone from Ontraport; retrying can't help.</summary>
+public class OtpConversationMissingException : OntraportException
+{
+    public OtpConversationMissingException(string message) : base(message) { }
 }
 
 public class OntraportConversationResponse

@@ -14,8 +14,12 @@ public class RenewalProcessingService : IRenewalProcessingService
     // Total processing runs allowed per renewal (first attempt + automatic retries).
     private const int MaxAttempts = 4;
 
+    public const string OtpCheckStep = "OTP Check";
+    private static readonly TimeSpan OtpCheckRetryDelay = TimeSpan.FromHours(1);
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IAsicRenewalClient _renewalClient;
+    private readonly ISmsProvider _smsProvider;
     private readonly IEmailService _emailService;
     private readonly IOptionsSnapshot<AsicSettings> _asicSettings;
     private readonly IOntraportSalesService _ontraportSalesService;
@@ -25,6 +29,7 @@ public class RenewalProcessingService : IRenewalProcessingService
     public RenewalProcessingService(
         ApplicationDbContext dbContext,
         IAsicRenewalClient renewalClient,
+        ISmsProvider smsProvider,
         IEmailService emailService,
         IOptionsSnapshot<AsicSettings> asicSettings,
         IOntraportSalesService ontraportSalesService,
@@ -33,6 +38,7 @@ public class RenewalProcessingService : IRenewalProcessingService
     {
         _dbContext = dbContext;
         _renewalClient = renewalClient;
+        _smsProvider = smsProvider;
         _emailService = emailService;
         _asicSettings = asicSettings;
         _ontraportSalesService = ontraportSalesService;
@@ -74,6 +80,23 @@ public class RenewalProcessingService : IRenewalProcessingService
                 renewalRequest.LastAttemptAt.Value > DateTime.UtcNow.AddMinutes(-30))
             {
                 _logger.LogWarning("Renewal request {RenewalRequestId} already has a recent run (started {LastAttemptAt:u}); skipping", renewalRequestId, renewalRequest.LastAttemptAt);
+                return;
+            }
+
+            // Without a readable OTP the card payment can't finish, and the half-done run leaves an
+            // unpaid transaction at ASIC that blocks this name for 48 hours. So check first, and if
+            // the OTP conversation is broken, hold the renewal (no attempt used) and check again hourly.
+            if (!renewalRequest.IsTest && await _smsProvider.CheckAsync() is { } otpProblem)
+            {
+                renewalRequest.Status = RenewalStatus.Failed;
+                renewalRequest.FailedAtStep = OtpCheckStep;
+                renewalRequest.ErrorMessage = $"Not started at ASIC: {otpProblem}";
+                renewalRequest.ErrorCategory = RenewalErrorCategories.Transient;
+                renewalRequest.NextRetryAt = DateTime.UtcNow + OtpCheckRetryDelay;
+                await _dbContext.SaveChangesAsync();
+                _backgroundJobClient.Schedule<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewalRequestId), OtpCheckRetryDelay);
+                _logger.LogError("Renewal {RenewalRequestId} held before ASIC: {OtpProblem}. Checking again in {Delay}.",
+                    renewalRequestId, otpProblem, OtpCheckRetryDelay);
                 return;
             }
 

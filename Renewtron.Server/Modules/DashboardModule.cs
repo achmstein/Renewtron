@@ -1,3 +1,4 @@
+using Asic.Client.Abstractions;
 using Carter;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -10,7 +11,7 @@ public sealed class DashboardModule : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/admin/dashboard", async (ApplicationDbContext db, IOptionsSnapshot<PricingSettings> pricing) =>
+        app.MapGet("/api/admin/dashboard", async (ApplicationDbContext db, IOptionsSnapshot<PricingSettings> pricing, ISmsProvider sms) =>
         {
             var now = DateTime.UtcNow;
             // The business runs on Sydney time — "this month" means the AEST month.
@@ -180,8 +181,16 @@ public sealed class DashboardModule : ICarterModule
                 // Hangfire storage being unreachable is itself a health signal; the nulls say so.
             }
 
+            // Renewals can't pay ASIC without reading the OTP SMS, so a broken OTP conversation
+            // holds every renewal. Held ones are the renewals waiting on this check.
+            var otpProblem = await sms.CheckAsync();
+            var otpHeldCount = await renewals.CountAsync(r => r.Status == RenewalStatus.Failed
+                && r.FailedAtStep == Services.RenewalProcessingService.OtpCheckStep && r.NextRetryAt != null);
+
             var health = new
             {
+                otpProblem,
+                otpHeldCount,
                 stuckCount = stuckAgg?.Count ?? 0,
                 oldestStuckAt = stuckAgg?.Oldest,
                 outboxPending,

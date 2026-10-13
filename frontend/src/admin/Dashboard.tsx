@@ -207,7 +207,7 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
   })
   // "never" doesn't trip the card: right after a deploy every job reads never
   // until its first scheduled run, and that's expected, not an incident.
-  const attention = health.stuckCount > 0 || health.outboxDead > 0 || jobs.some((j) => j.state === 'stale')
+  const attention = !!health.otpProblem || health.stuckCount > 0 || health.outboxDead > 0 || jobs.some((j) => j.state === 'stale')
 
   return (
     <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
@@ -227,6 +227,20 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
         </div>
         <StatusPill tone={attention ? 'amber' : 'emerald'}>{attention ? 'ATTENTION' : 'HEALTHY'}</StatusPill>
       </div>
+
+      {/* OTP — without it no renewal can pay ASIC, so it outranks everything else here */}
+      {health.otpProblem ? (
+        <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
+          <div className="font-semibold">Renewals are on hold: the OTP SMS can't be read</div>
+          <div className="mt-0.5 text-amber-800">{health.otpProblem}</div>
+          <div className="mt-1 text-xs text-amber-700">
+            {health.otpHeldCount > 0
+              ? `${health.otpHeldCount} ${health.otpHeldCount === 1 ? 'renewal is' : 'renewals are'} waiting and will start within an hour of this being fixed.`
+              : 'New renewals will wait, without being started at ASIC, until this is fixed.'}{' '}
+            <Link to="/admin/settings" className="font-medium underline">Settings →</Link>
+          </div>
+        </div>
+      ) : null}
 
       {/* Metrics band */}
       <div className="grid grid-cols-3 divide-x divide-zinc-100 border-t border-zinc-100">

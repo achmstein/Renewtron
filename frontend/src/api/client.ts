@@ -255,6 +255,9 @@ export interface DashboardResponse {
   recentSearches: Array<{ id: string; abn: string; searchedAt: string; success: boolean; resultsCount: number }>
   recentRenewals: Array<{ id: string; businessName: string | null; initiatedAt: string; status: string }>
   health?: {
+    /** Null when the OTP SMS can be read; otherwise why renewals are being held. */
+    otpProblem: string | null
+    otpHeldCount: number
     stuckCount: number
     oldestStuckAt: string | null
     outboxPending: number
