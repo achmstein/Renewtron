@@ -64,7 +64,8 @@ public sealed class RenewalsModule : ICarterModule
             ILeadService leadService,
             IOptionsSnapshot<PricingSettings> pricing,
             IOptionsSnapshot<PortalSettings> portal,
-            IOptionsSnapshot<AsicSettings> asicSettings) =>
+            IOptionsSnapshot<AsicSettings> asicSettings,
+            IOptionsSnapshot<TestModeSettings> testMode) =>
         {
             if (request.RenewalYears != 1 && request.RenewalYears != 3)
                 return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
@@ -73,6 +74,8 @@ public sealed class RenewalsModule : ICarterModule
 
             var lead = await db.Leads.FirstOrDefaultAsync(l => l.Id == request.LeadId);
             if (lead is null) return Results.NotFound(new { error = "Lead not found." });
+            if (lead.IsTest && !testMode.Value.StripeReady)
+                return Results.Conflict(new { error = "Test mode is missing its Stripe test keys (Admin → Settings → Test mode)." });
 
             var searchResults = await db.SearchResults
                 .Include(sr => sr.SearchLog)
@@ -123,7 +126,8 @@ public sealed class RenewalsModule : ICarterModule
                     ["ids_hash"] = idsHash,
                 },
                 request.PaymentMethodId,
-                idempotencyKey);
+                idempotencyKey,
+                testMode: lead.IsTest);
 
             if (confirm.RequiresAction)
             {
@@ -169,7 +173,8 @@ public sealed class RenewalsModule : ICarterModule
             IBackgroundJobClient jobs,
             ILeadService leadService,
             IOptionsSnapshot<PricingSettings> pricing,
-            IOptionsSnapshot<PortalSettings> portal) =>
+            IOptionsSnapshot<PortalSettings> portal,
+            IOptionsSnapshot<TestModeSettings> testMode) =>
         {
             if (request.RenewalYears != 1 && request.RenewalYears != 3)
                 return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
@@ -180,6 +185,8 @@ public sealed class RenewalsModule : ICarterModule
 
             var lead = await db.Leads.FirstOrDefaultAsync(l => l.Id == request.LeadId);
             if (lead is null) return Results.NotFound(new { error = "Lead not found." });
+            if (lead.IsTest && !testMode.Value.StripeReady)
+                return Results.Conflict(new { error = "Test mode is missing its Stripe test keys (Admin → Settings → Test mode)." });
 
             var searchResults = await db.SearchResults
                 .Include(sr => sr.SearchLog)
@@ -192,7 +199,7 @@ public sealed class RenewalsModule : ICarterModule
             var pricePer = pricing.Value.GetCustomerPrice(request.RenewalYears);
             var total = pricePer * searchResults.Count;
 
-            var intent = await stripe.GetPaymentIntentAsync(request.PaymentIntentId);
+            var intent = await stripe.GetPaymentIntentAsync(request.PaymentIntentId, testMode: lead.IsTest);
             if (intent is null)
                 return Results.UnprocessableEntity(new { error = "Payment could not be verified. Please contact support." });
             if (intent.Status != "succeeded")
@@ -366,6 +373,7 @@ public sealed class RenewalsModule : ICarterModule
                     amount = r.Amount,
                     status = r.Status.ToString(),
                     source = r.Source.ToString(),
+                    isTest = r.IsTest,
                     paymentType = r.PaymentType.ToString(),
                     initiatedAt = r.InitiatedAt,
                     completedAt = r.CompletedAt,
@@ -389,7 +397,7 @@ public sealed class RenewalsModule : ICarterModule
             // row (or a failed one, which has no CompletedAt) has been in status since it was initiated.
             var items = rows.Select(r => new
             {
-                r.id, r.abn, r.businessName, r.renewalYears, r.amount, r.status, r.source,
+                r.id, r.abn, r.businessName, r.renewalYears, r.amount, r.status, r.source, r.isTest,
                 r.paymentType, r.initiatedAt, r.completedAt, r.email, r.errorMessage, r.failedAtStep,
                 r.errorCategory, r.attemptCount, r.nextRetryAt,
                 r.transactionReference, r.initiatedByLabel, r.stripePaymentSucceeded,
@@ -404,7 +412,7 @@ public sealed class RenewalsModule : ICarterModule
             // when they silently tracked the grid filter a status=Failed filter made the
             // success rate 0% and revenue $0. Day/month boundaries are AEST — the business
             // (and every recurring job) runs on Sydney time, not UTC.
-            var all = db.RenewalRequests.AsNoTracking();
+            var all = db.RenewalRequests.AsNoTracking().Where(r => !r.IsTest); // test customers aren't revenue
             var aest = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
             var aestNow = TimeZoneInfo.ConvertTimeFromUtc(now, aest);
             var todayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(aestNow.Date, DateTimeKind.Unspecified), aest);
@@ -949,6 +957,7 @@ public sealed class RenewalsModule : ICarterModule
                 renewal.DateOfBirth = lead.DateOfBirth;
                 renewal.Tfn = lead.Tfn;
                 renewal.PaymentType = PaymentType.Stripe;
+                renewal.IsTest = lead.IsTest;
                 renewal.Amount = pricePer;
                 renewal.Status = RenewalStatus.Pending;
                 renewal.CompletedAt = null;
@@ -974,6 +983,7 @@ public sealed class RenewalsModule : ICarterModule
                     Tfn = lead.Tfn,
                     Source = RenewalSource.Renewtron,
                     PaymentType = PaymentType.Stripe,
+                    IsTest = lead.IsTest,
                     Amount = pricePer,
                     Status = RenewalStatus.Pending,
                 };

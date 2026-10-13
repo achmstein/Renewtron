@@ -105,6 +105,7 @@ builder.Services.AddOptions<TrackingSettings>().BindConfiguration("Tracking");
 builder.Services.AddOptions<PortalSettings>().BindConfiguration("Portal");
 builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyInbox");
 builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKeyRequest");
+builder.Services.AddOptions<TestModeSettings>().BindConfiguration("TestMode");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();

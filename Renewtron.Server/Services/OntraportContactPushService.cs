@@ -88,6 +88,8 @@ public class OntraportContactPushService : IOntraportContactPushService
             .Include(l => l.SearchLog).ThenInclude(s => s!.Results)
             .FirstOrDefaultAsync(l => l.Id == leadId);
         if (lead is null || string.IsNullOrWhiteSpace(lead.Email)) return;
+        // Test customers never reach Ontraport, so no real automation fires for them.
+        if (lead.IsTest) return;
 
         var (first, last) = SplitName(lead.FullName);
         var wanted = new Dictionary<string, object>
@@ -168,6 +170,7 @@ public class OntraportContactPushService : IOntraportContactPushService
     private async Task<string?> EnsureContactAsync(Guid leadId)
     {
         if (!Enabled) return null;
+        if (await _db.Leads.AnyAsync(l => l.Id == leadId && l.IsTest)) return null;
 
         // Only an id PushLeadAsync stored can be trusted (it checked it); an id that came in
         // on the URL is re-checked by pushing the lead, which is idempotent.

@@ -36,6 +36,9 @@ public class Lead
     public LeadOutcome Outcome { get; set; } = LeadOutcome.Pending;
     public string? OutcomeMessage { get; set; }
 
+    /// <summary>A test customer (Settings → Test mode): Stripe test keys, no ASIC, no Ontraport.</summary>
+    public bool IsTest { get; set; }
+
     // Reminder opt-in
     public bool ReminderOptIn { get; set; }
 

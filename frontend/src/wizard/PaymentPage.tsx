@@ -24,7 +24,7 @@ export default function PaymentPage() {
 
   const { lead, waitUntilVerified } = useLead(leadId, () => navigate('/'))
   const [pricing, setPricing] = useState<PricingResponse | null>(null)
-  const [stripeKey, setStripeKey] = useState<string | null>(null)
+  const [liveStripeKey, setLiveStripeKey] = useState<string | null>(null)
 
   useEffect(() => {
     if (!leadId) return
@@ -32,12 +32,16 @@ export default function PaymentPage() {
     void loadSiteConfig().then((config) => {
       // The publishable key is public by design — it comes from /api/site-config so the
       // page doesn't depend on an admin session or a build-time env var.
-      setStripeKey(
+      setLiveStripeKey(
         config.stripePublishableKey ||
           ((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined) ?? null),
       )
     })
   }, [leadId, navigate])
+
+  // Test customers pay with Stripe's test keys. Elements only mounts once the lead has
+  // loaded, so the key never switches under it.
+  const stripeKey = lead?.testMode ? (lead.testStripePublishableKey || null) : liveStripeKey
 
   const stripePromise = useMemo<Promise<Stripe | null> | null>(
     () => (stripeKey ? loadStripe(stripeKey) : null),
@@ -121,6 +125,13 @@ export default function PaymentPage() {
             <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Complete your payment</h1>
             <p className="mt-2 text-sm text-gray-600">Secure payment powered by Stripe</p>
           </div>
+
+          {lead.testMode ? (
+            <div className="mb-6 rounded-md bg-amber-50 border border-amber-300 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Test mode — no real money, nothing is sent to ASIC.</p>
+              <p className="mt-1">Pay with the card <span className="font-mono">4242 4242 4242 4242</span>, any future expiry date and any CVC.</p>
+            </div>
+          ) : null}
 
           {droppedCount > 0 ? (
             <div className="mb-6 rounded-md bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">

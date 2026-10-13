@@ -34,7 +34,9 @@ public interface IStripePaymentService
         string description,
         Dictionary<string, string> metadata,
         string paymentMethodId,
-        string? idempotencyKey = null);
+        string? idempotencyKey = null,
+        bool testMode = false);
 
-    Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId);
+    /// <param name="testMode">Use the test customers' Stripe test keys (Settings → Test mode).</param>
+    Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId, bool testMode = false);
 }

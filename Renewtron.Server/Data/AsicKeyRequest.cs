@@ -29,6 +29,9 @@ public class AsicKeyRequest
     /// <summary>"Sync" (created by the daily sales sync) or "Manual" (admin button).</summary>
     public string Source { get; set; } = "Sync";
 
+    /// <summary>For a test customer: never sent to ASIC, and kept out of the desktop tool's list.</summary>
+    public bool IsTest { get; set; }
+
     public AsicKeyRequestStatus Status { get; set; } = AsicKeyRequestStatus.Pending;
     /// <summary>ASIC's reference number from the Thank You page.</summary>
     public string? AsicReferenceNumber { get; set; }

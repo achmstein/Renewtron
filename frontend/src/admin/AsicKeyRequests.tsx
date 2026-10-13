@@ -141,6 +141,7 @@ export default function AsicKeyRequests() {
         <div>
           <div className="text-xs text-zinc-700 tabular-nums">{relativeTime(row.original.createdAt)}</div>
           <div className="text-xxs font-mono tabular-nums text-zinc-400">{row.original.source.toLowerCase()}</div>
+          {row.original.isTest ? <StatusPill tone="amber">TEST</StatusPill> : null}
         </div>
       ),
     },

@@ -8,11 +8,25 @@ namespace Renewtron.Services;
 public class StripePaymentService : IStripePaymentService
 {
     private readonly StripeSettings _settings;
+    private readonly TestModeSettings _testMode;
 
-    public StripePaymentService(IOptionsSnapshot<StripeSettings> settings)
+    public StripePaymentService(IOptionsSnapshot<StripeSettings> settings, IOptionsSnapshot<TestModeSettings> testMode)
     {
         _settings = settings.Value;
+        _testMode = testMode.Value;
         StripeConfiguration.ApiKey = _settings.SecretKey;
+    }
+
+    /// <summary>The key goes on every request, so a test charge can never fall back to the live key.</summary>
+    private RequestOptions Options(bool testMode, string? idempotencyKey = null)
+    {
+        if (testMode && !_testMode.StripeReady)
+            throw new InvalidOperationException("Test mode needs Stripe test keys (Settings → Test mode).");
+        return new RequestOptions
+        {
+            ApiKey = testMode ? _testMode.StripeSecretKey : _settings.SecretKey,
+            IdempotencyKey = idempotencyKey,
+        };
     }
 
     public async Task<StripeConfirmResult> ConfirmPaymentAsync(
@@ -21,7 +35,8 @@ public class StripePaymentService : IStripePaymentService
         string description,
         Dictionary<string, string> metadata,
         string paymentMethodId,
-        string? idempotencyKey = null)
+        string? idempotencyKey = null,
+        bool testMode = false)
     {
         try
         {
@@ -43,8 +58,7 @@ public class StripePaymentService : IStripePaymentService
             };
 
             var service = new PaymentIntentService();
-            var requestOptions = idempotencyKey is null ? null : new RequestOptions { IdempotencyKey = idempotencyKey };
-            var paymentIntent = await service.CreateAsync(options, requestOptions);
+            var paymentIntent = await service.CreateAsync(options, Options(testMode, idempotencyKey));
 
             return paymentIntent.Status switch
             {
@@ -73,7 +87,7 @@ public class StripePaymentService : IStripePaymentService
         }
     }
 
-    public async Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId)
+    public async Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId, bool testMode = false)
     {
         try
         {
@@ -81,7 +95,7 @@ public class StripePaymentService : IStripePaymentService
             var paymentIntent = await service.GetAsync(paymentIntentId, new PaymentIntentGetOptions
             {
                 Expand = ["latest_charge"],
-            });
+            }, Options(testMode));
             return new StripeIntentState(
                 paymentIntent.Id,
                 paymentIntent.Status,

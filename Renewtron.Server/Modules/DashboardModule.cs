@@ -24,25 +24,29 @@ public sealed class DashboardModule : ICarterModule
             var elevenMonthsAgo = now.AddMonths(-11);
             var thirteenMonthsAgo = now.AddMonths(-13);
 
+            // Test customers (Settings → Test mode) never count towards the numbers.
+            var renewals = db.RenewalRequests.AsNoTracking().Where(r => !r.IsTest);
+            var leads = db.Leads.AsNoTracking().Where(l => !l.IsTest);
+
             var totalSearches = await db.SearchLogs.AsNoTracking().CountAsync();
             var successfulSearches = await db.SearchLogs.AsNoTracking().CountAsync(s => s.Success);
-            var renewalsInitiated = await db.RenewalRequests.AsNoTracking().CountAsync();
-            var renewalsCompleted = await db.RenewalRequests.AsNoTracking().CountAsync(r => r.Status == RenewalStatus.Completed);
-            var renewalsFailed = await db.RenewalRequests.AsNoTracking().CountAsync(r => r.Status == RenewalStatus.Failed);
-            var renewalsPending = await db.RenewalRequests.AsNoTracking().CountAsync(r => r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing);
+            var renewalsInitiated = await renewals.CountAsync();
+            var renewalsCompleted = await renewals.CountAsync(r => r.Status == RenewalStatus.Completed);
+            var renewalsFailed = await renewals.CountAsync(r => r.Status == RenewalStatus.Failed);
+            var renewalsPending = await renewals.CountAsync(r => r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing);
 
-            var totalLeads = await db.Leads.AsNoTracking().CountAsync();
-            var convertedLeads = await db.Leads.AsNoTracking().CountAsync(l => l.Outcome == LeadOutcome.RenewalCompleted);
-            var notDueLeads = await db.Leads.AsNoTracking().CountAsync(l => l.Outcome == LeadOutcome.NotDueForRenewal);
+            var totalLeads = await leads.CountAsync();
+            var convertedLeads = await leads.CountAsync(l => l.Outcome == LeadOutcome.RenewalCompleted);
+            var notDueLeads = await leads.CountAsync(l => l.Outcome == LeadOutcome.NotDueForRenewal);
 
             // Channel breakdown for the current month — COMPLETED renewals only. Counting
             // failed/pending rows as revenue made this page disagree with the Renewals page.
-            var renewtronDirect = await db.RenewalRequests.AsNoTracking()
+            var renewtronDirect = await renewals
                 .Where(r => r.Source == RenewalSource.Renewtron && r.Status == RenewalStatus.Completed
                     && r.CompletedAt != null && r.CompletedAt >= monthStart)
                 .Select(r => r.Amount)
                 .ToListAsync();
-            var ontraport = await db.RenewalRequests.AsNoTracking()
+            var ontraport = await renewals
                 .Where(r => r.Source == RenewalSource.Ontraport && r.Status == RenewalStatus.Completed
                     && r.CompletedAt != null && r.CompletedAt >= monthStart)
                 .Select(r => r.Amount)
@@ -50,7 +54,7 @@ public sealed class DashboardModule : ICarterModule
 
             // Average basket — recent completions (90d), falling back to the configured
             // 1-year price rather than a hardcoded number that matches no real fee.
-            var basketStats = await db.RenewalRequests.AsNoTracking()
+            var basketStats = await renewals
                 .Where(r => r.Status == RenewalStatus.Completed && r.Amount > 0 && r.CompletedAt >= ninetyDaysAgo)
                 .GroupBy(r => 1)
                 .Select(g => new { Count = g.Count(), Sum = g.Sum(r => r.Amount) })
@@ -60,7 +64,7 @@ public sealed class DashboardModule : ICarterModule
                 : pricing.Value.GetCustomerPrice(1);
 
             // Action 1: leads that found a renewable name and never paid
-            var abandonedAtPaymentCount = await db.Leads.AsNoTracking()
+            var abandonedAtPaymentCount = await leads
                 .CountAsync(l => l.Outcome == LeadOutcome.RenewalAvailable
                     && !l.ConvertedToRenewal
                     && l.CreatedAt >= ninetyDaysAgo);
@@ -77,7 +81,7 @@ public sealed class DashboardModule : ICarterModule
             var ontraportPipelineValue = ontraportPipeline.Sum();
 
             // Action 3: failed renewals worth retrying (last 30 days)
-            var failedRenewals = await db.RenewalRequests.AsNoTracking()
+            var failedRenewals = await renewals
                 .Where(r => r.Status == RenewalStatus.Failed && r.InitiatedAt >= thirtyDaysAgo)
                 .Select(r => r.Amount)
                 .ToListAsync();
@@ -87,7 +91,7 @@ public sealed class DashboardModule : ICarterModule
             // Action 5: 1-year renewals from 11-13 months ago — coming back due soon.
             // Bucketed by CompletedAt: the term starts when the renewal actually completed,
             // not when the customer first clicked (a retried renewal can differ by days).
-            var pastCustomersDueSoonCount = await db.RenewalRequests.AsNoTracking()
+            var pastCustomersDueSoonCount = await renewals
                 .CountAsync(r => r.Status == RenewalStatus.Completed
                     && r.RenewalYears == 1
                     && r.CompletedAt != null
@@ -95,7 +99,7 @@ public sealed class DashboardModule : ICarterModule
                     && r.CompletedAt <= elevenMonthsAgo);
 
             // Recent activity feed — combined timeline (last 48h, capped at 30)
-            var paidActivity = await db.RenewalRequests.AsNoTracking()
+            var paidActivity = await renewals
                 .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null && r.CompletedAt >= fortyEightHoursAgo)
                 .OrderByDescending(r => r.CompletedAt)
                 .Take(30)
@@ -108,7 +112,7 @@ public sealed class DashboardModule : ICarterModule
                     r.Source.ToString()))
                 .ToListAsync();
 
-            var leadActivity = await db.Leads.AsNoTracking()
+            var leadActivity = await leads
                 .Where(l => l.Outcome == LeadOutcome.RenewalAvailable
                     && !l.ConvertedToRenewal
                     && l.CreatedAt >= fortyEightHoursAgo)
@@ -135,7 +139,7 @@ public sealed class DashboardModule : ICarterModule
                 .Select(s => new { s.Id, s.Abn, s.SearchedAt, s.Success, s.ResultsCount })
                 .ToListAsync();
 
-            var recentRenewals = await db.RenewalRequests.AsNoTracking()
+            var recentRenewals = await renewals
                 .Include(r => r.SearchResult)
                 .OrderByDescending(r => r.InitiatedAt)
                 .Take(10)
@@ -150,7 +154,7 @@ public sealed class DashboardModule : ICarterModule
 
             // System health — "is the machine actually running?" at a glance.
             var staleCutoff = now.AddHours(-2);
-            var stuckAgg = await db.RenewalRequests.AsNoTracking()
+            var stuckAgg = await renewals
                 .Where(r => (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)
                     && (r.LastAttemptAt ?? r.InitiatedAt) < staleCutoff)
                 .GroupBy(r => 1)

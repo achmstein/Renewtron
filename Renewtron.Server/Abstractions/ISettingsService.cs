@@ -23,4 +23,5 @@ public interface ISettingsService
     Task UpdateTrackingSettingsAsync(TrackingSettings settings);
     Task UpdateAsicKeyInboxSettingsAsync(AsicKeyInboxSettings settings);
     Task UpdateAsicKeyRequestSettingsAsync(AsicKeyRequestSettings settings);
+    Task UpdateTestModeSettingsAsync(TestModeSettings settings);
 }

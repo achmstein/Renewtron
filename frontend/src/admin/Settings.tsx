@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody } from '../api/client'
+import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -29,6 +29,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox' },
   { key: 'asickeyrequests', group: 'INTEGRATIONS', title: 'ASIC key requests' },
   { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags' },
+  { key: 'testmode',  group: 'TESTING',       title: 'Test mode' },
 ]
 
 export default function Settings() {
@@ -48,6 +49,8 @@ export default function Settings() {
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
   const [keyRequests, setKeyRequests] = useState<AsicKeyRequestSettings>(defaultAsicKeyRequest())
+  const [testMode, setTestMode] = useState<TestModeSettings>({ testEmails: '', stripeSecretKey: '', stripePublishableKey: '' })
+  const [testData, setTestData] = useState<TestModeData | null>(null)
 
   const load = async () => {
     const r = await api.admin.settings()
@@ -63,6 +66,8 @@ export default function Settings() {
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
     setKeyRequests(r.asicKeyRequest ?? defaultAsicKeyRequest())
+    if (r.testMode) setTestMode({ testEmails: r.testMode.testEmails, stripeSecretKey: r.testMode.stripeSecretKey, stripePublishableKey: r.testMode.stripePublishableKey })
+    void api.admin.testModeData().then(setTestData).catch(() => {})
   }
   useEffect(() => { void load() }, [])
 
@@ -87,6 +92,19 @@ export default function Settings() {
   const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
   const onAsicKeys  = save('ASIC key inbox', () => api.admin.updateAsicKeyInbox(asicKeys))
   const onKeyRequests = save('ASIC key requests', () => api.admin.updateAsicKeyRequest(keyRequests))
+  const onTestMode  = save('Test mode', () => api.admin.updateTestMode(testMode))
+
+  const deleteTestData = () => {
+    if (!window.confirm('Delete every test lead, renewal and ASIC key request? Real customers are not touched.')) return
+    void sileo.promise(api.admin.deleteTestModeData(), {
+      loading: { title: 'Deleting test data…' },
+      success: (r) => {
+        void api.admin.testModeData().then(setTestData).catch(() => {})
+        return { title: 'Test data deleted', description: `${r.leads} lead(s), ${r.renewals} renewal(s), ${r.asicKeyRequests} key request(s).` }
+      },
+      error: (err) => ({ title: 'Could not delete test data', description: err instanceof Error ? err.message : undefined }),
+    }).catch(() => {})
+  }
 
   // Tests the form's current values without saving them; each check reports on its own line.
   const testMutation = useMutation({ mutationFn: () => api.admin.testAsicKeyInbox(asicKeys) })
@@ -132,6 +150,10 @@ export default function Settings() {
     asickeys: (() => {
       const total = [asicKeys.username, asicKeys.password, asicKeys.ontraportFieldId].filter(isFilled).length
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
+    })(),
+    testmode: (() => {
+      const keys = testMode.stripeSecretKey.trim() !== '' && testMode.stripePublishableKey.trim() !== ''
+      return keys && isFilled(testMode.testEmails) ? 'configured' : keys || isFilled(testMode.testEmails) ? 'partial' : 'empty'
     })(),
     asickeyrequests: keyRequests.enabled && isFilled(keyRequests.requestEmail) ? 'configured' : isFilled(keyRequests.requestEmail) ? 'partial' : 'empty',
   }
@@ -434,6 +456,43 @@ export default function Settings() {
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
                 </form>
+              ) : null}
+
+              {activeKey === 'testmode' ? (
+                <div className="space-y-6">
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-1">
+                    <p>Anyone who enters one of these emails on the website goes through the real site, emails and Business Portal, but:</p>
+                    <ul className="list-disc pl-5">
+                      <li>pays with Stripe's test keys (card 4242 4242 4242 4242), so no money moves;</li>
+                      <li>can pick any business name on the ABN, due or not;</li>
+                      <li>is never sent to ASIC — the renewal is marked done with a TEST- reference;</li>
+                      <li>is never sent to Ontraport, and their ASIC key requests stay out of the key tool;</li>
+                      <li>doesn't count on the dashboard, Payments or the Renewals totals.</li>
+                    </ul>
+                  </div>
+                  <form onSubmit={onTestMode} className="space-y-4">
+                    <Field label="Test customer emails" hint="One per line. Use an address that isn't a real customer's — e.g. you+test@gmail.com.">
+                      <textarea rows={3} className={`${inputCls} font-mono text-xs`} value={testMode.testEmails} onChange={(e) => setTestMode({ ...testMode, testEmails: e.target.value })} />
+                    </Field>
+                    <Field label="Stripe test secret key" hint="Stripe dashboard → Developers → API keys, with 'Test mode' switched on. Starts sk_test_.">
+                      <input type="password" className={`${inputCls} font-mono`} value={testMode.stripeSecretKey} onChange={(e) => setTestMode({ ...testMode, stripeSecretKey: e.target.value })} />
+                    </Field>
+                    <Field label="Stripe test publishable key" hint="Starts pk_test_.">
+                      <input className={`${inputCls} font-mono`} value={testMode.stripePublishableKey} onChange={(e) => setTestMode({ ...testMode, stripePublishableKey: e.target.value })} />
+                    </Field>
+                    <button type="submit" className={submitBtnCls}>Save</button>
+                  </form>
+                  <div className="border-t border-zinc-100 pt-4 flex items-center justify-between gap-4">
+                    <p className="text-sm text-zinc-600">
+                      {testData
+                        ? `Test data on file: ${testData.leads} lead(s), ${testData.renewals} renewal(s), ${testData.asicKeyRequests} key request(s). The Business Portal keeps its own copy of the test account.`
+                        : 'Loading test data…'}
+                    </p>
+                    <button type="button" onClick={deleteTestData} className="shrink-0 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                      Delete test data
+                    </button>
+                  </div>
+                </div>
               ) : null}
             </Section>
           )}

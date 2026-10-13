@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Carter;
+using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
 
@@ -51,8 +52,9 @@ public sealed class SettingsModule : ICarterModule
     {
         var group = app.MapGroup("/api/admin/settings").RequireAuthorization().WithTags("Admin.Settings");
 
-        group.MapGet("/", async (ISettingsService settings) =>
+        group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions) =>
         {
+            var testMode = testModeOptions.CurrentValue;
             var sendGrid = await settings.GetSendGridSettingsAsync();
             var stripe = await settings.GetStripeSettingsAsync();
             var asic = await settings.GetAsicSettingsAsync();
@@ -114,6 +116,13 @@ public sealed class SettingsModule : ICarterModule
                     defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
                     messageTemplate = asicKeyRequest.MessageTemplate,
                     defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
+                },
+                testMode = new
+                {
+                    testEmails = testMode.TestEmails ?? "",
+                    stripeSecretKey = Mask(testMode.StripeSecretKey),
+                    stripePublishableKey = testMode.StripePublishableKey ?? "",
+                    stripeReady = testMode.StripeReady,
                 },
             });
         });
@@ -182,6 +191,20 @@ public sealed class SettingsModule : ICarterModule
         {
             NormalizeAsicKeyRequest(body);
             await settings.UpdateAsicKeyRequestSettingsAsync(body);
+            return Results.NoContent();
+        });
+
+        group.MapPut("/test-mode", async (TestModeSettings body, IOptionsMonitor<TestModeSettings> current, ISettingsService settings) =>
+        {
+            body.StripeSecretKey = Unmask(body.StripeSecretKey, current.CurrentValue.StripeSecretKey).Trim();
+            body.StripePublishableKey = (body.StripePublishableKey ?? "").Trim();
+            // A live key here would charge test customers for real — refuse anything but test keys.
+            if (body.StripeSecretKey.Length > 0 && !body.StripeSecretKey.StartsWith("sk_test_", StringComparison.Ordinal))
+                return Results.BadRequest(new { error = "The Stripe secret key must be a test key (sk_test_…)." });
+            if (body.StripePublishableKey.Length > 0 && !body.StripePublishableKey.StartsWith("pk_test_", StringComparison.Ordinal))
+                return Results.BadRequest(new { error = "The Stripe publishable key must be a test key (pk_test_…)." });
+            body.TestEmails = string.Join("\n", body.Emails());
+            await settings.UpdateTestModeSettingsAsync(body);
             return Results.NoContent();
         });
 

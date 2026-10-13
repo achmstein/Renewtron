@@ -114,12 +114,14 @@ public sealed class AsicKeyRequestsModule : ICarterModule
 
         // ---- the person's list -----------------------------------------------------------
         // What needs doing by hand, with every value for ASIC's form: rows already taken
-        // first, then failed, then pending. The desktop tool reads this too.
+        // first, then failed, then pending. The desktop tool reads this too, and submits what it
+        // gets, so test customers' rows are never listed here.
         group.MapGet("/manual", async (ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings, int max = 50) =>
         {
             var current = settings.CurrentValue;
             var rows = (await db.AsicKeyRequests.AsNoTracking()
                 .Where(r => r.Status == AsicKeyRequestStatus.Pending || r.Status == AsicKeyRequestStatus.Failed || r.Status == AsicKeyRequestStatus.Manual)
+                .Where(r => !r.IsTest)
                 .OrderBy(r => r.Status == AsicKeyRequestStatus.Manual ? 0 : r.Status == AsicKeyRequestStatus.Failed ? 1 : 2)
                 .ThenBy(r => r.CreatedAt)
                 .Take(Math.Clamp(max, 1, 200))
@@ -231,6 +233,7 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             phoneNumber = number,
             question = Question(r, settings),
             source = r.Source,
+            isTest = r.IsTest,
             status = r.Status.ToString(),
             asicReferenceNumber = r.AsicReferenceNumber,
             errorMessage = r.ErrorMessage,

@@ -46,6 +46,7 @@ public sealed class LeadsModule : ICarterModule
             ILeadService leadService,
             ILeadEmailService leadEmail,
             IBackgroundJobClient jobs,
+            IOptionsSnapshot<TestModeSettings> testMode,
             HttpContext httpContext) =>
         {
             if (!Helpers.IsValidAbn(request.Abn))
@@ -71,6 +72,7 @@ public sealed class LeadsModule : ICarterModule
                 Source = Trim(request.Source, 64),
                 OntraportContactId = Trim(request.OntraportContactId, 20),
                 VisitorId = Trim(request.VisitorId, 64),
+                IsTest = testMode.Value.IsTestEmail(request.Email),
             });
 
             if (request.SearchLogId is { } sid)
@@ -82,7 +84,7 @@ public sealed class LeadsModule : ICarterModule
             return Results.Ok(new { leadId = lead.Id });
         }).WithTags("Wizard").RequireRateLimiting("lead-capture"); // each call sends a lead email
 
-        app.MapGet("/api/leads/{id:guid}", async (Guid id, ApplicationDbContext db) =>
+        app.MapGet("/api/leads/{id:guid}", async (Guid id, ApplicationDbContext db, IOptionsSnapshot<TestModeSettings> testMode) =>
         {
             var lead = await db.Leads.AsNoTracking()
                 .Include(l => l.SearchLog)
@@ -106,6 +108,9 @@ public sealed class LeadsModule : ICarterModule
                 // False while names from our copy of the register wait on ASIC's confirmation;
                 // the wizard polls this and payment is refused until it flips.
                 verified = lead.SearchLog?.IsVerified ?? true,
+                // A test customer pays with Stripe's test keys, so the payment page needs them.
+                testMode = lead.IsTest,
+                testStripePublishableKey = lead.IsTest ? testMode.Value.StripePublishableKey : null,
                 businessNames = lead.SearchLog?.Results.Where(r => r.IsAvailable).OrderBy(r => r.BusinessName).Select(r => new
                 {
                     id = r.Id,
@@ -139,7 +144,19 @@ public sealed class LeadsModule : ICarterModule
             // doesn't know (e.g. registered since the last import) waits on ASIC here.
             SearchSource source;
             BusinessNamesResult searchResult;
-            if (!asicSettings.Value.ForceFallback && asic.TryGetRecent(cleanAbn, out var recent))
+            BusinessNamesResult? testNames = null;
+            // A test customer can pick any name on the ABN, due or not: nothing is sent to ASIC,
+            // so our copy of the register is the whole answer (ASIC only for an ABN it lacks).
+            if (lead.IsTest
+                && await localNames.SearchByAbnAsync(cleanAbn) is { Success: true, BusinessNames.Count: > 0 } local0)
+                testNames = local0;
+
+            if (testNames is not null)
+            {
+                source = SearchSource.Local;
+                searchResult = testNames;
+            }
+            else if (!asicSettings.Value.ForceFallback && asic.TryGetRecent(cleanAbn, out var recent))
             {
                 source = SearchSource.Asic;
                 searchResult = recent;
@@ -208,6 +225,7 @@ public sealed class LeadsModule : ICarterModule
                 InitiatedBy = SearchInitiator.Customer,
                 Source = source,
                 ResultsCount = searchResult.BusinessNames.Count,
+                VerifiedAt = testNames is not null ? DateTime.UtcNow : null,
             };
             var savedResults = searchResult.BusinessNames.Select(b => new SearchResult
             {
@@ -223,7 +241,11 @@ public sealed class LeadsModule : ICarterModule
             await leadService.LinkSearchLogAsync(lead.Id, searchLog.Id);
             await leadService.UpdateLeadOutcomeAsync(lead.Id, LeadOutcome.RenewalAvailable, null);
 
-            if (source == SearchSource.Asic)
+            if (testNames is not null)
+            {
+                // Test customer: settled already, and never pushed to Ontraport.
+            }
+            else if (source == SearchSource.Asic)
                 // The business names are ASIC's — send them to the lead's Ontraport contact.
                 jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
             else if (!asicSettings.Value.ForceFallback)

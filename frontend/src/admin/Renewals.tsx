@@ -177,6 +177,7 @@ export default function Renewals() {
       cell: ({ row }) => (
         <div>
           <SourcePill source={row.original.source} />
+          {row.original.isTest ? <span className="ml-1"><StatusPill tone="amber">TEST</StatusPill></span> : null}
           <div className="mt-1"><PaymentPill r={row.original} /></div>
         </div>
       ),

@@ -140,6 +140,11 @@ public class SettingsService : ISettingsService
         await UpdateSettingsSectionAsync("AsicKeyRequest", settings);
     }
 
+    public async Task UpdateTestModeSettingsAsync(TestModeSettings settings)
+    {
+        await UpdateSettingsSectionAsync("TestMode", settings);
+    }
+
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)
     {
         // Load existing overrides if present, else start empty. We never touch

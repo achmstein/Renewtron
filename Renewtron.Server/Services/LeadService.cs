@@ -28,6 +28,7 @@ public class CreateLeadDto
     public string? Source { get; set; }
     public string? OntraportContactId { get; set; }
     public string? VisitorId { get; set; }
+    public bool IsTest { get; set; }
 }
 
 public class LeadService : ILeadService
@@ -56,6 +57,7 @@ public class LeadService : ILeadService
             Source = dto.Source,
             OntraportContactId = dto.OntraportContactId,
             VisitorId = dto.VisitorId,
+            IsTest = dto.IsTest,
             CreatedAt = DateTime.UtcNow,
             Outcome = LeadOutcome.Pending
         };

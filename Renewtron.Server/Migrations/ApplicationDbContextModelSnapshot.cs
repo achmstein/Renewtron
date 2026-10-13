@@ -381,6 +381,9 @@ namespace Renewtron.Migrations
                         .HasMaxLength(140)
                         .HasColumnType("nvarchar(140)");
 
+                    b.Property<bool>("IsTest")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("KeyReceivedAt")
                         .HasColumnType("datetime2");
 
@@ -635,6 +638,9 @@ namespace Renewtron.Migrations
                     b.Property<string>("IpAddress")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsTest")
+                        .HasColumnType("bit");
 
                     b.Property<string>("MobileNumber")
                         .IsRequired()
@@ -974,6 +980,9 @@ namespace Renewtron.Migrations
 
                     b.Property<DateTime>("InitiatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsTest")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastAttemptAt")
                         .HasColumnType("datetime2");

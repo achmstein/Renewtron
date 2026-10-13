@@ -19,6 +19,9 @@ public class RenewalRequest
     // Source tracking
     public RenewalSource Source { get; set; } = RenewalSource.Renewtron;
 
+    /// <summary>From a test customer: paid with Stripe's test keys and never sent to ASIC.</summary>
+    public bool IsTest { get; set; }
+
     // Payment
     public PaymentType PaymentType { get; set; }
     public decimal Amount { get; set; } // Amount paid by customer

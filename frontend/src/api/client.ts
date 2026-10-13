@@ -53,7 +53,18 @@ export interface LeadDto {
   /** False while names listed from our copy of the register wait on ASIC's confirmation. */
   verified: boolean
   businessNames: BusinessNameDto[]
+  /** A test customer (Admin → Settings → Test mode): pays with Stripe's test keys, nothing reaches ASIC. */
+  testMode?: boolean
+  testStripePublishableKey?: string | null
 }
+
+export interface TestModeSettings {
+  testEmails: string
+  stripeSecretKey: string
+  stripePublishableKey: string
+}
+
+export interface TestModeData { leads: number; renewals: number; asicKeyRequests: number }
 
 export interface CheckResponse {
   outcome: 'RenewalAvailable' | 'NotDueForRenewal' | 'RenewalInProgress' | 'NoBusinessNames'
@@ -144,6 +155,8 @@ export interface AsicKeyRequestDto {
   phoneNumber: string
   question: string | null
   source: string
+  /** A test customer's request — never sent to ASIC. */
+  isTest?: boolean
   status: string
   asicReferenceNumber: string | null
   errorMessage: string | null
@@ -289,6 +302,7 @@ export const api = {
       tracking: TrackingSettings
       asicKeyInbox: AsicKeyInboxSettings
       asicKeyRequest: AsicKeyRequestSettings
+      testMode: TestModeSettings & { stripeReady: boolean }
     }>('/api/admin/settings'),
     searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
@@ -473,6 +487,8 @@ export const api = {
           amount: number
           status: 'Pending' | 'Processing' | 'Completed' | 'Failed'
           source: string
+          /** A test customer's renewal — Stripe test payment, not sent to ASIC. */
+          isTest?: boolean
           paymentType: 'Stripe' | 'External'
           initiatedAt: string
           completedAt?: string | null
@@ -789,6 +805,9 @@ export const api = {
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),
     testAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<AsicKeyInboxTestResult>('/api/admin/settings/asic-key-inbox/test', { method: 'POST', body: JSON.stringify(body) }),
     updateAsicKeyRequest: (body: AsicKeyRequestSettings) => apiFetch<void>('/api/admin/settings/asic-key-request', { method: 'PUT', body: JSON.stringify(body) }),
+    updateTestMode: (body: TestModeSettings) => apiFetch<void>('/api/admin/settings/test-mode', { method: 'PUT', body: JSON.stringify(body) }),
+    testModeData: () => apiFetch<TestModeData>('/api/admin/test-mode/data'),
+    deleteTestModeData: () => apiFetch<TestModeData>('/api/admin/test-mode/data', { method: 'DELETE' }),
 
     funnel: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
       const qs = new URLSearchParams()

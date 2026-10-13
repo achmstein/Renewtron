@@ -66,6 +66,7 @@ public sealed class PaymentsModule : ICarterModule
                 .Include(p => p.RenewalRequest).ThenInclude(r => r.SearchResult).ThenInclude(s => s.SearchLog)
                 .Include(p => p.RenewalRequest).ThenInclude(r => r.Lead)
                 .Where(p => p.PaymentStatus == "succeeded")
+                .Where(p => !p.RenewalRequest.IsTest) // test customers paid with Stripe's test keys
                 .ToListAsync();
 
             allRows.AddRange(payments
@@ -96,6 +97,7 @@ public sealed class PaymentsModule : ICarterModule
             var fails = await db.FunnelEvents.AsNoTracking()
                 .Include(e => e.Lead)
                 .Where(e => e.Step == FunnelSteps.PaymentFailed)
+                .Where(e => e.Lead == null || !e.Lead.IsTest)
                 .ToListAsync();
 
             allRows.AddRange(fails.Select(e => new PaymentRow(

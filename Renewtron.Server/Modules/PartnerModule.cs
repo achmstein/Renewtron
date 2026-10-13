@@ -50,7 +50,7 @@ public sealed class PartnerModule : ICarterModule
                 .Skip((page - 1) * pageSize).Take(pageSize)
                 .Select(r => new
                 {
-                    r.Id, r.Status, r.Source, r.RenewalYears, r.Amount, r.Email, r.MobileNumber, r.DateOfBirth,
+                    r.Id, r.Status, r.Source, r.IsTest, r.RenewalYears, r.Amount, r.Email, r.MobileNumber, r.DateOfBirth,
                     r.InitiatedAt, r.CompletedAt, r.TransactionReference, r.ErrorCategory, r.NextRetryAt,
                     BusinessName = r.SearchResult.BusinessName,
                     RegistrationDate = r.SearchResult.RegistrationDate,
@@ -94,6 +94,7 @@ public sealed class PartnerModule : ICarterModule
                     id = r.Id,
                     status = r.Status.ToString(),
                     source = r.Source.ToString(),
+                    isTest = r.IsTest,
                     businessName = r.BusinessName,
                     registrationDate = NullIfEmpty(r.RegistrationDate),
                     abn = r.Abn,
@@ -121,7 +122,8 @@ public sealed class PartnerModule : ICarterModule
 
         // ---- ASIC key requests ------------------------------------------------------
         group.MapPost("/asic-key-requests", async (
-            AsicKeyRequestBody body, ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings) =>
+            AsicKeyRequestBody body, ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings,
+            IOptionsMonitor<TestModeSettings> testMode) =>
         {
             var businessName = Regex.Replace(body.BusinessName ?? "", @"\s+", " ").Trim();
             var email = (body.Email ?? "").Trim();
@@ -164,6 +166,7 @@ public sealed class PartnerModule : ICarterModule
                 Abn = abn,
                 BusinessName = businessName,
                 Source = "Portal",
+                IsTest = testMode.CurrentValue.IsTestEmail(email),
                 Status = AsicKeyRequestStatus.Pending,
                 CreatedAt = DateTime.UtcNow,
             };

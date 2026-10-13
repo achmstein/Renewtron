@@ -112,14 +112,21 @@ public class RenewalProcessingService : IRenewalProcessingService
                 renewalRequest.SearchResult.BusinessName,
                 renewalRequest.SearchResult.SearchLog.Abn);
 
-            // Process the ASIC renewal using settings email
-            var result = await _renewalClient.RenewBusinessNameAsync(
-                renewalRequest.SearchResult.SearchLog.Abn,
-                renewalRequest.SearchResult.AccountNumber,
-                renewalRequest.RenewalYears,
-                asicSettings.Email ?? "",
-                asicCardDetails
-            );
+            // A test customer's renewal never reaches ASIC (or its card): it simply succeeds.
+            var result = renewalRequest.IsTest
+                ? new RenewalResult
+                {
+                    IsSuccess = true,
+                    Message = "Test mode: not sent to ASIC.",
+                    TransactionReference = "TEST-" + Random.Shared.Next(10_000_000, 99_999_999),
+                }
+                : await _renewalClient.RenewBusinessNameAsync(
+                    renewalRequest.SearchResult.SearchLog.Abn,
+                    renewalRequest.SearchResult.AccountNumber,
+                    renewalRequest.RenewalYears,
+                    asicSettings.Email ?? "",
+                    asicCardDetails
+                );
 
             // Update renewal request with result
             renewalRequest.Status = result.IsSuccess ? RenewalStatus.Completed : RenewalStatus.Failed;
