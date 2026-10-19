@@ -19,17 +19,10 @@ export default function ConfirmationPage() {
   // Customers sent here from the Business Portal get a way back to it.
   const [portalUrl, setPortalUrl] = useState<string | null>(null)
 
-  // Straight after payment the server hands back a one-click portal sign-in link: take the
-  // customer into the portal (their account and names are set up there) after a short pause.
+  // Straight after payment the server hands back a one-click portal sign-in link: the
+  // customer goes straight into the portal (their account and names are set up there).
   const location = useLocation()
   const signInUrl = (location.state as { portalSignInUrl?: string | null } | null)?.portalSignInUrl ?? null
-  const [redirectIn, setRedirectIn] = useState<number | null>(signInUrl ? 8 : null)
-  useEffect(() => {
-    if (!signInUrl || redirectIn === null) return
-    if (redirectIn <= 0) { window.location.assign(signInUrl); return }
-    const t = window.setTimeout(() => setRedirectIn(redirectIn - 1), 1000)
-    return () => window.clearTimeout(t)
-  }, [signInUrl, redirectIn])
 
   useEffect(() => {
     if (getPrefill().source.toLowerCase() !== 'portal') return
@@ -88,6 +81,34 @@ export default function ConfirmationPage() {
     })
   }, [renewals.length, leadId, lead?.abn, totalAmount])
 
+  // Leave for the portal once the conversion above is recorded (it goes by sendBeacon, so it
+  // survives the navigation) — or after a few seconds whatever happens, so nobody waits here.
+  useEffect(() => {
+    if (!signInUrl) return
+    if (!loading) { window.location.replace(signInUrl); return }
+    const t = window.setTimeout(() => window.location.replace(signInUrl), 4000)
+    return () => window.clearTimeout(t)
+  }, [signInUrl, loading])
+
+  if (signInUrl) {
+    return (
+      <div className="relative isolate overflow-auto flex-1">
+        <GridBackground />
+        <div className="mx-auto max-w-md px-6 py-24 text-center">
+          <svg className="mx-auto h-12 w-12 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <h1 className="mt-6 text-xl font-semibold text-gray-900">Payment received — taking you to your portal…</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Not moving?{' '}
+            <a href={signInUrl} className="font-medium text-brand hover:text-brand-dark">Go to my portal</a>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="relative isolate overflow-auto flex-1">
       <GridBackground />
@@ -107,25 +128,6 @@ export default function ConfirmationPage() {
           </div>
         ) : (
           <>
-            {signInUrl ? (
-              <div className="mx-auto mb-6 max-w-2xl rounded-xl bg-brand/5 p-4 ring-1 ring-brand/20 sm:flex sm:items-center sm:justify-between sm:gap-4">
-                <p className="text-sm text-gray-700">
-                  Your Business Portal account is ready. Track this renewal and all your business names there.
-                  {redirectIn !== null ? <> Taking you there in {redirectIn}s…</> : null}
-                </p>
-                <div className="mt-3 flex shrink-0 items-center gap-3 sm:mt-0">
-                  {redirectIn !== null ? (
-                    <button type="button" onClick={() => setRedirectIn(null)} className="text-sm font-medium text-gray-600 hover:text-gray-500">
-                      Stay here
-                    </button>
-                  ) : null}
-                  <a href={signInUrl} className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-dark">
-                    Go to my portal
-                  </a>
-                </div>
-              </div>
-            ) : null}
-
             <div className="mx-auto max-w-2xl">
               <UserDetailsSummary abn={lead.abn} fullName={lead.fullName} email={lead.email} mobileNumber={lead.mobileNumber} dateOfBirth={lead.dateOfBirth} />
             </div>

@@ -23,6 +23,10 @@ public class AsicKeyRequest
     public string? Phone { get; set; }
     public string Abn { get; set; } = "";
     public string BusinessName { get; set; } = "";
+    /// <summary>The client's date of birth as dd/MM/yyyy — ASIC now asks for it to identify the holder.</summary>
+    public string? DateOfBirth { get; set; }
+    /// <summary>The client's address on one line, e.g. "1 Smith St, Suburb NSW 2000".</summary>
+    public string? Address { get; set; }
     /// <summary>The rendered enquiry text actually sent.</summary>
     public string? Question { get; set; }
 

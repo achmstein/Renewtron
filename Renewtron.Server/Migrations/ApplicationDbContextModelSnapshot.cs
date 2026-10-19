@@ -338,6 +338,9 @@ namespace Renewtron.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("Address")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<Guid?>("AsicKeyNotificationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -361,6 +364,9 @@ namespace Renewtron.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("DateOfBirth")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Email")
                         .IsRequired()

@@ -20,9 +20,11 @@ export interface Prefill {
   dob: string
   contactId: string
   source: string
+  /** The business name to renew — from the portal's Renew button. */
+  businessName: string
 }
 
-const EMPTY: Prefill = { abn: '', fullName: '', email: '', mobile: '', dob: '', contactId: '', source: '' }
+const EMPTY: Prefill = { abn: '', fullName: '', email: '', mobile: '', dob: '', contactId: '', source: '', businessName: '' }
 
 const STORAGE_KEY = 'renewtron.prefill'
 
@@ -34,6 +36,7 @@ const ALIASES: Record<keyof Prefill, string[]> = {
   dob: ['dob', 'dateofbirth', 'date_of_birth', 'birthdate'],
   contactId: ['cid', 'contactid', 'contact_id', 'oid', 'ontraportid', 'ontraport_id'],
   source: ['source', 'utm_source', 'src'],
+  businessName: ['business', 'businessname', 'business_name', 'bn'],
 }
 
 /** Ontraport merge fields render as "[ABN]" when the contact has no value. */
@@ -133,11 +136,12 @@ export function parsePrefill(search: string): Prefill {
     dob: normalizeDob(pick(params, ALIASES.dob)),
     contactId: pick(params, ALIASES.contactId),
     source: pick(params, ALIASES.source),
+    businessName: pick(params, ALIASES.businessName).replace(/\s+/g, ' '),
   }
 }
 
 function hasAnything(p: Prefill) {
-  return Boolean(p.abn || p.fullName || p.email || p.mobile || p.dob || p.contactId || p.source)
+  return Boolean(p.abn || p.fullName || p.email || p.mobile || p.dob || p.contactId || p.source || p.businessName)
 }
 
 function read(): Prefill {
@@ -169,6 +173,8 @@ export function capturePrefill(search: string): Prefill {
   for (const key of Object.keys(EMPTY) as Array<keyof Prefill>) {
     if (incoming[key]) merged[key] = incoming[key]
   }
+  // The name belongs to the link it came on: a fresh link without one mustn't renew a stale pick.
+  merged.businessName = incoming.businessName
   write(merged)
   return merged
 }
@@ -185,6 +191,20 @@ export function rememberDetails(details: Partial<Prefill>) {
     if (value) merged[key] = value
   }
   write(merged)
+}
+
+/** The 18+ check the details step applies to a yyyy-mm-dd date of birth. */
+export function isAdult(dob: string): boolean {
+  if (!dob) return false
+  const eighteenAgo = new Date()
+  eighteenAgo.setFullYear(eighteenAgo.getFullYear() - 18)
+  return new Date(dob) <= eighteenAgo
+}
+
+/** Case- and spacing-insensitive business name comparison. */
+export function sameBusinessName(a: string, b: string): boolean {
+  const norm = (v: string) => (v ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+  return norm(a) !== '' && norm(a) === norm(b)
 }
 
 export function getPrefill(): Prefill {

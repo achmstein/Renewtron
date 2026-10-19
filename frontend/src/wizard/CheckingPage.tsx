@@ -4,6 +4,7 @@ import { api, type LeadDto } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
 import WizardProgress from '../components/WizardProgress'
+import { getPrefill, sameBusinessName } from '../lib/prefill'
 import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
@@ -57,7 +58,10 @@ export default function CheckingPage() {
             abn: lead.abn,
             detail: `${result.businessNames.length} name(s)`,
           })
-          navigate(`/select-names/${leadId}`)
+          // Sent from the portal to renew one name: skip the pick and go to the card.
+          const wanted = getPrefill().businessName
+          const match = wanted ? result.businessNames.find((b) => sameBusinessName(b.businessName, wanted)) : undefined
+          navigate(match ? `/payment/${leadId}?ids=${match.id}&years=1` : `/select-names/${leadId}`)
         } else {
           trackStep(FunnelStep.CheckUnavailable, { leadId, abn: lead.abn, detail: result.outcome })
           navigate(`/not-available/${leadId}`)

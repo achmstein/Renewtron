@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
-import { capturePrefill, normalizeAbn, rememberDetails } from '../lib/prefill'
-import { FunnelStep, getVisitorId, trackStep } from '../lib/tracking'
+import { createLead } from '../lib/leads'
+import { capturePrefill, isAdult, normalizeAbn } from '../lib/prefill'
+import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -54,11 +54,7 @@ export default function DetailsPage() {
     if (!cleanMobile) next.mobile = 'Please enter your mobile number'
     else if (cleanMobile.length < 10) next.mobile = 'Please enter a valid Australian mobile number'
     if (!dob) next.dob = 'Please enter your date of birth'
-    else {
-      const eighteenAgo = new Date()
-      eighteenAgo.setFullYear(eighteenAgo.getFullYear() - 18)
-      if (new Date(dob) > eighteenAgo) next.dob = 'You must be at least 18 years old'
-    }
+    else if (!isAdult(dob)) next.dob = 'You must be at least 18 years old'
     setErrors(next)
     return !next.fullName && !next.email && !next.mobile && !next.dob
   }
@@ -68,19 +64,9 @@ export default function DetailsPage() {
     if (!validate()) return
     setIsSubmitting(true)
     try {
-      const result = await api.createLead({
-        abn: abn.replace(/\s+/g, ''),
-        fullName: fullName.trim(),
-        email: email.trim().toLowerCase(),
-        mobileNumber: mobileNumber.replace(/[\s-]/g, ''),
-        dateOfBirth: dob,
-        source: prefill.source || (prefill.contactId ? 'ontraport' : undefined),
-        ontraportContactId: prefill.contactId || undefined,
-        visitorId: getVisitorId(),
-      })
-      rememberDetails({ fullName: fullName.trim() })
-      trackStep(FunnelStep.DetailsSubmitted, { abn, leadId: result.leadId })
-      navigate(`/checking/${result.leadId}`)
+      const leadId = await createLead({ abn, fullName, email, mobileNumber, dateOfBirth: dob }, prefill)
+      trackStep(FunnelStep.DetailsSubmitted, { abn, leadId })
+      navigate(`/checking/${leadId}`)
     } catch (err) {
       setErrors((e2) => ({ ...e2, general: err instanceof Error ? err.message : 'An error occurred. Please try again.' }))
       setIsSubmitting(false)

@@ -22,6 +22,9 @@ public sealed class Enquiry
     public string Email { get; set; } = "";
     /// <summary>Contact phone as typed in; split for ASIC's boxes at submit time.</summary>
     public string Phone { get; set; } = "";
+    /// <summary>Date of birth (dd/MM/yyyy) and one-line address, for the enquiry text. Optional.</summary>
+    public string DateOfBirth { get; set; } = "";
+    public string Address { get; set; } = "";
     /// <summary>
     /// Already split, from Renewtron: the server applies its fallback phone (admin Settings)
     /// when the contact has none, so a row from the list arrives with these filled in.
@@ -134,8 +137,14 @@ public sealed class Enquiry
             ["BusinessName"] = BusinessName.Trim(),
             ["Email"] = keyEmail,
             ["ClientEmail"] = Email.Trim(),
+            ["DateOfBirth"] = DateOfBirth.Trim(),
+            ["Address"] = Address.Trim(),
         };
-        var text = Regex.Replace(template, @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
+        // A comma-separated part whose optional value is blank is dropped whole, not left as a bare label.
+        string[] optional = ["DateOfBirth", "Address"];
+        var parts = template.Split(',').Where(part => !optional.Any(name =>
+            part.Contains($"{{{name}}}", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(values[name])));
+        var text = Regex.Replace(string.Join(",", parts), @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
         return Regex.Replace(text, @"[ \t]+", " ").Trim();
     }
 

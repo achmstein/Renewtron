@@ -21,8 +21,12 @@ public class PortalSettings
     /// <summary>A sign-in link for the checkout's confirmation page. The payer typed the email,
     /// so the portal honours it only for an account created after this wizard run began
     /// (<paramref name="leadCreatedAt"/>), i.e. by this purchase — never an existing one.</summary>
+    /// <remarks>Marked <c>from=checkout</c>: the confirmation page sends the payer there itself
+    /// (no mail scanner ever sees it), so the portal signs them in without asking for a click.</remarks>
     public string? CheckoutSignInUrl(string? email, DateTimeOffset now, DateTime leadCreatedAt) =>
-        CreateSignInUrl(email, now, new DateTimeOffset(DateTime.SpecifyKind(leadCreatedAt, DateTimeKind.Utc)));
+        CreateSignInUrl(email, now, new DateTimeOffset(DateTime.SpecifyKind(leadCreatedAt, DateTimeKind.Utc))) is { } url
+            ? url + "&from=checkout"
+            : null;
 
     private string? CreateSignInUrl(string? email, DateTimeOffset now, DateTimeOffset? notAccountBefore)
     {

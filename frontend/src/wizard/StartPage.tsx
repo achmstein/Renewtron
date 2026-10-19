@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
-import { capturePrefill } from '../lib/prefill'
+import { createLead } from '../lib/leads'
+import { capturePrefill, isAdult, parsePrefill } from '../lib/prefill'
 import { FunnelStep, trackStep } from '../lib/tracking'
 
 const steps = [
@@ -20,6 +21,8 @@ export default function StartPage() {
   const [abn, setAbn] = useState('')
   const [error, setError] = useState('')
   const [prefilled, setPrefilled] = useState(false)
+  const [skipping, setSkipping] = useState(false)
+  const skipStarted = useRef(false)
 
   useEffect(() => {
     const prefill = capturePrefill(search)
@@ -27,7 +30,28 @@ export default function StartPage() {
     if (!prefill.abn) return
     setAbn(formatAbn(prefill.abn))
     setPrefilled(true)
-  }, [search])
+
+    // From the portal's Renew button we already know everything the forms ask: go straight
+    // to the check (and from there to the card). Only for a link carrying it — not when the
+    // customer comes back here — and anything missing or failing shows the normal form.
+    const linked = parsePrefill(search)
+    const complete = linked.source.toLowerCase() === 'portal'
+      && prefill.fullName.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefill.email)
+      && prefill.mobile.length >= 10 && isAdult(prefill.dob)
+    if (!complete || skipStarted.current) return
+    skipStarted.current = true
+    setSkipping(true)
+    void api.prefetchSearch(prefill.abn).catch(() => {})
+    createLead({
+      abn: prefill.abn, fullName: prefill.fullName, email: prefill.email,
+      mobileNumber: prefill.mobile, dateOfBirth: prefill.dob,
+    }, prefill)
+      .then((leadId) => {
+        trackStep(FunnelStep.DetailsSubmitted, { abn: prefill.abn, leadId })
+        navigate(`/checking/${leadId}`, { replace: true })
+      })
+      .catch(() => setSkipping(false))
+  }, [search, navigate])
 
   const isValid = () => {
     const clean = abn.replace(/\s+/g, '')
@@ -61,6 +85,15 @@ export default function StartPage() {
           </p>
         </div>
 
+        {skipping ? (
+          <div className="mx-auto mt-12 max-w-md text-center">
+            <svg className="mx-auto h-10 w-10 animate-spin text-brand" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <p className="mt-4 text-sm text-gray-600">Getting your renewal ready…</p>
+          </div>
+        ) : (
         <div className="mx-auto mt-12 max-w-md">
           <form onSubmit={submit}>
             <div className="space-y-6">
@@ -101,6 +134,7 @@ export default function StartPage() {
             </div>
           </form>
         </div>
+        )}
       </div>
     </div>
   )

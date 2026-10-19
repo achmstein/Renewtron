@@ -26,7 +26,7 @@ public sealed class PartnerModule : ICarterModule
 {
     public sealed record AsicKeyRequestBody(
         string? BusinessName, string? Abn, string? Email, string? GivenNames, string? FamilyName,
-        string? Phone, string? ExternalReference);
+        string? Phone, string? ExternalReference, string? DateOfBirth = null, string? Address = null);
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -165,6 +165,8 @@ public sealed class PartnerModule : ICarterModule
                 Phone = phone,
                 Abn = abn,
                 BusinessName = businessName,
+                DateOfBirth = AsicKeyRequestService.FormatDateOfBirth(body.DateOfBirth),
+                Address = string.IsNullOrWhiteSpace(body.Address) ? null : Regex.Replace(body.Address, @"\s+", " ").Trim(),
                 Source = "Portal",
                 IsTest = testMode.CurrentValue.IsTestEmail(email),
                 Status = AsicKeyRequestStatus.Pending,

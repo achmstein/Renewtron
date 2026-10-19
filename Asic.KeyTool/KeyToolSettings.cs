@@ -43,11 +43,15 @@ public sealed class KeyToolSettings
     /// </summary>
     public string RequestEmail { get; set; } = "businessnamerenewals@gmail.com";
 
-    /// <summary>Free-text enquiry. Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email}.</summary>
+    /// <summary>
+    /// Free-text enquiry for a typed-in row (rows from Renewtron come with their text already
+    /// rendered). Placeholders: {FirstName} {LastName} {DateOfBirth} {Address} {Abn} {BusinessName}
+    /// {Email} {ClientEmail}; a comma-separated part whose {DateOfBirth} or {Address} is blank is left out.
+    /// </summary>
     public string MessageTemplate { get; set; } = DefaultMessageTemplate;
 
     public const string DefaultMessageTemplate =
-        "My name is {FirstName} {LastName} ABN {Abn} for my business name {BusinessName} please email a copy of my ASIC key to {Email}";
+        "My name is {FirstName} {LastName}, date of birth {DateOfBirth}, address {Address}, ABN {Abn} for my business name {BusinessName}. Please email a copy of my ASIC key to {Email}";
 
     // ---- storage ---------------------------------------------------------------------
 

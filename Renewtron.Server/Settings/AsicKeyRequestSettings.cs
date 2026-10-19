@@ -27,9 +27,13 @@ public class AsicKeyRequestSettings
     public string DefaultPhonePrefix { get; set; } = "";
     public string DefaultPhoneNumber { get; set; } = "";
 
-    /// <summary>Free-text enquiry. Placeholders: {FirstName} {LastName} {Abn} {BusinessName} {Email} {ClientEmail}.</summary>
+    /// <summary>
+    /// Free-text enquiry. Placeholders: {FirstName} {LastName} {DateOfBirth} {Address} {Abn}
+    /// {BusinessName} {Email} {ClientEmail}. When a client has no date of birth or address on
+    /// file, the comma-separated part holding that placeholder is left out of the text.
+    /// </summary>
     public string MessageTemplate { get; set; } = DefaultMessageTemplate;
 
     public const string DefaultMessageTemplate =
-        "My name is {FirstName} {LastName} ABN {Abn} for my business name {BusinessName} please email a copy of my ASIC key to {Email}";
+        "My name is {FirstName} {LastName}, date of birth {DateOfBirth}, address {Address}, ABN {Abn} for my business name {BusinessName}. Please email a copy of my ASIC key to {Email}";
 }

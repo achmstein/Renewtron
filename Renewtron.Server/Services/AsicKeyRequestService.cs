@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -48,6 +49,8 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
             Phone = sale.MobileNumber,
             Abn = DigitsOnly(sale.Abn),
             BusinessName = sale.BusinessName.Trim(),
+            DateOfBirth = FormatDateOfBirth(sale.DateOfBirth),
+            Address = JoinAddress(sale.Address, sale.Suburb, sale.State, sale.Postcode),
             Source = source,
             Status = AsicKeyRequestStatus.Pending,
             CreatedAt = DateTime.UtcNow,
@@ -158,9 +161,47 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
             ["BusinessName"] = request.BusinessName.Trim(),
             ["Email"] = (settings.RequestEmail ?? "").Trim(),
             ["ClientEmail"] = request.Email.Trim(),
+            ["DateOfBirth"] = (request.DateOfBirth ?? "").Trim(),
+            ["Address"] = (request.Address ?? "").Trim(),
         };
-        var text = Regex.Replace(template, @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
+        return Fill(template, values);
+    }
+
+    /// <summary>Optional placeholders: a comma-separated part of the template that holds one with
+    /// no value is dropped whole, so "…, date of birth {DateOfBirth}, …" doesn't leave a dangling label.</summary>
+    private static readonly string[] OptionalPlaceholders = ["DateOfBirth", "Address"];
+
+    private static string Fill(string template, IReadOnlyDictionary<string, string> values)
+    {
+        var parts = template.Split(',').Where(part => !OptionalPlaceholders.Any(name =>
+            part.Contains($"{{{name}}}", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(values.GetValueOrDefault(name))));
+        var text = Regex.Replace(string.Join(",", parts), @"\{(\w+)\}", m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
         return Regex.Replace(text, @"[ \t]+", " ").Trim();
+    }
+
+    /// <summary>A date of birth in whatever shape it arrived (yyyy-MM-dd, dd/MM/yyyy, unix
+    /// seconds from Ontraport) as dd/MM/yyyy; null when there isn't one.</summary>
+    public static string? FormatDateOfBirth(string? raw)
+    {
+        var value = (raw ?? "").Trim();
+        if (value.Length == 0) return null;
+        var inv = CultureInfo.InvariantCulture;
+        if (Regex.IsMatch(value, @"^\d{9,11}$") && long.TryParse(value, out var seconds))
+            return DateTimeOffset.FromUnixTimeSeconds(seconds).UtcDateTime.ToString("dd/MM/yyyy", inv);
+        string[] formats = ["yyyy-MM-dd", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ssZ", "d/M/yyyy", "dd/MM/yyyy", "d-M-yyyy"];
+        if (DateTime.TryParseExact(value, formats, inv, DateTimeStyles.None, out var date))
+            return date.ToString("dd/MM/yyyy", inv);
+        return value;
+    }
+
+    /// <summary>"1 Smith St, Suburb NSW 2000" from the parts we have; null when there are none.</summary>
+    public static string? JoinAddress(string? street, string? suburb, string? state, string? postcode)
+    {
+        static string Clean(string? v) => Regex.Replace(v ?? "", @"\s+", " ").Trim();
+        var locality = string.Join(" ", new[] { Clean(suburb), Clean(state), Clean(postcode) }.Where(v => v.Length > 0));
+        var joined = string.Join(", ", new[] { Clean(street), locality }.Where(v => v.Length > 0));
+        return joined.Length == 0 ? null : joined;
     }
 
     public static (string Given, string Family) SplitName(string? fullName)
