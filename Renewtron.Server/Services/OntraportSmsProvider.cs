@@ -126,6 +126,15 @@ public class OntraportSmsProvider : ISmsProvider
         }
     }
 
+    // Ontraport sends the same field as a string one day and a number the next (account_id
+    // has gone both ways, each time failing every renewal), so read any JSON value into the
+    // text fields and accept numbers written as strings.
+    private static readonly JsonSerializerOptions LenientJson = new()
+    {
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        Converters = { new AnyValueAsStringConverter(), new LenientBoolConverter() },
+    };
+
     private async Task<List<ConversationMessage>> GetConversationMessagesAsync(string conversationId)
     {
         try
@@ -148,7 +157,7 @@ public class OntraportSmsProvider : ISmsProvider
                 throw new OntraportException($"Failed to fetch conversation messages: {response.StatusCode}");
             }
 
-            var result = JsonSerializer.Deserialize<OntraportConversationResponse>(content);
+            var result = JsonSerializer.Deserialize<OntraportConversationResponse>(content, LenientJson);
 
             if (result?.Code != 0 || result?.Data == null)
             {
@@ -248,12 +257,45 @@ public class OntraportConversationResponse
     [JsonPropertyName("data")]
     public ConversationData? Data { get; set; }
 
-    // Ontraport sends account_id as a JSON string ("12345"), not a number, so binding
-    // it to `int` blew up the whole deserializer mid-conversation-fetch and failed
-    // every renewal at "Process Payment". Match the rest of this file's ID fields
-    // (UserId, ContactId, etc.) which are all string?.
+    // Ontraport has sent account_id as a string and as a number; LenientJson reads either.
     [JsonPropertyName("account_id")]
     public string? AccountId { get; set; }
+}
+
+/// <summary>Reads any JSON value into a string: strings as they are, numbers and booleans as
+/// their text, objects and arrays as raw JSON.</summary>
+public sealed class AnyValueAsStringConverter : JsonConverter<string>
+{
+    public override bool HandleNull => true;
+
+    public override string? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType switch
+        {
+            JsonTokenType.Null => null,
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.True => "true",
+            JsonTokenType.False => "false",
+            JsonTokenType.Number => JsonDocument.ParseValue(ref reader).RootElement.GetRawText(),
+            _ => JsonDocument.ParseValue(ref reader).RootElement.GetRawText(),
+        };
+
+    public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) => writer.WriteStringValue(value);
+}
+
+/// <summary>Booleans as true/false, 1/0 or their string forms.</summary>
+public sealed class LenientBoolConverter : JsonConverter<bool>
+{
+    public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        reader.TokenType switch
+        {
+            JsonTokenType.True => true,
+            JsonTokenType.False => false,
+            JsonTokenType.Number => reader.TryGetInt64(out var n) && n != 0,
+            JsonTokenType.String => reader.GetString()?.Trim().ToLowerInvariant() is "true" or "1",
+            _ => false,
+        };
+
+    public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options) => writer.WriteBooleanValue(value);
 }
 
 public class ConversationData
