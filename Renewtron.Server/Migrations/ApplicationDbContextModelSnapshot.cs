@@ -972,6 +972,9 @@ namespace Renewtron.Migrations
                     b.Property<string>("BpayReference")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("CardFailureCount")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 

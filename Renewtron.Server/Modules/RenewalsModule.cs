@@ -659,6 +659,7 @@ public sealed class RenewalsModule : ICarterModule
                 failedAtStep = r.FailedAtStep,
                 errorCategory = r.ErrorCategory,
                 attemptCount = r.AttemptCount,
+                cardFailureCount = r.CardFailureCount,
                 lastAttemptAt = r.LastAttemptAt,
                 nextRetryAt = r.NextRetryAt,
                 stripePayment = r.StripePayment == null ? null : new

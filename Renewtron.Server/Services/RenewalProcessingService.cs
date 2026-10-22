@@ -16,6 +16,9 @@ public class RenewalProcessingService : IRenewalProcessingService
 
     public const string OtpCheckStep = "OTP Check";
     private static readonly TimeSpan OtpCheckRetryDelay = TimeSpan.FromHours(1);
+    // After a failed card attempt: another card try waits an hour; switching to BPAY goes soon.
+    private static readonly TimeSpan CardRetryDelay = TimeSpan.FromHours(1);
+    private static readonly TimeSpan BpayFallbackDelay = TimeSpan.FromMinutes(10);
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IAsicRenewalClient _renewalClient;
@@ -86,8 +89,10 @@ public class RenewalProcessingService : IRenewalProcessingService
             // Without a readable OTP the card payment can't finish, and the half-done run leaves an
             // unpaid transaction at ASIC that blocks this name for 48 hours. So check first, and if
             // the OTP conversation is broken, hold the renewal (no attempt used) and check again hourly.
-            // Paying later by BPAY needs no card, so no OTP either.
-            var payLater = AsicPaymentMethods.IsBpay(_asicSettings.Value.PaymentMethod);
+            // Paying later by BPAY needs no card, so no OTP either: either BPAY is the method, or
+            // this name has had as many failed card attempts as Settings allow.
+            var cardFailures = await CardFailuresSoFarAsync(renewalRequest);
+            var payLater = UsesBpay(cardFailures);
             if (!renewalRequest.IsTest && !payLater && await _smsProvider.CheckAsync() is { } otpProblem)
             {
                 renewalRequest.Status = RenewalStatus.Failed;
@@ -171,13 +176,27 @@ public class RenewalProcessingService : IRenewalProcessingService
             renewalRequest.FailedAtStep = result.IsSuccess ? null : result.FailedAtStep;
             renewalRequest.ErrorCategory = result.IsSuccess ? null : RenewalErrorClassifier.Classify(result.FailedAtStep, result.Message);
 
-            if (!result.IsSuccess)
+            // A failed card attempt with "switch to BPAY after N" on: try the card again, or once
+            // N attempts have failed, pay later by BPAY. Either way the renewal isn't finished, so
+            // the customer's Ontraport record isn't told it failed.
+            var retryingAfterCardFailure = false;
+            if (!result.IsSuccess && !payLater && RenewalErrorClassifier.IsCardFailure(result.FailedAtStep, result.Message))
+            {
+                renewalRequest.CardFailureCount = cardFailures + 1;
+                retryingAfterCardFailure = ScheduleCardFailureRetry(renewalRequest);
+            }
+
+            if (!result.IsSuccess && !retryingAfterCardFailure)
                 ScheduleAutoRetryIfEligible(renewalRequest);
 
             await _dbContext.SaveChangesAsync();
 
             // Update OntraportSale status if this renewal came from Ontraport
-            if (renewalRequest.Source == RenewalSource.Ontraport)
+            if (retryingAfterCardFailure)
+            {
+                // Still in progress: the outcome is written when the retry finishes.
+            }
+            else if (renewalRequest.Source == RenewalSource.Ontraport)
             {
                 try
                 {
@@ -331,6 +350,55 @@ public class RenewalProcessingService : IRenewalProcessingService
         else
             outboxEntry.LastError = "Immediate sync failed; the outbox job will retry.";
         await _dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>Whether this run pays later by BPAY rather than by card.</summary>
+    private bool UsesBpay(int cardFailures)
+    {
+        var settings = _asicSettings.Value;
+        if (AsicPaymentMethods.IsBpay(settings.PaymentMethod)) return true;
+        var after = settings.BpayAfterCardFailures;
+        return after > 0 && cardFailures >= after;
+    }
+
+    /// <summary>
+    /// Failed card attempts so far for this business name: this record's, or a recent earlier
+    /// record's for the same ABN and ASIC account, whichever is higher.
+    /// </summary>
+    private async Task<int> CardFailuresSoFarAsync(RenewalRequest renewalRequest)
+    {
+        var abn = renewalRequest.SearchResult.SearchLog.Abn;
+        var account = renewalRequest.SearchResult.AccountNumber;
+        var since = DateTime.UtcNow.AddDays(-60);
+        var earlier = await _dbContext.RenewalRequests
+            .Where(r => r.Id != renewalRequest.Id && r.CardFailureCount > 0 && r.InitiatedAt >= since
+                     && r.SearchResult.AccountNumber == account && r.SearchResult.SearchLog.Abn == abn)
+            .MaxAsync(r => (int?)r.CardFailureCount) ?? 0;
+        return Math.Max(renewalRequest.CardFailureCount, earlier);
+    }
+
+    /// <summary>
+    /// After a failed card attempt, when Settings switch to BPAY after N failures: schedules the
+    /// next run, by card again or (once N have failed) by BPAY. False when the switch is off,
+    /// leaving the failure to the usual retry rules.
+    /// </summary>
+    private bool ScheduleCardFailureRetry(RenewalRequest renewalRequest)
+    {
+        var after = _asicSettings.Value.BpayAfterCardFailures;
+        if (after <= 0) return false;
+
+        var toBpay = renewalRequest.CardFailureCount >= after;
+        var delay = toBpay ? BpayFallbackDelay : CardRetryDelay;
+        renewalRequest.ErrorCategory = RenewalErrorCategories.Transient;
+        renewalRequest.NextRetryAt = DateTime.UtcNow + delay;
+        var renewalId = renewalRequest.Id;
+        _backgroundJobClient.Schedule<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewalId), delay);
+
+        _logger.LogWarning(toBpay
+                ? "Renewal {RenewalRequestId}: card failed {Failures} of {Allowed} times; paying later by BPAY in {Delay}"
+                : "Renewal {RenewalRequestId}: card failed {Failures} of {Allowed} times; trying the card again in {Delay}",
+            renewalId, renewalRequest.CardFailureCount, after, delay);
+        return true;
     }
 
     private void ScheduleAutoRetryIfEligible(RenewalRequest renewalRequest)

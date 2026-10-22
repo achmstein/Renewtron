@@ -165,6 +165,7 @@ export default function RenewalDetails() {
                 {data.errorMessage ? <div className="mt-1 text-sm text-red-900 break-words font-mono">{data.errorMessage}</div> : null}
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xxs font-mono text-red-800/70 tabular-nums">
                   <span>attempt {data.attemptCount || 1}</span>
+                  {data.cardFailureCount > 0 ? <span>card failed {data.cardFailureCount}×</span> : null}
                   {data.lastAttemptAt ? <span>last run {fmtDateTime(data.lastAttemptAt)}</span> : null}
                   {data.nextRetryAt ? <span className="text-indigo-700">auto-retry {fmtDateTime(data.nextRetryAt)}</span> : null}
                   {!data.nextRetryAt && data.errorCategory !== 'NotDueYet' ? <span>no auto-retry — needs you</span> : null}

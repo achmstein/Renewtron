@@ -40,6 +40,10 @@ public class RenewalRequest
     public string? BpayReference { get; set; }
     public DateTime? BpayPaidAt { get; set; }
 
+    // Card attempts at ASIC that failed without taking money (declined, or the payment
+    // didn't go through). Once it reaches AsicSettings.BpayAfterCardFailures, runs pay by BPAY.
+    public int CardFailureCount { get; set; }
+
     // Retry tracking. AttemptCount counts processing runs; ErrorCategory is one of
     // RenewalErrorCategories; NextRetryAt is set when an automatic retry is scheduled.
     public int AttemptCount { get; set; }

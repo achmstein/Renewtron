@@ -16,6 +16,14 @@ public class AsicSettings
     /// reference on it, for someone to pay at the bank.
     /// </summary>
     public string PaymentMethod { get; set; } = AsicPaymentMethods.Card;
+
+    /// <summary>
+    /// Paying by card: after this many failed card attempts on a renewal (declined, or the
+    /// payment didn't go through), the next run pays later by BPAY instead. 0 = never.
+    /// </summary>
+    public int BpayAfterCardFailures { get; set; }
+
+    public const int MaxBpayAfterCardFailures = 5;
 }
 
 public static class AsicPaymentMethods

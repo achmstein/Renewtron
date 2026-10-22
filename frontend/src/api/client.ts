@@ -299,7 +299,7 @@ export const api = {
       sendGrid: { apiKey: string; fromEmail: string; fromName: string }
       stripe: { secretKey: string; publishableKey: string }
       pricing: { oneYearFee: number; threeYearFee: number }
-      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay' }
+      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }
       ontraport: OntraportSettingsBody
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
@@ -645,6 +645,7 @@ export const api = {
       failedAtStep?: string | null
       errorCategory?: string | null
       attemptCount: number
+      cardFailureCount: number
       lastAttemptAt?: string | null
       nextRetryAt?: string | null
       stripePayment?: {
@@ -809,7 +810,7 @@ export const api = {
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
     updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
     updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
-    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay' }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
+    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),

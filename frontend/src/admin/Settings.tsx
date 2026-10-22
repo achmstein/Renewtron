@@ -40,7 +40,7 @@ export default function Settings() {
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
-  const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay' }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card' })
+  const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0 })
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
@@ -299,6 +299,16 @@ export default function Settings() {
                       <option value="Bpay">Pay later by BPAY</option>
                     </select>
                   </Field>
+                  {asic.paymentMethod === 'Card' ? (
+                    <Field label="Switch to BPAY after" hint={asic.bpayAfterCardFailures > 0
+                      ? `After ${asic.bpayAfterCardFailures} failed card ${asic.bpayAfterCardFailures === 1 ? 'attempt' : 'attempts'} on a renewal (declined, or no SMS code), it's lodged to pay later by BPAY instead. Card retries are an hour apart.`
+                      : 'Never: renewals are only ever paid by card.'}>
+                      <select className={inputCls} value={asic.bpayAfterCardFailures} onChange={(e) => setAsic({ ...asic, bpayAfterCardFailures: Number(e.target.value) })}>
+                        <option value={0}>Never</option>
+                        {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} failed card {n === 1 ? 'attempt' : 'attempts'}</option>)}
+                      </select>
+                    </Field>
+                  ) : null}
                   <Field label="Email">
                     <input type="email" className={inputCls} value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
                   </Field>

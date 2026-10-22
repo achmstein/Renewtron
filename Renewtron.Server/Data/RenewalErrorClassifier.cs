@@ -42,6 +42,16 @@ public static class RenewalErrorClassifier
         };
     }
 
+    /// <summary>
+    /// A card attempt that failed without ASIC taking money: the card payment itself failed
+    /// (declined, SMS code not received, 3DS error), or ASIC declined it at completion.
+    /// Safe to try again, by card or by BPAY.
+    /// </summary>
+    public static bool IsCardFailure(string? failedAtStep, string? errorMessage) =>
+        failedAtStep == "Process Payment" ||
+        (failedAtStep == "Complete Payment Action" &&
+         (errorMessage ?? "").Contains("declined", StringComparison.OrdinalIgnoreCase));
+
     public static string Classify(string? failedAtStep, string? errorMessage)
     {
         var message = errorMessage ?? "";
