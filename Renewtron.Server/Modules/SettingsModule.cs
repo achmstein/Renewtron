@@ -79,6 +79,7 @@ public sealed class SettingsModule : ICarterModule
                     // hasCvc lets the UI show the section as complete without seeing the value.
                     cvc = "",
                     hasCvc = !string.IsNullOrEmpty(asic.Cvc),
+                    paymentMethod = AsicPaymentMethods.IsBpay(asic.PaymentMethod) ? AsicPaymentMethods.Bpay : AsicPaymentMethods.Card,
                 },
                 ontraport = new
                 {
@@ -154,6 +155,7 @@ public sealed class SettingsModule : ICarterModule
             var current = await settings.GetAsicSettingsAsync();
             body.CardNumber = Unmask(body.CardNumber, current.CardNumber);
             if (string.IsNullOrEmpty(body.Cvc)) body.Cvc = current.Cvc;
+            body.PaymentMethod = AsicPaymentMethods.IsBpay(body.PaymentMethod) ? AsicPaymentMethods.Bpay : AsicPaymentMethods.Card;
             await settings.UpdateAsicSettingsAsync(body);
             return Results.NoContent();
         });

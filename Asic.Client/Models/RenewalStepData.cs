@@ -37,6 +37,10 @@ public class RenewalStepData
     public string PaymentUrl { get; set; }
     public string HostedTokenizationId { get; set; }
 
+    // Pay later by BPAY
+    public string? BpayBillerCode { get; set; }
+    public string? BpayReference { get; set; }
+
     public static RenewalStepData Create(string abn, string accountNumber, int renewalYears, string email, CreditCardDetails cardDetails)
     {
         return new RenewalStepData

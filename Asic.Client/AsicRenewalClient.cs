@@ -107,7 +107,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         }
     }
 
-    public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string accountNumber, int renewalYears, string email, CreditCardDetails cardDetails)
+    public async Task<RenewalResult> RenewBusinessNameAsync(string abn, string accountNumber, int renewalYears, string email, CreditCardDetails cardDetails, bool payLater = false)
     {
         try
         {
@@ -117,7 +117,7 @@ public class AsicRenewalClient : IAsicRenewalClient
             var initialData = RenewalStepData.Create(abn, accountNumber, renewalYears, email, cardDetails);
 
             // Railway-oriented pipeline: each step only executes if the previous step succeeded
-            return await InitializeSessionStepAsync(initialData)
+            var upToPayment = InitializeSessionStepAsync(initialData)
                 .ThenAsync("Submit ABN", SubmitAbnStepAsync)
                 .ThenAsync("Select Business", SelectBusinessStepAsync)
                 .ThenAsync("Proceed to Renewal Period", ProceedToRenewalPeriodStepAsync)
@@ -125,7 +125,25 @@ public class AsicRenewalClient : IAsicRenewalClient
                 .ThenAsync("Proceed to Review", ProceedToReviewStepAsync)
                 .ThenAsync("Select Authority Declaration", SelectAuthorityDeclarationStepAsync)
                 .ThenAsync("Proceed to Payment", ProceedToPaymentStepAsync)
-                .ThenAsync("Submit Email", SubmitEmailStepAsync)
+                .ThenAsync("Submit Email", SubmitEmailStepAsync);
+
+            if (payLater)
+            {
+                // ASIC's "Pay later -> BPAY": lodge the renewal now, pay at the bank later.
+                return await upToPayment
+                    .ThenAsync("Select BPAY", SelectBpayStepAsync)
+                    .ThenAsync("Submit Pay Later", SubmitPayLaterStepAsync)
+                    .ToRenewalResultAsync(data => new RenewalResult
+                    {
+                        IsSuccess = true,
+                        Message = $"Lodged with ASIC to pay later by BPAY (biller {data.BpayBillerCode}, reference {data.BpayReference})",
+                        TransactionReference = data.TransactionReference,
+                        BpayBillerCode = data.BpayBillerCode,
+                        BpayReference = data.BpayReference,
+                    });
+            }
+
+            return await upToPayment
                 .ThenAsync("Select Payment Method", SelectPaymentMethodStepAsync)
                 .ThenAsync("Open Payment Gateway", OpenPaymentGatewayStepAsync)
                 .ThenAsync("Process Payment", ProcessPaymentStepAsync)
@@ -580,6 +598,131 @@ public class AsicRenewalClient : IAsicRenewalClient
 
         data.PageContent = content;
         return StepResult<RenewalStepData>.Success(data);
+    }
+
+    private const string AdfValueChange =
+        "%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E";
+
+    /// <summary>
+    /// On "Select Payment Preference": tick "Pay later", then "BPAY", and read the biller code
+    /// and customer reference ASIC shows underneath. They're shown only on this page, so the
+    /// run stops here — before anything is lodged — unless both were read.
+    /// </summary>
+    private async Task<StepResult<RenewalStepData>> SelectBpayStepAsync(RenewalStepData data)
+    {
+        // The two top radios fire together, as they do in a browser (same as the card path).
+        var region = ExtractCurrentRegionIndex(data.PageContent);
+        var content = await PostPaymentPreferenceAsync(data, region,
+            $"event=tmpt%3Aregion%3A{region}%3ApayLater%2Ctmpt%3Aregion%3A{region}%3ApayNow&" +
+            $"event.tmpt:region:{region}:payLater={AdfValueChange}&" +
+            $"event.tmpt:region:{region}:payNow={AdfValueChange}&" +
+            $"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A{region}%3ApayLater%2Ctmpt%3Aregion%3A{region}%3ApayNow");
+        if (content == null)
+            return StepResult<RenewalStepData>.Failure("Failed to choose Pay later", "Select BPAY");
+
+        // Then the BPAY option under it, unless ASIC already shows the BPAY details.
+        if (ReadBpay(content) == null)
+        {
+            var subRegion = ExtractCurrentRegionIndex(content);
+            if (string.IsNullOrEmpty(subRegion)) subRegion = region;
+            var after = await PostPaymentPreferenceAsync(data, subRegion,
+                $"event=tmpt%3Aregion%3A{subRegion}%3Abpay%2Ctmpt%3Aregion%3A{subRegion}%3Ainvoice&" +
+                $"event.tmpt:region:{subRegion}:bpay={AdfValueChange}&" +
+                $"event.tmpt:region:{subRegion}:invoice={AdfValueChange}&" +
+                $"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A{subRegion}%3Abpay%2Ctmpt%3Aregion%3A{subRegion}%3Ainvoice");
+            if (after != null) content = after;
+        }
+
+        if (ReadBpay(content) is not { } bpay)
+            return StepResult<RenewalStepData>.Failure(
+                "ASIC didn't show a BPAY biller code and customer reference, so nothing was lodged. " +
+                $"Page said: {Snippet(content)}",
+                "Select BPAY");
+
+        data.BpayBillerCode = bpay.BillerCode;
+        data.BpayReference = bpay.Reference;
+        data.PageContent = content;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    /// <summary>The "Pay Later" button: ASIC lodges the renewal, to be paid by BPAY.</summary>
+    private async Task<StepResult<RenewalStepData>> SubmitPayLaterStepAsync(RenewalStepData data)
+    {
+        var region = ExtractCurrentRegionIndex(data.PageContent);
+        var formData = new StringBuilder();
+        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+        formData.Append($"popt=tmpt%3Aregion%3A{region}%3ApayLater&");
+        formData.Append($"plopt=tmpt%3Aregion%3A{region}%3Abpay&");
+        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+        formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
+        formData.Append("Adf-Page-Id=1&");
+        formData.Append($"javax.faces.ViewState={data.ViewState}&");
+        formData.Append("oracle.adf.view.rich.RENDER=tmpt%3Aregion&");
+        formData.Append($"event=tmpt%3Aregion%3A{region}%3AnextButt&");
+        formData.Append($"event.tmpt:region:{region}:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&");
+        formData.Append($"oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A{region}%3AnextButt");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
+        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+        request.Headers.Add("Adf-Rich-Message", "true");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
+
+        var response = await _http.SendAsync(request);
+        var content = await response.Content.ReadAsStringAsync();
+        var lodged = $"BPAY biller {data.BpayBillerCode}, reference {data.BpayReference}, transaction {data.TransactionReference ?? "unknown"}";
+
+        // Still on the preference page with its Pay Later button: ASIC didn't take it.
+        if (!response.IsSuccessStatusCode || content.Contains(">Pay Later</button>"))
+            return StepResult<RenewalStepData>.Failure(
+                $"Pay later wasn't accepted ({lodged}). Check ASIC before paying. Page said: {Snippet(content)}",
+                "Submit Pay Later");
+
+        data.PageContent = content;
+        return StepResult<RenewalStepData>.Success(data);
+    }
+
+    /// <summary>Posts the payment-preference form with Pay later + BPAY chosen; null on an HTTP failure.</summary>
+    private async Task<string?> PostPaymentPreferenceAsync(RenewalStepData data, string region, string eventFields)
+    {
+        var formData = new StringBuilder();
+        formData.Append("tmpt:connectHeaderView:searchWithinDropDown=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle2=&");
+        formData.Append("tmpt:connectHeaderView:searchForNeedle3=&");
+        formData.Append($"popt=tmpt%3Aregion%3A{region}%3ApayLater&");
+        formData.Append($"plopt=tmpt%3Aregion%3A{region}%3Abpay&");
+        formData.Append("org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform&");
+        formData.Append($"Adf-Window-Id={data.AdfWindowId}&");
+        formData.Append("Adf-Page-Id=1&");
+        formData.Append($"javax.faces.ViewState={data.ViewState}&");
+        formData.Append(eventFields);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"public/faces/renewal?Adf-Window-Id={data.AdfWindowId}&Adf-Page-Id=1");
+        request.Content = new StringContent(formData.ToString(), Encoding.UTF8, "application/x-www-form-urlencoded");
+        request.Headers.Add("Adf-Rich-Message", "true");
+        request.Headers.Add("Adf-Ads-Page-Id", "2");
+
+        var response = await _http.SendAsync(request);
+        return response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync() : null;
+    }
+
+    /// <summary>"Biller Code: 17301" and "Customer Reference Number: 8596799759492", with or without tags between.</summary>
+    public static (string BillerCode, string Reference)? ReadBpay(string? html)
+    {
+        if (string.IsNullOrEmpty(html)) return null;
+        const string gap = @"(?:\s|&nbsp;|&#160;|<[^>]*>)*";
+        var biller = Regex.Match(html, @"Biller\s*Code\s*:?" + gap + @"(\d{3,10})", RegexOptions.IgnoreCase);
+        var reference = Regex.Match(html, @"Customer\s*Reference\s*Number\s*:?" + gap + @"(\d{6,20})", RegexOptions.IgnoreCase);
+        return biller.Success && reference.Success ? (biller.Groups[1].Value, reference.Groups[1].Value) : null;
+    }
+
+    private static string Snippet(string? html)
+    {
+        var text = Regex.Replace(Regex.Replace(html ?? "", "<[^>]+>", " "), @"\s+", " ").Trim();
+        return text.Length > 300 ? text[..300] + "…" : text;
     }
 
     private async Task<StepResult<RenewalStepData>> OpenPaymentGatewayStepAsync(RenewalStepData data)

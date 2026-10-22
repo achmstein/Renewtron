@@ -299,7 +299,7 @@ export const api = {
       sendGrid: { apiKey: string; fromEmail: string; fromName: string }
       stripe: { secretKey: string; publishableKey: string }
       pricing: { oneYearFee: number; threeYearFee: number }
-      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean }
+      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay' }
       ontraport: OntraportSettingsBody
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
@@ -502,6 +502,8 @@ export const api = {
           attemptCount: number
           nextRetryAt?: string | null
           transactionReference?: string | null
+          bpayReference?: string | null
+          bpayPaidAt?: string | null
           initiatedByLabel: string
           stripePaymentSucceeded: boolean
           cardBrand?: string | null
@@ -636,6 +638,9 @@ export const api = {
       completedAt?: string | null
       transactionReference?: string | null
       hostedTokenizationId?: string | null
+      bpayBillerCode?: string | null
+      bpayReference?: string | null
+      bpayPaidAt?: string | null
       errorMessage?: string | null
       failedAtStep?: string | null
       errorCategory?: string | null
@@ -655,6 +660,8 @@ export const api = {
       lead?: { id: string; fullName: string; email: string } | null
     }>(`/api/admin/renewals/${id}`),
     retryRenewal: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewals/${id}/retry`, { method: 'POST' }),
+    markBpayPaid: (id: string, paid: boolean) =>
+      apiFetch<{ bpayPaidAt: string | null }>(`/api/admin/renewals/${id}/bpay-paid?paid=${paid}`, { method: 'POST' }),
     manualRenewal: (input: { abn: string; businessName: string; accountNumber: string; registrationDate?: string; renewalYears: 1 | 3; email?: string }) =>
       apiFetch<{ renewalId: string; status: string; message?: string }>('/api/admin/manual-renewal', { method: 'POST', body: JSON.stringify(input) }),
     manualSearch: (abn: string) => apiFetch<{
@@ -802,7 +809,7 @@ export const api = {
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
     updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
     updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
-    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
+    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay' }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),

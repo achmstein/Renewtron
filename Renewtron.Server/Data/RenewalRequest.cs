@@ -34,6 +34,12 @@ public class RenewalRequest
     public string? ErrorMessage { get; set; }
     public string? FailedAtStep { get; set; }
 
+    // Lodged with ASIC's "Pay later -> BPAY": ASIC hasn't been paid until someone pays these
+    // at the bank (ASIC shows them only once). BpayPaidAt is set when staff mark it paid.
+    public string? BpayBillerCode { get; set; }
+    public string? BpayReference { get; set; }
+    public DateTime? BpayPaidAt { get; set; }
+
     // Retry tracking. AttemptCount counts processing runs; ErrorCategory is one of
     // RenewalErrorCategories; NextRetryAt is set when an automatic retry is scheduled.
     public int AttemptCount { get; set; }

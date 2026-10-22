@@ -51,6 +51,21 @@ export default function RenewalDetails() {
       void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
     },
   })
+  const bpayMutation = useMutation({
+    mutationFn: (paid: boolean) => api.admin.markBpayPaid(id!, paid),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-renewal', id] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
+    },
+  })
+  const markBpay = (paid: boolean) => {
+    void sileo.promise(bpayMutation.mutateAsync(paid), {
+      loading: { title: paid ? 'Marking BPAY paid…' : 'Undoing…' },
+      success: () => ({ title: paid ? 'Marked BPAY paid.' : 'Marked BPAY unpaid.' }),
+      error: (e) => ({ title: 'Couldn’t update it', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
+
   const retry = () => {
     void sileo.promise(retryMutation.mutateAsync(), {
       loading: { title: 'Retrying renewal…' },
@@ -211,6 +226,24 @@ export default function RenewalDetails() {
           <Row label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
           {data.failedAtStep ? <Row label="Failed at step" value={<StatusPill tone="red">{data.failedAtStep}</StatusPill>} /> : null}
         </Section>
+
+        {data.bpayReference ? (
+          <Section kicker="BPAY" title="Pay later by BPAY">
+            <Row label="Biller code" value={data.bpayBillerCode ?? '—'} mono />
+            <Row label="Customer reference" value={data.bpayReference} mono />
+            <Row label="Paid" value={
+              <span className="flex items-center gap-2">
+                {data.bpayPaidAt
+                  ? <><StatusPill tone="emerald">PAID</StatusPill><span className="font-mono tabular-nums">{fmtDateTime(data.bpayPaidAt)}</span></>
+                  : <StatusPill tone="amber">TO PAY</StatusPill>}
+                <button type="button" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}
+                  className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50">
+                  {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
+                </button>
+              </span>
+            } />
+          </Section>
+        ) : null}
 
         {data.stripePayment?.cardLast4 ? (
           <Section kicker="CARD" title="Customer card on file">

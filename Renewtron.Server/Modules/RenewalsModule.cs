@@ -384,6 +384,8 @@ public sealed class RenewalsModule : ICarterModule
                     attemptCount = r.AttemptCount,
                     nextRetryAt = r.NextRetryAt,
                     transactionReference = r.TransactionReference,
+                    bpayReference = r.BpayReference,
+                    bpayPaidAt = r.BpayPaidAt,
                     initiatedByLabel = r.SearchResult.SearchLog.InitiatedBy.ToString(),
                     stripePaymentSucceeded = r.StripePayment != null && r.StripePayment.PaymentStatus == "succeeded",
                     cardBrand = r.StripePayment != null ? r.StripePayment.CardBrand : null,
@@ -400,7 +402,7 @@ public sealed class RenewalsModule : ICarterModule
                 r.id, r.abn, r.businessName, r.renewalYears, r.amount, r.status, r.source, r.isTest,
                 r.paymentType, r.initiatedAt, r.completedAt, r.email, r.errorMessage, r.failedAtStep,
                 r.errorCategory, r.attemptCount, r.nextRetryAt,
-                r.transactionReference, r.initiatedByLabel, r.stripePaymentSucceeded,
+                r.transactionReference, r.bpayReference, r.bpayPaidAt, r.initiatedByLabel, r.stripePaymentSucceeded,
                 r.cardBrand, r.cardLast4, r.lead,
                 timeInStatusHours = r.completedAt.HasValue
                     ? Math.Round((now - r.completedAt.Value).TotalHours, 1)
@@ -591,7 +593,9 @@ public sealed class RenewalsModule : ICarterModule
                 // A failure after ASIC took payment ("Complete Payment Action", or any run
                 // that got far enough to hold a tokenization id) must not be blindly re-run —
                 // the retry pays ASIC's card again. These need per-row verification first.
-                if (renewal.FailedAtStep == "Complete Payment Action" || renewal.HostedTokenizationId != null)
+                if (renewal.FailedAtStep == "Submit Pay Later")
+                return Results.BadRequest(new { error = "Cannot retry automatically: ASIC may already have this renewal lodged to pay later by BPAY. Check at ASIC before retrying." });
+            if (renewal.FailedAtStep == "Complete Payment Action" || renewal.HostedTokenizationId != null)
                 {
                     skippedPaymentRisk++;
                     continue;
@@ -648,6 +652,9 @@ public sealed class RenewalsModule : ICarterModule
                 completedAt = r.CompletedAt,
                 transactionReference = r.TransactionReference,
                 hostedTokenizationId = r.HostedTokenizationId,
+                bpayBillerCode = r.BpayBillerCode,
+                bpayReference = r.BpayReference,
+                bpayPaidAt = r.BpayPaidAt,
                 errorMessage = r.ErrorMessage,
                 failedAtStep = r.FailedAtStep,
                 errorCategory = r.ErrorCategory,
@@ -672,6 +679,19 @@ public sealed class RenewalsModule : ICarterModule
                     email = r.Lead.Email,
                 },
             });
+        });
+
+        // A renewal lodged to pay later: staff record that the BPAY has been paid at the bank
+        // (paid = false undoes it).
+        admin.MapPost("/{id:guid}/bpay-paid", async (Guid id, bool? paid, ApplicationDbContext db) =>
+        {
+            var renewal = await db.RenewalRequests.FirstOrDefaultAsync(r => r.Id == id);
+            if (renewal is null) return Results.NotFound(new { error = "Renewal request not found" });
+            if (string.IsNullOrEmpty(renewal.BpayReference))
+                return Results.BadRequest(new { error = "This renewal wasn't lodged to pay by BPAY." });
+            renewal.BpayPaidAt = paid == false ? null : DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { bpayPaidAt = renewal.BpayPaidAt });
         });
 
         admin.MapPost("/{id:guid}/retry", async (Guid id, ApplicationDbContext db, IBackgroundJobClient jobs) =>

@@ -44,6 +44,13 @@ public sealed class KeyToolSettings
     public string RequestEmail { get; set; } = "businessnamerenewals@gmail.com";
 
     /// <summary>
+    /// The "Your email address" box on ASIC's form — where ASIC replies. Blank uses each
+    /// client's own email (the default); an address here is used for every enquiry instead.
+    /// A single row picked from the list can also be given a different one before it's sent.
+    /// </summary>
+    public string ReplyEmail { get; set; } = "";
+
+    /// <summary>
     /// Free-text enquiry for a typed-in row (rows from Renewtron come with their text already
     /// rendered). Placeholders: {FirstName} {LastName} {DateOfBirth} {Address} {Abn} {BusinessName}
     /// {Email} {ClientEmail}; a comma-separated part whose {DateOfBirth} or {Address} is blank is left out.

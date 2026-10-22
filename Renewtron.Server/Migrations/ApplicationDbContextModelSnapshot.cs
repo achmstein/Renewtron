@@ -963,6 +963,15 @@ namespace Renewtron.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("BpayBillerCode")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("BpayPaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("BpayReference")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 

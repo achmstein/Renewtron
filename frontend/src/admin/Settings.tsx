@@ -40,7 +40,7 @@ export default function Settings() {
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
-  const [asic, setAsic] = useState({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '' })
+  const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay' }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card' })
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
@@ -291,6 +291,14 @@ export default function Settings() {
 
               {activeKey === 'asic' ? (
                 <form onSubmit={onAsic} className="space-y-4">
+                  <Field label="Pay ASIC by" hint={asic.paymentMethod === 'Bpay'
+                    ? 'Each renewal is lodged with ASIC to pay later. Its BPAY biller code and reference are saved on the renewal — pay them at the bank, then mark it paid.'
+                    : 'Each renewal is paid at ASIC straight away with the card below (needs the SMS code).'}>
+                    <select className={inputCls} value={asic.paymentMethod} onChange={(e) => setAsic({ ...asic, paymentMethod: e.target.value as 'Card' | 'Bpay' })}>
+                      <option value="Card">Credit card now</option>
+                      <option value="Bpay">Pay later by BPAY</option>
+                    </select>
+                  </Field>
                   <Field label="Email">
                     <input type="email" className={inputCls} value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
                   </Field>

@@ -8,6 +8,11 @@ public class RenewalResult
     public string HostedTokenizationId { get; set; }
     public string? FailedAtStep { get; set; }
 
+    // Set when the renewal was lodged with ASIC's "Pay later -> BPAY": it isn't paid until
+    // someone pays these at their bank, and ASIC shows them only once.
+    public string? BpayBillerCode { get; set; }
+    public string? BpayReference { get; set; }
+
     public static RenewalResult Success(string transactionReference, string hostedTokenizationId)
     {
         return new RenewalResult

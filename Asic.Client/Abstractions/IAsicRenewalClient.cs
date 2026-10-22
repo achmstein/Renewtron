@@ -10,5 +10,6 @@ public interface IAsicRenewalClient
         string accountNumber,
         int renewalYears,
         string email,
-        CreditCardDetails cardDetails);
+        CreditCardDetails cardDetails,
+        bool payLater = false);
 }

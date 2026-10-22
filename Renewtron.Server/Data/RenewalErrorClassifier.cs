@@ -46,6 +46,11 @@ public static class RenewalErrorClassifier
     {
         var message = errorMessage ?? "";
 
+        // Pressing "Pay Later" may have lodged the renewal even when we couldn't tell: never
+        // retry it automatically, or ASIC could end up with two.
+        if (failedAtStep == "Submit Pay Later")
+            return RenewalErrorCategories.PaymentRisk;
+
         if (failedAtStep == "Complete Payment Action" ||
             message.Contains("Payment processed but completion failed", StringComparison.OrdinalIgnoreCase))
             return RenewalErrorCategories.PaymentRisk;

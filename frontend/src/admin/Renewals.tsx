@@ -178,6 +178,9 @@ export default function Renewals() {
         <div>
           <SourcePill source={row.original.source} />
           {row.original.isTest ? <span className="ml-1"><StatusPill tone="amber">TEST</StatusPill></span> : null}
+          {row.original.bpayReference
+            ? <span className="ml-1"><StatusPill tone={row.original.bpayPaidAt ? 'emerald' : 'amber'}>{row.original.bpayPaidAt ? 'BPAY PAID' : 'BPAY TO PAY'}</StatusPill></span>
+            : null}
           <div className="mt-1"><PaymentPill r={row.original} /></div>
         </div>
       ),

@@ -166,7 +166,10 @@ public static class Program
                 continue;
             }
 
-            await SendServerRequestAsync(rows[labels.IndexOf(choice)], label: null, manualFallback: true, ct);
+            var picked = rows[labels.IndexOf(choice)];
+            var replyTo = ChooseReplyEmail(picked);
+            if (replyTo == null) continue;
+            await SendServerRequestAsync(picked, label: null, manualFallback: true, ct, replyTo);
             AnsiConsole.WriteLine();
         }
     }
@@ -273,9 +276,10 @@ public static class Program
     /// can fill ASIC's page in themselves and type the reference. Returns null when the row
     /// never got as far as the browser.
     /// </summary>
-    private static async Task<AsicKeyRequestResult?> SendServerRequestAsync(ServerRequest row, string? label, bool manualFallback, CancellationToken ct)
+    private static async Task<AsicKeyRequestResult?> SendServerRequestAsync(ServerRequest row, string? label, bool manualFallback, CancellationToken ct, string? replyEmail = null)
     {
         var enquiry = ToEnquiry(row);
+        if (!string.IsNullOrWhiteSpace(replyEmail)) enquiry.Email = replyEmail.Trim();
         if (enquiry.Problem() is { } problem)
         {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(row.BusinessName)}: {Markup.Escape(problem)}[/]");
@@ -350,11 +354,40 @@ public static class Program
         catch (Exception ex) { AnsiConsole.MarkupLine($"[yellow]Could not put {Markup.Escape(row.BusinessName)} back in the queue: {Markup.Escape(ex.Message)}[/]"); }
     }
 
+    /// <summary>
+    /// The email ASIC replies to for one row picked from the list: the client's own, the
+    /// reply-to set in Settings, or one typed now. Null = go back without sending.
+    /// </summary>
+    private static string? ChooseReplyEmail(ServerRequest row)
+    {
+        const string Back = "Back";
+        var client = (row.Email ?? "").Trim();
+        var choices = new List<string>();
+        var clientChoice = Enquiry.LooksLikeEmail(client) ? $"Client's email — {client}" : null;
+        var settingChoice = string.IsNullOrWhiteSpace(_settings.ReplyEmail) ? null : $"Reply-to from Settings — {_settings.ReplyEmail.Trim()}";
+        // Whatever Settings would use goes first, so Enter keeps today's behaviour.
+        foreach (var c in settingChoice != null ? new[] { settingChoice, clientChoice } : new[] { clientChoice, settingChoice })
+            if (c != null) choices.Add(c);
+        const string Other = "A different email…";
+        choices.Add(Other);
+        choices.Add(Back);
+
+        var pick = AnsiConsole.Prompt(new SelectionPrompt<string>()
+            .Title("Email for ASIC's form [grey](where ASIC replies)[/]:")
+            .HighlightStyle(new Style(foreground: Color.SpringGreen3))
+            .AddChoices(choices));
+        if (pick == Back) return null;
+        if (pick == clientChoice) return client;
+        if (pick == settingChoice) return _settings.ReplyEmail.Trim();
+        return AnsiConsole.Prompt(new TextPrompt<string>("Email address:")
+            .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
+    }
+
     private static Enquiry ToEnquiry(ServerRequest row) => new()
     {
         BusinessName = row.BusinessName,
         Abn = row.Abn,
-        Email = row.Email,
+        Email = string.IsNullOrWhiteSpace(_settings.ReplyEmail) ? row.Email : _settings.ReplyEmail.Trim(),
         Phone = row.Phone ?? "",
         PhonePrefix = row.PhonePrefix,
         PhoneNumber = row.PhoneNumber,
@@ -630,7 +663,7 @@ public static class Program
                 .Title("Change what?")
                 .HighlightStyle(new Style(foreground: Color.SpringGreen3))
                 .AddChoices("Renewtron server", "Browser", "Token attempts", "Pause between requests",
-                            "Key delivery email", "Enquiry text", "Back"));
+                            "Key delivery email", "Reply-to email", "Enquiry text", "Back"));
 
             switch (choice)
             {
@@ -666,6 +699,17 @@ public static class Program
                     _settings.RequestEmail = AnsiConsole.Prompt(new TextPrompt<string>("Inbox ASIC should email the key to:")
                         .DefaultValue(_settings.RequestEmail)
                         .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
+                    break;
+
+                case "Reply-to email":
+                    AnsiConsole.MarkupLine("[grey]The \"Your email address\" box on ASIC's form, where ASIC replies. Each client's own email, or one address for every enquiry. A row picked from the list can still be given another one before it's sent.[/]");
+                    var replyMode = AnsiConsole.Prompt(new SelectionPrompt<string>().Title("Reply-to:")
+                        .AddChoices("Each client's own email", "One address for every enquiry"));
+                    _settings.ReplyEmail = replyMode == "Each client's own email"
+                        ? ""
+                        : AnsiConsole.Prompt(new TextPrompt<string>("Address:")
+                            .DefaultValue(string.IsNullOrWhiteSpace(_settings.ReplyEmail) ? _settings.RequestEmail : _settings.ReplyEmail)
+                            .Validate(v => Enquiry.LooksLikeEmail(v) ? ValidationResult.Success() : ValidationResult.Error("[red]Not an email address[/]"))).Trim();
                     break;
 
                 case "Enquiry text":

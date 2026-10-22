@@ -86,7 +86,9 @@ public class RenewalProcessingService : IRenewalProcessingService
             // Without a readable OTP the card payment can't finish, and the half-done run leaves an
             // unpaid transaction at ASIC that blocks this name for 48 hours. So check first, and if
             // the OTP conversation is broken, hold the renewal (no attempt used) and check again hourly.
-            if (!renewalRequest.IsTest && await _smsProvider.CheckAsync() is { } otpProblem)
+            // Paying later by BPAY needs no card, so no OTP either.
+            var payLater = AsicPaymentMethods.IsBpay(_asicSettings.Value.PaymentMethod);
+            if (!renewalRequest.IsTest && !payLater && await _smsProvider.CheckAsync() is { } otpProblem)
             {
                 renewalRequest.Status = RenewalStatus.Failed;
                 renewalRequest.FailedAtStep = OtpCheckStep;
@@ -148,7 +150,8 @@ public class RenewalProcessingService : IRenewalProcessingService
                     renewalRequest.SearchResult.AccountNumber,
                     renewalRequest.RenewalYears,
                     asicSettings.Email ?? "",
-                    asicCardDetails
+                    asicCardDetails,
+                    payLater
                 );
 
             // Update renewal request with result
@@ -156,6 +159,14 @@ public class RenewalProcessingService : IRenewalProcessingService
             renewalRequest.CompletedAt = result.IsSuccess ? DateTime.UtcNow : null;
             renewalRequest.TransactionReference = result.TransactionReference;
             renewalRequest.HostedTokenizationId = result.HostedTokenizationId;
+            if (result.IsSuccess && !string.IsNullOrEmpty(result.BpayReference))
+            {
+                renewalRequest.BpayBillerCode = result.BpayBillerCode;
+                renewalRequest.BpayReference = result.BpayReference;
+                renewalRequest.BpayPaidAt = null;
+                _logger.LogWarning("Renewal {RenewalRequestId} lodged to pay later: BPAY biller {BillerCode}, reference {Reference}, transaction {TransactionReference}",
+                    renewalRequestId, result.BpayBillerCode, result.BpayReference, result.TransactionReference);
+            }
             renewalRequest.ErrorMessage = result.IsSuccess ? null : result.Message;
             renewalRequest.FailedAtStep = result.IsSuccess ? null : result.FailedAtStep;
             renewalRequest.ErrorCategory = result.IsSuccess ? null : RenewalErrorClassifier.Classify(result.FailedAtStep, result.Message);
