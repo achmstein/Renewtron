@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,12 @@ builder.AddServiceDefaults();
 var overridesPath = builder.Configuration["Storage:OverridesPath"]
     ?? Path.Combine(builder.Environment.ContentRootPath, "settings.overrides.json");
 builder.Configuration.AddJsonFile(overridesPath, optional: true, reloadOnChange: true);
+
+// Sign-in cookies are encrypted with Data Protection keys. Kept next to the overrides file
+// (the /data volume in production) so a redeploy doesn't sign everyone out.
+builder.Services.AddDataProtection()
+    .SetApplicationName("Renewtron")
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(overridesPath))!, "dataprotection-keys")));
 
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
