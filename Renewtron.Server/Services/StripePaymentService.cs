@@ -40,25 +40,32 @@ public class StripePaymentService : IStripePaymentService
     {
         try
         {
-            var options = new PaymentIntentCreateOptions
+            var service = new PaymentIntentService();
+
+            // One PaymentIntent per order: the order's key always returns the same intent,
+            // so a retry with another card confirms it again instead of opening a new one.
+            // A PaymentIntent can only succeed once, so the order can't be charged twice.
+            var paymentIntent = await service.CreateAsync(new PaymentIntentCreateOptions
             {
                 Amount = (long)(amount * 100), // Stripe expects amount in cents
                 Currency = "aud",
                 Description = description,
                 ReceiptEmail = customerEmail,
                 Metadata = metadata,
-                PaymentMethod = paymentMethodId,
-                Confirm = true,
                 AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
                 {
                     Enabled = true,
                     AllowRedirects = "never",
                 },
-                Expand = ["latest_charge"],
-            };
+            }, Options(testMode, idempotencyKey));
 
-            var service = new PaymentIntentService();
-            var paymentIntent = await service.CreateAsync(options, Options(testMode, idempotencyKey));
+            // Each attempt brings a fresh card token, so this key is new per attempt but
+            // the same if the exact request is resent.
+            paymentIntent = await service.ConfirmAsync(paymentIntent.Id, new PaymentIntentConfirmOptions
+            {
+                PaymentMethod = paymentMethodId,
+                Expand = ["latest_charge"],
+            }, Options(testMode, $"{paymentIntent.Id}:{paymentMethodId}"));
 
             return paymentIntent.Status switch
             {

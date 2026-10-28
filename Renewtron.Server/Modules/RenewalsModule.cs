@@ -80,6 +80,7 @@ public sealed class RenewalsModule : ICarterModule
             var searchResults = await db.SearchResults
                 .Include(sr => sr.SearchLog)
                 .Where(sr => request.SearchResultIds.Contains(sr.Id))
+                .OrderBy(sr => sr.Id)
                 .ToListAsync();
 
             if (searchResults.Count == 0)
@@ -107,7 +108,9 @@ public sealed class RenewalsModule : ICarterModule
             var total = pricePer * searchResults.Count;
             var businessNames = string.Join(", ", searchResults.Select(s => s.BusinessName));
 
-            var idempotencySource = $"batch:{lead.Id}:{request.RenewalYears}:{string.Join(",", resultIds.OrderBy(id => id))}";
+            // Everything sent to Stripe when the intent is created must be in the key, or a
+            // retry after a price or email change hits Stripe's "same key, different parameters" error.
+            var idempotencySource = $"batch:{lead.Id}:{request.RenewalYears}:{string.Join(",", resultIds.OrderBy(id => id))}:{total}:{lead.Email}";
             var idempotencyKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(idempotencySource)));
             var idsHash = IdsHash(resultIds);
 
