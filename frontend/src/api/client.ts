@@ -297,7 +297,7 @@ export const api = {
     dashboard: () => apiFetch<DashboardResponse>('/api/admin/dashboard'),
     settings: () => apiFetch<{
       sendGrid: { apiKey: string; fromEmail: string; fromName: string }
-      stripe: { secretKey: string; publishableKey: string }
+      stripe: { secretKey: string; publishableKey: string; webhookSecret?: string }
       pricing: { oneYearFee: number; threeYearFee: number }
       asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }
       ontraport: OntraportSettingsBody
@@ -809,7 +809,7 @@ export const api = {
     },
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
     updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
-    updateStripe: (body: { secretKey: string; publishableKey: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
+    updateStripe: (body: { secretKey: string; publishableKey: string; webhookSecret: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),

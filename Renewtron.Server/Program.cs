@@ -115,6 +115,7 @@ builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKey
 builder.Services.AddOptions<TestModeSettings>().BindConfiguration("TestMode");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
+builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();

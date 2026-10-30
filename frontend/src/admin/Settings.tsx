@@ -38,7 +38,7 @@ export default function Settings() {
 
   // Form state mirrors the original separate models
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
-  const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '' })
+  const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '', webhookSecret: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
   const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0 })
   // The CVC never comes back from the server; this flag says one is stored.
@@ -56,7 +56,7 @@ export default function Settings() {
     const r = await api.admin.settings()
     setData(r)
     setSg(r.sendGrid)
-    setStripe(r.stripe)
+    setStripe({ ...r.stripe, webhookSecret: r.stripe.webhookSecret ?? '' })
     setPricing(r.pricing)
     const { hasCvc, ...asicFields } = r.asic
     setAsic(asicFields)
@@ -262,6 +262,9 @@ export default function Settings() {
                   </Field>
                   <Field label="Publishable key">
                     <input className={`${inputCls} font-mono`} value={stripe.publishableKey} onChange={(e) => setStripe({ ...stripe, publishableKey: e.target.value })} />
+                  </Field>
+                  <Field label="Dispute webhook signing secret" hint="Stripe dashboard → Developers → Webhooks: add an endpoint at this site's /api/stripe/webhook for the charge.dispute.created event, then paste its signing secret (whsec_…). New disputes get Renewtron's evidence staged for Smart Disputes.">
+                    <input type="password" className={`${inputCls} font-mono`} value={stripe.webhookSecret} onChange={(e) => setStripe({ ...stripe, webhookSecret: e.target.value })} />
                   </Field>
                   <button type="submit" className={submitBtnCls}>Save</button>
                 </form>

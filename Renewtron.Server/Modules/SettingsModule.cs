@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Carter;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
@@ -65,7 +65,7 @@ public sealed class SettingsModule : ICarterModule
             return Results.Ok(new
             {
                 sendGrid = new { apiKey = Mask(sendGrid.ApiKey), fromEmail = sendGrid.FromEmail, fromName = sendGrid.FromName },
-                stripe = new { secretKey = Mask(stripe.SecretKey), publishableKey = stripe.PublishableKey },
+                stripe = new { secretKey = Mask(stripe.SecretKey), publishableKey = stripe.PublishableKey, webhookSecret = Mask(stripe.WebhookSecret) },
                 pricing = await settings.GetPricingSettingsAsync(),
                 asic = new
                 {
@@ -141,6 +141,7 @@ public sealed class SettingsModule : ICarterModule
         {
             var current = await settings.GetStripeSettingsAsync();
             body.SecretKey = Unmask(body.SecretKey, current.SecretKey);
+            body.WebhookSecret = Unmask(body.WebhookSecret, current.WebhookSecret)?.Trim();
             await settings.UpdateStripeSettingsAsync(body);
             return Results.NoContent();
         });
