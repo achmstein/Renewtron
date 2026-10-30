@@ -40,6 +40,14 @@ public class RenewalRequest
     public string? BpayReference { get; set; }
     public DateTime? BpayPaidAt { get; set; }
 
+    // Paying the BPAY bill through Airwallex (Admin → BPAY to pay). BpayAmount is what was
+    // sent; the transfer's status comes back from Airwallex, and PAID sets BpayPaidAt.
+    public decimal? BpayAmount { get; set; }
+    public string? AirwallexTransferId { get; set; }
+    public string? AirwallexTransferStatus { get; set; }
+    public string? BpayPaymentError { get; set; }
+    public int BpayPaymentAttempts { get; set; }
+
     // Card attempts at ASIC that failed without taking money (declined, or the payment
     // didn't go through). Once it reaches AsicSettings.BpayAfterCardFailures, runs pay by BPAY.
     public int CardFailureCount { get; set; }

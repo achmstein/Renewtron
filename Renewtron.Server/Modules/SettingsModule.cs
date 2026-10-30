@@ -52,9 +52,11 @@ public sealed class SettingsModule : ICarterModule
     {
         var group = app.MapGroup("/api/admin/settings").RequireAuthorization().WithTags("Admin.Settings");
 
-        group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions) =>
+        group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions,
+            IOptionsMonitor<AirwallexSettings> airwallexOptions) =>
         {
             var testMode = testModeOptions.CurrentValue;
+            var airwallex = airwallexOptions.CurrentValue;
             var sendGrid = await settings.GetSendGridSettingsAsync();
             var stripe = await settings.GetStripeSettingsAsync();
             var asic = await settings.GetAsicSettingsAsync();
@@ -108,6 +110,14 @@ public sealed class SettingsModule : ICarterModule
                     asicKeyPattern = asicKeyInbox.AsicKeyPattern,
                     // Saved overrides pin the pattern, so a newer code default needs a way back in.
                     defaultAsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern,
+                    oneYearFee = asic.OneYearFee,
+                    threeYearFee = asic.ThreeYearFee,
+                },
+                airwallex = new
+                {
+                    clientId = airwallex.ClientId ?? "",
+                    apiKey = Mask(airwallex.ApiKey),
+                    useSandbox = airwallex.UseSandbox,
                 },
                 asicKeyRequest = new
                 {
@@ -159,6 +169,8 @@ public sealed class SettingsModule : ICarterModule
             if (string.IsNullOrEmpty(body.Cvc)) body.Cvc = current.Cvc;
             body.PaymentMethod = AsicPaymentMethods.IsBpay(body.PaymentMethod) ? AsicPaymentMethods.Bpay : AsicPaymentMethods.Card;
             body.BpayAfterCardFailures = Math.Clamp(body.BpayAfterCardFailures, 0, AsicSettings.MaxBpayAfterCardFailures);
+            if (body.OneYearFee < 0 || body.ThreeYearFee < 0)
+                return Results.BadRequest(new { error = "ASIC fees can't be negative." });
             await settings.UpdateAsicSettingsAsync(body);
             return Results.NoContent();
         });
@@ -197,6 +209,21 @@ public sealed class SettingsModule : ICarterModule
             NormalizeAsicKeyRequest(body);
             await settings.UpdateAsicKeyRequestSettingsAsync(body);
             return Results.NoContent();
+        });
+
+        group.MapPut("/airwallex", async (AirwallexSettings body, IOptionsMonitor<AirwallexSettings> current, ISettingsService settings) =>
+        {
+            body.ClientId = (body.ClientId ?? "").Trim();
+            body.ApiKey = Unmask(body.ApiKey, current.CurrentValue.ApiKey)?.Trim();
+            await settings.UpdateAirwallexSettingsAsync(body);
+            return Results.NoContent();
+        });
+
+        // Logs in with the saved keys, so a wrong key shows up before anyone tries to pay.
+        group.MapPost("/airwallex/test", async (IAirwallexClient airwallex) =>
+        {
+            var error = await airwallex.TestConnectionAsync();
+            return error is null ? Results.Ok(new { ok = true }) : Results.BadRequest(new { error });
         });
 
         group.MapPut("/test-mode", async (TestModeSettings body, IOptionsMonitor<TestModeSettings> current, ISettingsService settings) =>

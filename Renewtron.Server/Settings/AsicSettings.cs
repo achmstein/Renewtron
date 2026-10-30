@@ -24,6 +24,19 @@ public class AsicSettings
     public int BpayAfterCardFailures { get; set; }
 
     public const int MaxBpayAfterCardFailures = 5;
+
+    /// <summary>What ASIC charges for a 1-year renewal: the amount paid on its BPAY bill. 0 = not set.</summary>
+    public decimal OneYearFee { get; set; }
+
+    /// <summary>What ASIC charges for a 3-year renewal. 0 = not set.</summary>
+    public decimal ThreeYearFee { get; set; }
+
+    /// <summary>ASIC's fee for this renewal period, or null when it isn't set.</summary>
+    public decimal? FeeFor(int years)
+    {
+        var fee = years == 3 ? ThreeYearFee : years == 1 ? OneYearFee : 0m;
+        return fee > 0 ? fee : null;
+    }
 }
 
 public static class AsicPaymentMethods

@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { sileo } from 'sileo'
-import { api, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
+import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
 
 const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
 const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
@@ -23,6 +23,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'sendgrid',  group: 'EMAIL & COMMS', title: 'SendGrid' },
   { key: 'winback',   group: 'EMAIL & COMMS', title: 'Win-back template' },
   { key: 'stripe',    group: 'PAYMENTS',      title: 'Stripe' },
+  { key: 'airwallex', group: 'PAYMENTS',      title: 'Airwallex' },
   { key: 'pricing',   group: 'PAYMENTS',      title: 'Pricing' },
   { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials' },
   { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport' },
@@ -40,7 +41,8 @@ export default function Settings() {
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '', webhookSecret: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
-  const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0 })
+  const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0, oneYearFee: 0, threeYearFee: 0 })
+  const [airwallex, setAirwallex] = useState<AirwallexSettings>({ clientId: '', apiKey: '', useSandbox: true })
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
@@ -61,6 +63,7 @@ export default function Settings() {
     const { hasCvc, ...asicFields } = r.asic
     setAsic(asicFields)
     setAsicHasCvc(hasCvc)
+    setAirwallex(r.airwallex ?? { clientId: '', apiKey: '', useSandbox: true })
     setOntraport(r.ontraport)
     setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
@@ -86,6 +89,14 @@ export default function Settings() {
   const onSendGrid  = save('SendGrid', () => api.admin.updateSendGrid(sg))
   const onStripe    = save('Stripe', () => api.admin.updateStripe(stripe))
   const onPricing   = save('Pricing', () => api.admin.updatePricing(pricing))
+  const onAirwallex = save('Airwallex', () => api.admin.updateAirwallex(airwallex))
+  const testAirwallex = () => {
+    void sileo.promise(api.admin.testAirwallex(), {
+      loading: { title: 'Logging in to Airwallex…' },
+      success: () => ({ title: 'Airwallex keys work' }),
+      error: (e) => ({ title: 'Airwallex login failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
   const onAsic      = save('ASIC', () => api.admin.updateAsic(asic).then(() => { if (asic.cvc) setAsicHasCvc(true) }))
   const onOntraport = save('Ontraport', () => api.admin.updateOntraport(ontraport))
   const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
@@ -155,6 +166,7 @@ export default function Settings() {
       const keys = testMode.stripeSecretKey.trim() !== '' && testMode.stripePublishableKey.trim() !== ''
       return keys && isFilled(testMode.testEmails) ? 'configured' : keys || isFilled(testMode.testEmails) ? 'partial' : 'empty'
     })(),
+    airwallex: isFilled(airwallex.clientId) && isFilled(airwallex.apiKey) ? 'configured' : isFilled(airwallex.clientId) || isFilled(airwallex.apiKey) ? 'partial' : 'empty',
     asickeyrequests: keyRequests.enabled && isFilled(keyRequests.requestEmail) ? 'configured' : isFilled(keyRequests.requestEmail) ? 'partial' : 'empty',
   }
 
@@ -270,6 +282,28 @@ export default function Settings() {
                 </form>
               ) : null}
 
+              {activeKey === 'airwallex' ? (
+                <form onSubmit={onAirwallex} className="space-y-4">
+                  <p className="text-sm text-zinc-600">Pays ASIC's BPAY bills for renewals lodged to pay later (Admin → BPAY to pay). Keys: Airwallex → Settings → Developer → API keys.</p>
+                  <Field label="Environment" hint={airwallex.useSandbox ? "Sandbox: payments are simulated and no money moves. Use sandbox keys." : 'Live: payments really leave your Airwallex AUD balance. Use live keys.'}>
+                    <select className={inputCls} value={airwallex.useSandbox ? 'sandbox' : 'live'} onChange={(e) => setAirwallex({ ...airwallex, useSandbox: e.target.value === 'sandbox' })}>
+                      <option value="sandbox">Sandbox (no money moves)</option>
+                      <option value="live">Live</option>
+                    </select>
+                  </Field>
+                  <Field label="Client ID">
+                    <input className={`${inputCls} font-mono`} value={airwallex.clientId} onChange={(e) => setAirwallex({ ...airwallex, clientId: e.target.value })} />
+                  </Field>
+                  <Field label="API key">
+                    <input type="password" className={`${inputCls} font-mono`} value={airwallex.apiKey} onChange={(e) => setAirwallex({ ...airwallex, apiKey: e.target.value })} />
+                  </Field>
+                  <div className="flex items-center gap-3">
+                    <button type="submit" className={submitBtnCls}>Save</button>
+                    <button type="button" onClick={testAirwallex} className="rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-800 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50">Test saved keys</button>
+                  </div>
+                </form>
+              ) : null}
+
               {activeKey === 'pricing' ? (
                 <form onSubmit={onPricing} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -330,6 +364,14 @@ export default function Settings() {
                     </Field>
                     <Field label="CVC" hint={asicHasCvc ? 'Stored. Leave blank to keep it.' : undefined}>
                       <input type="password" className={`${inputCls} font-mono tabular-nums`} value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} placeholder={asicHasCvc ? '•••' : ''} />
+                    </Field>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="ASIC fee, 1 year (A$)" hint="What ASIC charges for a 1-year renewal. BPAY bills are paid this amount through Airwallex. Update it when ASIC's fees change (usually 1 July).">
+                      <input type="number" min="0" step="0.01" className={`${inputCls} font-mono tabular-nums`} value={asic.oneYearFee || ''} onChange={(e) => setAsic({ ...asic, oneYearFee: Number(e.target.value) || 0 })} />
+                    </Field>
+                    <Field label="ASIC fee, 3 years (A$)" hint="What ASIC charges for a 3-year renewal.">
+                      <input type="number" min="0" step="0.01" className={`${inputCls} font-mono tabular-nums`} value={asic.threeYearFee || ''} onChange={(e) => setAsic({ ...asic, threeYearFee: Number(e.target.value) || 0 })} />
                     </Field>
                   </div>
                   <button type="submit" className={submitBtnCls}>Save</button>

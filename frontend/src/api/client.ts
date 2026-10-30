@@ -64,6 +64,30 @@ export interface TestModeSettings {
   stripePublishableKey: string
 }
 
+export interface AirwallexSettings { clientId: string; apiKey: string; useSandbox: boolean }
+
+export interface BpayBill {
+  id: string
+  businessName: string | null
+  abn: string | null
+  renewalYears: number
+  lodgedAt: string
+  transactionReference: string | null
+  billerCode: string | null
+  customerReference: string | null
+  /** What was sent to Airwallex, or what would be sent now (ASIC's fee); null when the fee isn't set. */
+  amount: number | null
+  /** Can be ticked and paid now. */
+  payable: boolean
+  transferId: string | null
+  /** Airwallex's status (PROCESSING, SENT, PAID, FAILED…), or REJECTED / UNKNOWN from Renewtron. */
+  transferStatus: string | null
+  error: string | null
+  paidAt: string | null
+}
+
+export interface BpayPayOutcome { renewalId: string; sent: boolean; status: string | null; error: string | null }
+
 export interface TestModeData { leads: number; renewals: number; asicKeyRequests: number }
 
 export interface CheckResponse {
@@ -299,7 +323,8 @@ export const api = {
       sendGrid: { apiKey: string; fromEmail: string; fromName: string }
       stripe: { secretKey: string; publishableKey: string; webhookSecret?: string }
       pricing: { oneYearFee: number; threeYearFee: number }
-      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }
+      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }
+      airwallex: AirwallexSettings
       ontraport: OntraportSettingsBody
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
       tracking: TrackingSettings
@@ -810,12 +835,24 @@ export const api = {
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
     updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
     updateStripe: (body: { secretKey: string; publishableKey: string; webhookSecret: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
-    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
+    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),
     testAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<AsicKeyInboxTestResult>('/api/admin/settings/asic-key-inbox/test', { method: 'POST', body: JSON.stringify(body) }),
     updateAsicKeyRequest: (body: AsicKeyRequestSettings) => apiFetch<void>('/api/admin/settings/asic-key-request', { method: 'PUT', body: JSON.stringify(body) }),
+    updateAirwallex: (body: AirwallexSettings) => apiFetch<void>('/api/admin/settings/airwallex', { method: 'PUT', body: JSON.stringify(body) }),
+    testAirwallex: () => apiFetch<{ ok: boolean }>('/api/admin/settings/airwallex/test', { method: 'POST' }),
+    bpayBills: (includePaid = false) => apiFetch<{
+      items: BpayBill[]
+      airwallexReady: boolean
+      sandbox: boolean
+      oneYearFee: number | null
+      threeYearFee: number | null
+    }>(`/api/admin/bpay${includePaid ? '?includePaid=true' : ''}`),
+    payBpayBills: (renewalIds: string[], expectedTotal: number) =>
+      apiFetch<{ outcomes: BpayPayOutcome[] }>('/api/admin/bpay/pay', { method: 'POST', body: JSON.stringify({ renewalIds, expectedTotal }) }),
+    syncBpayPayments: () => apiFetch<{ changed: number }>('/api/admin/bpay/sync', { method: 'POST' }),
     updateTestMode: (body: TestModeSettings) => apiFetch<void>('/api/admin/settings/test-mode', { method: 'PUT', body: JSON.stringify(body) }),
     testModeData: () => apiFetch<TestModeData>('/api/admin/test-mode/data'),
     deleteTestModeData: () => apiFetch<TestModeData>('/api/admin/test-mode/data', { method: 'DELETE' }),

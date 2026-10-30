@@ -956,6 +956,14 @@ namespace Renewtron.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AirwallexTransferId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AirwallexTransferStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -963,11 +971,22 @@ namespace Renewtron.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("BpayAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("BpayBillerCode")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("BpayPaidAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("BpayPaymentAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BpayPaymentError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("BpayReference")
                         .HasColumnType("nvarchar(max)");

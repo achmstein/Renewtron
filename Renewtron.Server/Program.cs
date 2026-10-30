@@ -113,9 +113,12 @@ builder.Services.AddOptions<PortalSettings>().BindConfiguration("Portal");
 builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyInbox");
 builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKeyRequest");
 builder.Services.AddOptions<TestModeSettings>().BindConfiguration("TestMode");
+builder.Services.AddOptions<AirwallexSettings>().BindConfiguration("Airwallex");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
+builder.Services.AddHttpClient<IAirwallexClient, AirwallexClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<IBpayPaymentService, BpayPaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
@@ -303,6 +306,13 @@ RecurringJob.AddOrUpdate<IBulkRenewalService>(
     service => service.ProcessEligibleRenewalsAsync(),
     "30 7 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// Reads back Airwallex BPAY payments still in flight and marks renewals paid once Airwallex
+// reports PAID (and unmarks one that fails late). Idle when nothing is in flight.
+RecurringJob.AddOrUpdate<IBpayPaymentService>(
+    "airwallex-bpay-sync",
+    service => service.SyncAsync(),
+    "*/10 * * * *");
 
 // Retries renewal-outcome write-backs to Ontraport that failed at completion time.
 RecurringJob.AddOrUpdate<IOntraportSalesService>(

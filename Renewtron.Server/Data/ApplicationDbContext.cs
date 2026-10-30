@@ -89,6 +89,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // Match the stored snapshot's decimal(18,2) so EF doesn't flag PendingModelChanges.
             entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.Property(e => e.BpayAmount).HasPrecision(18, 2);
+            entity.Property(e => e.AirwallexTransferId).HasMaxLength(64);
+            entity.Property(e => e.AirwallexTransferStatus).HasMaxLength(32);
+            entity.Property(e => e.BpayPaymentError).HasMaxLength(1000);
 
             entity.HasOne(e => e.SearchResult)
                 .WithOne(s => s.RenewalRequest)

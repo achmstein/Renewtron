@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Archive, Briefcase, CreditCard, Filter, House, KeyRound, LogOut, Menu as MenuIcon,
-  RefreshCw, Search, Send, Settings, ShoppingCart, SquarePen, Users, X,
+  Landmark, RefreshCw, Search, Send, Settings, ShoppingCart, SquarePen, Users, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 
@@ -16,6 +16,7 @@ const Icon = {
   Users: <Users strokeWidth={1.5} className="size-4 shrink-0" />,
   Cart: <ShoppingCart strokeWidth={1.5} className="size-4 shrink-0" />,
   Card: <CreditCard strokeWidth={1.5} className="size-4 shrink-0" />,
+  Bank: <Landmark strokeWidth={1.5} className="size-4 shrink-0" />,
   Bulk: <Archive strokeWidth={1.5} className="size-4 shrink-0" />,
   Briefcase: <Briefcase strokeWidth={1.5} className="size-4 shrink-0" />,
   Pencil: <SquarePen strokeWidth={1.5} className="size-4 shrink-0" />,
@@ -43,6 +44,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/admin/renewals', label: 'Renewals', icon: Icon.Refresh },
       { to: '/admin/payments', label: 'Payments', icon: Icon.Card },
+      { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank },
       { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },
       { to: '/admin/bulk-renewals', label: 'Bulk Renewals', icon: Icon.Bulk },
       { to: '/admin/asic-key-requests', label: 'ASIC Key Requests', icon: Icon.Key },
