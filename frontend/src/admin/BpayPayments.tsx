@@ -36,7 +36,10 @@ export default function BpayPayments() {
     queryKey: ['admin-bpay', { showPaid }],
     queryFn: () => api.admin.bpayBills(showPaid),
   })
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-bpay'] })
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-bpay'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-sidebar-counts'] })
+  }
 
   const items = data?.items ?? []
   const payable = items.filter((b) => b.payable && b.amount != null)

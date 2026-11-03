@@ -42,7 +42,10 @@ export default function AsicKeyRequests() {
     queryFn: () => api.admin.asicKeyRequests({ status: statuses.join(',') || undefined, search: search || undefined }),
     placeholderData: keepPreviousData,
   })
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-asic-key-requests'] })
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-asic-key-requests'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-sidebar-counts'] })
+  }
 
   const runMutation = useMutation({ mutationFn: () => api.admin.runAsicKeyRequests(), onSettled: () => void invalidate() })
   const runNow = () => {

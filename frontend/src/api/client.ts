@@ -86,6 +86,9 @@ export interface BpayBill {
   paidAt: string | null
 }
 
+/** Work waiting on staff, shown as sidebar badges. */
+export interface SidebarCounts { bpayToPay: number; asicKeyRequests: number }
+
 export interface BpayPayOutcome { renewalId: string; sent: boolean; status: string | null; error: string | null }
 
 export interface TestModeData { leads: number; renewals: number; asicKeyRequests: number }
@@ -843,6 +846,7 @@ export const api = {
     updateAsicKeyRequest: (body: AsicKeyRequestSettings) => apiFetch<void>('/api/admin/settings/asic-key-request', { method: 'PUT', body: JSON.stringify(body) }),
     updateAirwallex: (body: AirwallexSettings) => apiFetch<void>('/api/admin/settings/airwallex', { method: 'PUT', body: JSON.stringify(body) }),
     testAirwallex: () => apiFetch<{ ok: boolean }>('/api/admin/settings/airwallex/test', { method: 'POST' }),
+    sidebarCounts: () => apiFetch<SidebarCounts>('/api/admin/sidebar-counts'),
     bpayBills: (includePaid = false) => apiFetch<{
       items: BpayBill[]
       airwallexReady: boolean

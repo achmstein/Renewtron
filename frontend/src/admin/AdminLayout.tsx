@@ -1,12 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
-  Archive, Briefcase, CreditCard, Filter, House, KeyRound, LogOut, Menu as MenuIcon,
-  Landmark, RefreshCw, Search, Send, Settings, ShoppingCart, SquarePen, Users, X,
+  Archive, CreditCard, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
+  Landmark, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import { api, type SidebarCounts } from '../api/client'
 
-interface NavItem { to: string; label: string; end?: boolean; icon: ReactNode }
+/** Badge = work waiting on staff; the key names a count from /api/admin/sidebar-counts. */
+interface NavItem { to: string; label: string; end?: boolean; icon: ReactNode; badge?: keyof SidebarCounts }
 interface NavSection { kicker: string; items: NavItem[] }
 
 const Icon = {
@@ -18,10 +21,9 @@ const Icon = {
   Card: <CreditCard strokeWidth={1.5} className="size-4 shrink-0" />,
   Bank: <Landmark strokeWidth={1.5} className="size-4 shrink-0" />,
   Bulk: <Archive strokeWidth={1.5} className="size-4 shrink-0" />,
-  Briefcase: <Briefcase strokeWidth={1.5} className="size-4 shrink-0" />,
   Pencil: <SquarePen strokeWidth={1.5} className="size-4 shrink-0" />,
   Key: <KeyRound strokeWidth={1.5} className="size-4 shrink-0" />,
-  Send: <Send strokeWidth={1.5} className="size-4 shrink-0" />,
+  Inbox: <Inbox strokeWidth={1.5} className="size-4 shrink-0" />,
   Funnel: <Filter strokeWidth={1.5} className="size-4 shrink-0" />,
   Cog: <Settings strokeWidth={1.5} className="size-4 shrink-0" />,
   Logout: <LogOut strokeWidth={1.5} className="size-4 shrink-0" />,
@@ -29,27 +31,43 @@ const Icon = {
   Close: <X strokeWidth={1.5} className="size-6 text-white" />,
 }
 
+// Grouped by the job at hand: winning customers, lodging renewals, paying for them, ASIC keys.
 const navSections: NavSection[] = [
   {
-    kicker: 'Operations',
+    kicker: 'Overview',
     items: [
       { to: '/admin', label: 'Dashboard', end: true, icon: Icon.Dashboard },
-      { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
-      { to: '/admin/leads', label: 'Leads', icon: Icon.Users },
       { to: '/admin/funnel', label: 'Funnel', icon: Icon.Funnel },
     ],
   },
   {
-    kicker: 'Pipeline',
+    kicker: 'Customers',
+    items: [
+      { to: '/admin/leads', label: 'Leads', icon: Icon.Users },
+      { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
+      { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },
+    ],
+  },
+  {
+    kicker: 'Renewals',
     items: [
       { to: '/admin/renewals', label: 'Renewals', icon: Icon.Refresh },
-      { to: '/admin/payments', label: 'Payments', icon: Icon.Card },
-      { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank },
-      { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },
-      { to: '/admin/bulk-renewals', label: 'Bulk Renewals', icon: Icon.Bulk },
-      { to: '/admin/asic-key-requests', label: 'ASIC Key Requests', icon: Icon.Key },
-      { to: '/admin/asic-keys', label: 'ASIC Keys', icon: Icon.Key },
       { to: '/admin/manual-renewal', label: 'Manual Renewal', icon: Icon.Pencil },
+      { to: '/admin/bulk-renewals', label: 'Bulk Renewals', icon: Icon.Bulk },
+    ],
+  },
+  {
+    kicker: 'Payments',
+    items: [
+      { to: '/admin/payments', label: 'Payments', icon: Icon.Card },
+      { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank, badge: 'bpayToPay' },
+    ],
+  },
+  {
+    kicker: 'ASIC Keys',
+    items: [
+      { to: '/admin/asic-key-requests', label: 'Key Requests', icon: Icon.Inbox, badge: 'asicKeyRequests' },
+      { to: '/admin/asic-keys', label: 'Keys', icon: Icon.Key },
     ],
   },
   {
@@ -80,6 +98,11 @@ function OpsBadge() {
 function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { data: counts } = useQuery({
+    queryKey: ['admin-sidebar-counts'],
+    queryFn: api.admin.sidebarCounts,
+    refetchInterval: 60_000,
+  })
 
   const onSignOut = async () => {
     await logout()
@@ -97,7 +120,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex flex-1 flex-col">
-        <ul role="list" className="flex flex-1 flex-col gap-y-7">
+        <ul role="list" className="flex flex-1 flex-col gap-y-6">
           {navSections.map((section) => (
             <li key={section.kicker}>
               <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500 mb-2 px-2">{section.kicker}</div>
@@ -119,6 +142,11 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
                       <span className="nav-edge absolute inset-y-1.5 left-0 w-0.5 rounded-r bg-brand-500 opacity-0 transition-opacity"></span>
                       <span className="text-zinc-500 group-hover:text-zinc-300">{item.icon}</span>
                       <span className="truncate">{item.label}</span>
+                      {item.badge && counts?.[item.badge] ? (
+                        <span className="ml-auto rounded-full bg-brand-500/15 px-1.5 py-px text-xxs font-mono font-medium tabular-nums text-brand-300">
+                          {counts[item.badge]}
+                        </span>
+                      ) : null}
                     </NavLink>
                   </li>
                 ))}
