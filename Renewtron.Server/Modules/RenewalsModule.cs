@@ -297,10 +297,13 @@ public sealed class RenewalsModule : ICarterModule
             string? errorCategory = null,
             DateTime? dateFrom = null,
             DateTime? dateTo = null,
+            string? view = null,
             int page = 1,
             int pageSize = 10) =>
         {
             page = Math.Max(1, page);
+            // view=toFix: the "Renewals to fix" queue, same test as the sidebar badge.
+            var toFix = string.Equals(view, "toFix", StringComparison.OrdinalIgnoreCase);
             pageSize = Math.Clamp(pageSize, 1, 200);
 
             // Facet params accept comma-separated multi-values ("Failed,Pending").
@@ -315,6 +318,8 @@ public sealed class RenewalsModule : ICarterModule
             IQueryable<RenewalRequest> Filtered(bool applyStatus = true, bool applySource = true, bool applyInitiatedBy = true, bool applyCategory = true)
             {
                 IQueryable<RenewalRequest> q = db.RenewalRequests.AsNoTracking();
+                if (toFix)
+                    q = q.Where(r => !r.IsTest).Where(WorkQueues.RenewalNeedsPerson);
                 if (!string.IsNullOrWhiteSpace(abn))
                     q = q.Where(r => r.SearchResult.SearchLog.Abn.Contains(abn));
                 if (!string.IsNullOrWhiteSpace(failedAtStep))
@@ -482,6 +487,7 @@ public sealed class RenewalsModule : ICarterModule
             var scheduledRetryValue = pipelineRows
                 .Where(r => r.Status == RenewalStatus.Failed && r.NextRetryAt != null)
                 .Sum(r => r.Amount);
+            // Same test as WorkQueues.RenewalNeedsPerson (the "Renewals to fix" queue), in memory.
             var needsReviewRows = pipelineRows
                 .Where(r => r.Status == RenewalStatus.Failed && r.NextRetryAt == null && r.ErrorCategory != RenewalErrorCategories.NotDueYet)
                 .ToList();

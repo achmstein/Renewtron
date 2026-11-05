@@ -5,6 +5,7 @@ import { ChevronLeft, CircleCheck, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { ClientLink } from './_components'
 import { FunnelPills, KickerLabel, StatusPill, type Tone } from './_ui'
+import { Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 
 function formatAbn(abn: string) {
@@ -218,46 +219,15 @@ export default function LeadDetails() {
 /* ───── Pills + helpers ───── */
 
 function BigOutcomePill({ outcome }: { outcome: string }) {
-  const m = outcomeMeta(outcome)
-  const map: Record<Tone, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-    indigo:  'bg-indigo-50 text-indigo-700 ring-indigo-100',
-    amber:   'bg-amber-50 text-amber-700 ring-amber-100',
-    red:     'bg-red-50 text-red-700 ring-red-100',
-    zinc:    'bg-zinc-100 text-zinc-700 ring-zinc-200',
-  }
-  return (
-    <span className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-mono font-medium tracking-[0.14em] ring-1 ring-inset uppercase ${map[m.tone]}`}>
-      {m.label}
-    </span>
-  )
+  return <Status kind="lead" status={outcome} size="lg" />
 }
 
 function OutcomePill({ outcome }: { outcome: string }) {
-  const m = outcomeMeta(outcome)
-  return <StatusPill tone={m.tone}>{m.label}</StatusPill>
-}
-
-function outcomeMeta(outcome: string | null | undefined): { tone: Tone; label: string } {
-  switch (outcome) {
-    case 'RenewalCompleted':  return { tone: 'emerald', label: 'CONVERTED' }
-    case 'RenewalAvailable':  return { tone: 'emerald', label: 'AVAILABLE' }
-    case 'NotDueForRenewal':  return { tone: 'amber',   label: 'NOT DUE' }
-    case 'RenewalInProgress': return { tone: 'indigo',  label: 'IN PROGRESS' }
-    case 'NoBusinessNames':   return { tone: 'zinc',    label: 'NO NAMES' }
-    case 'Pending':           return { tone: 'zinc',    label: 'PENDING' }
-    default:                  return { tone: 'zinc',    label: outcome ? outcome.toUpperCase() : 'PENDING' }
-  }
+  return <Status kind="lead" status={outcome} />
 }
 
 function RenewalStatusPill({ status }: { status: string }) {
-  switch (status) {
-    case 'Completed':  return <StatusPill tone="emerald">PAID</StatusPill>
-    case 'Processing': return <StatusPill tone="indigo">PROC.</StatusPill>
-    case 'Pending':    return <StatusPill tone="amber">PEND.</StatusPill>
-    case 'Failed':     return <StatusPill tone="red">FAILED</StatusPill>
-    default:           return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
-  }
+  return <Status kind="renewal" status={status} />
 }
 
 function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {

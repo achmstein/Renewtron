@@ -7,6 +7,7 @@ import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
 import { EmptyState, FunnelPills, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
+import { Status } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -447,25 +448,11 @@ function leadFunnelStages(l: Lead): Array<{ label: string; tone: Tone; active: b
 }
 
 function OutcomePill({ outcome }: { outcome: string }) {
-  switch (outcome) {
-    case 'RenewalAvailable':  return <StatusPill tone="emerald">RENEW. AVAIL.</StatusPill>
-    case 'RenewalCompleted':  return <StatusPill tone="emerald">CONVERTED</StatusPill>
-    case 'NotDueForRenewal':  return <StatusPill tone="zinc">NOT DUE</StatusPill>
-    case 'RenewalInProgress': return <StatusPill tone="indigo">IN PROGRESS</StatusPill>
-    case 'NoBusinessNames':   return <StatusPill tone="amber">NO NAMES</StatusPill>
-    case 'Pending':           return <StatusPill tone="zinc">PENDING</StatusPill>
-    default:                  return <StatusPill tone="zinc">{outcome.toUpperCase()}</StatusPill>
-  }
+  return <Status kind="lead" status={outcome} />
 }
 
 function RenewalStatusPill({ status }: { status: string }) {
-  switch (status) {
-    case 'Completed':  return <StatusPill tone="emerald">PAID</StatusPill>
-    case 'Processing': return <StatusPill tone="indigo">PROC.</StatusPill>
-    case 'Pending':    return <StatusPill tone="amber">PEND.</StatusPill>
-    case 'Failed':     return <StatusPill tone="red">FAILED</StatusPill>
-    default:           return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
-  }
+  return <Status kind="renewal" status={status} />
 }
 
 function Avatar({ name }: { name: string }) {

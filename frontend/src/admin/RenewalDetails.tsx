@@ -6,6 +6,7 @@ import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ClientLink } from './_components'
 import { KickerLabel, StatusPill, type Tone } from './_ui'
+import { renewalStatus, Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.renewal>>
@@ -21,16 +22,6 @@ function fmtDob(s: string) {
   const dd = String(d.getDate()).padStart(2, '0')
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   return `${dd}/${mm}/${d.getFullYear()}`
-}
-
-function statusTone(status: string): Tone {
-  switch (status) {
-    case 'Completed':  return 'emerald'
-    case 'Processing': return 'indigo'
-    case 'Pending':    return 'amber'
-    case 'Failed':     return 'red'
-    default:           return 'zinc'
-  }
 }
 
 export default function RenewalDetails() {
@@ -143,7 +134,7 @@ export default function RenewalDetails() {
             <ClientLink kind="renewal" id={data.id} className="mt-3" />
           </div>
           <div className="text-right">
-            <BigStatusPill status={data.status} />
+            <Status entry={renewalStatus(data)} size="lg" />
             {data.completedAt ? (
               <div className="mt-1.5 text-xxs font-mono text-zinc-500 tabular-nums">closed {relativeTime(data.completedAt)}</div>
             ) : data.status === 'Processing' || data.status === 'Pending' ? (
@@ -258,22 +249,6 @@ export default function RenewalDetails() {
         ) : null}
       </div>
     </div>
-  )
-}
-
-function BigStatusPill({ status }: { status: string }) {
-  const tone = statusTone(status)
-  const map: Record<Tone, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-    indigo:  'bg-indigo-50 text-indigo-700 ring-indigo-100',
-    amber:   'bg-amber-50 text-amber-700 ring-amber-100',
-    red:     'bg-red-50 text-red-700 ring-red-100',
-    zinc:    'bg-zinc-100 text-zinc-700 ring-zinc-200',
-  }
-  return (
-    <span className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-mono font-medium tracking-[0.14em] ring-1 ring-inset uppercase ${map[tone]}`}>
-      {status}
-    </span>
   )
 }
 

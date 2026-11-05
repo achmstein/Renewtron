@@ -34,7 +34,17 @@ public sealed class SidebarModule : ICarterModule
             var clientDuplicates = await db.Clients.AsNoTracking()
                 .CountAsync(c => !c.IsTest && c.PossibleDuplicateOfId != null);
 
-            return Results.Ok(new { bpayToPay, asicKeyRequests, clientDuplicates });
+            // Failed renewals nothing will retry on its own.
+            var renewalsToFix = await db.RenewalRequests.AsNoTracking()
+                .Where(r => !r.IsTest)
+                .Where(WorkQueues.RenewalNeedsPerson)
+                .CountAsync();
+
+            // Key letters we couldn't read or place; the Keys page's "Needs attention".
+            var keysToSort = await db.AsicKeyNotifications.AsNoTracking()
+                .CountAsync(n => !WorkQueues.KeyLetterSettled.Contains(n.Status));
+
+            return Results.Ok(new { renewalsToFix, bpayToPay, asicKeyRequests, keysToSort, clientDuplicates });
         }).RequireAuthorization().WithTags("Admin.Sidebar");
     }
 }

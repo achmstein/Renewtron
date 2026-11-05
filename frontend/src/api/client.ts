@@ -87,7 +87,7 @@ export interface BpayBill {
 }
 
 /** Work waiting on staff, shown as sidebar badges. */
-export interface SidebarCounts { bpayToPay: number; asicKeyRequests: number; clientDuplicates: number }
+export interface SidebarCounts { renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
 
 export interface ClientListItem {
   id: string
@@ -605,7 +605,7 @@ export const api = {
       } | null
       renewalRequests: Array<{ id: string; status: string; amount: number; renewalYears: number; initiatedAt: string; businessName?: string | null }>
     }>(`/api/admin/leads/${id}`),
-    renewals: (params: { abn?: string; status?: string; initiatedBy?: string; source?: string; failedAtStep?: string; errorCategory?: string; dateFrom?: string; dateTo?: string; page?: number; pageSize?: number } = {}) => {
+    renewals: (params: { abn?: string; status?: string; initiatedBy?: string; source?: string; failedAtStep?: string; errorCategory?: string; dateFrom?: string; dateTo?: string; view?: 'toFix'; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
       if (params.status) qs.set('status', params.status)
@@ -615,6 +615,7 @@ export const api = {
       if (params.errorCategory) qs.set('errorCategory', params.errorCategory)
       if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
       if (params.dateTo) qs.set('dateTo', params.dateTo)
+      if (params.view) qs.set('view', params.view)
       if (params.page) qs.set('page', String(params.page))
       if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''

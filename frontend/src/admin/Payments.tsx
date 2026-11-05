@@ -4,7 +4,8 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CalendarRange, X } from 'lucide-react'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, StatTile, StatusPill } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, StatTile } from './_ui'
+import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -218,9 +219,7 @@ function ResultCell({ p, onError }: { p: Payment; onError: (m: string) => void }
   return (
     <div>
       <div className="flex items-center gap-1.5">
-        {p.kind === 'succeeded'
-          ? <StatusPill tone="emerald">SUCCEEDED</StatusPill>
-          : <StatusPill tone="red">FAILED</StatusPill>}
+        <Status kind="payment" status={p.kind} />
         {p.error ? (
           <button onClick={() => onError(p.error ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100" title="View error">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">

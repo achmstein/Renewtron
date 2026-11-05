@@ -4,27 +4,12 @@ import { Link } from 'react-router-dom'
 import { RotateCw, Send } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type BpayBill } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton, StatTile, StatusPill, type Tone } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, StatTile, StatusPill } from './_ui'
+import { Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-
-const STATUS: Record<string, { label: string; tone: Tone }> = {
-  UNKNOWN:           { label: 'No answer — check', tone: 'amber' },
-  REJECTED:          { label: 'Refused',           tone: 'red' },
-  IN_APPROVAL:       { label: 'Awaiting approval', tone: 'indigo' },
-  SCHEDULED:         { label: 'Scheduled',         tone: 'indigo' },
-  OVERDUE:           { label: 'Overdue',           tone: 'amber' },
-  PROCESSING:        { label: 'Processing',        tone: 'indigo' },
-  SENT:              { label: 'Sent',              tone: 'indigo' },
-  PAID:              { label: 'Paid',              tone: 'emerald' },
-  FAILED:            { label: 'Failed',            tone: 'red' },
-  CANCELLED:         { label: 'Cancelled',         tone: 'red' },
-  APPROVAL_REJECTED: { label: 'Approval rejected', tone: 'red' },
-  APPROVAL_RECALLED: { label: 'Approval recalled', tone: 'red' },
-  APPROVAL_BLOCKED:  { label: 'Approval blocked',  tone: 'red' },
-}
 
 export default function BpayPayments() {
   const [showPaid, setShowPaid] = useState(false)
@@ -147,12 +132,10 @@ export default function BpayPayments() {
       enableSorting: false,
       cell: ({ row }) => {
         const b = row.original
-        const s = b.transferStatus ? STATUS[b.transferStatus] ?? { label: b.transferStatus, tone: 'zinc' as Tone } : null
         return (
           <div className="max-w-[16rem]">
-            {b.paidAt ? <StatusPill tone="emerald">PAID {relativeTime(b.paidAt)}</StatusPill>
-              : s ? <StatusPill tone={s.tone}>{s.label}</StatusPill>
-              : <StatusPill tone="amber">To pay</StatusPill>}
+            {b.paidAt ? <StatusPill tone="emerald">PAID {relativeTime(b.paidAt).toUpperCase()}</StatusPill>
+              : <Status kind="bpay" status={b.transferStatus ?? 'TO_PAY'} />}
             {b.error ? <div className="mt-1 text-xxs font-mono text-red-700 break-words">{b.error}</div> : null}
             {b.transferId ? <div className="mt-1 text-xxs font-mono text-zinc-400">{b.transferId}</div> : null}
           </div>

@@ -5,7 +5,8 @@ import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, 
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, type Tone } from './_ui'
+import { Status, statusOf, type Meaning } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -658,33 +659,18 @@ function retryHint(status: string): string {
 }
 
 function OntraportStatusPill({ status }: { status: string }) {
-  switch (status) {
-    case 'Synced':                   return <StatusPill tone="zinc">SYNCED</StatusPill>
-    case 'WaitingForRenewalWindow':  return <StatusPill tone="amber">WAITING</StatusPill>
-    case 'RenewalQueued':            return <StatusPill tone="indigo">QUEUED</StatusPill>
-    case 'RenewalCompleted':         return <StatusPill tone="emerald">COMPLETED</StatusPill>
-    case 'RenewalFailed':            return <StatusPill tone="red">FAILED</StatusPill>
-    case 'NotDueForRenewal':         return <StatusPill tone="zinc">NOT DUE</StatusPill>
-    case 'IneligibleForRenewal':     return <StatusPill tone="amber">INELIGIBLE</StatusPill>
-    case 'AsicNotYetDue':            return <StatusPill tone="amber">ASIC NOT YET DUE</StatusPill>
-    case 'RenewalInProgress':        return <StatusPill tone="amber">IN PROGRESS</StatusPill>
-    default:                         return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
-  }
+  return <Status kind="sale" status={status} />
 }
 
 // Dark-background variant for the Up Next hero card
 function OntraportStatusPillDark({ status }: { status: string }) {
-  const map: Record<string, [string, string]> = {
-    Synced:                   ['SYNCED',    'bg-zinc-700/40 text-zinc-200 ring-zinc-500/30'],
-    WaitingForRenewalWindow:  ['WAITING',   'bg-amber-500/20 text-amber-200 ring-amber-400/30'],
-    RenewalQueued:            ['QUEUED',    'bg-indigo-500/20 text-indigo-200 ring-indigo-400/30'],
-    RenewalCompleted:         ['COMPLETED', 'bg-emerald-500/20 text-emerald-200 ring-emerald-400/30'],
-    RenewalFailed:            ['FAILED',    'bg-red-500/20 text-red-200 ring-red-400/30'],
-    NotDueForRenewal:         ['NOT DUE',   'bg-zinc-700/40 text-zinc-300 ring-zinc-500/30'],
-    IneligibleForRenewal:     ['INELIGIBLE','bg-amber-500/20 text-amber-200 ring-amber-400/30'],
-    AsicNotYetDue:            ['ASIC WAIT', 'bg-amber-500/20 text-amber-200 ring-amber-400/30'],
-    RenewalInProgress:        ['IN PROG',   'bg-amber-500/20 text-amber-200 ring-amber-400/30'],
+  const e = statusOf('sale', status)
+  const cls: Record<Meaning, string> = {
+    action:  'bg-red-500/20 text-red-200 ring-red-400/30',
+    waiting: 'bg-amber-500/20 text-amber-200 ring-amber-400/30',
+    working: 'bg-indigo-500/20 text-indigo-200 ring-indigo-400/30',
+    done:    'bg-emerald-500/20 text-emerald-200 ring-emerald-400/30',
+    quiet:   'bg-zinc-700/40 text-zinc-200 ring-zinc-500/30',
   }
-  const [label, cls] = map[status] ?? [status.toUpperCase(), 'bg-zinc-700/40 text-zinc-200 ring-zinc-500/30']
-  return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ring-1 ring-inset ${cls}`}>{label}</span>
+  return <span title={e.hint} className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ring-1 ring-inset ${cls[e.meaning]}`}>{e.label.toUpperCase()}</span>
 }

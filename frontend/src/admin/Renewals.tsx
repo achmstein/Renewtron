@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarRange, Loader2, RefreshCw, Wrench, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, ViewToggle } from './_ui'
+import { renewalStatus, Status, statusLabel } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -44,6 +45,12 @@ export default function Renewals() {
     window.matchMedia('(min-width: 1024px)').matches ? 'Table' : 'Cards')
   const [page, setPage] = useState(1)
 
+  // ?view=to-fix is the sidebar's "Renewals to fix" queue: the same list, narrowed on the server.
+  const [searchParams] = useSearchParams()
+  const toFix = searchParams.get('view') === 'to-fix'
+  const [shownView, setShownView] = useState(toFix)
+  if (shownView !== toFix) { setShownView(toFix); setPage(1) }
+
   const [abnInput, setAbnInput] = useState('')
   const abn = useDebouncedValue(abnInput, 300)
   const [statuses, setStatuses] = useState<string[]>([])
@@ -59,8 +66,9 @@ export default function Renewals() {
 
   const queryClient = useQueryClient()
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ['admin-renewals', { abn, statuses, sources, categories, initiators, dateFrom, dateTo, page }],
+    queryKey: ['admin-renewals', { toFix, abn, statuses, sources, categories, initiators, dateFrom, dateTo, page }],
     queryFn: () => api.admin.renewals({
+      view: toFix ? 'toFix' : undefined,
       abn: abn || undefined,
       status: statuses.join(',') || undefined,
       source: sources.join(',') || undefined,
@@ -126,7 +134,7 @@ export default function Renewals() {
   const withPageReset = <T,>(setter: (v: T) => void) => (v: T) => { setPage(1); setter(v) }
 
   const sourceLabels: Record<string, string> = { Renewtron: 'Direct', Ontraport: 'Ontraport', BulkUpload: 'Bulk upload' }
-  const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: f.value, count: f.count }))
+  const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: statusLabel('renewal', f.value), count: f.count }))
   const sourceOptions: FacetOption[] = facets.source.map((f) => ({ value: f.value, label: sourceLabels[f.value] ?? f.value, count: f.count }))
   const categoryOptions: FacetOption[] = facets.errorCategory.map((f) => ({ value: f.value, label: categoryLabel(f.value), count: f.count }))
   const initiatorOptions: FacetOption[] = facets.initiatedBy.map((f) => ({ value: f.value, label: f.value, count: f.count }))
@@ -219,9 +227,11 @@ export default function Renewals() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="OPS"
-        title="Renewal requests"
-        subtitle="All renewals across origins — customer checkout, admin, Ontraport, bulk."
+        kicker={toFix ? 'WORK' : 'RECORDS'}
+        title={toFix ? 'Renewals to fix' : 'Renewal requests'}
+        subtitle={toFix
+          ? 'Failed, and nothing will retry them on their own. Those waiting for a scheduled retry or for ASIC’s renewal window aren’t here.'
+          : 'All renewals across origins — customer checkout, admin, Ontraport, bulk.'}
         right={
           <>
             {stats.failedValue30d > 0 ? (
@@ -531,17 +541,9 @@ function Cell({ label, value }: { label: string; value: ReactNode }) {
 /* ─────── Cell components ─────── */
 
 function StatusCell({ r, onError }: { r: Renewal; onError: (m: string) => void }) {
-  const pill = (() => {
-    switch (r.status) {
-      case 'Completed':  return <StatusPill tone="emerald">COMPLETED</StatusPill>
-      case 'Processing': return <StatusPill tone="indigo">PROCESSING</StatusPill>
-      case 'Pending':    return <StatusPill tone="amber">PENDING</StatusPill>
-      case 'Failed':     return <StatusPill tone="red">FAILED</StatusPill>
-    }
-  })()
   return (
     <div className="flex items-center gap-1.5">
-      {pill}
+      <Status entry={renewalStatus(r)} />
       {r.status === 'Failed' && r.errorMessage ? (
         <button onClick={() => onError(r.errorMessage ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100" title="View error">
           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">

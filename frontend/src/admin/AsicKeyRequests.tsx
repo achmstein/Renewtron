@@ -4,7 +4,8 @@ import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyRequestDto } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill } from './_ui'
+import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -22,14 +23,7 @@ const PAGE_SIZE = 25
 
 const ASIC_FORM_URL = 'https://www.edge.asic.gov.au/008/inquiryV001?start/landingPage'
 
-const STATUS: Record<string, { label: string; tone: Tone }> = {
-  Pending:     { label: 'To do',         tone: 'amber' },
-  Manual:      { label: 'With a person', tone: 'indigo' },
-  Submitted:   { label: 'Sent to ASIC',  tone: 'indigo' },
-  KeyReceived: { label: 'Key received',  tone: 'emerald' },
-  Failed:      { label: 'Not sent',      tone: 'red' },
-}
-const statusLabel = (s: string) => STATUS[s]?.label ?? s
+const statusLabel = (s: string) => vocabLabel('keyRequest', s)
 
 export default function AsicKeyRequests() {
   const [statuses, setStatusesRaw] = useState<string[]>([])
@@ -283,8 +277,7 @@ function defaultStats(): Stats {
 }
 
 function RequestStatusPill({ status }: { status: string }) {
-  const s = STATUS[status]
-  return <StatusPill tone={s?.tone ?? 'zinc'}>{(s?.label ?? status).toUpperCase()}</StatusPill>
+  return <Status kind="keyRequest" status={status} />
 }
 
 function copyText(value: string) {

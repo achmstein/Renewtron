@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, Copy, KeyRound, Loader2, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
-import { EmptyState, KickerLabel, StatusPill, type Tone } from './_ui'
+import { EmptyState, KickerLabel, StatusPill } from './_ui'
+import { Status } from './_status'
 import { fmtDate, fmtMoney2, formatAbn, relativeTime } from './_utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -211,7 +212,7 @@ function Timeline({ client }: { client: ClientDetail }) {
                   <span title={new Date(e.at).toLocaleString()}>{fmtDate(e.at)}</span>{e.sub ? ` · ${e.sub}` : ''}
                 </div>
               </div>
-              <StatusPill tone={historyTone(e.status)}>{historyLabel(e.status)}</StatusPill>
+              <Status kind={e.kind} status={e.status} />
             </div>
           </li>
         ))}
@@ -373,7 +374,7 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
                     {n.lastRenewedAt ? `${fmtDate(n.lastRenewedAt)} · ${n.lastRenewalYears} yr` : '—'}
                   </td>
                   <td className="py-2 pr-4 font-mono">{n.asicKey ?? '—'}</td>
-                  <td className="py-2 pr-4"><StatusPill tone={nameTone(n.status)}>{n.status.toUpperCase()}</StatusPill></td>
+                  <td className="py-2 pr-4"><Status kind="businessName" status={n.status} /></td>
                   <td className="py-2 pr-4 text-right whitespace-nowrap">
                     <NameMenu name={n} busy={setStatus.isPending} onStatus={(status) => setStatus.mutate({ id: n.id, status })} />
                   </td>
@@ -418,10 +419,6 @@ function anniversary(registrationDate: string | null) {
   return `Anniversary ${Number(m[2])} ${months[Number(m[1]) - 1] ?? ''}`
 }
 
-function nameTone(status: string): Tone {
-  return status === 'Active' ? 'emerald' : status === 'Cancelled' ? 'red' : 'zinc'
-}
-
 function Notes({ client }: { client: ClientDetail }) {
   const queryClient = useQueryClient()
   const [notes, setNotes] = useState(client.notes ?? '')
@@ -439,31 +436,6 @@ function Notes({ client }: { client: ClientDetail }) {
       </div>
     </div>
   )
-}
-
-/** Short words for the statuses the history lists show (renewals, sales, key requests, wizard visits, emails). */
-const HISTORY_LABELS: Record<string, string> = {
-  NotDueForRenewal: 'Not due',
-  RenewalAvailable: 'Due',
-  RenewalInProgress: 'In progress',
-  NoBusinessNames: 'No names',
-  RenewalCompleted: 'Renewed',
-  RenewalFailed: 'Failed',
-  IneligibleForRenewal: 'Not eligible',
-  KeyReceived: 'Key received',
-}
-
-function historyLabel(status: string) {
-  // Anything not listed: split the enum's words ("AwaitingPayment" → "Awaiting payment").
-  const words = HISTORY_LABELS[status] ?? status.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase().replace(/^./, (c) => c.toUpperCase())
-  return words.toUpperCase()
-}
-
-function historyTone(status: string): Tone {
-  if (/Completed|KeyReceived|Sent|Delivered|Paid/.test(status)) return 'emerald'
-  if (/Fail|Error|Bounced|Cancel/.test(status)) return 'red'
-  if (/Pending|Progress|Submitted|Queued|Awaiting|Synced|Available/.test(status)) return 'amber'
-  return 'zinc'
 }
 
 function Section({ kicker, title, children, className = 'mt-6' }: { kicker: string; title: string; children: ReactNode; className?: string }) {

@@ -3,7 +3,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { Upload as UploadIcon, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile } from './_ui'
+import { Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -323,13 +324,5 @@ function DueDateCell({ u }: { u: Upload }) {
 }
 
 function BulkStatusPill({ status }: { status: string }) {
-  switch (status) {
-    case 'WaitingForRenewalWindow': return <StatusPill tone="amber">WAITING</StatusPill>
-    case 'RenewalQueued':           return <StatusPill tone="indigo">QUEUED</StatusPill>
-    case 'RenewalCompleted':        return <StatusPill tone="emerald">COMPLETED</StatusPill>
-    case 'RenewalFailed':           return <StatusPill tone="red">FAILED</StatusPill>
-    case 'NotDueForRenewal':        return <StatusPill tone="zinc">NOT DUE</StatusPill>
-    case 'Skipped':                 return <StatusPill tone="zinc">SKIPPED</StatusPill>
-    default:                        return <StatusPill tone="zinc">{status.toUpperCase()}</StatusPill>
-  }
+  return <Status kind="bulk" status={status} />
 }

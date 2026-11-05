@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Inbox, Loader2, RotateCw, UserPlus, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyJobStatus, type AsicKeyNotificationListItem } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, type Tone } from './_ui'
+import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -20,22 +22,20 @@ type Stats = KeysResponse['stats']
 const PAGE_SIZE = 25
 type Facets = KeysResponse['facets']
 
-const STATUS: Record<string, { label: string; tone: Tone }> = {
-  Pending:               { label: 'Pending',          tone: 'amber' },
-  Completed:             { label: 'Completed',        tone: 'emerald' },
-  LinkNotFound:          { label: 'No link',          tone: 'red' },
-  DownloadFailed:        { label: 'Download failed',  tone: 'red' },
-  KeyNotFound:           { label: 'Key not found',    tone: 'red' },
-  ContactNotFound:       { label: 'No contact',       tone: 'amber' },
-  SavedToClient:         { label: 'Saved to client',  tone: 'emerald' },
-  OntraportUpdateFailed: { label: 'Ontraport failed', tone: 'red' },
-}
-const statusLabel = (s: string) => STATUS[s]?.label ?? s
+const statusLabel = (s: string) => vocabLabel('keyLetter', s)
+
+/** The "Keys to sort" queue (?view=to-sort): letters a person has to deal with. Keep in step with WorkQueues.KeyLetterSettled. */
+const TO_SORT = ['LinkNotFound', 'DownloadFailed', 'KeyNotFound', 'ContactNotFound', 'OntraportUpdateFailed']
 
 export default function AsicKeys() {
-  const [statuses, setStatusesRaw] = useState<string[]>([])
+  const [searchParams] = useSearchParams()
+  const toSort = searchParams.get('view') === 'to-sort'
+  const [statuses, setStatusesRaw] = useState<string[]>(() => (toSort ? TO_SORT : []))
   const [searchInput, setSearchInputRaw] = useState('')
   const [page, setPage] = useState(1)
+  // The sidebar links "Keys to sort" and "Key letters" to this same page: switch the filter with it.
+  const [shownView, setShownView] = useState(toSort)
+  if (shownView !== toSort) { setShownView(toSort); setStatusesRaw(toSort ? TO_SORT : []); setPage(1) }
   const setStatuses = (v: string[]) => { setPage(1); setStatusesRaw(v) }
   const setSearchInput = (v: string) => { setPage(1); setSearchInputRaw(v) }
   const search = useDebouncedValue(searchInput, 300)
@@ -230,9 +230,11 @@ export default function AsicKeys() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="PIPELINE"
-        title="ASIC keys"
-        subtitle="ASIC “Notification request” emails → linked PDF → ASIC key → written onto the Ontraport contact. Scans every 15 minutes."
+        kicker={toSort ? 'WORK' : 'RECORDS'}
+        title={toSort ? 'Keys to sort' : 'ASIC key letters'}
+        subtitle={toSort
+          ? 'Key letters we couldn’t read or place. Retry them, or choose the client a key belongs to.'
+          : 'ASIC “Notification request” emails → linked PDF → ASIC key → written onto the Ontraport contact. Scans every 15 minutes.'}
         right={
           <>
             <button
@@ -339,8 +341,7 @@ function defaultStats(): Stats {
 }
 
 function KeyStatusPill({ status }: { status: string }) {
-  const s = STATUS[status]
-  return <StatusPill tone={s?.tone ?? 'zinc'}>{(s?.label ?? status).toUpperCase()}</StatusPill>
+  return <Status kind="keyLetter" status={status} />
 }
 
 function DetailDialog({ row: listRow, onClose }: { row: Row | null; onClose: () => void }) {

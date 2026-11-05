@@ -1,30 +1,36 @@
 import { useState, type ReactNode } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Archive, Contact, CreditCard, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
-  Landmark, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, X,
+  Archive, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
+  Landmark, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api, type SidebarCounts } from '../api/client'
 import { ClientSearch, ClientSearchButton } from './ClientSearch'
 
-/** Badge = work waiting on staff; the key names a count from /api/admin/sidebar-counts. */
-interface NavItem { to: string; label: string; end?: boolean; icon: ReactNode; badge?: keyof SidebarCounts }
+/**
+ * One sidebar entry. `to` may carry a query (`?view=to-fix`) for a queue that is a view of a list
+ * page; the badge names a count from /api/admin/sidebar-counts (work waiting on staff).
+ */
+interface NavItem { to: string; label: string; icon: ReactNode; badge?: keyof SidebarCounts }
 interface NavSection { kicker: string; items: NavItem[] }
 
 const Icon = {
   Dashboard: <House strokeWidth={1.5} className="size-4 shrink-0" />,
   Search: <Search strokeWidth={1.5} className="size-4 shrink-0" />,
   Refresh: <RefreshCw strokeWidth={1.5} className="size-4 shrink-0" />,
+  Wrench: <Wrench strokeWidth={1.5} className="size-4 shrink-0" />,
   Users: <Users strokeWidth={1.5} className="size-4 shrink-0" />,
   Contact: <Contact strokeWidth={1.5} className="size-4 shrink-0" />,
+  Copy: <Copy strokeWidth={1.5} className="size-4 shrink-0" />,
   Cart: <ShoppingCart strokeWidth={1.5} className="size-4 shrink-0" />,
   Card: <CreditCard strokeWidth={1.5} className="size-4 shrink-0" />,
   Bank: <Landmark strokeWidth={1.5} className="size-4 shrink-0" />,
   Bulk: <Archive strokeWidth={1.5} className="size-4 shrink-0" />,
   Pencil: <SquarePen strokeWidth={1.5} className="size-4 shrink-0" />,
   Key: <KeyRound strokeWidth={1.5} className="size-4 shrink-0" />,
+  KeyAlert: <FileWarning strokeWidth={1.5} className="size-4 shrink-0" />,
   Inbox: <Inbox strokeWidth={1.5} className="size-4 shrink-0" />,
   Funnel: <Filter strokeWidth={1.5} className="size-4 shrink-0" />,
   Cog: <Settings strokeWidth={1.5} className="size-4 shrink-0" />,
@@ -33,44 +39,48 @@ const Icon = {
   Close: <X strokeWidth={1.5} className="size-6 text-white" />,
 }
 
-// Grouped by the job at hand: winning customers, lodging renewals, paying for them, ASIC keys.
+// Grouped by job: the work waiting on a person first, then who it is for, money, numbers,
+// and last the raw records for digging.
 const navSections: NavSection[] = [
   {
-    kicker: 'Overview',
+    kicker: 'Work',
     items: [
-      { to: '/admin', label: 'Dashboard', end: true, icon: Icon.Dashboard },
+      { to: '/admin/renewals?view=to-fix', label: 'Renewals to fix', icon: Icon.Wrench, badge: 'renewalsToFix' },
+      { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank, badge: 'bpayToPay' },
+      { to: '/admin/asic-key-requests', label: 'Key requests', icon: Icon.Inbox, badge: 'asicKeyRequests' },
+      { to: '/admin/asic-keys?view=to-sort', label: 'Keys to sort', icon: Icon.KeyAlert, badge: 'keysToSort' },
+      { to: '/admin/manual-renewal', label: 'Manual renewal', icon: Icon.Pencil },
+    ],
+  },
+  {
+    kicker: 'Clients',
+    items: [
+      { to: '/admin/clients', label: 'All clients', icon: Icon.Contact },
+      { to: '/admin/clients/duplicates', label: 'Duplicates', icon: Icon.Copy, badge: 'clientDuplicates' },
+    ],
+  },
+  {
+    kicker: 'Money',
+    items: [
+      { to: '/admin/payments', label: 'Payments', icon: Icon.Card },
+    ],
+  },
+  {
+    kicker: 'Reports',
+    items: [
+      { to: '/admin', label: 'Overview', icon: Icon.Dashboard },
       { to: '/admin/funnel', label: 'Funnel', icon: Icon.Funnel },
     ],
   },
   {
-    kicker: 'Customers',
+    kicker: 'Records',
     items: [
-      { to: '/admin/clients', label: 'Clients', icon: Icon.Contact, badge: 'clientDuplicates' },
       { to: '/admin/leads', label: 'Leads', icon: Icon.Users },
       { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
-      { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },
-    ],
-  },
-  {
-    kicker: 'Renewals',
-    items: [
       { to: '/admin/renewals', label: 'Renewals', icon: Icon.Refresh },
-      { to: '/admin/manual-renewal', label: 'Manual Renewal', icon: Icon.Pencil },
-      { to: '/admin/bulk-renewals', label: 'Bulk Renewals', icon: Icon.Bulk },
-    ],
-  },
-  {
-    kicker: 'Payments',
-    items: [
-      { to: '/admin/payments', label: 'Payments', icon: Icon.Card },
-      { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank, badge: 'bpayToPay' },
-    ],
-  },
-  {
-    kicker: 'ASIC Keys',
-    items: [
-      { to: '/admin/asic-key-requests', label: 'Key Requests', icon: Icon.Inbox, badge: 'asicKeyRequests' },
-      { to: '/admin/asic-keys', label: 'Keys', icon: Icon.Key },
+      { to: '/admin/ontraport-sales', label: 'Ontraport sales', icon: Icon.Cart },
+      { to: '/admin/bulk-renewals', label: 'Bulk uploads', icon: Icon.Bulk },
+      { to: '/admin/asic-keys', label: 'Key letters', icon: Icon.Key },
     ],
   },
   {
@@ -80,6 +90,29 @@ const navSections: NavSection[] = [
     ],
   },
 ]
+
+const allItems = navSections.flatMap((s) => s.items)
+
+/**
+ * The one entry to highlight: the longest path containing the current one (a client's page
+ * lights "All clients", the duplicates page lights "Duplicates"), and among those the entry
+ * whose `view` matches ("Renewals to fix" vs "Renewals").
+ */
+function activeItem(pathname: string, search: string): NavItem | undefined {
+  const view = new URLSearchParams(search).get('view')
+  let best: NavItem | undefined
+  let bestLen = -1
+  for (const item of allItems) {
+    const [path, query] = item.to.split('?')
+    const within = path === '/admin'
+      ? pathname === '/admin' || pathname === '/admin/'
+      : pathname === path || pathname.startsWith(path + '/')
+    if (!within) continue
+    if (new URLSearchParams(query ?? '').get('view') !== view) continue
+    if (path.length > bestLen) { best = item; bestLen = path.length }
+  }
+  return best
+}
 
 function Wordmark({ size = 'lg' }: { size?: 'lg' | 'sm' }) {
   const text = size === 'lg' ? 'text-[15px]' : 'text-[14px]'
@@ -101,6 +134,8 @@ function OpsBadge() {
 function SidebarBody({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const active = activeItem(location.pathname, location.search)
   const { data: counts } = useQuery({
     queryKey: ['admin-sidebar-counts'],
     queryFn: api.admin.sidebarCounts,
@@ -134,17 +169,15 @@ function SidebarBody({ onNavigate, onSearch }: { onNavigate?: () => void; onSear
               <ul role="list" className="-mx-1 space-y-0.5">
                 {section.items.map((item) => (
                   <li key={item.to}>
-                    <NavLink
+                    <Link
                       to={item.to}
-                      end={item.end}
                       onClick={onNavigate}
-                      className={({ isActive }) =>
-                        `nav-link group relative flex items-center gap-x-3 rounded-md py-1.5 pl-3 pr-2 text-sm font-medium transition ${
-                          isActive
-                            ? 'active text-white bg-white/[0.07]'
-                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                        }`
-                      }
+                      aria-current={item === active ? 'page' : undefined}
+                      className={`nav-link group relative flex items-center gap-x-3 rounded-md py-1.5 pl-3 pr-2 text-sm font-medium transition ${
+                        item === active
+                          ? 'active text-white bg-white/[0.07]'
+                          : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                      }`}
                     >
                       <span className="nav-edge absolute inset-y-1.5 left-0 w-0.5 rounded-r bg-brand-500 opacity-0 transition-opacity"></span>
                       <span className="text-zinc-500 group-hover:text-zinc-300">{item.icon}</span>
@@ -154,7 +187,7 @@ function SidebarBody({ onNavigate, onSearch }: { onNavigate?: () => void; onSear
                           {counts[item.badge]}
                         </span>
                       ) : null}
-                    </NavLink>
+                    </Link>
                   </li>
                 ))}
               </ul>
