@@ -2,7 +2,7 @@ import { Check, PlusCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Command, CommandEmpty, CommandGroup, CommandItem, CommandList,
+  Command, CommandEmpty, CommandGroup, CommandItem, CommandList, CommandSeparator,
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
@@ -14,8 +14,7 @@ export type FacetOption = { value: string; label: string; count: number }
  * shadcn-style faceted filter, but the facts come from the server: options and their
  * counts are computed by the API under the other active filters, and selecting values
  * refetches server-side — nothing is filtered in the browser.
- * The popup is styled to the admin's language (rounded-xl, zinc ring, mono kicker)
- * rather than the stock shadcn look.
+ * Stock shadcn look on the admin theme: sentence case, Badge secondary for what's chosen.
  */
 export function FacetedFilter({ title, options, selected, onChange }: {
   title: string
@@ -34,64 +33,56 @@ export function FacetedFilter({ title, options, selected, onChange }: {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 border-dashed whitespace-nowrap">
-          <PlusCircle className="h-4 w-4" />
+        <Button variant="outline" size="sm" className="border-dashed">
+          <PlusCircle />
           {title}
           {selected.length > 0 ? (
             <>
-              <Separator orientation="vertical" className="mx-0.5 h-4" />
+              <Separator orientation="vertical" className="mx-0.5 data-[orientation=vertical]:h-4" />
               <div className="flex gap-1">
                 {selected.length > 2 ? (
-                  <Badge variant="secondary" className="rounded-sm px-1 font-mono font-normal">{selected.length} selected</Badge>
+                  <Badge variant="secondary" className="rounded-sm px-1 font-normal">{selected.length} selected</Badge>
                 ) : options.filter(o => selectedSet.has(o.value)).map(o => (
-                  <Badge key={o.value} variant="secondary" className="rounded-sm px-1 font-mono font-normal">{o.label}</Badge>
+                  <Badge key={o.value} variant="secondary" className="rounded-sm px-1 font-normal">{o.label}</Badge>
                 ))}
               </div>
             </>
           ) : null}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-60 rounded-xl border-border p-0 shadow-lg" align="start">
-        <div className="border-b border-border px-3 pb-2 pt-2.5">
-          <div className="text-xs font-medium text-muted-foreground">{title}</div>
-        </div>
-        <Command className="rounded-xl">
+      <PopoverContent className="w-60 p-0" align="start">
+        <Command>
           <CommandList>
-            <CommandEmpty className="px-3 py-6 text-center text-sm text-muted-foreground">Nothing to filter.</CommandEmpty>
-            <CommandGroup className="p-1.5">
+            <CommandEmpty>Nothing to filter.</CommandEmpty>
+            <CommandGroup heading={title}>
               {options.map((option) => {
                 const isSelected = selectedSet.has(option.value)
                 return (
-                  <CommandItem
-                    key={option.value}
-                    onSelect={() => toggle(option.value)}
-                    className="cursor-pointer gap-2.5 rounded-md px-2.5 py-2 text-foreground data-[selected=true]:bg-muted/50 data-[selected=true]:text-foreground"
-                  >
+                  <CommandItem key={option.value} onSelect={() => toggle(option.value)}>
                     <span className={cn(
-                      'flex size-4 shrink-0 items-center justify-center rounded-[4px] ring-1 ring-inset transition-colors',
-                      isSelected ? 'bg-primary ring-brand-600 text-white' : 'bg-card ring-border [&_svg]:invisible',
+                      'flex size-4 shrink-0 items-center justify-center rounded-sm border',
+                      isSelected ? 'border-primary bg-primary text-primary-foreground' : '[&_svg]:invisible',
                     )}>
-                      <Check className="size-3 !text-white" strokeWidth={3} />
+                      <Check className="size-3 text-current" />
                     </span>
                     <span className="truncate">{option.label}</span>
-                    <span className="ml-auto shrink-0 font-mono text-xs tabular-nums text-muted-foreground/70">{option.count.toLocaleString()}</span>
+                    <span className="ml-auto shrink-0 text-caption text-muted-foreground tabular-nums">{option.count.toLocaleString()}</span>
                   </CommandItem>
                 )
               })}
             </CommandGroup>
+            {selected.length > 0 ? (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem onSelect={() => onChange([])} className="justify-center text-center">
+                    Clear filter
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            ) : null}
           </CommandList>
         </Command>
-        {selected.length > 0 ? (
-          <div className="border-t border-border p-1.5">
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              className="w-full rounded-md px-2.5 py-1.5 text-center text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-            >
-              Clear {title.toLowerCase()}
-            </button>
-          </div>
-        ) : null}
       </PopoverContent>
     </Popover>
   )

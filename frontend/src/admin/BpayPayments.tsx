@@ -1,15 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { RotateCw, Send } from 'lucide-react'
+import { Info, RotateCw, Send, TriangleAlert } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type BpayBill } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton, StatTile, StatusPill } from './_ui'
+import { EmptyState, PageHeader, RefreshButton } from './_ui'
 import { Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 export default function BpayPayments() {
   const [showPaid, setShowPaid] = useState(false)
@@ -72,7 +77,7 @@ export default function BpayPayments() {
     {
       id: 'select',
       header: () => (
-        <input type="checkbox" aria-label="Select all" checked={allChosen} disabled={payable.length === 0} onChange={toggleAll} />
+        <Checkbox aria-label="Select all" checked={allChosen ? true : chosen.length > 0 ? 'indeterminate' : false} disabled={payable.length === 0} onCheckedChange={() => toggleAll()} />
       ),
       enableSorting: false,
       meta: { className: 'w-8' },
@@ -80,13 +85,12 @@ export default function BpayPayments() {
         const b = row.original
         const can = b.payable && b.amount != null
         return (
-          <input
-            type="checkbox"
+          <Checkbox
             aria-label={`Select ${b.businessName ?? ''}`}
             disabled={!can}
             checked={selected.has(b.id)}
             onClick={(e) => e.stopPropagation()}
-            onChange={() => toggle(b.id)}
+            onCheckedChange={() => toggle(b.id)}
           />
         )
       },
@@ -95,13 +99,15 @@ export default function BpayPayments() {
       id: 'business',
       accessorFn: (b) => b.businessName,
       header: 'Business',
-      meta: { className: 'min-w-[12rem] max-w-[18rem]' },
+      meta: { className: 'min-w-48 max-w-72' },
       cell: ({ row }) => {
         const b = row.original
         return (
-          <div>
-            <Link to={`/admin/renewals/${b.id}`} className="text-sm font-medium text-foreground hover:underline truncate block">{b.businessName}</Link>
-            <div className="text-xxs font-mono tabular-nums text-muted-foreground">{b.abn} · {b.renewalYears} {b.renewalYears === 1 ? 'year' : 'years'}</div>
+          <div className="min-w-0">
+            <Link to={`/admin/renewals/${b.id}`} className="block truncate text-sm font-medium hover:text-link hover:underline">{b.businessName}</Link>
+            <div className="text-caption text-muted-foreground">
+              <span className="font-mono tabular-nums">{b.abn}</span> · {b.renewalYears} {b.renewalYears === 1 ? 'year' : 'years'}
+            </div>
           </div>
         )
       },
@@ -111,9 +117,9 @@ export default function BpayPayments() {
       header: 'BPAY',
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="text-xs font-mono tabular-nums text-foreground">
-          <div>Biller {row.original.billerCode}</div>
-          <div className="text-muted-foreground">Ref {row.original.customerReference}</div>
+        <div className="tabular-nums">
+          <div className="text-sm">Biller <span className="font-mono">{row.original.billerCode}</span></div>
+          <div className="text-caption text-muted-foreground">Ref <span className="font-mono">{row.original.customerReference}</span></div>
         </div>
       ),
     },
@@ -123,8 +129,8 @@ export default function BpayPayments() {
       header: 'Amount',
       meta: { className: 'text-right', headerClassName: 'text-right' },
       cell: ({ row }) => row.original.amount == null
-        ? <span className="text-xs text-warning">fee not set</span>
-        : <span className="text-sm font-mono tabular-nums text-foreground">{fmtMoney2(row.original.amount)}</span>,
+        ? <span className="text-caption text-muted-foreground" title="Set ASIC’s fee in Settings">Fee not set</span>
+        : <span className="font-mono text-sm tabular-nums">{fmtMoney2(row.original.amount)}</span>,
     },
     {
       id: 'status',
@@ -133,11 +139,12 @@ export default function BpayPayments() {
       cell: ({ row }) => {
         const b = row.original
         return (
-          <div className="max-w-[16rem]">
-            {b.paidAt ? <StatusPill tone="emerald">PAID {relativeTime(b.paidAt).toUpperCase()}</StatusPill>
+          <div className="max-w-64">
+            {b.paidAt
+              ? <Status entry={{ label: `Paid ${relativeTime(b.paidAt)}`, meaning: 'done' }} />
               : <Status kind="bpay" status={b.transferStatus ?? 'TO_PAY'} />}
-            {b.error ? <div className="mt-1 text-xxs font-mono text-destructive break-words">{b.error}</div> : null}
-            {b.transferId ? <div className="mt-1 text-xxs font-mono text-muted-foreground/70">{b.transferId}</div> : null}
+            {b.error ? <div className="mt-1 break-words text-caption text-muted-foreground">{b.error}</div> : null}
+            {b.transferId ? <div className="mt-1 font-mono text-caption text-muted-foreground">{b.transferId}</div> : null}
           </div>
         )
       },
@@ -147,67 +154,76 @@ export default function BpayPayments() {
       accessorFn: (b) => b.lodgedAt,
       header: 'Lodged',
       cell: ({ row }) => (
-        <div>
-          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.lodgedAt)}</div>
-          {row.original.transactionReference ? <div className="text-xxs font-mono text-muted-foreground/70">{row.original.transactionReference}</div> : null}
+        <div className="tabular-nums">
+          <div className="text-sm">{relativeTime(row.original.lodgedAt)}</div>
+          {row.original.transactionReference ? <div className="font-mono text-caption text-muted-foreground">{row.original.transactionReference}</div> : null}
         </div>
       ),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [selected, allChosen, payable.length])
 
+  const owed = toPay.reduce((s, b) => s + (b.amount ?? 0), 0)
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="PIPELINE"
         title="BPAY to pay"
-        subtitle="Renewals lodged with ASIC to pay later by BPAY. Tick the bills, check the total, and pay them through Airwallex — one payment per bill. Each renewal is marked paid when Airwallex reports it paid."
+        subtitle="Renewals lodged with ASIC to pay by BPAY, one Airwallex payment per bill."
         right={
           <>
-            <button
-              onClick={sync}
-              disabled={syncMutation.isPending}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-card text-foreground px-3 py-2 text-sm font-medium ring-1 ring-inset ring-border hover:bg-muted/50 shadow-sm disabled:opacity-50 transition"
-              title="Read the latest status of payments in flight (also runs every 10 minutes)"
-            >
-              <RotateCw className={`h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+            <Button variant="outline" size="sm" onClick={sync} disabled={syncMutation.isPending} title="Read the latest status of payments in flight (also runs every 10 minutes)">
+              <RotateCw className={cn(syncMutation.isPending && 'animate-spin')} />
               Check Airwallex
-            </button>
+            </Button>
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
       />
 
-      {data && !data.airwallexReady ? (
-        <div className="mb-6 rounded-lg bg-warning/5 p-4 text-sm text-warning ring-1 ring-warning/25">
-          Airwallex isn't set up. Add the client ID and API key in <Link to="/admin/settings" className="underline">Settings → Airwallex</Link>.
-        </div>
-      ) : null}
-      {data?.airwallexReady && data.sandbox ? (
-        <div className="mb-6 rounded-lg bg-info/5 p-4 text-sm text-info ring-1 ring-info/20">
-          Airwallex is in <strong>sandbox</strong> mode: payments are simulated and ASIC is not paid.
-        </div>
-      ) : null}
-      {missingFee ? (
-        <div className="mb-6 rounded-lg bg-warning/5 p-4 text-sm text-warning ring-1 ring-warning/25">
-          Some bills have no amount because ASIC's fee for that period isn't set. Add it in <Link to="/admin/settings" className="underline">Settings → ASIC credentials</Link>.
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatTile kicker="TO PAY" label="Bills not yet paid" value={toPay.length.toLocaleString()}
-          sub={toPay.length > 0 ? fmtMoney2(toPay.reduce((s, b) => s + (b.amount ?? 0), 0)) + ' at ASIC’s fees' : 'nothing owed'} tone={toPay.length > 0 ? 'amber' : 'zinc'} />
-        <StatTile kicker="IN FLIGHT" label="Sent, waiting on Airwallex" value={inFlight.length.toLocaleString()} tone="indigo" />
-        <StatTile kicker="SELECTED" label="Ticked to pay now" value={fmtMoney2(total)} sub={`${chosen.length} ${chosen.length === 1 ? 'bill' : 'bills'}`} />
+      <div className={cn('space-y-3', ((data && !data.airwallexReady) || data?.sandbox || missingFee) && 'mb-6')}>
+        {data && !data.airwallexReady ? (
+          <Alert>
+            <TriangleAlert />
+            <AlertDescription>
+              <span>Airwallex isn’t set up. Add it in <Link to="/admin/settings" className="text-link hover:underline">Settings</Link>.</span>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {data?.airwallexReady && data.sandbox ? (
+          <Alert>
+            <Info />
+            <AlertDescription>Airwallex is in sandbox mode: payments are simulated and ASIC is not paid.</AlertDescription>
+          </Alert>
+        ) : null}
+        {missingFee ? (
+          <Alert>
+            <TriangleAlert />
+            <AlertDescription>
+              <span>Some bills have no amount: set ASIC’s fee in <Link to="/admin/settings" className="text-link hover:underline">Settings</Link>.</span>
+            </AlertDescription>
+          </Alert>
+        ) : null}
       </div>
 
+      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <Stat
+          label="To pay"
+          value={toPay.length.toLocaleString()}
+          sub={toPay.length > 0 ? `${fmtMoney2(owed)} at ASIC’s fees` : 'Nothing owed'}
+          dot={toPay.length > 0 ? 'bg-destructive' : undefined}
+        />
+        <Stat label="Waiting on Airwallex" value={inFlight.length.toLocaleString()} sub="Sent, not paid yet" />
+        <Stat label="Ticked to pay now" value={fmtMoney2(total)} sub={`${chosen.length} ${chosen.length === 1 ? 'bill' : 'bills'}`} />
+      </Card>
+
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input type="checkbox" checked={showPaid} onChange={(e) => setShowPaid(e.target.checked)} />
-          Show bills paid in the last 30 days
-        </label>
-        <Button onClick={() => setConfirming(true)} disabled={chosen.length === 0 || !data?.airwallexReady || payMutation.isPending}>
-          <Send className="h-4 w-4" /> Pay {chosen.length || ''} {chosen.length === 1 ? 'bill' : 'bills'}{chosen.length ? ` · ${fmtMoney2(total)}` : ''}
+        <div className="flex items-center gap-2">
+          <Checkbox id="bpay-show-paid" checked={showPaid} onCheckedChange={(v) => setShowPaid(v === true)} />
+          <Label htmlFor="bpay-show-paid" className="font-normal text-muted-foreground">Show bills paid in the last 30 days</Label>
+        </div>
+        <Button size="sm" onClick={() => setConfirming(true)} disabled={chosen.length === 0 || !data?.airwallexReady || payMutation.isPending}>
+          <Send /> Pay {chosen.length || ''} {chosen.length === 1 ? 'bill' : 'bills'}{chosen.length ? ` · ${fmtMoney2(total)}` : ''}
         </Button>
       </div>
 
@@ -215,41 +231,58 @@ export default function BpayPayments() {
         <DataTable
           columns={columns}
           data={items}
-          empty={<EmptyState title="No BPAY bills to pay" message="Renewals lodged with ASIC to pay later by BPAY show up here." />}
+          empty={<EmptyState title="No BPAY bills to pay" message="Renewals lodged to pay later by BPAY show up here." />}
         />
       </div>
 
       <Dialog open={confirming} onOpenChange={(o) => { if (!o && !payMutation.isPending) setConfirming(false) }}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <div className="text-xs font-medium text-info">
-              {data?.sandbox ? 'SANDBOX — NO MONEY MOVES' : 'PAY ASIC THROUGH AIRWALLEX'}
-            </div>
             <DialogTitle>Pay {chosen.length} BPAY {chosen.length === 1 ? 'bill' : 'bills'}, {fmtMoney2(total)}</DialogTitle>
+            <DialogDescription>
+              {data?.sandbox ? 'Sandbox: no money moves.' : 'Paid to ASIC through Airwallex, one payment per bill.'}
+            </DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-2">
-            <ul className="divide-y divide-border text-sm">
+          <DialogBody className="space-y-4">
+            <ul className="divide-y rounded-lg border text-sm">
               {chosen.map((b) => (
-                <li key={b.id} className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="truncate">{b.businessName} <span className="text-xxs font-mono text-muted-foreground/70">ref {b.customerReference}</span></span>
+                <li key={b.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="min-w-0 truncate">
+                    {b.businessName} <span className="text-caption text-muted-foreground">ref <span className="font-mono">{b.customerReference}</span></span>
+                  </span>
                   <span className="font-mono tabular-nums">{fmtMoney2(b.amount ?? 0)}</span>
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted-foreground">
-              {data?.sandbox
-                ? 'Each bill becomes one simulated Airwallex payment.'
-                : 'Each bill becomes one Airwallex payment from your AUD balance to ASIC (biller code and reference as shown). This can’t be undone from here.'}
-            </p>
+            {data?.sandbox ? null : (
+              <Alert>
+                <TriangleAlert />
+                <AlertDescription>Paid from your AUD balance. This can’t be undone from here.</AlertDescription>
+              </Alert>
+            )}
           </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirming(false)} disabled={payMutation.isPending}>Cancel</Button>
-            <Button onClick={pay} disabled={payMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={pay} disabled={payMutation.isPending}>
               {payMutation.isPending ? 'Paying…' : `Pay ${fmtMoney2(total)}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+/** One number in the page's stat strip: black, a muted label, one line under it. */
+function Stat({ label, value, sub, dot }: { label: string; value: string; sub?: string; dot?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col px-5 py-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
     </div>
   )
 }

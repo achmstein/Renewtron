@@ -1,15 +1,21 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { Info } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
 
 type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
-
-const inputCls = 'mt-1 block w-full rounded-md border-border shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
-const labelCls = 'block text-xs font-medium text-muted-foreground mb-1'
-const submitBtnCls = 'inline-flex justify-center rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition'
 
 type Settings = Awaited<ReturnType<typeof api.admin.settings>>
 
@@ -17,20 +23,28 @@ type SectionDef = {
   key: SectionKey
   group: string
   title: string
+  /** One line under the card title. */
+  description: string
+  /** The longer explanation, on hover. */
+  tip?: string
 }
 
 const SECTIONS: SectionDef[] = [
-  { key: 'sendgrid',  group: 'EMAIL & COMMS', title: 'SendGrid' },
-  { key: 'winback',   group: 'EMAIL & COMMS', title: 'Win-back template' },
-  { key: 'stripe',    group: 'PAYMENTS',      title: 'Stripe' },
-  { key: 'airwallex', group: 'PAYMENTS',      title: 'Airwallex' },
-  { key: 'pricing',   group: 'PAYMENTS',      title: 'Pricing' },
-  { key: 'asic',      group: 'INTEGRATIONS',  title: 'ASIC credentials' },
-  { key: 'ontraport', group: 'INTEGRATIONS',  title: 'Ontraport' },
-  { key: 'asickeys',  group: 'INTEGRATIONS',  title: 'ASIC key inbox' },
-  { key: 'asickeyrequests', group: 'INTEGRATIONS', title: 'ASIC key requests' },
-  { key: 'tracking',  group: 'MARKETING',     title: 'Tracking tags' },
-  { key: 'testmode',  group: 'TESTING',       title: 'Test mode' },
+  { key: 'sendgrid',  group: 'Email', title: 'SendGrid', description: 'Sends the site’s emails.' },
+  { key: 'winback',   group: 'Email', title: 'Win-back template', description: 'The email sent to leads who didn’t pay.' },
+  { key: 'stripe',    group: 'Payments', title: 'Stripe', description: 'Takes card payments on the website.' },
+  { key: 'airwallex', group: 'Payments', title: 'Airwallex', description: 'Pays ASIC’s BPAY bills for renewals lodged to pay later.', tip: 'Admin → BPAY to pay. Keys: Airwallex → Settings → Developer → API keys.' },
+  { key: 'pricing',   group: 'Payments', title: 'Pricing', description: 'What clients pay for a renewal.' },
+  { key: 'asic',      group: 'Integrations', title: 'ASIC credentials', description: 'How Renewtron pays ASIC for each renewal.' },
+  { key: 'ontraport', group: 'Integrations', title: 'Ontraport', description: 'Sales sync, contacts and the OTP conversation.' },
+  { key: 'asickeys',  group: 'Integrations', title: 'ASIC key inbox', description: 'Reads ASIC key letters from a Gmail inbox.' },
+  { key: 'asickeyrequests', group: 'Integrations', title: 'ASIC key requests', description: 'Asks ASIC to email a client’s key.' },
+  { key: 'tracking',  group: 'Marketing', title: 'Tracking tags', description: 'Analytics tags on the public site.' },
+  {
+    key: 'testmode', group: 'Testing', title: 'Test mode',
+    description: 'Test emails use the real site; no money moves and nothing reaches ASIC or Ontraport.',
+    tip: 'Anyone who enters one of these emails goes through the real site, emails and Business Portal, but: pays with Stripe’s test keys (card 4242 4242 4242 4242), so no money moves; can pick any business name on the ABN, due or not; is never sent to ASIC (the renewal is marked done with a TEST- reference); is never sent to Ontraport, and their ASIC key requests stay out of the key tool; doesn’t count on the dashboard, Payments or the Renewals totals.',
+  },
 ]
 
 export default function Settings() {
@@ -178,387 +192,356 @@ export default function Settings() {
   }, {})
 
   const active = SECTIONS.find((s) => s.key === activeKey)!
+  const card = { title: active.title, description: active.description, tip: active.tip, status: status[active.key] }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <PageHeader
-        kicker="SYSTEM"
-        title="Settings"
-        subtitle="Integrations, payments, pricing, and the ATO agent that drives onboarding."
-      />
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <PageHeader title="Settings" subtitle="Integrations, payments and pricing." />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-6 items-start">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-4">
         {/* Sidebar nav */}
-        <nav className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-          {Object.entries(groups).map(([group, sections], i) => (
-            <div key={group} className={i > 0 ? 'border-t border-border' : ''}>
-              <div className="px-4 pt-4 pb-2 text-xs font-medium text-muted-foreground/70">{group}</div>
-              <ul>
+        <Card className="gap-0 py-2">
+          <nav className="space-y-3">
+            {Object.entries(groups).map(([group, sections]) => (
+              <div key={group} className="px-2">
+                <div className="px-2 py-1 text-caption text-muted-foreground">{group}</div>
                 {sections.map((s) => {
                   const isActive = s.key === activeKey
                   return (
-                    <li key={s.key}>
-                      <button
-                        type="button"
-                        onClick={() => setActiveKey(s.key)}
-                        className={`group w-full text-left flex items-start justify-between gap-3 px-4 py-2.5 transition relative ${
-                          isActive ? 'bg-muted/50' : 'hover:bg-muted/50'
-                        }`}
-                      >
-                        {isActive ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r bg-primary" /> : null}
-                        <div className="min-w-0 flex-1">
-                          <div className={`text-sm font-medium ${isActive ? 'text-foreground' : 'text-foreground group-hover:text-foreground'}`}>{s.title}</div>
-                        </div>
-                        <ConfiguredDot status={status[s.key]} />
-                      </button>
-                    </li>
+                    <Button
+                      key={s.key}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => setActiveKey(s.key)}
+                      className={cn('w-full justify-between font-normal', isActive && 'bg-muted font-medium')}
+                    >
+                      <span className="truncate">{s.title}</span>
+                      <ConfiguredDot status={status[s.key]} />
+                    </Button>
                   )
                 })}
-              </ul>
-            </div>
-          ))}
-        </nav>
+              </div>
+            ))}
+          </nav>
+        </Card>
 
         {/* Active section */}
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-6 lg:col-span-3">
           {!data ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : (
-            <Section title={active.title} status={status[active.key]}>
-              {activeKey === 'sendgrid' ? (
-                <form onSubmit={onSendGrid} className="space-y-4">
-                  <Field label="API key">
-                    <input className={inputCls} value={sg.apiKey} onChange={(e) => setSg({ ...sg, apiKey: e.target.value })} />
-                  </Field>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="From email">
-                      <input className={inputCls} value={sg.fromEmail} onChange={(e) => setSg({ ...sg, fromEmail: e.target.value })} />
-                    </Field>
-                    <Field label="From name">
-                      <input className={inputCls} value={sg.fromName} onChange={(e) => setSg({ ...sg, fromName: e.target.value })} />
-                    </Field>
-                  </div>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
+            <Skeleton className="h-80 rounded-xl" />
+          ) : null}
 
-              {activeKey === 'winback' ? (
-                <form onSubmit={onWinBack} className="space-y-4">
-                  <Field label="Subject" hint="Merge tags: {{FullName}}, {{Abn}}, {{Email}}, {{BusinessName}}.">
-                    <input className={inputCls} value={winBack.subject} onChange={(e) => setWinBack({ ...winBack, subject: e.target.value })} />
-                  </Field>
-                  <Field label="Body (plain text)">
-                    <textarea
-                      rows={10}
-                      className={`${inputCls} font-mono text-xs leading-relaxed`}
-                      value={winBack.bodyPlain}
-                      onChange={(e) => setWinBack({ ...winBack, bodyPlain: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Body (HTML, optional)">
-                    <textarea
-                      rows={6}
-                      className={`${inputCls} font-mono text-xs leading-relaxed`}
-                      value={winBack.bodyHtml}
-                      onChange={(e) => setWinBack({ ...winBack, bodyHtml: e.target.value })}
-                    />
-                  </Field>
-                  <button type="submit" className={submitBtnCls}>Save template</button>
-                </form>
-              ) : null}
+          {data && activeKey === 'sendgrid' ? (
+            <SettingsCard {...card} onSubmit={onSendGrid}>
+              <Field label="API key">
+                <Input value={sg.apiKey} onChange={(e) => setSg({ ...sg, apiKey: e.target.value })} />
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="From email">
+                  <Input value={sg.fromEmail} onChange={(e) => setSg({ ...sg, fromEmail: e.target.value })} />
+                </Field>
+                <Field label="From name">
+                  <Input value={sg.fromName} onChange={(e) => setSg({ ...sg, fromName: e.target.value })} />
+                </Field>
+              </div>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'stripe' ? (
-                <form onSubmit={onStripe} className="space-y-4">
-                  <Field label="Secret key">
-                    <input type="password" className={`${inputCls} font-mono`} value={stripe.secretKey} onChange={(e) => setStripe({ ...stripe, secretKey: e.target.value })} />
-                  </Field>
-                  <Field label="Publishable key">
-                    <input className={`${inputCls} font-mono`} value={stripe.publishableKey} onChange={(e) => setStripe({ ...stripe, publishableKey: e.target.value })} />
-                  </Field>
-                  <Field label="Dispute webhook signing secret" hint="Stripe dashboard → Developers → Webhooks: add an endpoint at this site's /api/stripe/webhook for the charge.dispute.created event, then paste its signing secret (whsec_…). New disputes get Renewtron's evidence staged for Smart Disputes.">
-                    <input type="password" className={`${inputCls} font-mono`} value={stripe.webhookSecret} onChange={(e) => setStripe({ ...stripe, webhookSecret: e.target.value })} />
-                  </Field>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
+          {data && activeKey === 'winback' ? (
+            <SettingsCard {...card} onSubmit={onWinBack} saveLabel="Save template">
+              <Field label="Subject" hint="Merge tags: {{FullName}}, {{Abn}}, {{Email}}, {{BusinessName}}">
+                <Input value={winBack.subject} onChange={(e) => setWinBack({ ...winBack, subject: e.target.value })} />
+              </Field>
+              <Field label="Body (plain text)">
+                <Textarea rows={10} className="font-mono" value={winBack.bodyPlain} onChange={(e) => setWinBack({ ...winBack, bodyPlain: e.target.value })} />
+              </Field>
+              <Field label="Body (HTML, optional)">
+                <Textarea rows={6} className="font-mono" value={winBack.bodyHtml} onChange={(e) => setWinBack({ ...winBack, bodyHtml: e.target.value })} />
+              </Field>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'airwallex' ? (
-                <form onSubmit={onAirwallex} className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Pays ASIC's BPAY bills for renewals lodged to pay later (Admin → BPAY to pay). Keys: Airwallex → Settings → Developer → API keys.</p>
-                  <Field label="Environment" hint={airwallex.useSandbox ? "Sandbox: payments are simulated and no money moves. Use sandbox keys." : 'Live: payments really leave your Airwallex AUD balance. Use live keys.'}>
-                    <select className={inputCls} value={airwallex.useSandbox ? 'sandbox' : 'live'} onChange={(e) => setAirwallex({ ...airwallex, useSandbox: e.target.value === 'sandbox' })}>
-                      <option value="sandbox">Sandbox (no money moves)</option>
-                      <option value="live">Live</option>
-                    </select>
-                  </Field>
-                  <Field label="Client ID">
-                    <input className={`${inputCls} font-mono`} value={airwallex.clientId} onChange={(e) => setAirwallex({ ...airwallex, clientId: e.target.value })} />
-                  </Field>
-                  <Field label="API key">
-                    <input type="password" className={`${inputCls} font-mono`} value={airwallex.apiKey} onChange={(e) => setAirwallex({ ...airwallex, apiKey: e.target.value })} />
-                  </Field>
-                  <div className="flex items-center gap-3">
-                    <button type="submit" className={submitBtnCls}>Save</button>
-                    <button type="button" onClick={testAirwallex} className="rounded-md bg-card px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border hover:bg-muted/50">Test saved keys</button>
-                  </div>
-                </form>
-              ) : null}
+          {data && activeKey === 'stripe' ? (
+            <SettingsCard {...card} onSubmit={onStripe}>
+              <Field label="Secret key">
+                <Input type="password" className="font-mono" value={stripe.secretKey} onChange={(e) => setStripe({ ...stripe, secretKey: e.target.value })} />
+              </Field>
+              <Field label="Publishable key">
+                <Input className="font-mono" value={stripe.publishableKey} onChange={(e) => setStripe({ ...stripe, publishableKey: e.target.value })} />
+              </Field>
+              <Field
+                label="Dispute webhook signing secret"
+                hint="Starts whsec_. New disputes get Renewtron’s evidence staged."
+                tip="Stripe dashboard → Developers → Webhooks: add an endpoint at this site's /api/stripe/webhook for the charge.dispute.created event, then paste its signing secret (whsec_…). New disputes get Renewtron's evidence staged for Smart Disputes."
+              >
+                <Input type="password" className="font-mono" value={stripe.webhookSecret} onChange={(e) => setStripe({ ...stripe, webhookSecret: e.target.value })} />
+              </Field>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'pricing' ? (
-                <form onSubmit={onPricing} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="1-year renewal price">
-                      <div className="relative mt-1">
-                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground/70">$</span>
-                        <input type="number" step="0.01" value={pricing.oneYearFee} onChange={(e) => setPricing({ ...pricing, oneYearFee: Number(e.target.value) })}
-                          className="block w-full rounded-md border-border pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
-                      </div>
-                    </Field>
-                    <Field label="3-year renewal price">
-                      <div className="relative mt-1">
-                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground/70">$</span>
-                        <input type="number" step="0.01" value={pricing.threeYearFee} onChange={(e) => setPricing({ ...pricing, threeYearFee: Number(e.target.value) })}
-                          className="block w-full rounded-md border-border pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
-                      </div>
-                    </Field>
-                  </div>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
+          {data && activeKey === 'airwallex' ? (
+            <SettingsCard
+              {...card}
+              onSubmit={onAirwallex}
+              extra={<Button type="button" variant="outline" onClick={testAirwallex}>Test saved keys</Button>}
+            >
+              <Field label="Environment" hint={airwallex.useSandbox ? 'Payments are simulated; use sandbox keys.' : 'Payments really leave your Airwallex AUD balance; use live keys.'}>
+                <Select value={airwallex.useSandbox ? 'sandbox' : 'live'} onValueChange={(v) => setAirwallex({ ...airwallex, useSandbox: v === 'sandbox' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sandbox">Sandbox (no money moves)</SelectItem>
+                    <SelectItem value="live">Live</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Client ID">
+                <Input className="font-mono" value={airwallex.clientId} onChange={(e) => setAirwallex({ ...airwallex, clientId: e.target.value })} />
+              </Field>
+              <Field label="API key">
+                <Input type="password" className="font-mono" value={airwallex.apiKey} onChange={(e) => setAirwallex({ ...airwallex, apiKey: e.target.value })} />
+              </Field>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'asic' ? (
-                <form onSubmit={onAsic} className="space-y-4">
-                  <Field label="Pay ASIC by" hint={asic.paymentMethod === 'Bpay'
-                    ? 'Each renewal is lodged with ASIC to pay later. Its BPAY biller code and reference are saved on the renewal — pay them at the bank, then mark it paid.'
-                    : 'Each renewal is paid at ASIC straight away with the card below (needs the SMS code).'}>
-                    <select className={inputCls} value={asic.paymentMethod} onChange={(e) => setAsic({ ...asic, paymentMethod: e.target.value as 'Card' | 'Bpay' })}>
-                      <option value="Card">Credit card now</option>
-                      <option value="Bpay">Pay later by BPAY</option>
-                    </select>
-                  </Field>
-                  {asic.paymentMethod === 'Card' ? (
-                    <Field label="Switch to BPAY after" hint={asic.bpayAfterCardFailures > 0
-                      ? `After ${asic.bpayAfterCardFailures} failed card ${asic.bpayAfterCardFailures === 1 ? 'attempt' : 'attempts'} on a renewal (declined, or no SMS code), it's lodged to pay later by BPAY instead. Card retries are an hour apart.`
-                      : 'Never: renewals are only ever paid by card.'}>
-                      <select className={inputCls} value={asic.bpayAfterCardFailures} onChange={(e) => setAsic({ ...asic, bpayAfterCardFailures: Number(e.target.value) })}>
-                        <option value={0}>Never</option>
-                        {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} failed card {n === 1 ? 'attempt' : 'attempts'}</option>)}
-                      </select>
-                    </Field>
-                  ) : null}
-                  <Field label="Email">
-                    <input type="email" className={inputCls} value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
-                  </Field>
-                  <Field label="Card number">
-                    <input className={`${inputCls} font-mono tabular-nums`} value={asic.cardNumber} onChange={(e) => setAsic({ ...asic, cardNumber: e.target.value })} />
-                  </Field>
-                  <Field label="Cardholder name">
-                    <input className={inputCls} value={asic.cardholderName} onChange={(e) => setAsic({ ...asic, cardholderName: e.target.value })} />
-                  </Field>
-                  <div className="grid grid-cols-3 gap-4">
-                    <Field label="Expiry month">
-                      <input className={`${inputCls} font-mono tabular-nums`} value={asic.expiryMonth} onChange={(e) => setAsic({ ...asic, expiryMonth: e.target.value })} />
-                    </Field>
-                    <Field label="Expiry year">
-                      <input className={`${inputCls} font-mono tabular-nums`} value={asic.expiryYear} onChange={(e) => setAsic({ ...asic, expiryYear: e.target.value })} />
-                    </Field>
-                    <Field label="CVC" hint={asicHasCvc ? 'Stored. Leave blank to keep it.' : undefined}>
-                      <input type="password" className={`${inputCls} font-mono tabular-nums`} value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} placeholder={asicHasCvc ? '•••' : ''} />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="ASIC fee, 1 year (A$)" hint="What ASIC charges for a 1-year renewal. BPAY bills are paid this amount through Airwallex. Update it when ASIC's fees change (usually 1 July).">
-                      <input type="number" min="0" step="0.01" className={`${inputCls} font-mono tabular-nums`} value={asic.oneYearFee || ''} onChange={(e) => setAsic({ ...asic, oneYearFee: Number(e.target.value) || 0 })} />
-                    </Field>
-                    <Field label="ASIC fee, 3 years (A$)" hint="What ASIC charges for a 3-year renewal.">
-                      <input type="number" min="0" step="0.01" className={`${inputCls} font-mono tabular-nums`} value={asic.threeYearFee || ''} onChange={(e) => setAsic({ ...asic, threeYearFee: Number(e.target.value) || 0 })} />
-                    </Field>
-                  </div>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
+          {data && activeKey === 'pricing' ? (
+            <SettingsCard {...card} onSubmit={onPricing}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="1-year renewal price">
+                  <MoneyInput value={pricing.oneYearFee} onChange={(n) => setPricing({ ...pricing, oneYearFee: n })} />
+                </Field>
+                <Field label="3-year renewal price">
+                  <MoneyInput value={pricing.threeYearFee} onChange={(n) => setPricing({ ...pricing, threeYearFee: n })} />
+                </Field>
+              </div>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'ontraport' ? (
-                <form onSubmit={onOntraport} className="space-y-4">
-                  <Field label="API app ID">
-                    <input className={`${inputCls} font-mono`} value={ontraport.apiAppId} onChange={(e) => setOntraport({ ...ontraport, apiAppId: e.target.value })} />
-                  </Field>
-                  <Field label="API key">
-                    <input className={`${inputCls} font-mono`} value={ontraport.apiKey} onChange={(e) => setOntraport({ ...ontraport, apiKey: e.target.value })} />
-                  </Field>
-                  <Field label="Conversation ID">
-                    <input className={`${inputCls} font-mono`} value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
-                  </Field>
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={ontraport.pushWizardContacts} onChange={(e) => setOntraport({ ...ontraport, pushWizardContacts: e.target.checked })} />
-                    Create or update an Ontraport contact for everyone who uses the renewal wizard
-                  </label>
-                  <Field label="Wizard form tag ID">
-                    <input className={`${inputCls} font-mono`} value={ontraport.wizardLeadTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardLeadTagId: e.target.value })} placeholder="1908" />
-                  </Field>
-                  <Field label="Wizard paid tag ID">
-                    <input className={`${inputCls} font-mono`} value={ontraport.wizardPaidTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardPaidTagId: e.target.value })} placeholder="1737" />
-                  </Field>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
+          {data && activeKey === 'asic' ? (
+            <SettingsCard {...card} onSubmit={onAsic}>
+              <Field
+                label="Pay ASIC by"
+                hint={asic.paymentMethod === 'Bpay' ? 'Lodged to pay later; pay the BPAY bill, then mark it paid.' : 'Paid at ASIC straight away with the card below.'}
+                tip={asic.paymentMethod === 'Bpay'
+                  ? 'Each renewal is lodged with ASIC to pay later. Its BPAY biller code and reference are saved on the renewal — pay them at the bank, then mark it paid.'
+                  : 'Each renewal is paid at ASIC straight away with the card below (needs the SMS code).'}
+              >
+                <Select value={asic.paymentMethod} onValueChange={(v) => setAsic({ ...asic, paymentMethod: v as 'Card' | 'Bpay' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Card">Credit card now</SelectItem>
+                    <SelectItem value="Bpay">Pay later by BPAY</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              {asic.paymentMethod === 'Card' ? (
+                <Field
+                  label="Switch to BPAY after"
+                  hint={asic.bpayAfterCardFailures > 0 ? 'Then the renewal is lodged to pay later by BPAY.' : 'Renewals are only ever paid by card.'}
+                  tip={asic.bpayAfterCardFailures > 0
+                    ? `After ${asic.bpayAfterCardFailures} failed card ${asic.bpayAfterCardFailures === 1 ? 'attempt' : 'attempts'} on a renewal (declined, or no SMS code), it's lodged to pay later by BPAY instead. Card retries are an hour apart.`
+                    : undefined}
+                >
+                  <Select value={String(asic.bpayAfterCardFailures)} onValueChange={(v) => setAsic({ ...asic, bpayAfterCardFailures: Number(v) })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Never</SelectItem>
+                      {[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n} failed card {n === 1 ? 'attempt' : 'attempts'}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
               ) : null}
+              <Field label="Email">
+                <Input type="email" value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Card number">
+                  <Input className="font-mono tabular-nums" value={asic.cardNumber} onChange={(e) => setAsic({ ...asic, cardNumber: e.target.value })} />
+                </Field>
+                <Field label="Cardholder name">
+                  <Input value={asic.cardholderName} onChange={(e) => setAsic({ ...asic, cardholderName: e.target.value })} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <Field label="Expiry month">
+                  <Input className="font-mono tabular-nums" value={asic.expiryMonth} onChange={(e) => setAsic({ ...asic, expiryMonth: e.target.value })} />
+                </Field>
+                <Field label="Expiry year">
+                  <Input className="font-mono tabular-nums" value={asic.expiryYear} onChange={(e) => setAsic({ ...asic, expiryYear: e.target.value })} />
+                </Field>
+                <Field label="CVC" hint={asicHasCvc ? 'Stored. Leave blank to keep it.' : undefined}>
+                  <Input type="password" className="font-mono tabular-nums" value={asic.cvc} onChange={(e) => setAsic({ ...asic, cvc: e.target.value })} placeholder={asicHasCvc ? '•••' : ''} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field
+                  label="ASIC fee, 1 year (A$)"
+                  hint="Update when ASIC’s fees change (usually 1 July)."
+                  tip="What ASIC charges for a 1-year renewal. BPAY bills are paid this amount through Airwallex. Update it when ASIC's fees change (usually 1 July)."
+                >
+                  <Input type="number" min="0" step="0.01" className="font-mono tabular-nums" value={asic.oneYearFee || ''} onChange={(e) => setAsic({ ...asic, oneYearFee: Number(e.target.value) || 0 })} />
+                </Field>
+                <Field label="ASIC fee, 3 years (A$)" tip="What ASIC charges for a 3-year renewal.">
+                  <Input type="number" min="0" step="0.01" className="font-mono tabular-nums" value={asic.threeYearFee || ''} onChange={(e) => setAsic({ ...asic, threeYearFee: Number(e.target.value) || 0 })} />
+                </Field>
+              </div>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'asickeys' ? (
-                <form onSubmit={onAsicKeys} className="space-y-4">
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={asicKeys.enabled} onChange={(e) => setAsicKeys({ ...asicKeys, enabled: e.target.checked })} />
-                    Scanning enabled
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem] gap-4">
-                    <Field label="IMAP host">
-                      <input className={`${inputCls} font-mono`} value={asicKeys.imapHost} onChange={(e) => setAsicKeys({ ...asicKeys, imapHost: e.target.value })} placeholder="imap.gmail.com" />
-                    </Field>
-                    <Field label="Port">
-                      <input type="number" className={`${inputCls} font-mono tabular-nums`} value={asicKeys.imapPort} onChange={(e) => setAsicKeys({ ...asicKeys, imapPort: Number(e.target.value) || 993 })} />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Gmail address">
-                      <input type="email" className={inputCls} value={asicKeys.username} onChange={(e) => setAsicKeys({ ...asicKeys, username: e.target.value })} />
-                    </Field>
-                    <Field label="App password">
-                      <input type="password" className={`${inputCls} font-mono`} value={asicKeys.password} onChange={(e) => setAsicKeys({ ...asicKeys, password: e.target.value })} />
-                    </Field>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Field label="Folder / label">
-                      <input className={`${inputCls} font-mono`} value={asicKeys.folder} onChange={(e) => setAsicKeys({ ...asicKeys, folder: e.target.value })} placeholder="INBOX" />
-                    </Field>
-                    <Field label="Subject contains">
-                      <input className={inputCls} value={asicKeys.subjectFilter} onChange={(e) => setAsicKeys({ ...asicKeys, subjectFilter: e.target.value })} />
-                    </Field>
-                    <Field label="Lookback (days)">
-                      <input type="number" min={1} max={365} className={`${inputCls} font-mono tabular-nums`} value={asicKeys.lookbackDays} onChange={(e) => setAsicKeys({ ...asicKeys, lookbackDays: Number(e.target.value) || 30 })} />
-                    </Field>
-                  </div>
-                  <Field label="Ontraport ASIC key field">
-                    <input className={`${inputCls} font-mono`} value={asicKeys.ontraportFieldId} onChange={(e) => setAsicKeys({ ...asicKeys, ontraportFieldId: e.target.value })} placeholder="f5xxx" />
-                  </Field>
-                  <Field label="ASIC key pattern">
-                    <input className={`${inputCls} font-mono text-xs`} value={asicKeys.asicKeyPattern} onChange={(e) => setAsicKeys({ ...asicKeys, asicKeyPattern: e.target.value })} />
-                    {asicKeys.defaultAsicKeyPattern && asicKeys.asicKeyPattern !== asicKeys.defaultAsicKeyPattern ? (
-                      <button
-                        type="button"
-                        onClick={() => setAsicKeys({ ...asicKeys, asicKeyPattern: asicKeys.defaultAsicKeyPattern! })}
-                        className="mt-1 text-xxs font-mono text-link hover:underline"
-                      >
-                        Use the current default pattern
-                      </button>
-                    ) : null}
-                  </Field>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button type="submit" className={submitBtnCls}>Save</button>
-                    <button
-                      type="button"
-                      onClick={testAsicKeys}
-                      disabled={testMutation.isPending}
-                      className="inline-flex justify-center rounded-md bg-card text-foreground px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset ring-border hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                    >
-                      {testMutation.isPending ? 'Testing…' : 'Test connection'}
-                    </button>
-                  </div>
-                  {asicKeysTest ? <AsicKeyTestResults result={asicKeysTest} /> : null}
-                </form>
-              ) : null}
+          {data && activeKey === 'ontraport' ? (
+            <SettingsCard {...card} onSubmit={onOntraport}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="API app ID">
+                  <Input className="font-mono" value={ontraport.apiAppId} onChange={(e) => setOntraport({ ...ontraport, apiAppId: e.target.value })} />
+                </Field>
+                <Field label="API key">
+                  <Input className="font-mono" value={ontraport.apiKey} onChange={(e) => setOntraport({ ...ontraport, apiKey: e.target.value })} />
+                </Field>
+              </div>
+              <Field label="Conversation ID">
+                <Input className="font-mono" value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
+              </Field>
+              <SwitchField id="op-push" label="Add wizard users to Ontraport" description="Create or update a contact for everyone who uses the renewal wizard." checked={ontraport.pushWizardContacts} onCheckedChange={(v) => setOntraport({ ...ontraport, pushWizardContacts: v })} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Wizard form tag ID">
+                  <Input className="font-mono" value={ontraport.wizardLeadTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardLeadTagId: e.target.value })} placeholder="1908" />
+                </Field>
+                <Field label="Wizard paid tag ID">
+                  <Input className="font-mono" value={ontraport.wizardPaidTagId ?? ''} onChange={(e) => setOntraport({ ...ontraport, wizardPaidTagId: e.target.value })} placeholder="1737" />
+                </Field>
+              </div>
+            </SettingsCard>
+          ) : null}
 
-              {activeKey === 'asickeyrequests' ? (
-                <form onSubmit={onKeyRequests} className="space-y-4">
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={keyRequests.enabled} onChange={(e) => setKeyRequests({ ...keyRequests, enabled: e.target.checked })} />
-                    Requests enabled
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={keyRequests.autoRequestOnSync} onChange={(e) => setKeyRequests({ ...keyRequests, autoRequestOnSync: e.target.checked })} />
-                    Queue a request for every eligible sale the Ontraport sync brings in
-                  </label>
-                  <Field label="Email the key to">
-                    <input type="email" className={inputCls} value={keyRequests.requestEmail} onChange={(e) => setKeyRequests({ ...keyRequests, requestEmail: e.target.value })} />
+          {data && activeKey === 'asickeys' ? (
+            <SettingsCard
+              {...card}
+              onSubmit={onAsicKeys}
+              extra={
+                <Button type="button" variant="outline" onClick={testAsicKeys} disabled={testMutation.isPending}>
+                  {testMutation.isPending ? 'Testing…' : 'Test connection'}
+                </Button>
+              }
+              after={asicKeysTest ? <AsicKeyTestResults result={asicKeysTest} /> : null}
+            >
+              <SwitchField id="ak-enabled" label="Scanning enabled" description="Read new ASIC key letters from this inbox." checked={asicKeys.enabled} onCheckedChange={(v) => setAsicKeys({ ...asicKeys, enabled: v })} />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <div className="sm:col-span-3">
+                  <Field label="IMAP host">
+                    <Input className="font-mono" value={asicKeys.imapHost} onChange={(e) => setAsicKeys({ ...asicKeys, imapHost: e.target.value })} placeholder="imap.gmail.com" />
                   </Field>
-                  <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-4">
-                    <Field label="Area code">
-                      <input className={`${inputCls} font-mono tabular-nums`} value={keyRequests.defaultPhonePrefix} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhonePrefix: e.target.value })} placeholder="02" />
-                    </Field>
-                    <Field label="Fallback phone">
-                      <input className={`${inputCls} font-mono tabular-nums`} value={keyRequests.defaultPhoneNumber} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhoneNumber: e.target.value })} />
-                    </Field>
-                  </div>
-                  <Field label="Enquiry text">
-                    <textarea rows={3} className={`${inputCls} font-mono text-xs`} value={keyRequests.messageTemplate} onChange={(e) => setKeyRequests({ ...keyRequests, messageTemplate: e.target.value })} />
-                    {keyRequests.defaultMessageTemplate && keyRequests.messageTemplate !== keyRequests.defaultMessageTemplate ? (
-                      <button
-                        type="button"
-                        onClick={() => setKeyRequests({ ...keyRequests, messageTemplate: keyRequests.defaultMessageTemplate! })}
-                        className="mt-1 text-xxs font-mono text-link hover:underline"
-                      >
-                        Use the default wording
-                      </button>
-                    ) : null}
-                  </Field>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
-
-              {activeKey === 'tracking' ? (
-                <form onSubmit={onTracking} className="space-y-4">
-                  <Field label="Google Tag Manager container">
-                    <input className={`${inputCls} font-mono`} value={tracking.gtmContainerId} onChange={(e) => setTracking({ ...tracking, gtmContainerId: e.target.value })} placeholder="GTM-XXXXXXX" />
-                  </Field>
-                  <Field label="GA4 measurement ID">
-                    <input className={`${inputCls} font-mono`} value={tracking.ga4MeasurementId} onChange={(e) => setTracking({ ...tracking, ga4MeasurementId: e.target.value })} placeholder="G-XXXXXXXXXX" />
-                  </Field>
-                  <Field label="Meta pixel ID">
-                    <input className={`${inputCls} font-mono`} value={tracking.metaPixelId} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} placeholder="1234567890" />
-                  </Field>
-                  <Field label="Microsoft Clarity project ID">
-                    <input className={`${inputCls} font-mono`} value={tracking.clarityProjectId} onChange={(e) => setTracking({ ...tracking, clarityProjectId: e.target.value.trim() })} placeholder="abcd1234ef" />
-                  </Field>
-                  <button type="submit" className={submitBtnCls}>Save</button>
-                </form>
-              ) : null}
-
-              {activeKey === 'testmode' ? (
-                <div className="space-y-6">
-                  <div className="rounded-md bg-warning/5 border border-warning/25 p-4 text-sm text-warning space-y-1">
-                    <p>Anyone who enters one of these emails on the website goes through the real site, emails and Business Portal, but:</p>
-                    <ul className="list-disc pl-5">
-                      <li>pays with Stripe's test keys (card 4242 4242 4242 4242), so no money moves;</li>
-                      <li>can pick any business name on the ABN, due or not;</li>
-                      <li>is never sent to ASIC — the renewal is marked done with a TEST- reference;</li>
-                      <li>is never sent to Ontraport, and their ASIC key requests stay out of the key tool;</li>
-                      <li>doesn't count on the dashboard, Payments or the Renewals totals.</li>
-                    </ul>
-                  </div>
-                  <form onSubmit={onTestMode} className="space-y-4">
-                    <Field label="Test customer emails" hint="One per line. Use an address that isn't a real customer's — e.g. you+test@gmail.com.">
-                      <textarea rows={3} className={`${inputCls} font-mono text-xs`} value={testMode.testEmails} onChange={(e) => setTestMode({ ...testMode, testEmails: e.target.value })} />
-                    </Field>
-                    <Field label="Stripe test secret key" hint="Stripe dashboard → Developers → API keys, with 'Test mode' switched on. Starts sk_test_.">
-                      <input type="password" className={`${inputCls} font-mono`} value={testMode.stripeSecretKey} onChange={(e) => setTestMode({ ...testMode, stripeSecretKey: e.target.value })} />
-                    </Field>
-                    <Field label="Stripe test publishable key" hint="Starts pk_test_.">
-                      <input className={`${inputCls} font-mono`} value={testMode.stripePublishableKey} onChange={(e) => setTestMode({ ...testMode, stripePublishableKey: e.target.value })} />
-                    </Field>
-                    <button type="submit" className={submitBtnCls}>Save</button>
-                  </form>
-                  <div className="border-t border-border pt-4 flex items-center justify-between gap-4">
-                    <p className="text-sm text-muted-foreground">
-                      {testData
-                        ? `Test data on file: ${testData.leads} lead(s), ${testData.renewals} renewal(s), ${testData.asicKeyRequests} key request(s). The Business Portal keeps its own copy of the test account.`
-                        : 'Loading test data…'}
-                    </p>
-                    <button type="button" onClick={deleteTestData} className="shrink-0 rounded-md border border-destructive/20 bg-card px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/5">
-                      Delete test data
-                    </button>
-                  </div>
                 </div>
-              ) : null}
-            </Section>
-          )}
+                <Field label="Port">
+                  <Input type="number" className="font-mono tabular-nums" value={asicKeys.imapPort} onChange={(e) => setAsicKeys({ ...asicKeys, imapPort: Number(e.target.value) || 993 })} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Gmail address">
+                  <Input type="email" value={asicKeys.username} onChange={(e) => setAsicKeys({ ...asicKeys, username: e.target.value })} />
+                </Field>
+                <Field label="App password">
+                  <Input type="password" className="font-mono" value={asicKeys.password} onChange={(e) => setAsicKeys({ ...asicKeys, password: e.target.value })} />
+                </Field>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Folder or label">
+                  <Input className="font-mono" value={asicKeys.folder} onChange={(e) => setAsicKeys({ ...asicKeys, folder: e.target.value })} placeholder="INBOX" />
+                </Field>
+                <Field label="Subject contains">
+                  <Input value={asicKeys.subjectFilter} onChange={(e) => setAsicKeys({ ...asicKeys, subjectFilter: e.target.value })} />
+                </Field>
+                <Field label="Lookback (days)">
+                  <Input type="number" min={1} max={365} className="font-mono tabular-nums" value={asicKeys.lookbackDays} onChange={(e) => setAsicKeys({ ...asicKeys, lookbackDays: Number(e.target.value) || 30 })} />
+                </Field>
+              </div>
+              <Field label="Ontraport ASIC key field">
+                <Input className="font-mono" value={asicKeys.ontraportFieldId} onChange={(e) => setAsicKeys({ ...asicKeys, ontraportFieldId: e.target.value })} placeholder="f5xxx" />
+              </Field>
+              <Field label="ASIC key pattern">
+                <Input className="font-mono" value={asicKeys.asicKeyPattern} onChange={(e) => setAsicKeys({ ...asicKeys, asicKeyPattern: e.target.value })} />
+                {asicKeys.defaultAsicKeyPattern && asicKeys.asicKeyPattern !== asicKeys.defaultAsicKeyPattern ? (
+                  <LinkAction onClick={() => setAsicKeys({ ...asicKeys, asicKeyPattern: asicKeys.defaultAsicKeyPattern! })}>Use the current default pattern</LinkAction>
+                ) : null}
+              </Field>
+            </SettingsCard>
+          ) : null}
+
+          {data && activeKey === 'asickeyrequests' ? (
+            <SettingsCard {...card} onSubmit={onKeyRequests}>
+              <SwitchField id="kr-enabled" label="Requests enabled" description="Queue ASIC key requests for the key tool." checked={keyRequests.enabled} onCheckedChange={(v) => setKeyRequests({ ...keyRequests, enabled: v })} />
+              <SwitchField id="kr-auto" label="Request on Ontraport sync" description="Queue a request for every eligible sale the sync brings in." checked={keyRequests.autoRequestOnSync} onCheckedChange={(v) => setKeyRequests({ ...keyRequests, autoRequestOnSync: v })} />
+              <Field label="Email the key to">
+                <Input type="email" value={keyRequests.requestEmail} onChange={(e) => setKeyRequests({ ...keyRequests, requestEmail: e.target.value })} />
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Area code">
+                  <Input className="font-mono tabular-nums" value={keyRequests.defaultPhonePrefix} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhonePrefix: e.target.value })} placeholder="02" />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Fallback phone">
+                    <Input className="font-mono tabular-nums" value={keyRequests.defaultPhoneNumber} onChange={(e) => setKeyRequests({ ...keyRequests, defaultPhoneNumber: e.target.value })} />
+                  </Field>
+                </div>
+              </div>
+              <Field label="Enquiry text">
+                <Textarea rows={3} className="font-mono" value={keyRequests.messageTemplate} onChange={(e) => setKeyRequests({ ...keyRequests, messageTemplate: e.target.value })} />
+                {keyRequests.defaultMessageTemplate && keyRequests.messageTemplate !== keyRequests.defaultMessageTemplate ? (
+                  <LinkAction onClick={() => setKeyRequests({ ...keyRequests, messageTemplate: keyRequests.defaultMessageTemplate! })}>Use the default wording</LinkAction>
+                ) : null}
+              </Field>
+            </SettingsCard>
+          ) : null}
+
+          {data && activeKey === 'tracking' ? (
+            <SettingsCard {...card} onSubmit={onTracking}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Google Tag Manager container">
+                  <Input className="font-mono" value={tracking.gtmContainerId} onChange={(e) => setTracking({ ...tracking, gtmContainerId: e.target.value })} placeholder="GTM-XXXXXXX" />
+                </Field>
+                <Field label="GA4 measurement ID">
+                  <Input className="font-mono" value={tracking.ga4MeasurementId} onChange={(e) => setTracking({ ...tracking, ga4MeasurementId: e.target.value })} placeholder="G-XXXXXXXXXX" />
+                </Field>
+                <Field label="Meta pixel ID">
+                  <Input className="font-mono" value={tracking.metaPixelId} onChange={(e) => setTracking({ ...tracking, metaPixelId: e.target.value })} placeholder="1234567890" />
+                </Field>
+                <Field label="Microsoft Clarity project ID">
+                  <Input className="font-mono" value={tracking.clarityProjectId} onChange={(e) => setTracking({ ...tracking, clarityProjectId: e.target.value.trim() })} placeholder="abcd1234ef" />
+                </Field>
+              </div>
+            </SettingsCard>
+          ) : null}
+
+          {data && activeKey === 'testmode' ? (
+            <>
+              <SettingsCard {...card} onSubmit={onTestMode}>
+                <Field label="Test customer emails" hint="One per line, e.g. you+test@gmail.com. Never a real client’s address.">
+                  <Textarea rows={3} className="font-mono" value={testMode.testEmails} onChange={(e) => setTestMode({ ...testMode, testEmails: e.target.value })} />
+                </Field>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="Stripe test secret key" hint="Starts sk_test_." tip="Stripe dashboard → Developers → API keys, with 'Test mode' switched on. Starts sk_test_.">
+                    <Input type="password" className="font-mono" value={testMode.stripeSecretKey} onChange={(e) => setTestMode({ ...testMode, stripeSecretKey: e.target.value })} />
+                  </Field>
+                  <Field label="Stripe test publishable key" hint="Starts pk_test_.">
+                    <Input className="font-mono" value={testMode.stripePublishableKey} onChange={(e) => setTestMode({ ...testMode, stripePublishableKey: e.target.value })} />
+                  </Field>
+                </div>
+              </SettingsCard>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Test data</CardTitle>
+                  <CardDescription title="The Business Portal keeps its own copy of the test account.">
+                    {testData
+                      ? `${testData.leads} lead(s), ${testData.renewals} renewal(s), ${testData.asicKeyRequests} key request(s) on file.`
+                      : 'Loading test data…'}
+                  </CardDescription>
+                  <CardAction>
+                    <Button type="button" variant="outline" size="sm" onClick={deleteTestData}>Delete test data</Button>
+                  </CardAction>
+                </CardHeader>
+              </Card>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
@@ -583,13 +566,13 @@ function defaultAsicKeyInbox(): AsicKeyInboxSettings {
 function AsicKeyTestResults({ result }: { result: AsicKeyInboxTestResult }) {
   const { mailbox, ontraportField, keyPattern } = result
   return (
-    <div className="rounded-md bg-muted/50 ring-1 ring-border divide-y divide-border text-sm">
+    <div className="divide-y rounded-lg border text-sm">
       <TestRow ok={mailbox.ok} label="Mailbox">
         {mailbox.ok ? (
           <>
             Signed in to <span className="font-mono">{mailbox.host}</span> as <span className="font-mono">{mailbox.username}</span>.{' '}
             <span className="font-mono">{mailbox.folder}</span> holds {mailbox.messagesInFolder.toLocaleString()} messages;{' '}
-            <span className="font-semibold tabular-nums">{mailbox.matchingInLookback}</span> match the subject filter in the lookback window
+            <span className="font-medium tabular-nums">{mailbox.matchingInLookback}</span> match the subject filter in the lookback window
             {mailbox.latestSubject ? <> — latest: “{mailbox.latestSubject}”{mailbox.latestReceivedAt ? ` (${relativeTime(mailbox.latestReceivedAt)})` : ''}</> : null}.
           </>
         ) : mailbox.error}
@@ -610,50 +593,114 @@ function AsicKeyTestResults({ result }: { result: AsicKeyInboxTestResult }) {
 
 function TestRow({ ok, label, children }: { ok: boolean; label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start gap-3 px-3 py-2">
-      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ok ? 'bg-success' : 'bg-destructive'}`} />
+    <div className="flex items-start gap-3 px-4 py-3">
+      <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', ok ? 'bg-success' : 'bg-destructive')} />
       <div className="min-w-0">
-        <div className={`text-xxs font-mono font-medium uppercase tracking-[0.14em] ${ok ? 'text-success' : 'text-destructive'}`}>{label} · {ok ? 'OK' : 'FAILED'}</div>
-        <div className={`mt-0.5 break-words ${ok ? 'text-foreground' : 'text-destructive'}`}>{children}</div>
+        <div className="font-medium">{label} <span className="font-normal text-muted-foreground">· {ok ? 'passed' : 'failed'}</span></div>
+        <div className="mt-0.5 break-words text-caption text-muted-foreground">{children}</div>
       </div>
     </div>
   )
 }
 
-function ConfiguredDot({ status }: { status: 'configured' | 'partial' | 'empty' }) {
-  const map = { configured: 'bg-success', partial: 'bg-warning', empty: 'bg-zinc-300' }
-  const labels = { configured: 'Configured', partial: 'Incomplete', empty: 'Not configured' }
+type ConfigStatus = 'configured' | 'partial' | 'empty'
+
+const STATUS_DOT: Record<ConfigStatus, string> = { configured: 'bg-success', partial: 'bg-warning', empty: 'bg-muted-foreground/40' }
+const STATUS_WORD: Record<ConfigStatus, string> = { configured: 'Configured', partial: 'Incomplete', empty: 'Not set' }
+
+function ConfiguredDot({ status }: { status: ConfigStatus }) {
+  return <span aria-label={STATUS_WORD[status]} title={STATUS_WORD[status]} className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status])} />
+}
+
+/** One settings section: title, one line, the fields, and Save on the right. */
+function SettingsCard({ title, description, tip, status, onSubmit, saveLabel = 'Save', extra, after, children }: {
+  title: string
+  description: string
+  tip?: string
+  status: ConfigStatus
+  onSubmit: (e: React.FormEvent) => void
+  saveLabel?: string
+  extra?: ReactNode
+  after?: ReactNode
+  children: ReactNode
+}) {
   return (
-    <span className="shrink-0 mt-1.5 inline-flex items-center" title={labels[status]}>
-      <span className={`h-1.5 w-1.5 rounded-full ${map[status]}`} />
-    </span>
+    <form onSubmit={onSubmit}>
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription title={tip}>
+            {description}
+            {tip ? <Info aria-hidden className="ml-1 inline size-3.5 -translate-y-px" /> : null}
+          </CardDescription>
+          <CardAction>
+            <span className="flex items-center gap-1.5 text-caption text-muted-foreground">
+              <span aria-hidden className={cn('size-2 rounded-full', STATUS_DOT[status])} />
+              {STATUS_WORD[status]}
+            </span>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {children}
+          {after}
+        </CardContent>
+        <CardFooter className="justify-end gap-2 border-t">
+          {extra}
+          <Button type="submit">{saveLabel}</Button>
+        </CardFooter>
+      </Card>
+    </form>
   )
 }
 
-function Section({ title, subtitle, status, children }: { title: string; subtitle?: string; status: 'configured' | 'partial' | 'empty'; children: ReactNode }) {
-  const tone = status === 'configured' ? 'emerald' : status === 'partial' ? 'amber' : 'zinc'
-  const label = status === 'configured' ? 'CONFIGURED' : status === 'partial' ? 'INCOMPLETE' : 'NOT SET'
-  const statusClass = tone === 'emerald' ? 'text-success' : tone === 'amber' ? 'text-warning' : 'text-muted-foreground'
+/** A label, its input, and at most one muted line under it; the longer explanation on hover. */
+function Field({ label, hint, tip, children }: { label: string; hint?: string; tip?: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-card p-6 ring-1 ring-border shadow-sm">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-base font-semibold text-foreground tracking-tight">{title}</h3>
-          {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
-        </div>
-        <span className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] ${statusClass}`}>{label}</span>
+    <div className="grid gap-1.5">
+      <Label title={tip}>
+        {label}
+        {tip ? <Info aria-hidden className="size-3.5 text-muted-foreground" /> : null}
+      </Label>
+      {children}
+      {hint ? <p className="text-caption text-muted-foreground">{hint}</p> : null}
+    </div>
+  )
+}
+
+/** An on/off setting: label and one line on the left, the switch on the right. */
+function SwitchField({ id, label, description, checked, onCheckedChange }: {
+  id: string
+  label: string
+  description: string
+  checked: boolean
+  onCheckedChange: (v: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+      <div className="grid gap-0.5">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="text-caption text-muted-foreground">{description}</p>
       </div>
-      {children}
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+/** A dollar amount input. */
+function MoneyInput({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
-    <div>
-      <label className={labelCls}>{label}</label>
-      {children}
-      {hint ? <p className="mt-1 text-xxs font-mono text-muted-foreground">{hint}</p> : null}
+    <div className="relative">
+      <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground">$</span>
+      <Input type="number" step="0.01" className="pl-7 font-mono tabular-nums" value={value} onChange={(e) => onChange(Number(e.target.value))} />
     </div>
+  )
+}
+
+/** A small text action under a field (e.g. reset to the default). */
+function LinkAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <Button type="button" variant="link" onClick={onClick} className="h-auto justify-self-start p-0 text-caption font-normal text-link">
+      {children}
+    </Button>
   )
 }

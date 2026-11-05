@@ -1,15 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CircleCheck, Loader2, Search } from 'lucide-react'
+import { CircleCheck, CreditCard, Loader2, Search } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { KickerLabel, PageHeader } from './_ui'
+import { Field, PageHeader } from './_ui'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
 type SearchResult = { id: string; businessName: string; accountNumber: string; registrationDate: string }
-
-const inputCls = 'mt-1 block w-full rounded-md border-border shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
-const labelCls = 'block text-xs font-medium text-muted-foreground'
 
 export default function ManualRenewal() {
   const navigate = useNavigate()
@@ -103,134 +107,115 @@ export default function ManualRenewal() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="OPS"
         title="Manual renewal"
-        subtitle="Process a renewal for a client who paid externally."
+        subtitle="Renew a name for a client who paid us another way."
       />
 
-      {/* Step 1 */}
-      <Step kicker="STEP 01" active title="Search business" subtitle="Look up the ABN at ASIC.">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={searchAbn}
-            onChange={(e) => setSearchAbn(e.target.value.replace(/\D/g, '').slice(0, 11))}
-            onKeyDown={(e) => { if (e.key === 'Enter') search() }}
-            placeholder="11-digit ABN"
-            className={`${inputCls} font-mono tabular-nums flex-1`}
-            maxLength={11}
-          />
-          <button
-            onClick={search}
-            disabled={searchMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-800 disabled:opacity-50 transition self-start mt-1"
-          >
-            {searchMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            Search
-          </button>
-        </div>
+      <div className="space-y-6">
+        <Step n={1} title="Find the business" subtitle="Look up the ABN at ASIC.">
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              value={searchAbn}
+              onChange={(e) => setSearchAbn(e.target.value.replace(/\D/g, '').slice(0, 11))}
+              onKeyDown={(e) => { if (e.key === 'Enter') search() }}
+              placeholder="11-digit ABN"
+              aria-label="ABN"
+              className="flex-1 font-mono tabular-nums"
+              maxLength={11}
+            />
+            <Button variant="outline" onClick={search} disabled={searchMutation.isPending}>
+              {searchMutation.isPending ? <Loader2 className="animate-spin" /> : <Search />}
+              Search
+            </Button>
+          </div>
 
-        {searchResults.length > 0 ? (
-          <div className="mt-5">
-            <KickerLabel className="mb-2">Select business</KickerLabel>
-            <div className="space-y-2">
+          {searchResults.length > 0 ? (
+            <RadioGroup
+              className="mt-5 gap-2"
+              aria-label="Business"
+              value={selectedResult?.id ?? ''}
+              onValueChange={(id) => setSelectedResult(searchResults.find((r) => r.id === id) ?? null)}
+            >
               {searchResults.map((r) => (
-                <label key={r.id} className={`flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition ${
-                  selectedResult?.id === r.id ? 'border-brand-300 bg-primary/5/40 ring-1 ring-primary/20' : 'border-border hover:border-border'
-                }`}>
-                  <input type="radio" name="business" value={r.id} checked={selectedResult?.id === r.id} onChange={() => setSelectedResult(r)} className="mt-1 h-4 w-4 border-border accent-brand-600 focus:ring-brand-500" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground">{r.businessName}</div>
-                    <div className="text-xxs font-mono tabular-nums text-muted-foreground">acct {r.accountNumber} · reg {r.registrationDate}</div>
+                <label
+                  key={r.id}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50',
+                    selectedResult?.id === r.id && 'border-ring bg-link/5',
+                  )}
+                >
+                  <RadioGroupItem value={r.id} className="mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">{r.businessName}</div>
+                    <div className="text-caption text-muted-foreground">
+                      Account <span className="font-mono tabular-nums">{r.accountNumber}</span> · registered {r.registrationDate}
+                    </div>
                   </div>
                 </label>
               ))}
-            </div>
-          </div>
-        ) : null}
-      </Step>
+            </RadioGroup>
+          ) : null}
+        </Step>
 
-      {/* Step 2 */}
-      <Step kicker="STEP 02" active={!!selectedResult} dimmed={!selectedResult} title="Renewal details" subtitle="The ASIC credit card from settings will be used.">
-        {selectedResult ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Renewal years">
-              <select value={renewalYears} onChange={(e) => onYearsChange(Number(e.target.value) as 1 | 3)} className={inputCls}>
-                <option value={1}>1 year — default ${oneYearDefault}</option>
-                <option value={3}>3 years — default ${threeYearDefault}</option>
-              </select>
-            </Field>
-            <Field label="Customer email">
-              <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="customer@example.com" className={inputCls} />
-            </Field>
-            <Field label="Mobile number">
-              <input type="tel" value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} placeholder="04XX XXX XXX" className={`${inputCls} font-mono tabular-nums`} />
-            </Field>
-            <Field label="Date of birth (optional)">
-              <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={`${inputCls} font-mono tabular-nums`} />
-            </Field>
-            <Field label="Amount paid by customer" hint="Pre-filled with default price. Adjust if customer paid different.">
-              <div className="relative mt-1">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground/70">$</span>
-                <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="block w-full rounded-md border-border pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
+        <Step n={2} title="Renewal details" subtitle={selectedResult ? selectedResult.businessName : 'Pick a business first.'} dimmed={!selectedResult}>
+          {selectedResult ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Renewal years">
+                  <Select value={String(renewalYears)} onValueChange={(v) => onYearsChange(Number(v) as 1 | 3)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 year · ${oneYearDefault}</SelectItem>
+                      <SelectItem value="3">3 years · ${threeYearDefault}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Customer email">
+                  <Input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="customer@example.com" />
+                </Field>
+                <Field label="Mobile number">
+                  <Input type="tel" value={mobileNumber} onChange={(e) => setMobileNumber(e.target.value)} placeholder="04XX XXX XXX" className="tabular-nums" />
+                </Field>
+                <Field label="Date of birth (optional)">
+                  <Input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="tabular-nums" />
+                </Field>
+                <Field label="Amount the customer paid">
+                  <div className="relative" title="Filled in with our price. Change it if the customer paid a different amount.">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground">$</span>
+                    <Input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="pl-7 font-mono tabular-nums" />
+                  </div>
+                </Field>
               </div>
-            </Field>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">Pick a business in step 1 first.</p>
-        )}
 
-        {selectedResult ? (
-          <div className="mt-6">
-            <button
-              onClick={process}
-              disabled={processMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary disabled:opacity-50 shadow-sm transition"
-            >
-              {processMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing…
-                </>
-              ) : (
-                <>
-                  <CircleCheck className="h-4 w-4" />
-                  Process manual renewal
-                </>
-              )}
-            </button>
-          </div>
-        ) : null}
-      </Step>
-    </div>
-  )
-}
+              <Alert>
+                <CreditCard />
+                <AlertDescription>ASIC is paid with the company card from Settings.</AlertDescription>
+              </Alert>
 
-function Step({ kicker, title, subtitle, active, dimmed, children }: { kicker: string; title: string; subtitle?: string; active: boolean; dimmed?: boolean; children: React.ReactNode }) {
-  return (
-    <section className={`mt-6 rounded-xl bg-card p-5 ring-1 transition ${dimmed ? 'ring-border opacity-70' : active ? 'ring-border shadow-sm' : 'ring-border shadow-sm'}`}>
-      <div className="flex items-end justify-between gap-3 mb-4">
-        <div>
-          <div className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] ${active ? 'text-link' : 'text-muted-foreground/70'}`}>{kicker}</div>
-          <h2 className="mt-0.5 text-base font-semibold text-foreground tracking-tight">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
-        </div>
+              <Button onClick={process} disabled={processMutation.isPending}>
+                {processMutation.isPending ? <Loader2 className="animate-spin" /> : <CircleCheck />}
+                {processMutation.isPending ? 'Starting…' : 'Start renewal'}
+              </Button>
+            </div>
+          ) : null}
+        </Step>
       </div>
-      {children}
-    </section>
+    </div>
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Step({ n, title, subtitle, dimmed, children }: { n: number; title: string; subtitle?: string; dimmed?: boolean; children: ReactNode }) {
   return (
-    <div>
-      <label className={labelCls}>{label}</label>
-      {children}
-      {hint ? <p className="mt-1 text-xxs font-mono text-muted-foreground">{hint}</p> : null}
-    </div>
+    <Card className={cn(dimmed && 'opacity-60')}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <span className="inline-flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground tabular-nums">{n}</span>
+          {title}
+        </CardTitle>
+        {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+      </CardHeader>
+      {dimmed ? null : <CardContent>{children}</CardContent>}
+    </Card>
   )
 }

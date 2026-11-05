@@ -3,12 +3,13 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
-import { KickerLabel } from './_ui'
 import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.search>>
 
@@ -28,8 +29,7 @@ export default function SearchDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -37,9 +37,8 @@ export default function SearchDetails() {
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-foreground">Search not found</h3>
-        <p className="mt-1 text-sm text-muted-foreground">The search you’re looking for doesn’t exist.</p>
-        <Link to="/admin/searches" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to searches</Link>
+        <h3 className="text-heading">Search not found</h3>
+        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/searches">Back to searches</Link></Button>
       </div>
     )
   }
@@ -54,7 +53,6 @@ export default function SearchDetails() {
       <RecordCrumbs client={data.client} list={{ to: '/admin/searches', label: 'Searches' }} here={`ASIC search of ${shortDate(data.searchedAt)}`} />
 
       <RecordHeader
-        kicker={`ASIC search · ABN ${formatAbn(data.abn)}`}
         title={!data.success
           ? `${by} looked up ABN ${formatAbn(data.abn)}; ASIC didn’t answer`
           : `${by} found ${data.resultsCount} business name${data.resultsCount === 1 ? '' : 's'} on ABN ${formatAbn(data.abn)}`}
@@ -65,20 +63,18 @@ export default function SearchDetails() {
         <StoryStrip steps={story(data)} />
       </RecordHeader>
 
-      <div className="mt-6 rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
-        <div className="mb-4">
-          <KickerLabel>Names</KickerLabel>
-          <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">What ASIC returned</h2>
-        </div>
+      <Card className="mt-6 gap-4">
+        <CardHeader><CardTitle>What ASIC returned</CardTitle></CardHeader>
+        <CardContent>
         {data.results.length === 0 ? (
           <p className="text-sm text-muted-foreground">{data.success ? 'No business names on this ABN.' : 'Nothing: the search failed.'}</p>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y">
             {data.results.map((r) => (
               <div key={r.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">{r.businessName}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="truncate text-sm font-medium">{r.businessName}</div>
+                  <div className="text-caption text-muted-foreground">
                     {r.renewalRequest
                       ? <>{r.renewalRequest.renewalYears}-year renewal, {fmtMoney2(r.renewalRequest.amount)}, <When at={r.renewalRequest.initiatedAt} /></>
                       : 'No renewal started'}
@@ -91,23 +87,24 @@ export default function SearchDetails() {
             ))}
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
-          <Row label="Search ID" value={<span className="break-all">{data.id}</span>} />
+          <Row label="Search ID" value={<span className="break-all">{data.id}</span>} mono />
           <Row label="Searched" value={fmtDateTime(data.searchedAt)} />
           <Row label="Started by" value={data.initiatedBy} />
           <Row label="Result" value={`${data.success ? 'success' : 'failed'} · ${data.resultsCount} result(s)`} />
-          <Row label="IP address" value={data.ipAddress ?? '—'} />
-          <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} />
-          <Row label="User agent" value={<span className="break-all text-xs">{data.userAgent ?? '—'}</span>} />
+          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
+          <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
+          <Row label="User agent" value={<span className="break-all text-caption">{data.userAgent ?? '—'}</span>} />
           {data.results.map((r) => <Row key={r.id} label={r.businessName} value={`acct ${r.accountNumber} · reg ${r.registrationDate}`} />)}
         </dl>
         {data.errorMessage ? (
           <div className="mt-4">
-            <KickerLabel>Error</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{data.errorMessage}</pre>
+            <div className="text-caption text-muted-foreground">Error</div>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{data.errorMessage}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -159,11 +156,11 @@ function story(d: Detail): StoryStep[] {
   return steps
 }
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
+function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-mono text-sm tabular-nums text-foreground">{value}</dd>
+    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
+      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
+      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
     </div>
   )
 }

@@ -1,32 +1,22 @@
 import { useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Upload as UploadIcon, X } from 'lucide-react'
+import { RotateCw, Upload as UploadIcon, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile } from './_ui'
-import { Status } from './_status'
+import { EmptyState, PageHeader, RefreshButton, SectionTitle } from './_ui'
+import { Status, statusLabel } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
+import { TrendChart } from '@/components/trend-chart'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type BulkResponse = Awaited<ReturnType<typeof api.admin.bulkRenewals>>
 type Upload = BulkResponse['items'][number]
 type Stats = BulkResponse['stats']
 type Facets = BulkResponse['facets']
-
-/** Operator-friendly names for BulkRenewalStatus values (matches the pill wording). */
-function bulkStatusLabel(status: string): string {
-  switch (status) {
-    case 'WaitingForRenewalWindow': return 'Waiting'
-    case 'RenewalQueued':           return 'Queued'
-    case 'RenewalCompleted':        return 'Completed'
-    case 'RenewalFailed':           return 'Failed'
-    case 'NotDueForRenewal':        return 'Not due'
-    case 'Skipped':                 return 'Skipped'
-    default:                        return status
-  }
-}
 
 export default function BulkRenewals() {
   const [statuses, setStatuses] = useState<string[]>([])
@@ -102,7 +92,7 @@ export default function BulkRenewals() {
   const toggleBatch = (sourceFile: string) =>
     setBatches((prev) => (prev.includes(sourceFile) ? prev.filter((b) => b !== sourceFile) : [...prev, sourceFile]))
 
-  const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: bulkStatusLabel(f.value), count: f.count }))
+  const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: statusLabel('bulk', f.value), count: f.count }))
   const batchOptions: FacetOption[] = facets.batch.map((f) => ({ value: f.value, label: f.value, count: f.count }))
 
   const columns = useMemo<DataTableColumn<Upload>[]>(() => [
@@ -111,14 +101,15 @@ export default function BulkRenewals() {
       accessorKey: 'businessName',
       header: 'Business',
       // Compact on phones: business name only; ABN + owner return at sm.
-      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
+      meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-56 sm:max-w-72' },
       cell: ({ row }) => {
         const u = row.original
         return (
-          <div>
-            <div className="text-sm font-medium text-foreground truncate">{u.businessName}</div>
-            <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{u.abn}</div>
-            <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">{u.ownerName ?? 'no owner'}</div>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">{u.businessName}</div>
+            <div className="hidden truncate text-caption text-muted-foreground sm:block">
+              <span className="font-mono tabular-nums">{u.abn}</span> · {u.ownerName ?? 'no owner'}
+            </div>
           </div>
         )
       },
@@ -133,7 +124,7 @@ export default function BulkRenewals() {
     {
       accessorKey: 'amount',
       header: 'Amount',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
+      meta: { className: 'text-right font-mono tabular-nums text-sm', headerClassName: 'text-right' },
       cell: ({ row }) => fmtMoney2(row.original.amount),
     },
     {
@@ -146,7 +137,7 @@ export default function BulkRenewals() {
           <div>
             <BulkStatusPill status={u.status} />
             {u.errorMessage ? (
-              <div className="mt-1 text-xxs font-mono text-destructive truncate max-w-[12rem]" title={u.errorMessage}>{u.errorMessage}</div>
+              <div className="mt-1 max-w-48 truncate text-caption text-muted-foreground" title={u.errorMessage}>{u.errorMessage}</div>
             ) : null}
           </div>
         )
@@ -154,11 +145,11 @@ export default function BulkRenewals() {
     },
     {
       accessorKey: 'uploadedAt',
-      header: 'Source · Uploaded',
+      header: 'Uploaded',
       cell: ({ row }) => (
         <div>
-          <div className="text-xxs font-mono text-muted-foreground truncate max-w-[10rem]">{row.original.sourceFile ?? '(direct)'}</div>
-          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.uploadedAt)}</div>
+          <div className="text-sm tabular-nums">{relativeTime(row.original.uploadedAt)}</div>
+          <div className="max-w-40 truncate text-caption text-muted-foreground" title={row.original.sourceFile ?? undefined}>{row.original.sourceFile ?? 'Added directly'}</div>
         </div>
       ),
     },
@@ -167,85 +158,65 @@ export default function BulkRenewals() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="PIPELINE"
         title="Bulk renewals"
-        subtitle="Renewals imported from spreadsheet uploads — auto-fire when the due date enters the renewal window."
+        subtitle="Renewals from spreadsheet uploads; each starts once it’s due."
         right={
           <>
             <input ref={inputRef} type="file" accept=".xlsx" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-            <button
-              onClick={() => inputRef.current?.click()}
-              disabled={uploadMutation.isPending}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium hover:bg-zinc-800 shadow-sm disabled:opacity-50 transition"
-            >
-              <UploadIcon className="h-4 w-4" />
+            <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()} disabled={uploadMutation.isPending}>
+              <UploadIcon />
               {uploadMutation.isPending ? 'Uploading…' : 'Upload .xlsx'}
-            </button>
-            <button
-              onClick={processEligible}
-              disabled={processMutation.isPending}
-              className="inline-flex items-center whitespace-nowrap rounded-md bg-primary text-white px-3 py-2 text-sm font-medium hover:bg-primary shadow-sm disabled:opacity-50 transition"
-            >
-              {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
-            </button>
+            </Button>
             {failedCount > 0 ? (
-              <button
-                onClick={retryFailed}
-                disabled={retryMutation.isPending}
-                className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm disabled:opacity-50 transition"
-              >
+              <Button variant="outline" size="sm" onClick={retryFailed} disabled={retryMutation.isPending}>
+                <RotateCw />
                 {retryMutation.isPending ? 'Retrying…' : `Retry ${failedCount} failed`}
-              </button>
+              </Button>
             ) : null}
+            <Button size="sm" onClick={processEligible} disabled={processMutation.isPending} title="Queue every row that is inside ASIC’s renewal window">
+              {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
+            </Button>
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatTile
-          kicker="30D"
-          label="Pipeline next 30d"
+      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+        <Stat
+          label="Due in the next 30 days"
           value={fmtMoney0(stats.pipelineValueNext30d)}
           sub={`${data?.waitingCount ?? 0} waiting · ${data?.queuedCount ?? 0} queued`}
-          tone="emerald"
         />
-        <StatTile
-          kicker="STATUS"
+        <Stat
           label="Failed"
           value={failedCount.toLocaleString()}
-          sub={failedCount > 0 ? 'click "Retry" to re-queue' : 'all clear'}
-          tone={failedCount > 0 ? 'red' : 'zinc'}
+          sub={failedCount > 0 ? 'Retry to queue them again' : 'All clear'}
+          dot={failedCount > 0 ? 'bg-destructive' : undefined}
         />
-        <StatTile
-          kicker="UPLOAD"
+        <Stat
           label="Last upload"
           value={stats.lastUploadAt ? relativeTime(stats.lastUploadAt) : '—'}
-          sub={`${data?.totalCount ?? 0} total rows`}
+          sub={`${data?.totalCount ?? 0} rows in all`}
         />
-        <SparklineTile
-          kicker="14D"
-          label="Today"
+        <Stat
+          label="Added today"
           value={stats.today.toLocaleString()}
-          sub={`${stats.yesterday.toLocaleString()} yesterday`}
-          deltaPct={stats.deltaPct}
-          data={stats.daily14d.map((d) => d.count)}
+          sub={`${stats.yesterday.toLocaleString()} yesterday · last 14 days`}
+          trend={stats.daily14d}
+          trendLabel="rows"
         />
-      </div>
+      </Card>
 
-      {/* Batches strip — clicking a batch toggles it in the server-side batch facet */}
+      {/* Batches: clicking one toggles it in the server-side batch facet */}
       {stats.byBatch.length > 0 ? (
-        <div className="mt-6">
-          <div className="flex items-end justify-between mb-3">
-            <div>
-              <div className="text-xs font-medium text-muted-foreground">BATCHES</div>
-              <div className="text-sm text-muted-foreground">Click a batch to filter the table.</div>
-            </div>
-            {batches.length > 0 ? (
-              <button onClick={() => setBatches([])} className="text-xs font-medium text-muted-foreground hover:text-foreground px-2">Show all</button>
-            ) : null}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="mt-8 space-y-3">
+          <SectionTitle
+            title="Batches"
+            right={batches.length > 0
+              ? <Button variant="ghost" size="sm" onClick={() => setBatches([])}>Show all</Button>
+              : 'Click one to filter'}
+          />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats.byBatch.map((b) => {
               // "(direct)" rows have no sourceFile, so the server can't facet on them.
               const filterable = b.sourceFile !== '(direct)'
@@ -253,27 +224,22 @@ export default function BulkRenewals() {
               return (
                 <button
                   key={b.sourceFile}
+                  type="button"
                   onClick={() => filterable && toggleBatch(b.sourceFile)}
                   disabled={!filterable}
-                  className={`text-left rounded-xl border p-4 transition ${
-                    active
-                      ? 'border-brand-300 bg-primary/5 ring-1 ring-primary/20'
-                      : filterable
-                        ? 'border-border bg-card hover:border-border'
-                        : 'border-border bg-card cursor-default'
-                  }`}
+                  aria-pressed={active}
+                  className={cn(
+                    'rounded-xl border bg-card p-4 text-left shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                    filterable ? 'hover:bg-muted/50' : 'cursor-default',
+                    active && 'bg-muted ring-1 ring-ring',
+                  )}
                 >
-                  <div className="text-xs text-muted-foreground truncate">{b.sourceFile}</div>
-                  <div className="mt-1 flex items-baseline gap-2">
-                    <div className="text-lg font-semibold tabular-nums text-foreground">{b.total.toLocaleString()}</div>
-                    <div className="text-xs text-muted-foreground">rows</div>
+                  <div className="truncate text-sm text-muted-foreground">{b.sourceFile === '(direct)' ? 'Added directly' : b.sourceFile}</div>
+                  <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">
+                    {b.total.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">rows</span>
                   </div>
-                  <div className="mt-1 text-xxs font-mono tabular-nums">
-                    <span className="text-link">{b.completed} done</span>
-                    {' · '}
-                    <span className={b.failed > 0 ? 'text-destructive' : 'text-muted-foreground/70'}>{b.failed} failed</span>
-                    {' · '}
-                    <span className="text-foreground">{fmtMoney0(b.pipelineValue)} pipeline</span>
+                  <div className="text-caption text-muted-foreground tabular-nums">
+                    {b.completed} done · {b.failed} failed · {fmtMoney0(b.pipelineValue)} to come
                   </div>
                 </button>
               )
@@ -283,13 +249,13 @@ export default function BulkRenewals() {
       ) : null}
 
       {/* Filter toolbar — facet options and counts are resolved server-side */}
-      <div className="mt-6 flex flex-wrap items-center gap-2">
+      <div className="mt-8 flex flex-wrap items-center gap-2">
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         <FacetedFilter title="Batch" options={batchOptions} selected={batches} onChange={setBatches} />
         {hasActiveFilters ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
             Reset
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         ) : null}
       </div>
@@ -298,9 +264,35 @@ export default function BulkRenewals() {
         <DataTable
           columns={columns}
           data={items}
-          empty={<EmptyState title={hasActiveFilters ? 'No rows match the current filters.' : 'No bulk renewals yet. Upload an .xlsx to get started.'} />}
+          empty={<EmptyState
+            title={hasActiveFilters ? 'Nothing matches these filters' : 'No bulk renewals yet'}
+            message={hasActiveFilters ? undefined : 'Upload an .xlsx to get started.'}
+          />}
         />
       </div>
+    </div>
+  )
+}
+
+/** One number in the page's stat strip: black, a muted label, one line under it, an optional trend. */
+function Stat({ label, value, sub, dot, trend, trendLabel }: {
+  label: string
+  value: string
+  sub?: string
+  /** A status dot beside the label, e.g. bg-destructive. */
+  dot?: string
+  trend?: Array<{ date?: string; count: number }>
+  trendLabel?: string
+}) {
+  return (
+    <div className="flex min-w-0 flex-col px-5 py-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
+      {trend?.length ? <div className="mt-2 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
     </div>
   )
 }
@@ -314,11 +306,11 @@ function defaultStats(): Stats {
 
 function DueDateCell({ u }: { u: Upload }) {
   const days = u.renewalDueDate ? Math.floor((new Date(u.renewalDueDate).getTime() - Date.now()) / 86400000) : null
-  const daysClass = days == null ? 'text-muted-foreground/70' : days <= 0 ? 'text-destructive font-medium' : days <= 30 ? 'text-link font-medium' : 'text-muted-foreground'
+  const words = days == null ? '' : days === 0 ? 'today' : days < 0 ? `${-days} days ago` : `in ${days} days`
   return (
-    <div>
-      <div className="text-sm text-foreground tabular-nums">{u.renewalDueDate ? new Date(u.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</div>
-      <div className={`text-xxs font-mono tabular-nums ${daysClass}`}>{days == null ? '' : `${days} days`}</div>
+    <div className="tabular-nums">
+      <div className="text-sm">{u.renewalDueDate ? new Date(u.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</div>
+      <div className={cn('text-caption text-muted-foreground', days != null && days <= 30 && 'font-medium text-foreground')}>{words}</div>
     </div>
   )
 }

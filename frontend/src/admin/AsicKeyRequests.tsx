@@ -5,15 +5,20 @@ import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyRequestDto } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill } from './_ui'
+import { Cell, EmptyState, PageHeader, RefreshButton } from './_ui'
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
+import { TrendChart } from '@/components/trend-chart'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 type RequestsResponse = Awaited<ReturnType<typeof api.admin.asicKeyRequests>>
 type Row = AsicKeyRequestDto
@@ -86,18 +91,18 @@ export default function AsicKeyRequests() {
       id: 'business',
       accessorFn: (r: Row) => r.businessName,
       header: 'Business',
-      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
+      meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-56 sm:max-w-72' },
       cell: ({ row }) => {
         const r = row.original
         return (
-          <div>
-            <Link to={`/admin/asic-key-requests/${r.id}`} onClick={(e) => e.stopPropagation()} className="block truncate text-sm font-medium text-foreground hover:text-link hover:underline">{r.businessName}</Link>
-            {r.otherBusinessNames?.length ? (
-              <div className="text-xxs truncate text-muted-foreground" title={r.otherBusinessNames.join('\n')}>
-                + {r.otherBusinessNames.length === 1 ? r.otherBusinessNames[0] : `${r.otherBusinessNames.length} more names`}
-              </div>
-            ) : null}
-            <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{r.abn}</div>
+          <div className="min-w-0">
+            <Link to={`/admin/asic-key-requests/${r.id}`} onClick={(e) => e.stopPropagation()} className="block truncate text-sm font-medium hover:text-link hover:underline">{r.businessName}</Link>
+            <div className="hidden truncate text-caption text-muted-foreground sm:block" title={r.otherBusinessNames?.join('\n')}>
+              <span className="font-mono tabular-nums">{r.abn}</span>
+              {r.otherBusinessNames?.length
+                ? ` · + ${r.otherBusinessNames.length === 1 ? r.otherBusinessNames[0] : `${r.otherBusinessNames.length} more names`}`
+                : null}
+            </div>
           </div>
         )
       },
@@ -109,9 +114,9 @@ export default function AsicKeyRequests() {
       cell: ({ row }) => {
         const r = row.original
         return (
-          <div>
-            <div className="text-sm text-foreground truncate max-w-[12rem]">{r.contactName}</div>
-            <div className="text-xxs font-mono text-muted-foreground truncate max-w-[12rem]" title={r.email}>{r.email || '—'}</div>
+          <div className="max-w-48">
+            <div className="truncate text-sm">{r.contactName}</div>
+            <div className="truncate text-caption text-muted-foreground" title={r.email}>{r.email || '—'}</div>
           </div>
         )
       },
@@ -126,17 +131,10 @@ export default function AsicKeyRequests() {
           <div>
             <RequestStatusPill status={r.status} />
             {r.asicReferenceNumber ? (
-              <div className="mt-1 text-xxs font-mono tabular-nums text-muted-foreground">ref {r.asicReferenceNumber}</div>
+              <div className="mt-1 text-caption text-muted-foreground">Ref <span className="font-mono tabular-nums">{r.asicReferenceNumber}</span></div>
             ) : null}
             {r.errorMessage ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setDetail(r) }}
-                className={`mt-1 block text-left text-xxs font-mono truncate max-w-[14rem] hover:underline ${r.status === 'Failed' ? 'text-destructive' : 'text-muted-foreground'}`}
-                title="Show details"
-              >
-                {r.errorMessage}
-              </button>
+              <div className="mt-1 max-w-56 truncate text-caption text-muted-foreground" title={r.errorMessage}>{r.errorMessage}</div>
             ) : null}
           </div>
         )
@@ -146,10 +144,12 @@ export default function AsicKeyRequests() {
       accessorKey: 'createdAt',
       header: 'Queued',
       cell: ({ row }) => (
-        <div>
-          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.createdAt)}</div>
-          <div className="text-xxs font-mono tabular-nums text-muted-foreground/70">{row.original.source.toLowerCase()}</div>
-          {row.original.isTest ? <StatusPill tone="amber">TEST</StatusPill> : null}
+        <div className="tabular-nums">
+          <div className="text-sm">{relativeTime(row.original.createdAt)}</div>
+          <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
+            {row.original.source.toLowerCase()}
+            {row.original.isTest ? <Badge variant="outline">Test</Badge> : null}
+          </div>
         </div>
       ),
     },
@@ -162,14 +162,14 @@ export default function AsicKeyRequests() {
         const r = row.original
         if (r.status === 'KeyReceived') return null
         return (
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex items-center justify-end gap-1.5">
             {r.status === 'Failed' || r.status === 'Manual' ? (
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={requeueMutation.isPending} onClick={(e) => { e.stopPropagation(); requeue(r) }} title="Back on the to-do list">
-                <RotateCw className="h-3.5 w-3.5" /> Re-queue
+              <Button variant="outline" size="sm" disabled={requeueMutation.isPending} onClick={(e) => { e.stopPropagation(); requeue(r) }} title="Back on the to-do list">
+                <RotateCw /> Re-queue
               </Button>
             ) : null}
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setRecord(r) }} title="Fill in ASIC's form with these details and record the reference number">
-              <ClipboardCheck className="h-3.5 w-3.5" /> {r.status === 'Submitted' ? 'Update' : 'Do it'}
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setRecord(r) }} title="Fill in ASIC's form with these details and record the reference number">
+              <ClipboardCheck /> {r.status === 'Submitted' ? 'Update' : 'Do it'}
             </Button>
           </div>
         )
@@ -178,72 +178,58 @@ export default function AsicKeyRequests() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [requeueMutation.isPending])
 
+  const toDo = pendingCount + manualCount
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="PIPELINE"
         title="ASIC key requests"
-        subtitle="Each paid sale without a key → a request to fill in on ASIC's enquiry form, in the client's name, asking for the key to be emailed to the inbox. Record the reference and the inbox scanner does the rest."
+        subtitle="Ask ASIC to email a client’s key, then record the reference."
         right={
           <>
-            <button
-              onClick={runNow}
-              disabled={runMutation.isPending}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-card text-foreground px-3 py-2 text-sm font-medium ring-1 ring-inset ring-border hover:bg-muted/50 shadow-sm disabled:opacity-50 transition"
-              title="Match keys that have arrived in the inbox against sent requests"
-            >
-              <RotateCw className={`h-4 w-4 ${runMutation.isPending ? 'animate-spin' : ''}`} />
+            <Button variant="outline" size="sm" onClick={runNow} disabled={runMutation.isPending} title="Match keys that have arrived in the inbox against sent requests">
+              <RotateCw className={cn(runMutation.isPending && 'animate-spin')} />
               Match arrived keys
-            </button>
+            </Button>
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatTile
-          kicker="TO DO"
-          label="Waiting for a person"
-          value={(pendingCount + manualCount).toLocaleString()}
-          sub={manualCount > 0 ? `${manualCount} being handled now` : 'fill in ASIC’s form, record the reference'}
-          tone={pendingCount + manualCount > 0 ? 'amber' : 'zinc'}
+      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+        <Stat
+          label="To send"
+          value={toDo.toLocaleString()}
+          sub={manualCount > 0 ? `${manualCount} being sent now` : toDo > 0 ? 'Fill in ASIC’s form' : 'All clear'}
+          dot={toDo > 0 ? 'bg-destructive' : undefined}
         />
-        <StatTile
-          kicker="SENT"
-          label="Awaiting the key email"
-          value={submittedCount.toLocaleString()}
-          sub="matched when ASIC’s email lands"
-          tone="indigo"
-        />
-        <StatTile
-          kicker="DONE"
+        <Stat label="Waiting for ASIC" value={submittedCount.toLocaleString()} sub="Matched when the key email lands" />
+        <Stat
           label="Keys received"
           value={keyReceivedCount.toLocaleString()}
-          sub={failedCount > 0 ? `${failedCount} not sent — see notes` : `${(data?.totalCount ?? 0).toLocaleString()} requests total`}
-          tone="emerald"
+          sub={failedCount > 0 ? `${failedCount} not sent` : `${(data?.totalCount ?? 0).toLocaleString()} requests`}
         />
-        <SparklineTile
-          kicker="14D"
+        <Stat
           label="Sent today"
           value={stats.today.toLocaleString()}
-          sub={`${stats.yesterday.toLocaleString()} yesterday`}
-          deltaPct={stats.deltaPct}
-          data={stats.daily14d.map((d) => d.count)}
+          sub={`${stats.yesterday.toLocaleString()} yesterday · last 14 days`}
+          trend={stats.daily14d}
+          trendLabel="requests"
         />
-      </div>
+      </Card>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search business, ABN, contact, reference…"
-          className="h-9 w-64"
+          className="h-8 w-64"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         {hasActiveFilters ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
             Reset
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         ) : null}
       </div>
@@ -255,8 +241,8 @@ export default function AsicKeyRequests() {
           onRowClick={(r) => setDetail(r.original)}
           loading={isFetching && isPlaceholderData}
           empty={<EmptyState
-            title={hasActiveFilters ? 'No requests match the current filters.' : 'No ASIC key requests yet.'}
-            message={hasActiveFilters ? undefined : 'Turn on Settings → ASIC key requests, then sync Ontraport or use “Request key” on a sale.'}
+            title={hasActiveFilters ? 'Nothing matches these filters' : 'No key requests yet'}
+            message={hasActiveFilters ? undefined : 'Turn them on in Settings, or use “Request key” on a sale.'}
           />}
         />
         {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
@@ -266,6 +252,29 @@ export default function AsicKeyRequests() {
 
       <DetailDialog row={detail} onClose={() => setDetail(null)} />
       <RecordDialog row={record} onClose={() => setRecord(null)} onDone={() => void invalidate()} />
+    </div>
+  )
+}
+
+/** One number in the page's stat strip: black, a muted label, one line under it, an optional trend. */
+function Stat({ label, value, sub, dot, trend, trendLabel }: {
+  label: string
+  value: string
+  sub?: string
+  /** A status dot beside the label, e.g. bg-destructive. */
+  dot?: string
+  trend?: Array<{ date?: string; count: number }>
+  trendLabel?: string
+}) {
+  return (
+    <div className="flex min-w-0 flex-col px-5 py-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
+      {trend?.length ? <div className="mt-2 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
     </div>
   )
 }
@@ -288,14 +297,14 @@ function copyText(value: string) {
   )
 }
 
-function CopyValue({ value, small }: { value: string; small?: boolean }) {
+function CopyValue({ value }: { value: string }) {
   return (
-    <span className="inline-flex items-start gap-1 min-w-0">
-      <span className={`break-words ${small ? 'text-xs' : ''}`}>{value || '—'}</span>
+    <span className="inline-flex min-w-0 items-start gap-1">
+      <span className="break-words">{value || '—'}</span>
       {value ? (
-        <button type="button" onClick={() => copyText(value)} className="shrink-0 mt-0.5 text-muted-foreground/70 hover:text-foreground" title="Copy">
-          <Copy className="h-3 w-3" />
-        </button>
+        <Button type="button" variant="ghost" size="icon-xs" onClick={() => copyText(value)} className="shrink-0 text-muted-foreground" title="Copy" aria-label="Copy">
+          <Copy />
+        </Button>
       ) : null}
     </span>
   )
@@ -303,10 +312,10 @@ function CopyValue({ value, small }: { value: string; small?: boolean }) {
 
 /** Everything for ASIC's form, box by box, with copy buttons. */
 function FormValues({ row }: { row: Row }) {
-  const rows: Array<[string, string, boolean?]> = [
+  const rows: Array<[string, string]> = [
     ['My question is about a', 'Business Name'],
     ['I would like to know how to', 'Maintain information'],
-    ['My question is', row.question ?? '', true],
+    ['My question is', row.question ?? ''],
     ['Entity number', row.abn],
     ['Entity name', row.businessName],
     ['Your given names', row.givenNames],
@@ -316,11 +325,11 @@ function FormValues({ row }: { row: Row }) {
     ['Attach documents', 'No — then tick both declarations'],
   ]
   return (
-    <dl className="grid grid-cols-[10rem_1fr] gap-y-1 text-sm rounded-md bg-muted/50 ring-1 ring-border px-3 py-2">
-      {rows.map(([k, v, small]) => (
-        <div key={k} className="contents">
-          <dt className="text-xs text-muted-foreground pt-0.5">{k}</dt>
-          <dd className="text-foreground min-w-0"><CopyValue value={v} small={small} /></dd>
+    <dl className="divide-y rounded-lg border text-sm">
+      {rows.map(([k, v]) => (
+        <div key={k} className="grid gap-1 px-3 py-2 sm:grid-cols-5 sm:gap-3">
+          <dt className="text-caption text-muted-foreground sm:col-span-2">{k}</dt>
+          <dd className="min-w-0 sm:col-span-3"><CopyValue value={v} /></dd>
         </div>
       ))}
     </dl>
@@ -352,28 +361,29 @@ function RecordDialog({ row, onClose, onDone }: { row: Row | null; onClose: () =
         {row ? (
           <>
             <DialogHeader>
-              <div className="text-xs font-medium text-info">FILL IN ASIC’S FORM</div>
               <DialogTitle>{row.businessName}</DialogTitle>
-            </DialogHeader>
-            <DialogBody className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
+              <DialogDescription>
+                Fill in{' '}
                 <a href={ASIC_FORM_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link hover:underline">
-                  Open ASIC’s enquiry form <ExternalLink className="h-3 w-3" />
+                  ASIC’s enquiry form <ExternalLink className="size-3" />
                 </a>
-              </div>
+                {' '}with these details, then record the reference.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-4">
               <FormValues row={row} />
-              <div>
-                <Label htmlFor="record-ref" className="text-xs font-medium text-muted-foreground">ASIC reference number from the receipt</Label>
-                <Input id="record-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. 238824183 — leave blank if it couldn't be sent" className="mt-1 h-9 font-mono tabular-nums" autoFocus />
+              <div className="grid gap-1.5">
+                <Label htmlFor="record-ref">Reference number from the receipt</Label>
+                <Input id="record-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. 238824183, or blank if not sent" className="font-mono tabular-nums" autoFocus />
               </div>
-              <div>
-                <Label htmlFor="record-note" className="text-xs font-medium text-muted-foreground">Note (optional)</Label>
-                <Input id="record-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="why it couldn't be sent, or anything worth remembering" className="mt-1 h-9" />
+              <div className="grid gap-1.5">
+                <Label htmlFor="record-note">Note (optional)</Label>
+                <Input id="record-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why it couldn't be sent, or anything worth remembering" />
               </div>
             </DialogBody>
             <DialogFooter>
               <Button variant="outline" onClick={() => { onClose(); reset() }} disabled={mutation.isPending}>Cancel</Button>
-              <Button onClick={save} disabled={mutation.isPending} className={reference.trim() ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-zinc-700 hover:bg-zinc-800'}>
+              <Button onClick={save} disabled={mutation.isPending}>
                 {mutation.isPending ? 'Saving…' : reference.trim() ? 'Record as sent' : 'Mark as not sent'}
               </Button>
             </DialogFooter>
@@ -391,32 +401,30 @@ function DetailDialog({ row, onClose }: { row: Row | null; onClose: () => void }
         {row ? (
           <>
             <DialogHeader>
-              <div className="text-xs font-medium text-muted-foreground">ASIC KEY REQUEST</div>
               <DialogTitle>{row.businessName}</DialogTitle>
+              <DialogDescription>
+                Queued {fmtDateTime(row.createdAt)}{row.submittedAt ? ` · sent ${fmtDateTime(row.submittedAt)}` : ''}{row.keyReceivedAt ? ` · key ${fmtDateTime(row.keyReceivedAt)}` : ''}
+              </DialogDescription>
             </DialogHeader>
-            <DialogBody className="space-y-3">
-              <ClientLink kind="keyRequest" id={row.id} />
-              <div className="flex flex-wrap items-center gap-2">
+            <DialogBody className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <RequestStatusPill status={row.status} />
-                <span className="text-xs text-muted-foreground">
-                  queued {fmtDateTime(row.createdAt)}{row.submittedAt ? ` · sent ${fmtDateTime(row.submittedAt)}` : ''}{row.keyReceivedAt ? ` · key ${fmtDateTime(row.keyReceivedAt)}` : ''}
-                </span>
+                <ClientLink kind="keyRequest" id={row.id} />
               </div>
-              <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-sm">
-                <dt className="text-xs text-muted-foreground pt-0.5">Reference</dt>
-                <dd className="font-mono tabular-nums text-foreground">{row.asicReferenceNumber ?? '—'}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">Ontraport</dt>
-                <dd className="font-mono text-foreground">{row.ontraportContactId ?? '—'}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">Source</dt>
-                <dd className="text-foreground">{row.source}</dd>
+              <dl className="grid grid-cols-3 gap-x-6 gap-y-3">
+                <Cell label="Reference" value={row.asicReferenceNumber ?? '—'} mono />
+                <Cell label="Ontraport" value={row.ontraportContactId ?? '—'} mono />
+                <Cell label="Source" value={row.source} />
               </dl>
               {row.errorMessage ? (
-                <div className={`rounded-md px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words ring-1 ${row.status === 'Failed' ? 'bg-destructive/5 ring-destructive/20 text-destructive' : 'bg-muted/50 ring-border text-foreground'}`}>{row.errorMessage}</div>
+                <Alert variant={row.status === 'Failed' ? 'destructive' : 'default'}>
+                  <AlertDescription className="whitespace-pre-wrap break-words">{row.errorMessage}</AlertDescription>
+                </Alert>
               ) : null}
               <FormValues row={row} />
             </DialogBody>
             <DialogFooter>
-              <Button onClick={onClose} className="bg-zinc-900 hover:bg-zinc-800">Close</Button>
+              <Button variant="outline" onClick={onClose}>Close</Button>
             </DialogFooter>
           </>
         ) : null}

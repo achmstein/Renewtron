@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Inbox, Loader2, RotateCw, UserPlus, X } from 'lucide-react'
+import { ExternalLink, Inbox, Loader2, RotateCw, TriangleAlert, UserPlus, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyJobStatus, type AsicKeyNotificationListItem } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, type Tone } from './_ui'
+import { Cell, EmptyState, PageHeader, RefreshButton } from './_ui'
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
+import { TrendChart } from '@/components/trend-chart'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Card } from '@/components/ui/card'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 type KeysResponse = Awaited<ReturnType<typeof api.admin.asicKeys>>
 type Row = AsicKeyNotificationListItem
@@ -119,16 +123,19 @@ export default function AsicKeys() {
       id: 'business',
       accessorFn: (r: Row) => r.businessName ?? '',
       header: 'Business',
-      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
+      meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-56 sm:max-w-72' },
       cell: ({ row }) => {
         const r = row.original
         return (
-          <div>
-            <Link to={`/admin/asic-keys/${r.id}`} onClick={(e) => e.stopPropagation()} className={`block text-sm font-medium truncate hover:text-link hover:underline ${r.businessName ? 'text-foreground' : 'text-muted-foreground/70 italic'}`}>
-              {r.businessName ?? 'name not parsed'}
+          <div className="min-w-0">
+            <Link to={`/admin/asic-keys/${r.id}`} onClick={(e) => e.stopPropagation()} className={cn('block truncate text-sm font-medium hover:text-link hover:underline', !r.businessName && 'text-muted-foreground')}>
+              {r.businessName ?? 'Name not read'}
             </Link>
-            {r.abn ? <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{r.abn}</div> : null}
-            <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate" title={r.subject ?? ''}>{r.subject ?? '—'}</div>
+            <div className="hidden truncate text-caption text-muted-foreground sm:block" title={r.subject ?? ''}>
+              {r.abn ? <span className="font-mono tabular-nums">{r.abn}</span> : null}
+              {r.abn && r.subject ? ' · ' : null}
+              {r.subject}
+            </div>
           </div>
         )
       },
@@ -138,9 +145,7 @@ export default function AsicKeys() {
       accessorFn: (r: Row) => r.asicKey ?? '',
       header: 'ASIC key',
       meta: { className: 'font-mono tabular-nums text-sm' },
-      cell: ({ row }) => row.original.asicKey
-        ? <span className="text-foreground">{row.original.asicKey}</span>
-        : <span className="text-muted-foreground/70">—</span>,
+      cell: ({ row }) => row.original.asicKey ?? <span className="text-muted-foreground">—</span>,
     },
     {
       id: 'ontraport',
@@ -148,11 +153,11 @@ export default function AsicKeys() {
       header: 'Ontraport',
       cell: ({ row }) => {
         const r = row.original
-        if (!r.ontraportContactIds) return <span className="text-muted-foreground/70">—</span>
+        if (!r.ontraportContactIds) return <span className="text-muted-foreground">—</span>
         return (
           <div>
-            <div className="text-xs font-mono text-foreground truncate max-w-[10rem]" title={r.ontraportContactIds}>{r.ontraportContactIds}</div>
-            <div className="text-xxs font-mono tabular-nums text-muted-foreground">{r.ontraportContactsUpdated} updated</div>
+            <div className="max-w-40 truncate font-mono text-sm" title={r.ontraportContactIds}>{r.ontraportContactIds}</div>
+            <div className="text-caption text-muted-foreground tabular-nums">{r.ontraportContactsUpdated} updated</div>
           </div>
         )
       },
@@ -167,14 +172,7 @@ export default function AsicKeys() {
           <div>
             <KeyStatusPill status={r.status} />
             {r.errorMessage ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setDetail(r) }}
-                className="mt-1 block text-left text-xxs font-mono text-destructive truncate max-w-[12rem] hover:underline"
-                title="Show details"
-              >
-                {r.errorMessage}
-              </button>
+              <div className="mt-1 max-w-48 truncate text-caption text-muted-foreground" title={r.errorMessage}>{r.errorMessage}</div>
             ) : null}
           </div>
         )
@@ -184,9 +182,9 @@ export default function AsicKeys() {
       accessorKey: 'receivedAt',
       header: 'Received',
       cell: ({ row }) => (
-        <div>
-          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.receivedAt)}</div>
-          <div className="text-xxs font-mono tabular-nums text-muted-foreground/70">
+        <div className="tabular-nums">
+          <div className="text-sm">{relativeTime(row.original.receivedAt)}</div>
+          <div className="text-caption text-muted-foreground">
             {row.original.attemptCount} attempt{row.original.attemptCount === 1 ? '' : 's'}
           </div>
         </div>
@@ -203,19 +201,19 @@ export default function AsicKeys() {
         const done = r.status === 'Completed' || r.status === 'SavedToClient'
         const canAssign = !!r.asicKey && r.status !== 'Completed'
         return (
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex items-center justify-end gap-1.5">
             {canAssign ? (
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); setAssign(r) }} title="Write this key onto a contact you pick">
-                <UserPlus className="h-3.5 w-3.5" /> Assign
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setAssign(r) }} title="Write this key onto a contact you pick">
+                <UserPlus /> Assign
               </Button>
             ) : null}
             {!done ? (
               <Button
-                variant="ghost" size="sm" className="h-7 px-2 text-xs"
+                variant="outline" size="sm"
                 disabled={retryMutation.isPending}
                 onClick={(e) => { e.stopPropagation(); retry(r) }}
               >
-                <RotateCw className="h-3.5 w-3.5" /> Retry
+                <RotateCw /> Retry
               </Button>
             ) : null}
           </div>
@@ -225,88 +223,71 @@ export default function AsicKeys() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [retryMutation.isPending])
 
-  const lastScanTone: Tone = stats.lastScanState === 'Failed' ? 'red' : stats.lastScanState === 'Succeeded' ? 'emerald' : 'zinc'
+  const scanFailed = stats.lastScanState === 'Failed'
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker={toSort ? 'WORK' : 'RECORDS'}
         title={toSort ? 'Keys to sort' : 'ASIC key letters'}
-        subtitle={toSort
-          ? 'Key letters we couldn’t read or place. Retry them, or choose the client a key belongs to.'
-          : 'ASIC “Notification request” emails → linked PDF → ASIC key → written onto the Ontraport contact. Scans every 15 minutes.'}
+        subtitle={toSort ? 'Key letters we couldn’t read or place.' : 'Keys from ASIC’s emails, written onto the client.'}
         right={
           <>
-            <button
-              onClick={scan}
-              disabled={scanning}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary text-white px-3 py-2 text-sm font-medium hover:bg-primary shadow-sm disabled:opacity-50 transition"
-            >
-              {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />}
-              {scanning ? 'Scanning…' : 'Scan inbox now'}
-            </button>
             {attentionCount > 0 ? (
-              <button
-                onClick={retryAllFailed}
-                disabled={scanning}
-                className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm disabled:opacity-50 transition"
-                title="Re-run every non-completed notification through the pipeline"
-              >
-                <RotateCw className="h-4 w-4" />
+              <Button variant="outline" size="sm" onClick={retryAllFailed} disabled={scanning} title="Re-run every letter that isn’t done">
+                <RotateCw />
                 {`Retry ${attentionCount} failed`}
-              </button>
+              </Button>
             ) : null}
+            <Button size="sm" onClick={scan} disabled={scanning} title="Also runs every 15 minutes">
+              {scanning ? <Loader2 className="animate-spin" /> : <Inbox />}
+              {scanning ? 'Scanning…' : 'Scan inbox'}
+            </Button>
             <RefreshButton onClick={() => void refetch()} busy={isFetching || scanning} />
           </>
         }
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatTile
-          kicker="DONE"
+      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+        <Stat
           label="Keys written"
           value={completedCount.toLocaleString()}
-          sub={`${data?.savedToClientCount ? `+${data.savedToClientCount.toLocaleString()} saved to client · ` : ''}${totalCount.toLocaleString()} notifications total`}
-          tone="emerald"
+          sub={`${data?.savedToClientCount ? `+${data.savedToClientCount.toLocaleString()} saved to client · ` : ''}${totalCount.toLocaleString()} letters`}
         />
-        <StatTile
-          kicker="STATUS"
+        <Stat
           label="Needs attention"
           value={attentionCount.toLocaleString()}
-          sub={attentionCount > 0 ? 'retry, or assign a contact' : 'all clear'}
-          tone={attentionCount > 0 ? 'red' : 'zinc'}
+          sub={attentionCount > 0 ? 'Retry, or assign a contact' : 'All clear'}
+          dot={attentionCount > 0 ? 'bg-destructive' : undefined}
         />
-        <StatTile
-          kicker="SCAN"
+        <Stat
           label="Last scan"
           value={stats.lastScanAt ? relativeTime(stats.lastScanAt) : '—'}
-          sub={stats.lastScanState === 'Failed'
-            ? (stats.lastScanError ?? 'last run failed')
-            : stats.nextScanAt ? `next ${relativeTime(stats.nextScanAt)}` : 'not scheduled'}
-          tone={lastScanTone}
+          sub={scanFailed
+            ? (stats.lastScanError ?? 'Last run failed')
+            : stats.nextScanAt ? `Next ${relativeTime(stats.nextScanAt)}` : 'Not scheduled'}
+          dot={scanFailed ? 'bg-destructive' : undefined}
         />
-        <SparklineTile
-          kicker="14D"
+        <Stat
           label="Received today"
           value={stats.today.toLocaleString()}
-          sub={`${stats.yesterday.toLocaleString()} yesterday`}
-          deltaPct={stats.deltaPct}
-          data={stats.daily14d.map((d) => d.count)}
+          sub={`${stats.yesterday.toLocaleString()} yesterday · last 14 days`}
+          trend={stats.daily14d}
+          trendLabel="letters"
         />
-      </div>
+      </Card>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search business, ABN, key, contact…"
-          className="h-9 w-64"
+          className="h-8 w-64"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         {hasActiveFilters ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
             Reset
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         ) : null}
       </div>
@@ -318,8 +299,8 @@ export default function AsicKeys() {
           onRowClick={(r) => setDetail(r.original)}
           loading={isFetching && isPlaceholderData}
           empty={<EmptyState
-            title={hasActiveFilters ? 'No notifications match the current filters.' : 'No ASIC key notifications yet.'}
-            message={hasActiveFilters ? undefined : 'Configure the inbox under Settings → ASIC key inbox, then run a scan.'}
+            title={hasActiveFilters ? (toSort ? 'All clear' : 'Nothing matches these filters') : 'No key letters yet'}
+            message={hasActiveFilters ? undefined : 'Set up the inbox in Settings, then scan.'}
           />}
         />
         {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
@@ -329,6 +310,29 @@ export default function AsicKeys() {
 
       <DetailDialog row={detail} onClose={() => setDetail(null)} />
       <AssignDialog row={assign} onClose={() => setAssign(null)} onDone={() => void invalidate()} />
+    </div>
+  )
+}
+
+/** One number in the page's stat strip: black, a muted label, one line under it, an optional trend. */
+function Stat({ label, value, sub, dot, trend, trendLabel }: {
+  label: string
+  value: string
+  sub?: string
+  /** A status dot beside the label, e.g. bg-destructive. */
+  dot?: string
+  trend?: Array<{ date?: string; count: number }>
+  trendLabel?: string
+}) {
+  return (
+    <div className="flex min-w-0 flex-col px-5 py-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
+      {trend?.length ? <div className="mt-2 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
     </div>
   )
 }
@@ -358,56 +362,50 @@ function DetailDialog({ row: listRow, onClose }: { row: Row | null; onClose: () 
         {row ? (
           <>
             <DialogHeader>
-              <div className="text-xs font-medium text-muted-foreground">NOTIFICATION</div>
-              <DialogTitle>{row.businessName ?? 'Business name not parsed'}</DialogTitle>
+              <DialogTitle>{row.businessName ?? 'Name not read'}</DialogTitle>
+              <DialogDescription>
+                Received {fmtDateTime(row.receivedAt)}{row.processedAt ? ` · last try ${fmtDateTime(row.processedAt)}` : ''} · {row.attemptCount} attempt{row.attemptCount === 1 ? '' : 's'}
+              </DialogDescription>
             </DialogHeader>
-            <DialogBody className="space-y-3">
-              <ClientLink kind="keyLetter" id={row.id} />
-              <div className="flex flex-wrap items-center gap-2">
+            <DialogBody className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <KeyStatusPill status={row.status} />
-                <span className="text-xs text-muted-foreground">
-                  received {fmtDateTime(row.receivedAt)}{row.processedAt ? ` · last attempt ${fmtDateTime(row.processedAt)}` : ''} · {row.attemptCount} attempt{row.attemptCount === 1 ? '' : 's'}
-                </span>
+                <ClientLink kind="keyLetter" id={row.id} />
               </div>
 
-              <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-sm">
-                <dt className="text-xs text-muted-foreground pt-0.5">ASIC key</dt>
-                <dd className="font-mono tabular-nums text-foreground">{row.asicKey ?? '—'}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">ABN</dt>
-                <dd className="font-mono tabular-nums text-foreground">{row.abn ?? '—'}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">Contacts</dt>
-                <dd className="font-mono text-foreground break-all">{row.ontraportContactIds ?? '—'}{row.ontraportContactIds ? ` (${row.ontraportContactsUpdated} updated)` : ''}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">From</dt>
-                <dd className="text-foreground break-all">{row.from ?? '—'}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">Subject</dt>
-                <dd className="text-foreground break-words">{row.subject ?? '—'}</dd>
-                <dt className="text-xs text-muted-foreground pt-0.5">PDF link</dt>
-                <dd className="min-w-0">
-                  {row.downloadUrl ? (
-                    <a href={row.downloadUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link hover:underline break-all">
-                      open <ExternalLink className="h-3 w-3 shrink-0" />
-                    </a>
-                  ) : '—'}
-                </dd>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <Cell label="ASIC key" value={row.asicKey ?? '—'} mono />
+                <Cell label="ABN" value={row.abn ?? '—'} mono />
+                <Cell label="Contacts" value={<span className="break-all">{row.ontraportContactIds ?? '—'}{row.ontraportContactIds ? ` (${row.ontraportContactsUpdated} updated)` : ''}</span>} mono />
+                <Cell label="From" value={<span className="break-all">{row.from ?? '—'}</span>} />
+                <Cell label="Subject" value={<span className="break-words">{row.subject ?? '—'}</span>} />
+                <Cell label="PDF" value={row.downloadUrl ? (
+                  <a href={row.downloadUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link hover:underline">
+                    Open <ExternalLink className="size-3 shrink-0" />
+                  </a>
+                ) : '—'} />
               </dl>
 
               {row.errorMessage ? (
-                <div className="rounded-md bg-destructive/5 ring-1 ring-destructive/20 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-words">{row.errorMessage}</div>
+                <Alert variant="destructive">
+                  <TriangleAlert />
+                  <AlertDescription className="whitespace-pre-wrap break-words">{row.errorMessage}</AlertDescription>
+                </Alert>
               ) : null}
 
               {isFetching && !full ? (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Loading the PDF details…</div>
+                <div className="flex items-center gap-2 text-caption text-muted-foreground"><Loader2 className="size-3 animate-spin" /> Loading the PDF…</div>
               ) : null}
 
               {row.pdfTextExcerpt ? (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">PDF text (first 2,000 chars)</div>
-                  <pre className="max-h-48 overflow-auto rounded-md bg-muted/50 ring-1 ring-border px-3 py-2 text-xxs font-mono text-foreground whitespace-pre-wrap break-words">{row.pdfTextExcerpt}</pre>
+                <div className="grid gap-1.5">
+                  <div className="text-caption text-muted-foreground">PDF text</div>
+                  <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 px-3 py-2 font-sans text-caption whitespace-pre-wrap break-words">{row.pdfTextExcerpt}</pre>
                 </div>
               ) : null}
             </DialogBody>
             <DialogFooter>
-              <Button onClick={onClose} className="bg-zinc-900 hover:bg-zinc-800">Close</Button>
+              <Button variant="outline" onClick={onClose}>Close</Button>
             </DialogFooter>
           </>
         ) : null}
@@ -436,30 +434,28 @@ function AssignDialog({ row, onClose, onDone }: { row: Row | null; onClose: () =
     <Dialog open={!!row} onOpenChange={(o) => { if (!o && !mutation.isPending) { onClose(); setContactId('') } }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="text-xs font-medium text-warning">MANUAL MATCH</div>
           <DialogTitle>Assign to an Ontraport contact</DialogTitle>
+          <DialogDescription>
+            Write key <span className="font-mono">{row?.asicKey}</span> for {row?.businessName ?? 'this name'} onto a contact.
+          </DialogDescription>
         </DialogHeader>
-        <DialogBody className="space-y-3">
-          <p className="text-sm text-foreground">
-            No contact was found with business name <span className="font-medium">{row?.businessName ?? '—'}</span>.
-            Enter the Ontraport contact ID to write key <span className="font-mono">{row?.asicKey}</span> onto it.
-          </p>
-          <div>
-            <Label htmlFor="assign-contact" className="text-xs font-medium text-muted-foreground">Contact ID</Label>
+        <DialogBody>
+          <div className="grid gap-1.5">
+            <Label htmlFor="assign-contact">Contact ID</Label>
             <Input
               id="assign-contact"
               value={contactId}
               onChange={(e) => setContactId(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') apply() }}
               placeholder="e.g. 12345"
-              className="mt-1 h-9 font-mono tabular-nums"
+              className="font-mono tabular-nums"
               autoFocus
             />
           </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => { onClose(); setContactId('') }} disabled={mutation.isPending}>Cancel</Button>
-          <Button onClick={apply} disabled={mutation.isPending || !contactId.trim()} className="bg-amber-600 hover:bg-amber-700">
+          <Button onClick={apply} disabled={mutation.isPending || !contactId.trim()}>
             {mutation.isPending ? 'Writing…' : 'Write key'}
           </Button>
         </DialogFooter>

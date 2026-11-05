@@ -4,12 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { KeyRound, Loader2, RefreshCw } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { KickerLabel } from './_ui'
 import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.ontraportSale>>
 
@@ -47,16 +48,15 @@ export default function SaleDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-foreground">Sale not found</h3>
-        <Link to="/admin/ontraport-sales" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to Ontraport sales</Link>
+        <h3 className="text-heading">Sale not found</h3>
+        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/ontraport-sales">Back to Ontraport sales</Link></Button>
       </div>
     )
   }
@@ -79,7 +79,6 @@ export default function SaleDetails() {
         list={{ to: '/admin/ontraport-sales', label: 'Ontraport sales' }} here={`Sale of ${shortDate(data.syncedAt)}`} />
 
       <RecordHeader
-        kicker={`Ontraport sale · ${data.renewalYears} year${data.renewalYears === 1 ? '' : 's'} · ${fmtMoney2(data.amountPaid)}`}
         title={headline(data)}
         sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.renewalDueDate ? <> · due <DueIn at={data.renewalDueDate} /></> : ' · no due date'} · synced <When at={data.syncedAt} /></>}
         status={status}
@@ -89,7 +88,7 @@ export default function SaleDetails() {
       </RecordHeader>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Section kicker="Client" title="Who bought it">
+        <Section title="Who bought it">
           {data.client ? (
             <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
@@ -99,15 +98,15 @@ export default function SaleDetails() {
           {data.businessNameOwner ? <Row label="Name holder" value={data.businessNameOwner} /> : null}
         </Section>
 
-        <Section kicker="Keys" title="ASIC key for this name">
+        <Section title="ASIC key for this name">
           {data.keyLetters.length === 0 && data.keyRequests.length === 0 ? (
             <p className="text-sm text-muted-foreground">No key requested or received yet.</p>
           ) : null}
           {data.keyLetters.map((k) => (
-            <Row key={k.id} label="Key letter" value={<Link to={`/admin/asic-keys/${k.id}`} className="flex items-center gap-2 hover:underline"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></Link>} />
+            <Row key={k.id} label="Key letter" value={<Link to={`/admin/asic-keys/${k.id}`} className="flex items-center gap-2 text-caption text-muted-foreground hover:underline"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></Link>} />
           ))}
           {data.keyRequests.map((k) => (
-            <Row key={k.id} label="Key request" value={<Link to={`/admin/asic-key-requests/${k.id}`} className="flex items-center gap-2 hover:underline"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</Link>} />
+            <Row key={k.id} label="Key request" value={<Link to={`/admin/asic-key-requests/${k.id}`} className="flex items-center gap-2 text-caption text-muted-foreground hover:underline"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</Link>} />
           ))}
         </Section>
       </div>
@@ -115,20 +114,20 @@ export default function SaleDetails() {
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
           <Row label="Sale ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Status" value={data.status} mono />
+          <Row label="Status" value={data.status} />
           <Row label="Ontraport contact" value={data.ontraportContactId} mono />
           <Row label="Transaction" value={data.ontraportTransactionId} mono />
-          <Row label="Synced" value={fmtDateTime(data.syncedAt)} mono />
-          <Row label="Processed" value={data.processedAt ? fmtDateTime(data.processedAt) : '—'} mono />
-          <Row label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} mono />
-          <Row label="Date of birth" value={data.dateOfBirth ?? '—'} mono />
+          <Row label="Synced" value={fmtDateTime(data.syncedAt)} />
+          <Row label="Processed" value={data.processedAt ? fmtDateTime(data.processedAt) : '—'} />
+          <Row label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} />
+          <Row label="Date of birth" value={data.dateOfBirth ?? '—'} />
           <Row label="Address" value={data.address || '—'} />
           {data.renewal ? <Row label="Renewal" value={<Link to={`/admin/renewals/${data.renewal.id}`} className="break-all text-link hover:underline">{data.renewal.id}</Link>} mono /> : null}
         </dl>
         {data.errorMessage ? (
           <div className="mt-4">
-            <KickerLabel>Last error</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{data.errorMessage}</pre>
+            <div className="text-caption text-muted-foreground">Last error</div>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{data.errorMessage}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -184,18 +183,22 @@ function nextStep(d: Detail, tryAgain: ReactNode, keyButton: ReactNode): ReactNo
   }
   switch (d.status) {
     case 'RenewalFailed':
-      return <NextStep meaning="action" title="Try again puts it back for the next processing run." actions={<>{tryAgain}{openClient}</>}>{d.errorMessage ?? 'No error was recorded.'}</NextStep>
+      return <NextStep meaning="action" title="Try again puts it back for the next processing run." actions={<>{tryAgain}{openClient}</>}><span title={d.errorMessage ?? undefined}>{truncate(d.errorMessage ?? 'No error was recorded.', 120)}</span></NextStep>
     case 'IneligibleForRenewal':
-      return <NextStep meaning="action" title="Decide: refund, or contact the client." actions={openClient}>{d.errorMessage ?? 'Renewtron won’t retry it.'}</NextStep>
+      return <NextStep meaning="action" title="Decide: refund, or contact the client." actions={openClient}><span title={d.errorMessage ?? undefined}>{truncate(d.errorMessage ?? 'Renewtron won’t retry it.', 120)}</span></NextStep>
     case 'WaitingForRenewalWindow':
     case 'AsicNotYetDue':
     case 'RenewalInProgress':
       return <NextStep meaning="waiting" title="Nothing to do; Renewtron tries again on its own." actions={openClient}>{statusOf('sale', d.status).hint}</NextStep>
     case 'NotDueForRenewal':
-      return <NextStep meaning="quiet" title="Check the due date." actions={openClient}>The due date is outside ASIC’s renewal window, so Renewtron won’t renew it. If it’s wrong in Ontraport, fix it there and sync.</NextStep>
+      return <NextStep meaning="quiet" title="Check the due date." actions={openClient}><span title="The due date is outside ASIC’s renewal window, so Renewtron won’t renew it. If it’s wrong in Ontraport, fix it there and sync.">It’s outside ASIC’s renewal window; fix it in Ontraport if wrong.</span></NextStep>
     default:
       return <NextStep meaning="working" title="Nothing to do yet.">The next processing run (07:00) starts the renewal.</NextStep>
   }
+}
+
+function truncate(s: string, n: number) {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
 
 /** Sale → renewal → ASIC fee → ASIC key. */
@@ -228,23 +231,20 @@ function story(d: Detail): StoryStep[] {
   return steps
 }
 
-function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
-      <div className="mb-4">
-        <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">{title}</h2>
-      </div>
-      <dl className="space-y-3">{children}</dl>
-    </div>
+    <Card className="gap-4">
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardContent><dl className="space-y-3">{children}</dl></CardContent>
+    </Card>
   )
 }
 
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
+      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
+      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
     </div>
   )
 }

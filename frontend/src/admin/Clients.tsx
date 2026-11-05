@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, TriangleAlert, Users, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientLinkResult, type ClientListItem } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, StatTile, StatusPill } from './_ui'
+import { EmptyState, PageHeader, RefreshButton } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 
 const filters = [
   { value: '', label: 'All' },
@@ -65,18 +70,18 @@ export default function Clients() {
       id: 'client',
       accessorKey: 'fullName',
       header: 'Client',
-      meta: { sticky: true, className: 'min-w-[8rem] max-w-[40vw] sm:min-w-[14rem] sm:max-w-[20rem]' },
+      meta: { sticky: true, className: 'min-w-32 max-w-[40vw] sm:min-w-56 sm:max-w-80' },
       cell: ({ row }) => {
         const c = row.original
         return (
           <div className="min-w-0">
-            <Link to={`/admin/clients/${c.id}`} className="block text-sm font-medium text-foreground hover:underline truncate">{c.fullName || '—'}</Link>
-            <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">
+            <Link to={`/admin/clients/${c.id}`} className="block truncate text-sm font-medium text-link hover:underline">{c.fullName || '—'}</Link>
+            <div className="hidden truncate text-caption text-muted-foreground sm:block">
               {c.email ?? '—'}{c.emailCount > 1 ? ` +${c.emailCount - 1}` : ''}
             </div>
             {c.possibleDuplicateOfId ? (
-              <div className="mt-0.5 text-xxs text-warning truncate">
-                May be the same person as <Link to={`/admin/clients/${c.possibleDuplicateOfId}`} className="underline">{c.possibleDuplicateOfName ?? 'another client'}</Link>
+              <div className="mt-0.5 truncate text-caption text-muted-foreground">
+                May be <Link to={`/admin/clients/${c.possibleDuplicateOfId}`} className="text-link hover:underline">{c.possibleDuplicateOfName ?? 'another client'}</Link>
               </div>
             ) : null}
           </div>
@@ -89,11 +94,11 @@ export default function Clients() {
       enableSorting: false,
       cell: ({ row }) => {
         const c = row.original
-        if (c.activeNames === 0) return <span className="text-xxs font-mono text-muted-foreground/70">none</span>
+        if (c.activeNames === 0) return <span className="text-sm text-muted-foreground">None</span>
         return (
-          <div>
-            <div className="text-sm text-foreground truncate max-w-[16rem]">{c.firstName}</div>
-            {c.activeNames > 1 ? <div className="text-xxs font-mono text-muted-foreground tabular-nums">+{c.activeNames - 1} more</div> : null}
+          <div className="max-w-64">
+            <div className="truncate text-sm">{c.firstName}</div>
+            {c.activeNames > 1 ? <div className="text-caption text-muted-foreground tabular-nums">+{c.activeNames - 1} more</div> : null}
           </div>
         )
       },
@@ -103,9 +108,9 @@ export default function Clients() {
       header: 'ABN',
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="text-xs font-mono tabular-nums text-muted-foreground">
-          {row.original.abns.length ? formatAbn(row.original.abns[0]) : '—'}
-          {row.original.abns.length > 1 ? <span className="text-muted-foreground/70"> +{row.original.abns.length - 1}</span> : null}
+        <div className="font-mono text-sm tabular-nums">
+          {row.original.abns.length ? formatAbn(row.original.abns[0]) : <span className="text-muted-foreground">—</span>}
+          {row.original.abns.length > 1 ? <span className="text-muted-foreground"> +{row.original.abns.length - 1}</span> : null}
         </div>
       ),
     },
@@ -114,8 +119,8 @@ export default function Clients() {
       header: 'Next due',
       enableSorting: false,
       cell: ({ row }) => row.original.nextDue
-        ? <span className="text-sm font-mono tabular-nums text-foreground">{fmtDate(row.original.nextDue)}</span>
-        : <span className="text-xxs font-mono text-muted-foreground/70">unknown</span>,
+        ? <span className="text-sm tabular-nums">{fmtDate(row.original.nextDue)}</span>
+        : <span className="text-sm text-muted-foreground">Unknown</span>,
     },
     {
       id: 'flags',
@@ -123,71 +128,77 @@ export default function Clients() {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
-          {row.original.hasPurchased ? <StatusPill tone="emerald">CUSTOMER</StatusPill> : <StatusPill tone="zinc">LEAD</StatusPill>}
-          {row.original.keys > 0 ? <StatusPill tone="indigo">{row.original.keys} KEY{row.original.keys === 1 ? '' : 'S'}</StatusPill> : null}
-          {row.original.isTest ? <StatusPill tone="amber">TEST</StatusPill> : null}
+          {row.original.hasPurchased ? <Badge variant="secondary">Customer</Badge> : <Badge variant="outline">Lead</Badge>}
+          {row.original.keys > 0 ? <Badge variant="outline">{row.original.keys} key{row.original.keys === 1 ? '' : 's'}</Badge> : null}
+          {row.original.isTest ? <Badge variant="outline">Test</Badge> : null}
         </div>
       ),
     },
     {
       accessorKey: 'lastSeenAt',
       header: 'Last seen',
-      cell: ({ row }) => <span className="text-sm text-foreground tabular-nums">{relativeTime(row.original.lastSeenAt)}</span>,
+      cell: ({ row }) => <span className="text-sm tabular-nums">{relativeTime(row.original.lastSeenAt)}</span>,
     },
   ], [])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="CUSTOMERS"
         title="Clients"
         subtitle="One record per person, with every business name they hold."
         right={<RefreshButton onClick={() => { void refetch(); void refetchStats() }} busy={isFetching} />}
       />
 
-      <LinkPanel />
+      <div className="space-y-4">
+        {stats && stats.clients > 0 ? (
+          <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <Stat label="Clients" value={stats.clients.toLocaleString()} sub={`${stats.purchased.toLocaleString()} bought from us`} />
+            <Stat label="Business names" value={stats.names.toLocaleString()} sub="Active, across all clients" />
+            <Stat label="Several names" value={stats.severalNames.toLocaleString()} sub="Clients with more than one" />
+            <Stat
+              label="Possible duplicates"
+              value={stats.possibleDuplicates.toLocaleString()}
+              sub="Same name or mobile on an ABN"
+              dot={stats.possibleDuplicates > 0 ? 'bg-warning' : undefined}
+            />
+          </Card>
+        ) : null}
 
-      {stats && stats.clients > 0 ? (
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatTile label="Clients" value={stats.clients.toLocaleString()} sub={`${stats.purchased.toLocaleString()} bought from us`} />
-          <StatTile label="Business names" value={stats.names.toLocaleString()} sub="active, across all clients" />
-          <StatTile label="Several names" value={stats.severalNames.toLocaleString()} sub="clients with more than one" tone={stats.severalNames > 0 ? 'emerald' : 'zinc'} />
-          <StatTile label="Possible duplicates" value={stats.possibleDuplicates.toLocaleString()} sub="same name or mobile on an ABN" tone={stats.possibleDuplicates > 0 ? 'amber' : 'zinc'} />
-        </div>
-      ) : null}
+        {stats && stats.possibleDuplicates > 0 ? (
+          <Alert className="flex items-center gap-3 py-3 [&>svg]:translate-y-0">
+            <Users />
+            <div className="min-w-0 flex-1">
+              <AlertTitle>{stats.possibleDuplicates} possible duplicate{stats.possibleDuplicates === 1 ? '' : 's'} to decide</AlertTitle>
+              <AlertDescription>Merge or keep apart, one pair at a time.</AlertDescription>
+            </div>
+            <Button size="sm" variant="outline" asChild><Link to="/admin/clients/duplicates">Review</Link></Button>
+          </Alert>
+        ) : null}
 
-      {stats && stats.possibleDuplicates > 0 ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warning/5 px-5 py-3 ring-1 ring-warning/25">
-          <div className="text-sm text-warning">
-            <span className="font-medium">{stats.possibleDuplicates} possible duplicate{stats.possibleDuplicates === 1 ? '' : 's'}</span> to decide:
-            merge or keep apart, one pair at a time.
-          </div>
-          <Button size="sm" asChild><Link to="/admin/clients/duplicates">Review duplicates</Link></Button>
-        </div>
-      ) : null}
+        <LinkPanel />
+      </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, ABN or business name…" className="h-9 w-72" />
-        <div className="inline-flex rounded-md ring-1 ring-border overflow-hidden" role="group">
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, ABN or business name…" className="h-8 w-72" />
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={filter || 'all'}
+          onValueChange={(v) => { if (v) update({ filter: v === 'all' ? '' : v }) }}
+        >
           {filters.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => update({ filter: f.value })}
-              className={`px-3 h-9 text-sm ${filter === f.value ? 'bg-zinc-900 text-white' : 'bg-card text-foreground hover:bg-muted/50'}`}
-            >
-              {f.label}
-            </button>
+            <ToggleGroupItem key={f.value} value={f.value || 'all'} className="px-3">{f.label}</ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
         {search || filter ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => { setSearch(''); update({ filter: '', q: '' }) }}>
-            Reset <X className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); update({ filter: '', q: '' }) }}>
+            Reset <X />
           </Button>
         ) : null}
-        {loading ? <Loader2 className="h-4 w-4 animate-spin text-link" aria-label="Loading" /> : null}
+        {loading ? <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Loading" /> : null}
         {data && !loading ? (
-          <span className="text-xs font-mono tabular-nums text-muted-foreground">{data.totalCount.toLocaleString()} client{data.totalCount === 1 ? '' : 's'}</span>
+          <span className="text-caption text-muted-foreground tabular-nums">{data.totalCount.toLocaleString()} client{data.totalCount === 1 ? '' : 's'}</span>
         ) : null}
       </div>
 
@@ -196,11 +207,25 @@ export default function Clients() {
           columns={columns}
           data={items}
           loading={loading || (!data && isFetching)}
-          empty={!data ? <div className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-link" /></div>
-            : <EmptyState title="No clients match." message={stats?.clients ? undefined : 'Build the client records above first.'} />}
+          empty={!data ? <div className="py-10 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
+            : <EmptyState title="No clients match" message={stats?.clients ? undefined : 'Build the client records above first.'} />}
         />
         {data ? <Pagination page={page} pageSize={PAGE_SIZE} total={data.totalCount} onPage={(p) => update({ page: p })} /> : null}
       </div>
+    </div>
+  )
+}
+
+/** One number in the page's stat strip: black, a muted label, one line under it. */
+function Stat({ label, value, sub, dot }: { label: string; value: string; sub?: string; dot?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col px-5 py-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
     </div>
   )
 }
@@ -233,48 +258,54 @@ function LinkPanel() {
   // Once records exist the recurring job keeps them up to date; the panel shrinks to a status line.
   if (status.hasClients && !running && !(last && last.dryRun)) {
     return (
-      <div className="mt-4 text-xxs font-mono text-muted-foreground">
-        Kept up to date every 15 minutes{last ? ` · last run ${relativeTime(last.finishedAt)}` : ''}.{' '}
-        <button type="button" className="underline hover:text-foreground" onClick={() => run.mutate(false)}>Run now</button>
+      <div className="flex items-center gap-2 text-caption text-muted-foreground">
+        Kept up to date every 15 minutes{last ? ` · last run ${relativeTime(last.finishedAt)}` : ''}
+        <Button variant="ghost" size="xs" onClick={() => run.mutate(false)}>Run now</Button>
       </div>
     )
   }
 
   return (
-    <div className="mt-6 rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
-      <div className="text-xs font-medium text-link">BUILD CLIENT RECORDS</div>
-      <p className="mt-1 text-sm text-muted-foreground max-w-3xl">
-        Groups every Ontraport sale, wizard lead, renewal and key request into one client per person, and adds all the business
-        names under their ABNs from the public register. Do a dry run first: it reports what it would do and changes nothing.
-        After the real run, new records are added every 15 minutes.
-      </p>
+    <Card>
+      <CardHeader>
+        <CardTitle>Build client records</CardTitle>
+        <CardDescription title="Groups every Ontraport sale, wizard lead, renewal and key request into one client per person, and adds all the business names under their ABNs from the public register. After the real run, new records are added every 15 minutes.">
+          One client per person, from every sale, lead and renewal. Do a dry run first: it changes nothing.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {running ? (
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            {status.runningDry ? 'Dry run' : 'Building client records'} in progress
+            {status.runningSince ? ` · started ${relativeTime(status.runningSince)}` : ''}…
+          </div>
+        ) : last ? (
+          <LinkResult result={last} />
+        ) : null}
 
-      {running ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-foreground">
-          <Loader2 className="h-4 w-4 animate-spin text-link" />
-          {status.runningDry ? 'Dry run' : 'Building client records'} in progress
-          {status.runningSince ? ` · started ${relativeTime(status.runningSince)}` : ''}…
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" disabled={running} onClick={() => run.mutate(true)}>
+            {dryDone ? 'Dry run again' : 'Dry run'}
+          </Button>
+          <Button size="sm" disabled={running || (!dryDone && !status.hasClients)} onClick={() => run.mutate(false)}
+            title={!dryDone && !status.hasClients ? 'Do a dry run first' : undefined}>
+            Build client records
+          </Button>
         </div>
-      ) : last ? (
-        <LinkResult result={last} />
-      ) : null}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={running} onClick={() => run.mutate(true)}>
-          {dryDone ? 'Dry run again' : 'Dry run'}
-        </Button>
-        <Button size="sm" disabled={running || (!dryDone && !status.hasClients)} onClick={() => run.mutate(false)}
-          title={!dryDone && !status.hasClients ? 'Do a dry run first' : undefined}>
-          Build client records
-        </Button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
 function LinkResult({ result }: { result: ClientLinkResult }) {
   if (result.error) {
-    return <div className="mt-4 rounded-md bg-destructive/5 ring-1 ring-destructive/20 px-3 py-2 text-sm text-destructive">The {result.dryRun ? 'dry run' : 'run'} failed: {result.error}</div>
+    return (
+      <Alert variant="destructive">
+        <TriangleAlert />
+        <AlertDescription>The {result.dryRun ? 'dry run' : 'run'} failed: {result.error}</AlertDescription>
+      </Alert>
+    )
   }
   const rows: Array<[string, number]> = [
     ['Clients created', result.clientsCreated],
@@ -297,22 +328,25 @@ function LinkResult({ result }: { result: ClientLinkResult }) {
     ['Left unlinked', result.skipped],
   ]
   return (
-    <div className="mt-4">
-      <div className="text-sm font-medium text-foreground">
+    <div>
+      <div className="text-sm font-medium">
         {result.dryRun ? 'Dry run' : 'Run'} finished {relativeTime(result.finishedAt)}
-        {result.dryRun ? <span className="text-muted-foreground font-normal"> — nothing was saved. This is what a real run would do:</span> : null}
+        {result.dryRun ? <span className="font-normal text-muted-foreground"> · nothing was saved. A real run would do this:</span> : null}
       </div>
-      <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1">
+      <dl className="mt-2 grid grid-cols-2 gap-x-6 sm:grid-cols-4">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between gap-2 border-b border-border py-1">
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="text-sm font-mono tabular-nums text-foreground">{value.toLocaleString()}</dd>
+          <div
+            key={label}
+            className="flex items-baseline justify-between gap-2 border-b py-1.5"
+            title={label === 'Left unlinked' && result.skipped > 0
+              ? 'Records with no email to reach the person by (some manual renewals), or bulk uploads whose name isn’t on any client yet.'
+              : undefined}
+          >
+            <dt className="text-caption text-muted-foreground">{label}</dt>
+            <dd className="text-sm tabular-nums">{value.toLocaleString()}</dd>
           </div>
         ))}
       </dl>
-      {result.skipped > 0 ? (
-        <p className="mt-2 text-xxs text-muted-foreground">Left unlinked: records with no email to reach the person by (some manual renewals), or bulk uploads whose name isn't on any client yet.</p>
-      ) : null}
     </div>
   )
 }

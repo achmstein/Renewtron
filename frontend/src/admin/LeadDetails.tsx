@@ -3,12 +3,13 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
-import { KickerLabel } from './_ui'
 import { Status, renewalStatus, statusOf } from './_status'
 import { When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.lead>>
 type Renewal = Detail['renewalRequests'][number]
@@ -30,8 +31,7 @@ export default function LeadDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -39,9 +39,8 @@ export default function LeadDetails() {
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-foreground">Wizard visit not found</h3>
-        <p className="mt-1 text-sm text-muted-foreground">The lead you’re looking for doesn’t exist.</p>
-        <Link to="/admin/leads" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to leads</Link>
+        <h3 className="text-heading">Wizard visit not found</h3>
+        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/leads">Back to leads</Link></Button>
       </div>
     )
   }
@@ -54,9 +53,8 @@ export default function LeadDetails() {
       <RecordCrumbs client={data.client} list={{ to: '/admin/leads', label: 'Leads' }} here={`Wizard visit of ${shortDate(data.createdAt)}`} />
 
       <RecordHeader
-        kicker={`Wizard visit · ABN ${formatAbn(data.abn)}`}
         title={headline(data, latest)}
-        sub={<>{data.fullName} · {data.email} · <When at={data.createdAt} />{data.reminderOptIn ? ' · asked for reminders' : ''}</>}
+        sub={<>{data.fullName} · ABN {formatAbn(data.abn)} · <When at={data.createdAt} />{data.reminderOptIn ? ' · asked for reminders' : ''}</>}
         status={latest ? renewalStatus(latest) : statusOf('lead', data.outcome)}
       >
         {nextStep(data, latest)}
@@ -64,27 +62,27 @@ export default function LeadDetails() {
       </RecordHeader>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Section kicker="Person" title="Who visited">
+        <Section title="Who visited">
           {data.client ? (
             <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
           <Row label="Name" value={data.fullName} />
-          <Row label="Email" value={<a href={`mailto:${data.email}`} className="break-all text-link hover:text-link">{data.email}</a>} />
-          <Row label="Mobile" value={<a href={`tel:${data.mobileNumber}`} className="text-link hover:text-link">{data.mobileNumber}</a>} mono />
-          <Row label="Date of birth" value={fmtDob(data.dateOfBirth)} mono />
+          <Row label="Email" value={<a href={`mailto:${data.email}`} className="break-all text-link hover:underline">{data.email}</a>} />
+          <Row label="Mobile" value={<a href={`tel:${data.mobileNumber}`} className="text-link hover:underline">{data.mobileNumber}</a>} />
+          <Row label="Date of birth" value={fmtDob(data.dateOfBirth)} />
           <Row label="Reminders" value={data.reminderOptIn ? 'Asked for renewal reminders' : 'Didn’t ask for reminders'} />
         </Section>
 
-        <Section kicker="Names" title={names.length ? `${names.length} business name${names.length === 1 ? '' : 's'} on the ABN` : 'Business names on the ABN'}>
+        <Section title={names.length ? `${names.length} business name${names.length === 1 ? '' : 's'} on the ABN` : 'Business names on the ABN'}>
           {names.length === 0 ? (
             <p className="text-sm text-muted-foreground">{data.searchLog ? 'ASIC found no business names on this ABN.' : 'No ASIC search is linked to this visit.'}</p>
           ) : names.map((n) => {
             const r = data.renewalRequests.filter((x) => x.businessName === n.businessName).sort((a, b) => b.initiatedAt.localeCompare(a.initiatedAt))[0]
             return (
-              <div key={n.id} className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0">
+              <div key={n.id} className="flex items-center justify-between gap-3 border-b pb-2 last:border-0 last:pb-0">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">{n.businessName}</div>
-                  <div className="text-xs text-muted-foreground">{r ? <>Renewal <When at={r.initiatedAt} /> · {fmtMoney2(r.amount)}</> : 'No renewal started'}</div>
+                  <div className="truncate text-sm font-medium">{n.businessName}</div>
+                  <div className="text-caption text-muted-foreground">{r ? <>Renewal <When at={r.initiatedAt} /> · {fmtMoney2(r.amount)}</> : 'No renewal started'}</div>
                 </div>
                 {r ? <Link to={`/admin/renewals/${r.id}`}><Status entry={renewalStatus(r)} /></Link> : null}
               </div>
@@ -96,19 +94,19 @@ export default function LeadDetails() {
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
           <Row label="Lead ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Outcome" value={data.outcome} mono />
-          <Row label="Created" value={fmtDateTime(data.createdAt)} mono />
-          <Row label="Converted" value={data.convertedAt ? fmtDateTime(data.convertedAt) : '—'} mono />
+          <Row label="Outcome" value={data.outcome} />
+          <Row label="Created" value={fmtDateTime(data.createdAt)} />
+          <Row label="Converted" value={data.convertedAt ? fmtDateTime(data.convertedAt) : '—'} />
           <Row label="IP address" value={data.ipAddress ?? '—'} mono />
           <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
-          <Row label="User agent" value={<span className="break-all text-xs">{data.userAgent ?? '—'}</span>} mono />
-          {data.searchLog ? <Row label="Search" value={`${data.searchLog.success ? 'succeeded' : 'failed'} · ${data.searchLog.resultsCount} result(s) · ${fmtDateTime(data.searchLog.searchedAt)}`} mono /> : null}
+          <Row label="User agent" value={<span className="break-all text-caption">{data.userAgent ?? '—'}</span>} />
+          {data.searchLog ? <Row label="Search" value={`${data.searchLog.success ? 'succeeded' : 'failed'} · ${data.searchLog.resultsCount} result(s) · ${fmtDateTime(data.searchLog.searchedAt)}`} /> : null}
           {names.map((n) => <Row key={n.id} label={n.businessName} value={`acct ${n.accountNumber} · reg ${n.registrationDate}`} mono />)}
         </dl>
         {data.outcomeMessage || data.searchLog?.errorMessage ? (
           <div className="mt-4">
-            <KickerLabel>Messages</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{[data.outcomeMessage, data.searchLog?.errorMessage].filter(Boolean).join('\n')}</pre>
+            <div className="text-caption text-muted-foreground">Messages</div>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{[data.outcomeMessage, data.searchLog?.errorMessage].filter(Boolean).join('\n')}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -148,7 +146,7 @@ function nextStep(d: Detail, latest: Renewal | undefined): ReactNode {
   if (d.outcome === 'RenewalAvailable') {
     return (
       <NextStep meaning="waiting" title="Waiting on them to pay." actions={openClient}>
-        {d.reminderOptIn ? 'They asked for reminders, so they’ll hear from us before it’s due.' : 'They didn’t ask for reminders; win-back emails from Leads can reach them.'}
+        {d.reminderOptIn ? 'They’ll get a reminder before it’s due.' : 'No reminders asked for; win-back emails can reach them.'}
       </NextStep>
     )
   }
@@ -180,23 +178,20 @@ function story(d: Detail, latest: Renewal | undefined): StoryStep[] {
   return steps
 }
 
-function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
-      <div className="mb-4">
-        <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">{title}</h2>
-      </div>
-      <dl className="space-y-3">{children}</dl>
-    </div>
+    <Card className="gap-4">
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardContent><dl className="space-y-3">{children}</dl></CardContent>
+    </Card>
   )
 }
 
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
+      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
+      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
     </div>
   )
 }

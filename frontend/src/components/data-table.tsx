@@ -46,9 +46,11 @@ declare module '@tanstack/table-core' {
   }
 }
 
+// The pinned column keeps an opaque background so scrolled cells pass under it; a right border
+// marks its edge. Hover repeats the row's tint on top of the card colour.
 const stickyCellClass =
-  'sticky left-0 z-10 bg-card shadow-[inset_-1px_0_0_#E4E4E7] group-hover/row:bg-muted/50'
-const stickyHeadClass = 'sticky left-0 z-20 bg-muted/50 shadow-[inset_-1px_0_0_#E4E4E7]'
+  'sticky left-0 z-10 border-r bg-card group-hover/row:bg-muted'
+const stickyHeadClass = 'sticky left-0 z-20 border-r bg-card'
 
 export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick, loading }: {
   columns: DataTableColumn<TData>[]
@@ -67,15 +69,16 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
   const rows = table.getRowModel().rows
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm" aria-busy={loading || undefined}>
+    <div className="relative overflow-hidden rounded-xl border bg-card shadow-sm" aria-busy={loading || undefined}>
       {loading ? (
-        <div className="absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden bg-primary/10" role="progressbar" aria-label="Loading">
-          <div className="h-full w-1/3 bg-primary animate-[table-loading_1s_ease-in-out_infinite]" />
+        <div className="absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden bg-link/10" role="progressbar" aria-label="Loading">
+          <div className="h-full w-1/3 bg-link animate-[table-loading_1s_ease-in-out_infinite]" />
         </div>
       ) : null}
-      <div className={cn('overflow-x-auto transition-opacity', loading && 'opacity-50 pointer-events-none')}>
+      {/* w-0 min-w-full: the scroll area takes its parent's width and never widens the page to fit the table. */}
+      <div className={cn('w-0 min-w-full overflow-x-auto transition-opacity', loading && 'pointer-events-none opacity-50')}>
         <Table>
-          <TableHeader className="bg-muted/50">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => {
@@ -86,7 +89,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                     <TableHead
                       key={header.id}
                       className={cn(
-                        'whitespace-nowrap px-4 py-2.5 text-xs font-medium text-muted-foreground border-b border-border',
+                        'h-10 whitespace-nowrap px-4 text-xs font-medium text-muted-foreground',
                         meta?.sticky && stickyHeadClass,
                         meta?.headerClassName,
                       )}
@@ -95,12 +98,12 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                         <button
                           type="button"
                           onClick={header.column.getToggleSortingHandler()}
-                          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                          className="-ml-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground"
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          {dir === 'asc' ? <ArrowUp className="h-3 w-3" />
-                            : dir === 'desc' ? <ArrowDown className="h-3 w-3" />
-                            : <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+                          {dir === 'asc' ? <ArrowUp className="size-3" />
+                            : dir === 'desc' ? <ArrowDown className="size-3" />
+                            : <ChevronsUpDown className="size-3 opacity-40" />}
                         </button>
                       ) : (
                         flexRender(header.column.columnDef.header, header.getContext())
@@ -111,7 +114,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody className="divide-y divide-border">
+          <TableBody>
             {rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="px-4 py-12">{empty}</TableCell>
@@ -119,7 +122,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
             ) : rows.map((row) => (
               <TableRow
                 key={row.id}
-                className={cn('group/row border-0 transition-colors hover:bg-muted/50', onRowClick && 'cursor-pointer')}
+                className={cn('group/row hover:bg-muted/50', onRowClick && 'cursor-pointer')}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {row.getAllCells().map((cell) => {
@@ -127,7 +130,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                   return (
                     <TableCell
                       key={cell.id}
-                      className={cn('px-4 py-3 align-top', meta?.sticky && stickyCellClass, meta?.className)}
+                      className={cn('px-4 py-3 align-top text-sm', meta?.sticky && stickyCellClass, meta?.className)}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

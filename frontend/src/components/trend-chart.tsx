@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 
 /**
@@ -9,12 +10,14 @@ export function TrendChart({ data, valueLabel = 'renewals' }: {
   data: Array<{ date?: string; count: number }>
   valueLabel?: string
 }) {
+  // Each chart its own gradient: ids are page-global, and several charts can share a page.
+  const fillId = `trend-fill-${useId().replace(/:/g, '')}`
   if (data.length === 0) return null
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
         <defs>
-          <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--link, #0052A4)" stopOpacity={0.12} />
             <stop offset="100%" stopColor="var(--link, #0052A4)" stopOpacity={0} />
           </linearGradient>
@@ -38,7 +41,7 @@ export function TrendChart({ data, valueLabel = 'renewals' }: {
           dataKey="count"
           stroke="var(--link, #0052A4)"
           strokeWidth={2}
-          fill="url(#trend-fill)"
+          fill={`url(#${fillId})`}
           dot={false}
           activeDot={{ r: 3.5, fill: 'var(--link, #0052A4)', stroke: '#FFFFFF', strokeWidth: 1.5 }}
           isAnimationActive={false}

@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { CalendarRange, CircleAlert, Eye, EyeOff, X } from 'lucide-react'
+import { Eye, EyeOff, TriangleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
-import { ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { DateRangeFilter, ErrorModal, Pagination, Stat, StatStrip, useDebouncedValue } from './_components'
 import { SearchSentence, SentenceList } from './_sentences'
-import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, SparklineTile, StatTile, StatusPill, ViewToggle } from './_ui'
+import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, ViewToggle } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 type SearchesResponse = Awaited<ReturnType<typeof api.admin.searches>>
 type Search = SearchesResponse['items'][number]
@@ -74,30 +75,21 @@ export default function Searches() {
       accessorKey: 'abn',
       header: 'ABN',
       // Compact on phones: the searched ABN only; names + lead return at sm.
-      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[14rem] sm:max-w-[18rem]' },
+      meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-56 sm:max-w-72' },
       cell: ({ row }) => {
         const s = row.original
         return (
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-mono tabular-nums text-foreground">{s.abn}</span>
-              {s.repeatCount7d >= 3 ? <StatusPill tone="amber">×{s.repeatCount7d} 7D</StatusPill> : null}
+              <span className="font-mono tabular-nums">{s.abn}</span>
+              <RepeatBadge n={s.repeatCount7d} />
             </div>
-            {s.resultsCount === 0 ? (
-              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70">no names found</div>
-            ) : (
-              <div className="hidden sm:block mt-0.5 text-sm text-foreground truncate">
-                {s.firstBusinessName ?? '—'}
-                {s.resultsCount > 1 ? <span className="ml-1 text-xxs font-mono text-muted-foreground/70 tabular-nums">+{s.resultsCount - 1}</span> : null}
-              </div>
-            )}
-            {s.lead ? (
-              <Link to={`/admin/leads/${s.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70 hover:underline truncate">
-                {s.lead.fullName} · {s.lead.email}
-              </Link>
-            ) : (
-              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70">no lead</div>
-            )}
+            <div className="hidden truncate text-caption text-muted-foreground sm:block">
+              {s.resultsCount === 0 ? 'no names found' : <>{s.firstBusinessName ?? '—'}{s.resultsCount > 1 ? ` +${s.resultsCount - 1}` : ''}</>}
+            </div>
+            <div className="hidden truncate text-caption text-muted-foreground sm:block">
+              {s.lead ? <Link to={`/admin/leads/${s.lead.id}`} className="hover:underline" title={s.lead.email}>{s.lead.fullName}</Link> : 'no lead'}
+            </div>
           </div>
         )
       },
@@ -111,9 +103,9 @@ export default function Searches() {
     {
       accessorKey: 'resultsCount',
       header: 'Names',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
+      meta: { className: 'text-right tabular-nums', headerClassName: 'text-right' },
       cell: ({ row }) => row.original.resultsCount === 0
-        ? <span className="text-xxs text-muted-foreground/70">—</span>
+        ? <span className="text-muted-foreground">—</span>
         : row.original.resultsCount,
     },
     {
@@ -128,17 +120,17 @@ export default function Searches() {
       enableSorting: false,
       meta: { className: 'text-right', headerClassName: 'text-right' },
       cell: ({ row }) => row.original.renewal ? (
-        <div>
-          <div className="text-sm font-mono tabular-nums text-foreground">{fmtMoney0(row.original.renewal.amount)}</div>
+        <div className="flex flex-col items-end gap-1">
+          <span className="font-mono tabular-nums">{fmtMoney0(row.original.renewal.amount)}</span>
           <RenewalStatusPill status={row.original.renewal.status} />
         </div>
       ) : (
-        <span className="text-xxs font-mono text-muted-foreground/70">—</span>
+        <span className="text-muted-foreground">—</span>
       ),
     },
     {
       id: 'source',
-      header: 'Source',
+      header: 'By',
       enableSorting: false,
       cell: ({ row }) => <InitiatedByBadge value={row.original.initiatedBy} />,
     },
@@ -146,9 +138,9 @@ export default function Searches() {
       accessorKey: 'searchedAt',
       header: 'When',
       cell: ({ row }) => (
-        <div>
-          <div className="text-sm text-foreground tabular-nums whitespace-nowrap">{relativeTime(row.original.searchedAt)}</div>
-          <div className="text-xxs font-mono text-muted-foreground/70 tabular-nums whitespace-nowrap">{fmtDate(row.original.searchedAt)} · {fmtTime(row.original.searchedAt)}</div>
+        <div className="whitespace-nowrap">
+          <div className="tabular-nums">{relativeTime(row.original.searchedAt)}</div>
+          <div className="text-caption text-muted-foreground tabular-nums">{fmtDate(row.original.searchedAt)} · {fmtTime(row.original.searchedAt)}</div>
         </div>
       ),
     },
@@ -158,65 +150,60 @@ export default function Searches() {
       enableSorting: false,
       meta: { className: 'text-right' },
       cell: ({ row }) => (
-        <Link to={`/admin/searches/${row.original.id}`} className="text-sm font-medium text-link hover:text-link whitespace-nowrap">View →</Link>
+        <Button asChild size="sm" variant="ghost"><Link to={`/admin/searches/${row.original.id}`}>Open</Link></Button>
       ),
     },
   ], [])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <PageHeader
-        kicker="OPS"
-        title="Search logs"
-        subtitle="ABN searches recorded by customers, admins, and the bulk pipelines."
-        right={
-          <>
-            <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
-            <RefreshButton onClick={() => void refetch()} busy={isFetching} />
-          </>
-        }
-      />
+      <PageHeader title="Searches" subtitle="ABN lookups from the wizard, staff and Renewtron itself." />
 
       <StatsStrip stats={stats} />
 
-      {/* Filter toolbar — every facet is resolved server-side with live counts */}
+      {/* Filters, resolved on the server with live counts; the view and refresh sit at the end. */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input
           value={abnInput}
           onChange={(e) => { setPage(1); setAbnInput(e.target.value) }}
           placeholder="Filter ABN…"
-          className="h-9 w-40 font-mono tabular-nums"
+          className="h-8 w-40 font-mono tabular-nums placeholder:font-sans"
         />
         <FacetedFilter title="Result" options={resultOptions} selected={results} onChange={withPageReset(setResults)} />
-        <FacetedFilter title="Initiated by" options={initiatorOptions} selected={initiators} onChange={withPageReset(setInitiators)} />
+        <FacetedFilter title="Started by" options={initiatorOptions} selected={initiators} onChange={withPageReset(setInitiators)} />
         <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onFrom={withPageReset(setDateFrom)} onTo={withPageReset(setDateTo)} />
         <Button
           variant="outline"
           size="sm"
           onClick={() => { setPage(1); setIncludeSystem((v) => !v) }}
-          className={`h-9 border-dashed whitespace-nowrap ${includeSystem ? 'bg-primary/5 text-link border-brand-200 hover:bg-primary/10' : 'text-muted-foreground'}`}
-          title="System searches are background lookups for Ontraport sync and bulk renewals — hidden by default, noisy for daily ops. Selecting System under Initiated by also shows them."
+          aria-pressed={includeSystem}
+          className={includeSystem ? 'bg-accent' : 'border-dashed'}
+          title="Renewtron's own background lookups (Ontraport sync, bulk renewals). Hidden by default."
         >
-          {includeSystem ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          {includeSystem ? <Eye /> : <EyeOff />}
           {includeSystem ? 'System shown' : 'System hidden'}
         </Button>
         {hasActiveFilters ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
             Reset
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
+          <RefreshButton onClick={() => void refetch()} busy={isFetching} />
+        </div>
       </div>
 
       <div className="mt-4">
         {viewMode === 'Sentences' ? (
-          <SentenceList empty={<EmptyState title="No searches match the current filters." />}>
+          <SentenceList empty={<EmptyState title="Nothing matches these filters" />}>
             {searches.map((s) => <SearchSentence key={s.id} s={s} />)}
           </SentenceList>
         ) : viewMode === 'Cards' ? (
           <CardsView searches={searches} onShowError={setErrorModal} />
         ) : (
-          <DataTable columns={columns} data={searches} empty={<EmptyState title="No searches match the current filters." />} />
+          <DataTable columns={columns} data={searches} empty={<EmptyState title="Nothing matches these filters" />} />
         )}
 
         <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
@@ -224,39 +211,6 @@ export default function Searches() {
 
       <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Search error details" />
     </div>
-  )
-}
-
-function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
-  dateFrom: string
-  dateTo: string
-  onFrom: (v: string) => void
-  onTo: (v: string) => void
-}) {
-  const active = dateFrom || dateTo
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 border-dashed whitespace-nowrap">
-          <CalendarRange className="h-4 w-4" />
-          Dates
-          {active ? <span className="font-mono text-xs text-muted-foreground">{dateFrom || '…'} → {dateTo || '…'}</span> : null}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 space-y-3" align="start">
-        <div>
-          <div className="text-xs font-medium text-muted-foreground mb-1">From</div>
-          <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
-        </div>
-        <div>
-          <div className="text-xs font-medium text-muted-foreground mb-1">To</div>
-          <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
-        </div>
-        {active ? (
-          <Button variant="ghost" size="sm" className="w-full" onClick={() => { onFrom(''); onTo('') }}>Clear dates</Button>
-        ) : null}
-      </PopoverContent>
-    </Popover>
   )
 }
 
@@ -268,41 +222,39 @@ function defaultStats(): Stats {
   }
 }
 
-/* ---------------- STATS STRIP ---------------- */
+/* ---------------- Stats ---------------- */
 
 function StatsStrip({ stats }: { stats: Stats }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-      <StatTile
-        kicker="ALL TIME"
-        label="Total searches"
+    <StatStrip>
+      <Stat
+        label="Searches"
+        period="All time"
         value={stats.totalAllTime.toLocaleString()}
-        sub={`${stats.total30d.toLocaleString()} in last 30d`}
+        sub={`${stats.total30d.toLocaleString()} in the last 30 days`}
       />
-      <StatTile
-        kicker="30D"
-        label="Success rate"
+      <Stat
+        label="Answered by ASIC"
+        period="Last 30 days"
         value={`${stats.successRate30d}%`}
         sub={`${stats.success30d.toLocaleString()} of ${stats.total30d.toLocaleString()}`}
-        tone={stats.successRate30d >= 80 ? 'emerald' : stats.successRate30d >= 50 ? 'amber' : 'red'}
+        dot={stats.total30d === 0 ? null : stats.successRate30d < 50 ? 'action' : stats.successRate30d < 80 ? 'waiting' : null}
       />
-      <StatTile
-        kicker="30D"
-        label="Conversion rate"
+      <Stat
+        label="Became a renewal"
+        period="Last 30 days"
         value={`${stats.conversionRate30d}%`}
         sub={`${stats.conversions30d.toLocaleString()} paid renewals`}
-        tone={stats.conversionRate30d >= 30 ? 'emerald' : stats.conversionRate30d >= 10 ? 'amber' : 'zinc'}
       />
-      <SparklineTile
-        kicker="14D"
+      <Stat
         label="Today"
+        period={stats.deltaPct != null ? `${stats.deltaPct >= 0 ? '+' : ''}${stats.deltaPct}%` : undefined}
         value={stats.today.toLocaleString()}
         sub={`${stats.yesterday.toLocaleString()} yesterday`}
-        deltaPct={stats.deltaPct}
-        data={stats.daily14d.map((d) => d.count)}
-        labels={stats.daily14d.map((d) => d.date)}
+        trend={stats.daily14d.map((d) => ({ date: d.date, count: d.count }))}
+        hint="Searches today; the line is the last 14 days"
       />
-    </div>
+    </StatStrip>
   )
 }
 
@@ -310,73 +262,49 @@ function StatsStrip({ stats }: { stats: Stats }) {
 
 function CardsView({ searches, onShowError }: { searches: Search[]; onShowError: (m: string) => void }) {
   if (searches.length === 0) {
-    return <EmptyState title="No searches match the current filters." />
+    return <EmptyState title="Nothing matches these filters" />
   }
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {searches.map((s) => (
-        <Link
-          key={s.id}
-          to={`/admin/searches/${s.id}`}
-          className="group relative rounded-xl bg-card p-5 ring-1 ring-border hover:ring-primary/20 hover:shadow-md transition-all flex flex-col"
-        >
+        <Card key={s.id} className="gap-4 p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <div className="text-xs text-muted-foreground">ABN</div>
-                {s.repeatCount7d >= 3 ? <StatusPill tone="amber">×{s.repeatCount7d} 7D</StatusPill> : null}
+                <span className="font-mono tabular-nums">{s.abn}</span>
+                <RepeatBadge n={s.repeatCount7d} />
               </div>
-              <div className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{s.abn}</div>
-              {s.lead ? (
-                <div className="mt-2">
-                  <div className="text-sm text-foreground">{s.lead.fullName}</div>
-                  <div className="text-xxs font-mono text-muted-foreground/70">{s.lead.email}</div>
-                </div>
-              ) : (
-                <div className="mt-2 text-xxs font-mono text-muted-foreground/70">no lead captured</div>
-              )}
+              <div className="truncate text-caption text-muted-foreground">
+                {s.lead ? <>{s.lead.fullName} · {s.lead.email}</> : 'no lead'}
+              </div>
             </div>
-            <div className="flex flex-col items-end gap-1.5">
-              <OutcomeCell s={s} onError={onShowError} />
+            <div className="flex shrink-0 items-center gap-1.5">
               <InitiatedByBadge value={s.initiatedBy} />
+              <OutcomeCell s={s} onError={onShowError} />
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-border">
-            <div className="text-xs text-muted-foreground">Funnel</div>
-            <div className="mt-1.5"><FunnelPills stages={searchFunnelStages(s.funnel)} /></div>
-          </div>
+          <FunnelPills stages={searchFunnelStages(s.funnel)} />
 
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Cell label="Names found" value={
               s.resultsCount === 0
-                ? <span className="text-xxs font-mono text-muted-foreground/70">none</span>
-                : <>
-                    <div className="text-foreground truncate">{s.firstBusinessName ?? '—'}</div>
-                    {s.resultsCount > 1 ? <div className="text-xxs font-mono text-muted-foreground/70">+{s.resultsCount - 1} more</div> : null}
-                  </>
+                ? 'None'
+                : <span className="block truncate">{s.firstBusinessName ?? '—'}{s.resultsCount > 1 ? <span className="text-muted-foreground"> +{s.resultsCount - 1}</span> : null}</span>
             } />
             <Cell label="Renewal" value={
               s.renewal
-                ? <div>
-                    <div className="font-mono tabular-nums">{fmtMoney2(s.renewal.amount)}</div>
-                    <RenewalStatusPill status={s.renewal.status} />
-                  </div>
-                : <span className="text-xxs font-mono text-muted-foreground/70">—</span>
+                ? <span className="flex items-center gap-1.5"><span className="font-mono tabular-nums">{fmtMoney2(s.renewal.amount)}</span><RenewalStatusPill status={s.renewal.status} /></span>
+                : '—'
             } />
-            <Cell label="When" value={
-              <div>
-                <div>{relativeTime(s.searchedAt)}</div>
-                <div className="text-xxs font-mono text-muted-foreground/70">{fmtDate(s.searchedAt)} · {fmtTime(s.searchedAt)}</div>
-              </div>
-            } />
+            <Cell label="When" value={<span title={`${fmtDate(s.searchedAt)} · ${fmtTime(s.searchedAt)}`}>{relativeTime(s.searchedAt)}</span>} />
             <Cell label="IP" value={s.ipAddress ?? '—'} mono />
           </dl>
 
-          <div className="mt-4 pt-4 border-t border-border text-sm font-medium text-link group-hover:text-link">
-            View details →
+          <div className="flex justify-end border-t pt-4">
+            <Button asChild size="sm" variant="ghost"><Link to={`/admin/searches/${s.id}`}>Open</Link></Button>
           </div>
-        </Link>
+        </Card>
       ))}
     </div>
   )
@@ -387,22 +315,30 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
 function OutcomeCell({ s, onError }: { s: Search; onError: (m: string) => void }) {
   if (!s.success) {
     return (
-      <div className="flex items-center gap-1.5">
-        <StatusPill tone="red">FAILED</StatusPill>
+      <div className="flex items-center gap-1">
+        <Status entry={{ label: 'No answer', meaning: 'quiet', hint: 'ASIC didn’t answer the lookup.' }} />
         {s.errorMessage ? (
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={(e) => { e.preventDefault(); onError(s.errorMessage ?? '') }}
-            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-destructive/5 text-destructive hover:bg-destructive/10"
-            title="View error"
+            title="See the error"
+            aria-label="See the error"
           >
-            <CircleAlert className="h-3 w-3" />
-          </button>
+            <TriangleAlert className="text-destructive" />
+          </Button>
         ) : null}
       </div>
     )
   }
   if (s.lead?.outcome) return <OutcomePill outcome={s.lead.outcome} />
-  return <StatusPill tone="emerald">SUCCESS</StatusPill>
+  return <Status entry={{ label: 'Answered', meaning: 'quiet' }} />
+}
+
+/** "3× this week" when the same ABN keeps being searched. */
+function RepeatBadge({ n }: { n: number }) {
+  if (n < 3) return null
+  return <Badge variant="secondary" className="tabular-nums" title={`Searched ${n} times in the last 7 days`}>{n}× this week</Badge>
 }
 
 function OutcomePill({ outcome }: { outcome: string }) {
@@ -414,10 +350,6 @@ function RenewalStatusPill({ status }: { status: string }) {
 }
 
 function InitiatedByBadge({ value }: { value: string }) {
-  switch (value) {
-    case 'Admin':    return <StatusPill tone="indigo">ADMIN</StatusPill>
-    case 'Customer': return <StatusPill tone="zinc">CUSTOMER</StatusPill>
-    case 'System':   return <StatusPill tone="amber">SYSTEM</StatusPill>
-    default:         return <StatusPill tone="zinc">{value.toUpperCase()}</StatusPill>
-  }
+  const words: Record<string, string> = { Admin: 'Staff', Customer: 'Visitor', System: 'Renewtron' }
+  return <Badge variant="outline">{words[value] ?? value}</Badge>
 }

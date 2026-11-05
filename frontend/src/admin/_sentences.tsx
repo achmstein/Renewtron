@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
 import { renewalStatus, statusOf } from './_status'
 import { fmtMoney2, formatAbn } from './_utils'
+import { Card } from '@/components/ui/card'
 
 /*
  * The record lists' rows written as sentences: who, what happened, and the facts that matter
@@ -14,7 +15,7 @@ const B = ({ children }: { children: ReactNode }) => <span className="font-mediu
 /** A list of sentence rows in the admin's card frame, or the empty state. */
 export function SentenceList({ children, empty }: { children: ReactNode[]; empty: ReactNode }) {
   if (children.length === 0) return <>{empty}</>
-  return <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">{children}</div>
+  return <Card className="gap-0 overflow-hidden py-0">{children}</Card>
 }
 
 const ERROR_WORDS: Record<string, string> = {

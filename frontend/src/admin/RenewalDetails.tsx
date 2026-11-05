@@ -4,12 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { KickerLabel, StatusPill } from './_ui'
+import { StatusPill } from './_ui'
 import { renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When, agoWords, dueWords } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.renewal>>
 
@@ -67,8 +69,7 @@ export default function RenewalDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -76,9 +77,8 @@ export default function RenewalDetails() {
   if (!data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-foreground">Renewal request not found</h3>
-        <p className="mt-1 text-sm text-muted-foreground">The renewal you’re looking for doesn’t exist.</p>
-        <Link to="/admin/renewals" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to renewals</Link>
+        <h3 className="text-heading">Renewal not found</h3>
+        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/renewals">Back to renewals</Link></Button>
       </div>
     )
   }
@@ -101,7 +101,6 @@ export default function RenewalDetails() {
       />
 
       <RecordHeader
-        kicker={`Renewal · ${data.renewalYears} year${data.renewalYears === 1 ? '' : 's'} · ${fmtMoney2(data.amount)}`}
         title={headline(data)}
         sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.dueDate ? <> · due <DueIn at={data.dueDate} /></> : null} · started <When at={data.initiatedAt} /></>}
         status={status}
@@ -111,7 +110,7 @@ export default function RenewalDetails() {
       </RecordHeader>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Section kicker="Client" title="Who it’s for">
+        <Section title="Who it’s for">
           {data.client ? (
             <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
@@ -120,11 +119,11 @@ export default function RenewalDetails() {
           ) : null}
           <Row label="Email" value={data.email ?? '—'} />
           <Row label="Mobile" value={data.mobileNumber ?? '—'} mono />
-          <Row label="Date of birth" value={data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'} mono />
+          <Row label="Date of birth" value={data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'} />
         </Section>
 
-        <Section kicker="Money" title="How it was paid">
-          <Row label="Client paid" value={<span className="font-mono tabular-nums">{fmtMoney2(data.amount)}</span>} />
+        <Section title="How it was paid">
+          <Row label="Client paid" value={<span className="tabular-nums">{fmtMoney2(data.amount)}</span>} />
           <Row label="Through" value={data.paymentType === 'External'
             ? (data.sale ? <>Ontraport, <When at={data.sale.syncedAt} /></> : 'Outside Renewtron')
             : <>Card via Stripe · {statusOf('payment', data.stripePayment?.paymentStatus).label.toLowerCase()}{data.stripePayment?.paidAt ? <>, <When at={data.stripePayment.paidAt} /></> : null}</>} />
@@ -132,12 +131,11 @@ export default function RenewalDetails() {
             <Row label="ASIC fee" value={
               <span className="flex flex-wrap items-center gap-2">
                 {data.bpayPaidAt
-                  ? <><StatusPill tone="emerald">BPAY PAID</StatusPill><When at={data.bpayPaidAt} /></>
-                  : <StatusPill tone="red">BPAY TO PAY</StatusPill>}
-                <button type="button" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}
-                  className="text-sm font-medium text-link hover:text-link disabled:opacity-50">
+                  ? <><StatusPill tone="emerald">BPAY paid</StatusPill><span className="text-caption text-muted-foreground"><When at={data.bpayPaidAt} /></span></>
+                  : <StatusPill tone="red">BPAY to pay</StatusPill>}
+                <Button size="xs" variant={data.bpayPaidAt ? 'ghost' : 'outline'} disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}>
                   {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
-                </button>
+                </Button>
               </span>
             } />
           ) : data.status === 'Completed' ? (
@@ -150,27 +148,27 @@ export default function RenewalDetails() {
       <TechnicalDetail defaultOpen={false}>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
           <Row label="Request ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Status" value={`${data.status}${data.errorCategory ? ` · ${data.errorCategory}` : ''}`} mono />
-          <Row label="Failed at step" value={data.failedAtStep ?? '—'} mono />
-          <Row label="Attempts" value={`${data.attemptCount || 1}${data.cardFailureCount ? ` · card failed ${data.cardFailureCount}×` : ''}`} mono />
-          <Row label="Last run" value={data.lastAttemptAt ? fmtDateTime(data.lastAttemptAt) : '—'} mono />
-          <Row label="Next auto-retry" value={data.nextRetryAt ? fmtDateTime(data.nextRetryAt) : '—'} mono />
-          <Row label="Initiated" value={fmtDateTime(data.initiatedAt)} mono />
-          <Row label="Completed" value={data.completedAt ? fmtDateTime(data.completedAt) : '—'} mono />
-          <Row label="Source" value={`${data.source} · started by ${data.initiatedByLabel}`} mono />
+          <Row label="Status" value={`${data.status}${data.errorCategory ? ` · ${data.errorCategory}` : ''}`} />
+          <Row label="Failed at step" value={data.failedAtStep ?? '—'} />
+          <Row label="Attempts" value={`${data.attemptCount || 1}${data.cardFailureCount ? ` · card failed ${data.cardFailureCount}×` : ''}`} />
+          <Row label="Last run" value={data.lastAttemptAt ? fmtDateTime(data.lastAttemptAt) : '—'} />
+          <Row label="Next auto-retry" value={data.nextRetryAt ? fmtDateTime(data.nextRetryAt) : '—'} />
+          <Row label="Initiated" value={fmtDateTime(data.initiatedAt)} />
+          <Row label="Completed" value={data.completedAt ? fmtDateTime(data.completedAt) : '—'} />
+          <Row label="Source" value={`${data.source} · started by ${data.initiatedByLabel}`} />
           <Row label="ASIC account no." value={data.accountNumber} mono />
           <Row label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
           <Row label="IP address" value={data.ipAddress ?? '—'} mono />
           {data.bpayReference ? <Row label="BPAY" value={`biller ${data.bpayBillerCode ?? '—'} · ref ${data.bpayReference}`} mono /> : null}
           {data.stripePayment ? <Row label="Payment intent" value={<span className="break-all">{data.stripePayment.paymentIntentId}</span>} mono /> : null}
           {data.stripePayment?.cardLast4 ? (
-            <Row label="Client’s card" value={`${data.stripePayment.cardBrand?.toUpperCase() ?? ''} •••• ${data.stripePayment.cardLast4} · ${data.stripePayment.cardExpMonth ?? '--'}/${data.stripePayment.cardExpYear ?? '----'} · ${data.stripePayment.cardholderName ?? ''}`} mono />
+            <Row label="Client’s card" value={`${data.stripePayment.cardBrand?.toUpperCase() ?? ''} •••• ${data.stripePayment.cardLast4} · ${data.stripePayment.cardExpMonth ?? '--'}/${data.stripePayment.cardExpYear ?? '----'} · ${data.stripePayment.cardholderName ?? ''}`} />
           ) : null}
         </dl>
         {data.errorMessage ? (
           <div className="mt-4">
-            <KickerLabel>Last error, as ASIC or the system said it</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{data.errorMessage}</pre>
+            <div className="text-caption text-muted-foreground">Last error</div>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{data.errorMessage}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -203,7 +201,7 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
     return (
       <NextStep meaning="action" title={`Last activity ${agoWords(d.lastAttemptAt ?? d.initiatedAt)}.`}
         actions={<Button asChild size="sm" variant="outline"><Link to="/admin/renewals">Reconcile on Renewals</Link></Button>}>
-        The reconcile sweep re-queues stale renewals. If it stays stuck, look the name up at ASIC before running it again: it may have lodged.
+        <span title="The reconcile sweep re-queues stale renewals. If it stays stuck, look the name up at ASIC before running it again: it may have lodged.">Check ASIC before running it again: it may have lodged.</span>
       </NextStep>
     )
   }
@@ -236,7 +234,7 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
   if (d.nextRetryAt) {
     return (
       <NextStep meaning="waiting" title={`Renewtron tries again ${dueWords(d.nextRetryAt)}.`} actions={retryButton}>
-        You can retry now instead. {d.errorMessage ? `Last error: ${truncate(d.errorMessage, 160)}` : ''}
+        <span title={d.errorMessage ?? undefined}>You can retry now instead.</span>
       </NextStep>
     )
   }
@@ -246,13 +244,13 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
   if (paymentAtRisk(d)) {
     return (
       <NextStep meaning="action" title="Look the name up at ASIC first." actions={toClient}>
-        This run reached ASIC’s payment page, so ASIC may already have our money and the renewal. Retrying here is blocked so it can’t pay twice; if ASIC shows it renewed, note it on the client.
+        <span title="This run reached ASIC’s payment page, so ASIC may already have our money and the renewal. Retrying here is blocked so it can’t pay twice; if ASIC shows it renewed, note it on the client.">ASIC may already have our money, so retrying is blocked.</span>
       </NextStep>
     )
   }
   return (
     <NextStep meaning="action" title="Retry runs the renewal again from the start." actions={<>{retryButton}{toClient}</>}>
-      {d.errorMessage ? truncate(d.errorMessage, 220) : 'No error was recorded.'}
+      <span title={d.errorMessage ?? undefined}>{d.errorMessage ? truncate(d.errorMessage, 120) : 'No error was recorded.'}</span>
     </NextStep>
   )
 }
@@ -283,23 +281,20 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
 
-function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
-      <div className="mb-4">
-        <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">{title}</h2>
-      </div>
-      <dl className="space-y-3">{children}</dl>
-    </div>
+    <Card className="gap-4">
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardContent><dl className="space-y-3">{children}</dl></CardContent>
+    </Card>
   )
 }
 
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
+      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
+      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
     </div>
   )
 }

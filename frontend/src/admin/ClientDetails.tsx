@@ -1,19 +1,28 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Copy, KeyRound, Loader2, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
+import { Copy, KeyRound, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
-import { EmptyState, KickerLabel, StatusPill } from './_ui'
+import { Cell, EmptyState, StatusPill } from './_ui'
 import { Status, statusOf } from './_status'
-import { DueIn, When, useRowKeyboard } from './_rows'
+import { DueIn, Queue, When, useRowKeyboard } from './_rows'
 import { StoryStrip, type StoryStep } from './_record'
 import { WorkRow } from './_work'
 import { fmtDate, fmtMoney2, formatAbn, relativeTime } from './_utils'
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : undefined)
+const firstName = (c: ClientDetail) => c.fullName.split(' ')[0] || 'this client'
 
 export default function ClientDetails() {
   const { id } = useParams()
@@ -25,82 +34,84 @@ export default function ClientDetails() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-16 w-80" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     )
   }
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center">
-        <h3 className="text-base font-semibold text-foreground">Client not found</h3>
-        <p className="mt-1 text-sm text-muted-foreground">It may have been merged into another client.</p>
-        <Link to="/admin/clients" className="mt-4 inline-flex text-sm font-medium text-link">← Back to clients</Link>
+        <h3 className="text-heading">Client not found</h3>
+        <p className="mt-1 text-caption text-muted-foreground">It may have been merged into another client.</p>
+        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/clients">Back to clients</Link></Button>
       </div>
     )
   }
 
   const primary = data.emails.find((e) => e.isPrimary) ?? data.emails[0]
+  const facts = [primary?.email, data.mobileNumber, `first seen ${relativeTime(data.createdAt)}`].filter(Boolean)
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <Link to="/admin/clients" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ChevronLeft className="h-3 w-3" /> Back to clients
-        </Link>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <Breadcrumb>
+        <BreadcrumbList>
+          <BreadcrumbItem><BreadcrumbLink asChild><Link to="/admin/clients">Clients</Link></BreadcrumbLink></BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem><BreadcrumbPage>{data.fullName || 'Unnamed client'}</BreadcrumbPage></BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-title">{data.fullName || 'Unnamed client'}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{facts.join(' · ')}</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {data.hasPurchased ? <StatusPill tone="emerald">Customer</StatusPill> : <StatusPill tone="zinc">Lead</StatusPill>}
+          {data.reminderOptIn ? <StatusPill tone="indigo">Wants reminders</StatusPill> : null}
+          {data.unsubscribedAt ? <StatusPill tone="red">Unsubscribed</StatusPill> : null}
+          {data.isTest ? <StatusPill tone="amber">Test</StatusPill> : null}
+        </div>
       </div>
 
-      <div className="rounded-2xl bg-card ring-1 ring-border shadow-sm">
-        <div className="flex items-start justify-between gap-4 flex-wrap p-6">
-          <div className="min-w-0">
-            <div className="text-xs font-medium text-link">CLIENT</div>
-            <h1 className="mt-1 text-2xl font-semibold text-foreground tracking-tight">{data.fullName || '—'}</h1>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              {primary ? <span className="font-mono">{primary.email}</span> : null}
-              {data.mobileNumber ? <><span>·</span><span className="font-mono">{data.mobileNumber}</span></> : null}
-              <span>·</span><span>first seen {relativeTime(data.createdAt)}</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {data.hasPurchased ? <StatusPill tone="emerald">CUSTOMER</StatusPill> : <StatusPill tone="zinc">LEAD</StatusPill>}
-            {data.reminderOptIn ? <StatusPill tone="indigo">REMINDER OPT-IN</StatusPill> : null}
-            {data.unsubscribedAt ? <StatusPill tone="red">UNSUBSCRIBED</StatusPill> : null}
-            {data.isTest ? <StatusPill tone="amber">TEST</StatusPill> : null}
-          </div>
-        </div>
-        <SummaryStrip client={data} />
-      </div>
+      <SummaryStrip client={data} />
 
       <NeedsAttention client={data} />
 
       <DuplicatePanel client={data} />
 
-      <Section kicker="BUSINESS NAMES" title={`${activeNames(data).length} active, under ${data.abns.length} ABN${data.abns.length === 1 ? '' : 's'}`}>
+      <Section title="Business names" description={`${activeNames(data).length} active, under ${data.abns.length} ABN${data.abns.length === 1 ? '' : 's'}`}>
         <BusinessNames client={data} />
       </Section>
 
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        <Section kicker="ACTIVITY" title="Everything we've done with them" className="lg:col-span-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+        <Section title="Activity" className="lg:col-span-2">
           <Timeline client={data} />
         </Section>
         <div className="space-y-6">
-          <Section kicker="PROFILE" title="Contact details" className="">
-            <dl className="space-y-3">
-              <Row label="Date of birth" value={data.dateOfBirth ? fmtDate(data.dateOfBirth) : '—'} mono />
-              <Row label="Address" value={data.address ?? '—'} />
-              <Row label="TFN on file" value={data.hasTfn ? 'Yes' : 'No'} />
-              <Row label="Emails" value={
+          <Section title="Contact details">
+            <dl className="grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Cell label="Date of birth" value={data.dateOfBirth ? fmtDate(data.dateOfBirth) : '—'} />
+                <Cell label="TFN on file" value={data.hasTfn ? 'Yes' : 'No'} />
+              </div>
+              <Cell label="Address" value={data.address ?? '—'} />
+              <Cell label="Emails" value={
                 <ul className="space-y-1.5">
                   {data.emails.map((e) => (
-                    <li key={e.id} className="text-xs">
-                      <div className="font-mono break-all">{e.email}</div>
-                      <div className="text-muted-foreground/70">{e.isPrimary ? 'Primary · ' : ''}{e.source}{e.ontraportContactId ? ` · Ontraport ${e.ontraportContactId}` : ''}</div>
+                    <li key={e.id} title={e.ontraportContactId ? `Ontraport contact ${e.ontraportContactId}` : undefined}>
+                      <div className="break-all">{e.email}</div>
+                      <div className="text-caption text-muted-foreground">{e.isPrimary ? 'Primary · ' : ''}{e.source}</div>
                     </li>
                   ))}
                 </ul>
               } />
             </dl>
           </Section>
-          <Section kicker="NOTES" title="Staff notes" className="">
+          <Section title="Notes">
             <Notes client={data} />
           </Section>
         </div>
@@ -123,19 +134,16 @@ function NeedsAttention({ client }: { client: ClientDetail }) {
   const items = data.groups.flatMap((g) => g.items).filter((i) => i.kind !== 'duplicate')
   if (items.length === 0) {
     return (
-      <div className="mt-4 rounded-xl bg-success/5 px-4 py-2.5 text-sm text-success ring-1 ring-success/20">
-        Nothing needs a person for {client.fullName.split(' ')[0] || 'this client'} right now.
-      </div>
+      <Card className="flex-row items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+        <span aria-hidden className="size-2 rounded-full bg-success" />
+        Nothing needs you for {firstName(client)} right now.
+      </Card>
     )
   }
-  const meaning = items.some((i) => i.kind !== 'keyRequest' || i.reason === 'Pending' || i.reason === 'Failed') ? 'red' : 'amber'
   return (
-    <section className={`mt-4 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ${meaning === 'red' ? 'ring-destructive/20' : 'ring-warning/25'}`}>
-      <header className={`px-4 py-2.5 text-sm font-semibold ${meaning === 'red' ? 'bg-destructive/5 text-destructive' : 'bg-warning/5 text-warning'}`}>
-        Needs attention <span className="ml-1 font-mono text-xs font-normal opacity-70">{items.length}</span>
-      </header>
+    <Queue title="Needs attention" count={items.length}>
       {items.map((i) => <WorkRow key={`${i.kind}-${i.id}`} item={i} />)}
-    </section>
+    </Queue>
   )
 }
 
@@ -154,7 +162,7 @@ function SummaryStrip({ client }: { client: ClientDetail }) {
   const lastRenewed = renewed.map((r) => r.completedAt ?? r.initiatedAt).sort().reverse()[0]
   const others = [...new Set(client.abns.filter((a) => !a.isReminderContact).flatMap((a) => a.contacts.filter((c) => c.isReminderContact).map((c) => c.fullName)))]
 
-  const items: Array<{ label: string; value: ReactNode; sub?: ReactNode }> = [
+  const items: Array<{ label: string; value: ReactNode; sub?: string; dot?: string }> = [
     { label: 'Business names', value: active.length, sub: active.length === 1 ? active[0].name : active.length ? `across ${client.abns.length} ABN${client.abns.length === 1 ? '' : 's'}` : 'none on the register yet' },
     { label: 'Next due', value: next ? fmtDate(next.renewalDueDate!) : 'Unknown', sub: next ? next.name : active.length ? 'no due date on file' : undefined },
     { label: 'ASIC keys', value: active.length ? `${withKey} of ${active.length}` : '—', sub: withKey === active.length && active.length ? 'all names' : undefined },
@@ -162,34 +170,40 @@ function SummaryStrip({ client }: { client: ClientDetail }) {
       label: 'Reminders',
       value: client.unsubscribedAt ? 'Unsubscribed' : client.abns.length === 0 ? '—' : reminderAbns === client.abns.length ? 'Gets them' : reminderAbns === 0 ? 'Someone else' : `${reminderAbns} of ${client.abns.length} ABNs`,
       sub: others.length ? `others go to ${others.join(', ')}` : undefined,
+      dot: client.unsubscribedAt ? 'bg-destructive' : undefined,
     },
     { label: 'Renewals with us', value: renewed.length, sub: lastRenewed ? `last ${fmtDate(lastRenewed)}` : client.sales.length ? `${client.sales.length} Ontraport sale${client.sales.length === 1 ? '' : 's'}` : undefined },
   ]
   return (
-    <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border-t border-border">
-      {items.map((i) => (
-        <div key={i.label} className="px-6 py-4 border-border [&:not(:first-child)]:lg:border-l">
-          <dt className="text-xs text-muted-foreground">{i.label}</dt>
-          <dd className="mt-1 text-lg font-semibold text-foreground tabular-nums">{i.value}</dd>
-          {i.sub ? <dd className="text-xs text-muted-foreground truncate" title={typeof i.sub === 'string' ? i.sub : undefined}>{i.sub}</dd> : null}
-        </div>
-      ))}
-    </dl>
+    <Card className="gap-0 py-0">
+      <dl className="grid grid-cols-1 divide-y sm:grid-cols-5 sm:divide-x sm:divide-y-0">
+        {items.map((i) => (
+          <div key={i.label} className="min-w-0 px-5 py-4">
+            <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+              {i.dot ? <span aria-hidden className={cn('size-2 rounded-full', i.dot)} /> : null}
+              {i.label}
+            </dt>
+            <dd className="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums">{i.value}</dd>
+            {i.sub ? <dd className="truncate text-caption text-muted-foreground" title={i.sub}>{i.sub}</dd> : null}
+          </div>
+        ))}
+      </dl>
+    </Card>
   )
 }
 
 type TimelineKind = 'renewal' | 'sale' | 'keyRequest' | 'lead' | 'email'
 const KIND_LABELS: Record<TimelineKind, string> = { renewal: 'Renewals', sale: 'Ontraport sales', keyRequest: 'Key requests', lead: 'Wizard visits', email: 'Emails' }
 const KIND_ICONS: Record<TimelineKind, ReactNode> = {
-  renewal: <RefreshCw className="h-3.5 w-3.5" />,
-  sale: <ShoppingCart className="h-3.5 w-3.5" />,
-  keyRequest: <KeyRound className="h-3.5 w-3.5" />,
-  lead: <Users className="h-3.5 w-3.5" />,
-  email: <Mail className="h-3.5 w-3.5" />,
+  renewal: <RefreshCw className="size-4" />,
+  sale: <ShoppingCart className="size-4" />,
+  keyRequest: <KeyRound className="size-4" />,
+  lead: <Users className="size-4" />,
+  email: <Mail className="size-4" />,
 }
 const TIMELINE_STEP = 15
 
-/** Every record on the client, newest first, in one list; chips narrow it to one kind. */
+/** Every record on the client, newest first, in one list; the toggles narrow it to one kind. */
 function Timeline({ client }: { client: ClientDetail }) {
   const [kind, setKind] = useState<TimelineKind | ''>('')
   const [shown, setShown] = useState(TIMELINE_STEP)
@@ -220,40 +234,38 @@ function Timeline({ client }: { client: ClientDetail }) {
     return all.sort((a, b) => b.at.localeCompare(a.at))
   }, [client])
 
-  if (events.length === 0) return <div className="text-sm text-muted-foreground/70">Nothing yet.</div>
+  if (events.length === 0) return <p className="text-sm text-muted-foreground">Nothing here yet.</p>
   const counts = events.reduce<Partial<Record<TimelineKind, number>>>((acc, e) => ({ ...acc, [e.kind]: (acc[e.kind] ?? 0) + 1 }), {})
   const visible = events.filter((e) => !kind || e.kind === kind)
-  const chip = (value: TimelineKind | '', label: string, count: number) => (
-    <button key={value || 'all'} type="button" onClick={() => { setKind(value); setShown(TIMELINE_STEP) }}
-      className={`rounded-full px-2.5 py-1 text-xs ring-1 ${kind === value ? 'bg-zinc-900 text-white ring-zinc-900' : 'bg-card text-muted-foreground ring-border hover:bg-muted/50'}`}>
-      {label} <span className="tabular-nums opacity-60">{count}</span>
-    </button>
+  const option = (value: TimelineKind | 'all', label: string, count: number) => (
+    <ToggleGroupItem key={value} value={value} className="px-3">
+      {label} <span className="text-muted-foreground tabular-nums">{count}</span>
+    </ToggleGroupItem>
   )
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {chip('', 'All', events.length)}
-        {(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => chip(k, KIND_LABELS[k], counts[k]!))}
-      </div>
-      <ol className="relative border-l border-border ml-2">
+      <ToggleGroup type="single" variant="outline" size="sm" className="mb-3 flex-wrap" value={kind || 'all'}
+        onValueChange={(v) => { if (!v) return; setKind(v === 'all' ? '' : (v as TimelineKind)); setShown(TIMELINE_STEP) }}>
+        {option('all', 'All', events.length)}
+        {(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => option(k, KIND_LABELS[k], counts[k]!))}
+      </ToggleGroup>
+      <ol className="divide-y">
         {visible.slice(0, shown).map((e) => (
-          <li key={e.key} className="relative pl-6 pb-4 last:pb-0">
-            <span className="absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground ring-1 ring-border">{KIND_ICONS[e.kind]}</span>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                {e.to ? <Link to={e.to} className="text-sm text-foreground hover:underline">{e.title}</Link> : <div className="text-sm text-foreground">{e.title}</div>}
-                <div className="text-xs text-muted-foreground">
-                  <span title={new Date(e.at).toLocaleString()}>{fmtDate(e.at)}</span>{e.sub ? ` · ${e.sub}` : ''}
-                </div>
+          <li key={e.key} className="flex items-start gap-3 py-2.5">
+            <span aria-hidden className="mt-0.5 text-muted-foreground">{KIND_ICONS[e.kind]}</span>
+            <div className="min-w-0 flex-1">
+              {e.to ? <Link to={e.to} className="text-sm text-link hover:underline">{e.title}</Link> : <div className="text-sm">{e.title}</div>}
+              <div className="truncate text-caption text-muted-foreground">
+                <span title={new Date(e.at).toLocaleString()}>{fmtDate(e.at)}</span>{e.sub ? ` · ${e.sub}` : ''}
               </div>
-              <Status kind={e.kind} status={e.status} />
             </div>
+            <Status kind={e.kind} status={e.status} />
           </li>
         ))}
       </ol>
       {visible.length > shown ? (
-        <Button variant="ghost" size="sm" className="mt-3" onClick={() => setShown((s) => s + TIMELINE_STEP * 2)}>
+        <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShown((s) => s + TIMELINE_STEP * 2)}>
           Show {Math.min(visible.length - shown, TIMELINE_STEP * 2)} more
         </Button>
       ) : null}
@@ -287,36 +299,36 @@ function DuplicatePanel({ client }: { client: ClientDetail }) {
   ]
   if (others.length === 0) return null
   const busy = merge.isPending || dismiss.isPending
+  const why = 'Another client on the same ABN has the same name or mobile, under a different email. It may be the same person, or two people at the business who share a phone. Merge only if it’s the same person: the ASIC key enquiry goes out in one person’s name.'
 
   return (
-    <div className="mt-6 rounded-xl bg-warning/5 p-5 ring-1 ring-warning/25">
-      <div className="text-xs font-medium text-warning">POSSIBLE DUPLICATE</div>
-      <p className="mt-1 text-sm text-warning max-w-3xl">
-        Another client on the same ABN has the same name or mobile, under a different email. It may be the same person, or two
-        people at the business who share a phone. Merge only if it's the same person: the ASIC key enquiry goes out in one
-        person's name.
-      </p>
-      <ul className="mt-3 space-y-2">
-        {others.map((o) => (
-          <li key={o.id} className="flex flex-wrap items-center gap-2">
-            <Link to={`/admin/clients/${o.id}`} className="text-sm font-medium text-foreground underline">{o.fullName || 'Unnamed client'}</Link>
-            <Button size="sm" variant="outline" disabled={busy}
-              onClick={() => merge.mutate({ from: o.id, into: client.id })}>Merge into this client</Button>
-            <Button size="sm" variant="outline" disabled={busy}
-              onClick={() => merge.mutate({ from: client.id, into: o.id })}>Merge this into them</Button>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => dismiss.mutate(o.flagged)}>Different people</Button>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Card className="gap-0 overflow-hidden py-0">
+      <div className="border-b px-4 py-3" title={why}>
+        <h3 className="flex items-center gap-2 text-heading">
+          <span aria-hidden className="size-2 rounded-full bg-warning" />
+          Possible duplicate
+        </h3>
+        <p className="mt-0.5 text-caption text-muted-foreground">Same ABN and name or mobile, different email. Merge only if it’s the same person.</p>
+      </div>
+      {others.map((o) => (
+        <div key={o.id} className="flex flex-wrap items-center gap-2 border-b px-4 py-3 last:border-b-0">
+          <Link to={`/admin/clients/${o.id}`} className="mr-auto text-sm font-medium text-link hover:underline">{o.fullName || 'Unnamed client'}</Link>
+          <Button size="sm" variant="outline" disabled={busy}
+            onClick={() => merge.mutate({ from: o.id, into: client.id })}>Merge into this client</Button>
+          <Button size="sm" variant="outline" disabled={busy}
+            onClick={() => merge.mutate({ from: client.id, into: o.id })}>Merge this into them</Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => dismiss.mutate(o.flagged)}>Different people</Button>
+        </div>
+      ))}
+    </Card>
   )
 }
 
-/** One card per ABN: who deals with us about it, who gets its reminders, and its business names. */
+/** One group per ABN: who deals with us about it, who gets its reminders, and its business names. */
 function BusinessNames({ client }: { client: ClientDetail }) {
-  if (client.abns.length === 0) return <EmptyState title="No ABN yet." message="Business names appear once we have the client's ABN and it has been checked against the register." />
+  if (client.abns.length === 0) return <EmptyState title="No ABN yet" message="Business names appear once we have the client’s ABN." />
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {client.abns.map((a) => <AbnGroup key={a.abn} client={client} abn={a} />)}
     </div>
   )
@@ -338,43 +350,40 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
   const reminderOther = abn.contacts.find((c) => c.isReminderContact)
 
   return (
-    <div className="rounded-lg ring-1 ring-border">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3 rounded-t-lg">
-        <div className="min-w-0">
-          <div className="font-mono text-sm text-foreground tabular-nums">ABN {formatAbn(abn.abn)}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">
+    <div className="overflow-hidden rounded-lg border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-4 py-2.5">
+        <div className="min-w-0" title={abn.registerCheckedAt ? `Register checked ${relativeTime(abn.registerCheckedAt)}` : 'Register not checked yet'}>
+          <div className="text-sm font-medium">ABN <span className="font-mono">{formatAbn(abn.abn)}</span></div>
+          <div className="mt-0.5 text-caption text-muted-foreground">
             {abn.contacts.length === 0 ? 'Only contact' : (
               <>Also on this ABN:{' '}
                 {abn.contacts.map((c, i) => (
                   <span key={c.clientId}>
                     {i > 0 ? ', ' : ''}
-                    <Link to={`/admin/clients/${c.clientId}`} className="text-foreground underline">{c.fullName || 'Unnamed client'}</Link>
+                    <Link to={`/admin/clients/${c.clientId}`} className="text-link hover:underline">{c.fullName || 'Unnamed client'}</Link>
                     {c.isReminderContact ? ' (gets reminders)' : ''}
                   </span>
                 ))}
               </>
             )}
-            {' · '}register {abn.registerCheckedAt ? `checked ${relativeTime(abn.registerCheckedAt)}` : 'not checked yet'}
           </div>
         </div>
         <div className="flex items-center gap-2">
           {abn.isReminderContact ? (
-            <StatusPill tone="indigo">GETS REMINDERS</StatusPill>
+            <StatusPill tone="indigo">Gets reminders</StatusPill>
           ) : (
-            <>
-              <span className="text-xs text-muted-foreground">Reminders go to {reminderOther?.fullName || 'another contact'}</span>
-              <Button size="sm" variant="outline" disabled={makeReminder.isPending} onClick={() => makeReminder.mutate(client.id)}>
-                Send them to {client.fullName.split(' ')[0] || 'this client'}
-              </Button>
-            </>
+            <Button size="sm" variant="outline" disabled={makeReminder.isPending} onClick={() => makeReminder.mutate(client.id)}
+              title={`Reminders go to ${reminderOther?.fullName || 'another contact'}`}>
+              Send reminders to {firstName(client)}
+            </Button>
           )}
         </div>
       </div>
 
       {abn.businessNames.length === 0 ? (
-        <div className="px-4 py-3 text-sm text-muted-foreground/70">No business names on the register for this ABN.</div>
+        <div className="px-4 py-3 text-sm text-muted-foreground">No business names on the register for this ABN.</div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="divide-y">
           {abn.businessNames.map((n) => (
             <NameStory key={n.id} client={client} name={n} busy={setStatus.isPending} onStatus={(status) => setStatus.mutate({ id: n.id, status })} />
           ))}
@@ -434,12 +443,14 @@ function NameStory({ client, name: n, busy, onStatus }: {
     steps.push({ label: 'ASIC key', meaning: 'quiet', note: 'not requested' })
   }
 
+  const meta = `${n.registrationDate ? `Registered ${fmtDate(n.registrationDate)}` : 'Registration date unknown'}${n.asicAccountNumber ? ` · ASIC account ${n.asicAccountNumber}` : ''} · via ${n.source}`
+
   return (
-    <div className={`px-4 py-3 ${active ? '' : 'text-muted-foreground/70'}`}>
+    <div className="px-4 py-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className={`font-medium ${active ? 'text-foreground' : ''}`}>{n.name}</div>
-          <div className="text-xs text-muted-foreground">
+        <div className="min-w-0" title={meta}>
+          <div className={cn('text-sm font-medium', !active && 'text-muted-foreground')}>{n.name}</div>
+          <div className="text-caption text-muted-foreground">
             {active ? due : n.status === 'Excluded' ? 'Left out of reminders' : 'No longer on the register'}
             {n.lastRenewedAt ? <> · renewed <When at={n.lastRenewedAt} /> for {n.lastRenewalYears} yr</> : steps.length || !active ? null : ' · not renewed with us yet'}
             {n.asicKey ? <> · key <span className="font-mono">{n.asicKey}</span></> : null}
@@ -451,9 +462,6 @@ function NameStory({ client, name: n, busy, onStatus }: {
         </div>
       </div>
       {active && steps.length ? <div className="mt-2"><StoryStrip steps={steps} /></div> : null}
-      <div className="mt-1 text-xxs font-mono text-muted-foreground/70">
-        {n.registrationDate ? `reg ${fmtDate(n.registrationDate)}` : 'reg date unknown'}{n.asicAccountNumber ? ` · acct ${n.asicAccountNumber}` : ''} · via {n.source}
-      </div>
     </div>
   )
 }
@@ -468,12 +476,12 @@ function NameMenu({ name, busy, onStatus }: { name: ClientBusinessNameDto; busy:
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={`Actions for ${name.name}`} disabled={busy}>
-          <MoreHorizontal className="h-4 w-4" />
+        <Button size="icon-sm" variant="ghost" aria-label={`Actions for ${name.name}`} disabled={busy}>
+          <MoreHorizontal />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {name.asicKey ? <DropdownMenuItem onSelect={copyKey}><Copy className="h-4 w-4" /> Copy ASIC key</DropdownMenuItem> : null}
+        {name.asicKey ? <DropdownMenuItem onSelect={copyKey}><Copy /> Copy ASIC key</DropdownMenuItem> : null}
         {name.status === 'Active' ? <DropdownMenuItem onSelect={() => onStatus('Excluded')}>Leave out of reminders</DropdownMenuItem> : null}
         {name.status === 'Excluded' ? <DropdownMenuItem onSelect={() => onStatus('Active')}>Include in reminders again</DropdownMenuItem> : null}
       </DropdownMenuContent>
@@ -499,8 +507,7 @@ function Notes({ client }: { client: ClientDetail }) {
   })
   return (
     <div>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} maxLength={2000}
-        className="w-full rounded-md ring-1 ring-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+      <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} maxLength={2000} placeholder="Anything the next person should know" />
       <div className="mt-2 flex justify-end">
         <Button size="sm" disabled={save.isPending || notes === (client.notes ?? '')} onClick={() => save.mutate()}>Save notes</Button>
       </div>
@@ -508,23 +515,15 @@ function Notes({ client }: { client: ClientDetail }) {
   )
 }
 
-function Section({ kicker, title, children, className = 'mt-6' }: { kicker: string; title: string; children: ReactNode; className?: string }) {
+function Section({ title, description, action, children, className }: { title: string; description?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl bg-card p-5 ring-1 ring-border shadow-sm ${className}`}>
-      <div className="mb-4">
-        <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold text-foreground tracking-tight">{title}</h2>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-[8rem_1fr] gap-3 items-baseline">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
-    </div>
+    <Card className={cn('gap-4', className)}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description ? <CardDescription className="text-caption">{description}</CardDescription> : null}
+        {action ? <CardAction>{action}</CardAction> : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   )
 }

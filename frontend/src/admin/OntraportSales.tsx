@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { CircleAlert, Info, KeyRound, ListRestart, Loader2, RefreshCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, ViewToggle, type Tone } from './_ui'
+import { ErrorModal, Pagination, Stat, StatStrip, useDebouncedValue } from './_components'
+import { EmptyState, PageHeader, RefreshButton, ViewToggle } from './_ui'
 import { SaleSentence, SentenceList } from './_sentences'
-import { Status, statusOf, type Meaning } from './_status'
+import { Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 
 type SalesResponse = Awaited<ReturnType<typeof api.admin.ontraportSales>>
 type Sale = SalesResponse['items'][number]
@@ -147,20 +150,20 @@ export default function OntraportSales() {
       accessorKey: 'businessName',
       header: 'Business',
       // Compact on phones: business name only; ABN + contact return at sm.
-      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
+      meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-60 sm:max-w-76' },
       cell: ({ row }) => {
         const s = row.original
         return (
           <div>
-            <Link to={`/admin/ontraport-sales/${s.id}`} className="block truncate text-sm font-medium text-foreground hover:text-link hover:underline">{s.businessName}</Link>
-            <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{s.abn}</div>
-            <div className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70 truncate">
+            <Link to={`/admin/ontraport-sales/${s.id}`} className="block truncate font-medium hover:underline">{s.businessName}</Link>
+            <div className="hidden truncate text-caption text-muted-foreground sm:block">
+              <span className="font-mono tabular-nums">{s.abn}</span>
+              {' · '}
               {s.clientId ? (
-                <Link to={`/admin/clients/${s.clientId}`} className="underline decoration-zinc-300 hover:text-foreground" title="Open the client record">
+                <Link to={`/admin/clients/${s.clientId}`} className="text-link hover:underline" title={s.email}>
                   {s.contactName || s.email}
                 </Link>
-              ) : (s.contactName || s.email)}
-              {s.contactName ? ` · ${s.email}` : ''}
+              ) : <span title={s.email}>{s.contactName || s.email}</span>}
             </div>
           </div>
         )
@@ -174,8 +177,8 @@ export default function OntraportSales() {
     },
     {
       accessorKey: 'amountPaid',
-      header: 'Amount paid',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
+      header: 'Paid',
+      meta: { className: 'text-right font-mono tabular-nums', headerClassName: 'text-right' },
       cell: ({ row }) => fmtMoney2(row.original.amountPaid),
     },
     {
@@ -188,7 +191,7 @@ export default function OntraportSales() {
       id: 'syncedAt',
       accessorFn: (s) => new Date(s.syncedAt).getTime(),
       header: 'Synced',
-      meta: { className: 'text-sm text-foreground tabular-nums whitespace-nowrap' },
+      meta: { className: 'tabular-nums whitespace-nowrap' },
       cell: ({ row }) => relativeTime(row.original.syncedAt),
     },
     {
@@ -200,22 +203,19 @@ export default function OntraportSales() {
         const s = row.original
         const isFailed = s.status === 'RenewalFailed'
         return (
-          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
             <Button
-              variant="ghost" size="sm" className="h-7 px-2 text-xs"
+              variant="ghost" size="sm"
               disabled={keyRequestMutation.isPending}
               onClick={(e) => { e.stopPropagation(); requestKey(s.id, s.businessName) }}
               title="Add this business name to the ASIC key to-do list"
             >
-              <KeyRound className="h-3.5 w-3.5" /> Request key
+              <KeyRound /> Request key
             </Button>
             {s.renewalRequestId ? (
-              <Link
-                to={`/admin/renewals/${s.renewalRequestId}`}
-                className={`inline-flex items-center text-sm font-medium ${isFailed ? 'text-destructive hover:text-destructive' : 'text-link hover:text-link'}`}
-              >
-                {isFailed ? 'Investigate →' : 'View renewal →'}
-              </Link>
+              <Button asChild size="sm" variant="outline">
+                <Link to={`/admin/renewals/${s.renewalRequestId}`}>{isFailed ? 'Investigate' : 'Open renewal'}</Link>
+              </Button>
             ) : null}
           </div>
         )
@@ -227,141 +227,98 @@ export default function OntraportSales() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="PIPELINE"
         title="Ontraport sales"
-        subtitle="Sales paid in Ontraport — fired at ASIC when the due date enters the renewal window."
+        subtitle="Paid in Ontraport, renewed once the name is inside ASIC’s window."
         right={
           <>
-            <button
-              onClick={sync}
-              disabled={syncMutation.isPending}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium hover:bg-zinc-800 shadow-sm disabled:opacity-50 transition"
-            >
-              {syncMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Sync now
-            </button>
-            <button
-              onClick={processEligible}
-              disabled={processMutation.isPending}
-              className="inline-flex items-center whitespace-nowrap rounded-md bg-primary text-white px-3 py-2 text-sm font-medium hover:bg-primary shadow-sm disabled:opacity-50 transition"
-            >
-              {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
-            </button>
             {failedCount > 0 ? (
-              <Button variant="outline" className="h-9 whitespace-nowrap border-warning/25 text-warning hover:bg-warning/5" onClick={() => setRequeueOpen(true)}>
-                <ListRestart className="h-4 w-4" />
-                <span className="hidden sm:inline">Requeue failed</span>
-                <span className="sm:hidden">Requeue</span>
+              <Button variant="outline" size="sm" onClick={() => setRequeueOpen(true)} title="Put failed sales back in the pool, in batches">
+                <ListRestart />
+                Requeue failed
               </Button>
             ) : null}
-            <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
-            <RefreshButton onClick={() => void refetch()} busy={isFetching} />
+            <Button variant="outline" size="sm" onClick={sync} disabled={syncMutation.isPending} title="Pull new sales from Ontraport now">
+              {syncMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              Sync now
+            </Button>
+            <Button size="sm" onClick={processEligible} disabled={processMutation.isPending} title="Start renewals for every sale inside ASIC’s window">
+              {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
+            </Button>
           </>
         }
       />
 
-      {/* Stats strip — counts come from the server and describe ALL sales, not the filter */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatTile
-          kicker="30D"
-          label="Pipeline next 30d"
+      {/* Counts come from the server and describe all sales, not the filter. */}
+      <StatStrip>
+        <Stat
+          label="Due in the next 30 days"
           value={fmtMoney0(stats.pipelineValueNext30d)}
           sub={`${data?.waitingCount ?? 0} waiting · ${data?.queuedCount ?? 0} queued`}
-          tone="emerald"
         />
-        <StatTile
-          kicker="OVERDUE"
-          label="Past their due date"
+        <Stat
+          label="Overdue"
           value={buckets.overdue.toLocaleString()}
-          sub={buckets.overdue > 0 ? `${fmtMoney0(buckets.overdueValue)} unrecovered` : 'all on track'}
-          tone={buckets.overdue > 0 ? 'red' : 'zinc'}
+          sub={buckets.overdue > 0 ? `${fmtMoney0(buckets.overdueValue)} not renewed` : 'All on track'}
+          dot={buckets.overdue > 0 ? 'action' : null}
         />
-        <StatTile
-          kicker="FAILED"
-          label="Real failures"
+        <Stat
+          label="Failed"
           value={failedCount.toLocaleString()}
-          sub={failedCount > 0 ? 'review the table' : 'all clear'}
-          tone={failedCount > 0 ? 'red' : 'zinc'}
+          sub={blockedCount > 0 ? `${blockedCount.toLocaleString()} more waiting on ASIC or skipped` : failedCount > 0 ? 'Need a look' : 'All clear'}
+          dot={failedCount > 0 ? 'action' : null}
+          hint={blockedCount > 0 ? `${asicNotYetDueCount} not due at ASIC yet · ${renewalInProgressCount} open at ASIC · ${ineligibleCount} not eligible` : undefined}
         />
-        <StatTile
-          kicker="BLOCKED"
-          label="Transient / skipped"
-          value={blockedCount.toLocaleString()}
-          sub={blockedCount > 0
-            ? `${asicNotYetDueCount} not yet due · ${renewalInProgressCount} in progress · ${ineligibleCount} ineligible`
-            : 'none'}
-          tone={blockedCount > 0 ? 'amber' : 'zinc'}
-        />
-        <SparklineTile
-          kicker="SYNC · 14D"
-          label={stats.lastSyncAt ? relativeTime(stats.lastSyncAt) : 'No sync yet'}
+        <Stat
+          label="Synced today"
+          period={stats.lastSyncAt ? `Last ${relativeTime(stats.lastSyncAt)}` : 'No sync yet'}
           value={stats.today.toLocaleString()}
-          sub={stats.nextSyncAt ? `next at ${new Date(stats.nextSyncAt).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' })} · ${stats.yesterday.toLocaleString()} yesterday` : `${stats.yesterday.toLocaleString()} yesterday`}
-          deltaPct={stats.deltaPct}
-          data={stats.daily14d.map((d) => d.count)}
+          sub={stats.nextSyncAt
+            ? `${stats.yesterday.toLocaleString()} yesterday · next at ${new Date(stats.nextSyncAt).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+            : `${stats.yesterday.toLocaleString()} yesterday`}
+          trend={stats.daily14d.map((d) => ({ count: d.count }))}
+          hint="Sales pulled from Ontraport; the line is the last 14 days"
         />
-      </div>
+      </StatStrip>
 
-      {/* Up next hero */}
       {upNext.length > 0 ? (
-        <div className="mt-8 rounded-2xl bg-zinc-950 ring-1 ring-white/5 px-6 py-6 sm:px-8 sm:py-8 relative overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-primary/15 blur-3xl" />
-            <div className="absolute -left-24 -bottom-24 h-64 w-64 rounded-full bg-brand-400/10 blur-3xl" />
+        <section className="mt-8 space-y-3">
+          <h2 className="flex items-baseline gap-2 text-heading">
+            Up next
+            <span className="text-sm font-normal text-muted-foreground tabular-nums">{upNext.length} sale{upNext.length === 1 ? '' : 's'} · {fmtMoney0(upNextValue)}</span>
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {upNext.map((s) => <UpNextCard key={s.id} s={s} />)}
           </div>
-          <div className="relative">
-            <div className="flex items-end justify-between gap-4 flex-wrap mb-5">
-              <div>
-                <div className="text-xs font-medium text-brand-400">UP NEXT</div>
-                <h2 className="mt-1 text-xl font-semibold text-white tracking-tight">Closest renewals due</h2>
-                <p className="mt-1 text-sm text-muted-foreground/50">{upNext.length} sales · {fmtMoney0(upNextValue)} in pipeline</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {upNext.map((s) => (
-                <UpNextCard key={s.id} s={s} />
-              ))}
-            </div>
-          </div>
-        </div>
+        </section>
       ) : null}
 
-      {/* Heading + due-date urgency chips (a client-side view over the server-filtered rows) */}
-      <div className="mt-8 flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <div className="text-xs font-medium text-muted-foreground">VIEW</div>
-          <h2 className="mt-0.5 text-base font-semibold text-foreground tracking-tight">All pipeline</h2>
-        </div>
-        {/* Scrolls within itself on narrow screens instead of overflowing the page */}
-        <div className="max-w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-          <div className="inline-flex w-max rounded-md bg-card ring-1 ring-border shadow-sm" role="group">
-            <FilterTab active={dueFilter === 'overdue'} onClick={() => setDueFilter('overdue')} count={buckets.overdue} tone="red">Overdue</FilterTab>
-            <FilterTab active={dueFilter === '7d'}      onClick={() => setDueFilter('7d')}      count={buckets.soon7}   tone="amber">Next 7d</FilterTab>
-            <FilterTab active={dueFilter === '30d'}     onClick={() => setDueFilter('30d')}     count={buckets.soon30}  tone="emerald">Next 30d</FilterTab>
-            <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={buckets.all}     tone="zinc">All</FilterTab>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter toolbar — status facet is resolved server-side with live counts */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      {/* Due-date tabs and filters, resolved on the server; the view and refresh sit at the end. */}
+      <div className="mt-8 flex flex-wrap items-center gap-2">
+        <Tabs value={dueFilter} onValueChange={(v) => setDueFilter(v as DueFilter)}>
+          <TabsList className="h-8">
+            <DueTab value="overdue" count={buckets.overdue}>Overdue</DueTab>
+            <DueTab value="7d" count={buckets.soon7}>Next 7 days</DueTab>
+            <DueTab value="30d" count={buckets.soon30}>Next 30 days</DueTab>
+            <DueTab value="all" count={buckets.all}>All</DueTab>
+          </TabsList>
+        </Tabs>
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search business, contact, ABN, email…"
-          className="h-9 w-64"
+          placeholder="Search name, contact, ABN or email…"
+          className="h-8 w-64"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         {hasActiveFilters ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
             Reset
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
+          <RefreshButton onClick={() => void refetch()} busy={isFetching} />
+        </div>
       </div>
 
       <div className="mt-4">
@@ -428,52 +385,47 @@ function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose
     <Dialog open={open} onOpenChange={(o) => { if (!o && !liveMutation.isPending) onClose() }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <div className="text-xs font-medium text-warning">RECOVERY</div>
           <DialogTitle>Requeue failed sales</DialogTitle>
+          <DialogDescription>Start with a small batch, watch how it goes, then run again.</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-3">
-          <p className="text-sm text-foreground">
-            Puts failed sales back into the eligible pool in a controlled batch. Start small,
-            watch the completion rate, then run again — sales past the renewal window are excluded.
-          </p>
-
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="requeue-max" className="text-xs font-medium text-muted-foreground">Batch size</Label>
+              <Label htmlFor="requeue-max" className="text-caption font-normal text-muted-foreground">Batch size</Label>
               <Input
                 id="requeue-max" type="number" min={1} max={500} value={max}
                 onChange={(e) => setMax(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
-                className="h-8 w-20 font-mono tabular-nums"
+                className="h-8 w-20 tabular-nums"
               />
             </div>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Label className="text-caption font-normal text-muted-foreground" title="Sales past ASIC’s renewal window are left out unless you tick this">
               <Checkbox checked={includePastDue} onCheckedChange={(v) => setIncludePastDue(v === true)} />
-              include past-due
-            </label>
+              Include past due
+            </Label>
           </div>
           <Input
             value={errorInput}
             onChange={(e) => setErrorInput(e.target.value)}
             placeholder="Only errors containing… (optional)"
-            className="h-8 text-xs"
+            className="h-8"
           />
 
           {isFetching && !preview ? (
-            <div className="flex items-center gap-2 py-4 justify-center text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Running dry-run…
+            <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Checking what would change…
             </div>
           ) : preview ? (
             <>
-              <div className="rounded-md bg-muted/50 ring-1 ring-border px-3 py-2 text-xs font-mono text-foreground">
-                <span className="text-foreground font-semibold tabular-nums">{preview.batchSize}</span> of{' '}
+              <p className="text-sm">
+                <span className="font-medium tabular-nums">{preview.batchSize}</span> of{' '}
                 <span className="tabular-nums">{preview.totalMatching}</span> matching failed sales in this batch
-              </div>
+              </p>
               {preview.items.length > 0 ? (
-                <div className="max-h-36 overflow-y-auto rounded-md ring-1 ring-border divide-y divide-border">
+                <div className="max-h-36 divide-y overflow-y-auto rounded-lg border">
                   {preview.items.slice(0, 25).map((i) => (
-                    <div key={i.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
-                      <span className="min-w-0 truncate text-foreground">{i.businessName} · {i.abn}</span>
-                      <span className="shrink-0 font-mono tabular-nums text-muted-foreground/70">{fmtMoney0(i.amountPaid)}</span>
+                    <div key={i.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-caption">
+                      <span className="min-w-0 truncate">{i.businessName} · <span className="font-mono tabular-nums text-muted-foreground">{i.abn}</span></span>
+                      <span className="shrink-0 text-muted-foreground tabular-nums">{fmtMoney0(i.amountPaid)}</span>
                     </div>
                   ))}
                 </div>
@@ -483,7 +435,7 @@ function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={liveMutation.isPending}>Close</Button>
-          <Button onClick={runLive} disabled={liveMutation.isPending || !preview || nothingToDo} className="bg-amber-600 hover:bg-amber-700">
+          <Button onClick={runLive} disabled={liveMutation.isPending || !preview || nothingToDo}>
             {liveMutation.isPending ? 'Re-queuing…' : nothingToDo ? 'Nothing matches' : `Requeue ${preview?.batchSize ?? ''}`}
           </Button>
         </DialogFooter>
@@ -495,14 +447,14 @@ function RequeueFailedDialog({ open, onClose, onDone }: { open: boolean; onClose
 function emptyMessage(f: DueFilter, hasFilters: boolean) {
   if (hasFilters) {
     return f === 'all'
-      ? 'No Ontraport sales match the current filters.'
-      : 'No matches due in this window — try the All tab or reset the filters.'
+      ? 'Nothing matches these filters'
+      : 'Nothing due in this window matches. Try All.'
   }
   switch (f) {
-    case 'overdue': return 'No overdue sales — everything\'s on schedule.'
-    case '7d':      return 'Nothing due in the next 7 days.'
-    case '30d':     return 'Nothing due in the next 30 days.'
-    case 'all':     return 'No Ontraport sales in the pipeline.'
+    case 'overdue': return 'Nothing overdue. All on track'
+    case '7d':      return 'Nothing due in the next 7 days'
+    case '30d':     return 'Nothing due in the next 30 days'
+    case 'all':     return 'No Ontraport sales yet'
   }
 }
 
@@ -513,73 +465,59 @@ function defaultStats(): Stats {
   }
 }
 
-function FilterTab({ active, count, onClick, tone, children }: { active: boolean; count: number; onClick: () => void; tone: Tone; children: React.ReactNode }) {
-  const dotMap = { emerald: 'bg-success', amber: 'bg-warning', red: 'bg-destructive', indigo: 'bg-info', zinc: 'bg-zinc-400' }
+function DueTab({ value, count, children }: { value: DueFilter; count: number; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm font-medium transition first:rounded-l-md last:rounded-r-md ${
-        active ? 'bg-zinc-900 text-white' : 'text-foreground hover:bg-muted/50'
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${dotMap[tone]}`} />
-      <span>{children}</span>
-      <span className={`text-xxs font-mono tabular-nums ${active ? 'text-white/70' : 'text-muted-foreground/70'}`}>{count.toLocaleString()}</span>
-    </button>
+    <TabsTrigger value={value}>
+      {children}
+      <span className="text-muted-foreground tabular-nums">{count.toLocaleString()}</span>
+    </TabsTrigger>
   )
 }
 
-function UpNextCard({ s: row }: { s: SaleRow }) {
-  // Up-next rows all have a due date (the server only picks those).
-  const s = { ...row, _daysUntil: row._daysUntil ?? 0 }
-  const days = s._daysUntil
-  const tone: Tone = days < 0 ? 'red' : days <= 7 ? 'amber' : 'emerald'
-  const toneTextMap = { emerald: 'text-emerald-300', amber: 'text-amber-300', red: 'text-red-300', indigo: 'text-indigo-300', zinc: 'text-muted-foreground/50' }
-  const toneRingMap = { emerald: 'ring-emerald-400/30', amber: 'ring-amber-400/30', red: 'ring-red-400/30', indigo: 'ring-indigo-400/30', zinc: 'ring-zinc-400/30' }
+/** "3 days overdue", "today", "in 9 days", with a dot when it's close. */
+function DueWords({ days }: { days: number }) {
+  const dot = days < 0 ? 'bg-destructive' : days <= 7 ? 'bg-warning' : null
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+      {days < 0 ? `${Math.abs(days)} day${days === -1 ? '' : 's'} overdue` : days === 0 ? 'Due today' : `Due in ${days} day${days === 1 ? '' : 's'}`}
+    </span>
+  )
+}
 
-  const inner = (
+function UpNextCard({ s }: { s: SaleRow }) {
+  // Up-next rows all have a due date (the server only picks those).
+  const days = s._daysUntil ?? 0
+  const body = (
     <>
-      <div className={`text-xxs font-mono font-medium uppercase tracking-[0.14em] ${toneTextMap[tone]} tabular-nums`}>
-        {days < 0 ? `${Math.abs(days)}D OVERDUE` : days === 0 ? 'TODAY' : `${days}D`}
-      </div>
-      <div className="mt-1 text-sm font-medium text-white truncate" title={s.businessName}>{s.businessName}</div>
-      <div className="text-xxs font-mono text-muted-foreground/70 truncate">{s.contactName || s.email}</div>
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs font-mono tabular-nums text-muted-foreground/50">{fmtMoney0(s.amountPaid)}</span>
-        <OntraportStatusPillDark status={s.status} />
+      <div className="text-caption text-muted-foreground tabular-nums"><DueWords days={days} /></div>
+      <div className="truncate font-medium" title={s.businessName}>{s.businessName}</div>
+      <div className="truncate text-caption text-muted-foreground">{s.contactName || s.email}</div>
+      <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+        <span className="font-mono text-sm tabular-nums">{fmtMoney0(s.amountPaid)}</span>
+        <OntraportStatusPill status={s.status} />
       </div>
     </>
   )
-
-  // When a renewal exists, the whole card deep-links into it. Otherwise it's a static tile.
-  if (s.renewalRequestId) {
-    return (
-      <Link
-        to={`/admin/renewals/${s.renewalRequestId}`}
-        className={`block rounded-xl bg-card/5 ring-1 ${toneRingMap[tone]} px-3 py-3 hover:bg-card/10 hover:ring-white/30 transition`}
-      >
-        {inner}
-      </Link>
-    )
-  }
+  // When a renewal exists, the whole card opens it. Otherwise it's a plain tile.
   return (
-    <div className={`rounded-xl bg-card/5 ring-1 ${toneRingMap[tone]} px-3 py-3`}>
-      {inner}
-    </div>
+    <Card className={cn('relative gap-0.5 p-4', s.renewalRequestId && 'transition-colors hover:bg-muted/50')}>
+      {s.renewalRequestId ? (
+        <Link to={`/admin/renewals/${s.renewalRequestId}`} className="absolute inset-0 rounded-xl" aria-label={`Open the renewal for ${s.businessName}`} />
+      ) : null}
+      {body}
+    </Card>
   )
 }
 
 function DueCell({ s }: { s: SaleRow }) {
   if (!s.renewalDueDate || s._daysUntil === null) {
-    return <span className="text-xxs font-mono text-muted-foreground/70">—</span>
+    return <span className="text-muted-foreground">—</span>
   }
-  const days = s._daysUntil
-  const daysClass = days < 0 ? 'text-destructive font-medium' : days <= 7 ? 'text-warning font-medium' : days <= 30 ? 'text-success font-medium' : 'text-muted-foreground'
   return (
-    <div>
-      <div className="text-sm text-foreground tabular-nums whitespace-nowrap">{new Date(s.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })}</div>
-      <div className={`text-xxs font-mono tabular-nums ${daysClass}`}>{days < 0 ? `${Math.abs(days)} days overdue` : days === 0 ? 'today' : `in ${days} days`}</div>
+    <div className="whitespace-nowrap">
+      <div className="tabular-nums">{new Date(s.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })}</div>
+      <div className="text-caption text-muted-foreground tabular-nums"><DueWords days={s._daysUntil} /></div>
     </div>
   )
 }
@@ -608,33 +546,23 @@ function SaleStatusCell({ s, onShowError }: { s: SaleRow; onShowError: (title: s
 
   return (
     <div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
         <OntraportStatusPill status={s.status} />
         {isFailed ? (
-          <button
-            type="button"
-            onClick={() => onShowError(modalTitle, errorBody)}
-            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-destructive/5 text-destructive hover:bg-destructive/10 transition"
-            title="Why did this fail?"
-          >
-            <CircleAlert className="h-3 w-3" />
-          </button>
+          <Button variant="ghost" size="icon-xs" onClick={() => onShowError(modalTitle, errorBody)} title="Why did this fail?" aria-label="Why did this fail?">
+            <CircleAlert className="text-destructive" />
+          </Button>
         ) : isBlocked ? (
-          <button
-            type="button"
-            onClick={() => onShowError(modalTitle, errorBody)}
-            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-warning/5 text-warning hover:bg-warning/10 transition"
-            title={retryBanner(s.status)}
-          >
-            <TriangleAlert className="h-3 w-3" />
-          </button>
+          <Button variant="ghost" size="icon-xs" onClick={() => onShowError(modalTitle, errorBody)} title={retryBanner(s.status)} aria-label="More about this status">
+            <Info className="text-muted-foreground" />
+          </Button>
         ) : null}
       </div>
       {isFailed && s.renewalFailedAtStep ? (
-        <div className="mt-1 text-xxs font-mono text-destructive">Failed: {s.renewalFailedAtStep}</div>
+        <div className="mt-1 text-caption text-muted-foreground">Stopped at {s.renewalFailedAtStep}</div>
       ) : null}
       {isBlocked ? (
-        <div className="mt-1 text-xxs font-mono text-warning">{retryHint(s.status)}</div>
+        <div className="mt-1 text-caption text-muted-foreground">{retryHint(s.status)}</div>
       ) : null}
     </div>
   )
@@ -664,26 +592,13 @@ function retryBanner(status: string): string {
 
 function retryHint(status: string): string {
   switch (status) {
-    case 'AsicNotYetDue':     return 'Auto-retry: next 07:00 run'
-    case 'RenewalInProgress': return 'Auto-retry: next 07:00 run'
-    case 'IneligibleForRenewal': return 'Skipped — no retry'
+    case 'AsicNotYetDue':     return 'Retries at 07:00'
+    case 'RenewalInProgress': return 'Retries at 07:00'
+    case 'IneligibleForRenewal': return 'Skipped, won’t retry'
     default:                  return ''
   }
 }
 
 function OntraportStatusPill({ status }: { status: string }) {
   return <Status kind="sale" status={status} />
-}
-
-// Dark-background variant for the Up Next hero card
-function OntraportStatusPillDark({ status }: { status: string }) {
-  const e = statusOf('sale', status)
-  const cls: Record<Meaning, string> = {
-    action:  'bg-destructive/20 text-red-200 ring-red-400/30',
-    waiting: 'bg-warning/20 text-amber-200 ring-amber-400/30',
-    working: 'bg-info/20 text-indigo-200 ring-indigo-400/30',
-    done:    'bg-success/20 text-emerald-200 ring-emerald-400/30',
-    quiet:   'bg-zinc-700/40 text-zinc-200 ring-zinc-500/30',
-  }
-  return <span title={e.hint} className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ring-1 ring-inset ${cls[e.meaning]}`}>{e.label.toUpperCase()}</span>
 }

@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { CalendarRange, X } from 'lucide-react'
+import { CalendarRange, CircleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, StatTile } from './_ui'
+import { EmptyState, Field, PageHeader, RefreshButton } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 
 type PaymentsResponse = Awaited<ReturnType<typeof api.admin.payments>>
 type Payment = PaymentsResponse['items'][number]
@@ -65,20 +67,18 @@ export default function Payments() {
       header: 'Customer',
       enableSorting: false,
       // Compact on phones: customer name only; email + business names return at sm.
-      meta: { sticky: true, className: 'min-w-[7rem] max-w-[38vw] sm:min-w-[15rem] sm:max-w-[19rem]' },
+      meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-60 sm:max-w-80' },
       cell: ({ row }) => {
         const p = row.original
+        const second = [p.email, p.businessNames.join(', ')].filter(Boolean).join(' · ')
         return (
-          <div>
+          <div className="min-w-0">
             {p.leadId ? (
-              <Link to={`/admin/leads/${p.leadId}`} className="block text-sm font-medium text-foreground hover:underline truncate">{p.customerName ?? 'Lead'}</Link>
+              <Link to={`/admin/leads/${p.leadId}`} className="block truncate text-sm font-medium hover:text-link hover:underline">{p.customerName ?? 'Lead'}</Link>
             ) : (
-              <div className="text-sm font-medium text-foreground truncate">{p.customerName ?? '—'}</div>
+              <div className="truncate text-sm font-medium">{p.customerName ?? '—'}</div>
             )}
-            {p.email ? <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">{p.email}</div> : null}
-            {p.businessNames.length > 0 ? (
-              <div className="hidden sm:block mt-0.5 text-xxs text-muted-foreground truncate" title={p.businessNames.join(', ')}>{p.businessNames.join(', ')}</div>
-            ) : null}
+            {second ? <div className="hidden truncate text-caption text-muted-foreground sm:block" title={second}>{second}</div> : null}
           </div>
         )
       },
@@ -87,9 +87,9 @@ export default function Payments() {
       accessorKey: 'when',
       header: 'When',
       cell: ({ row }) => (
-        <div>
-          <div className="text-sm tabular-nums text-foreground">{fmtDate(row.original.when)}</div>
-          <div className="text-xxs font-mono tabular-nums text-muted-foreground/70">{fmtTime(row.original.when)}</div>
+        <div className="tabular-nums">
+          <div className="text-sm">{fmtDate(row.original.when)}</div>
+          <div className="text-caption text-muted-foreground">{fmtTime(row.original.when)}</div>
         </div>
       ),
     },
@@ -103,16 +103,16 @@ export default function Payments() {
       id: 'amount',
       accessorFn: (p) => p.amount ?? 0,
       header: 'Amount',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
-      cell: ({ row }) => row.original.amount != null ? fmtMoney2(row.original.amount) : <span className="text-muted-foreground/70">—</span>,
+      meta: { className: 'text-right font-mono tabular-nums text-sm', headerClassName: 'text-right' },
+      cell: ({ row }) => row.original.amount != null ? fmtMoney2(row.original.amount) : <span className="text-muted-foreground">—</span>,
     },
     {
       id: 'abn',
       header: 'ABN',
       enableSorting: false,
       cell: ({ row }) => row.original.abn
-        ? <span className="text-xxs font-mono tabular-nums text-muted-foreground">{row.original.abn}</span>
-        : <span className="text-sm text-muted-foreground/70">—</span>,
+        ? <span className="font-mono text-sm tabular-nums text-muted-foreground">{row.original.abn}</span>
+        : <span className="text-sm text-muted-foreground">—</span>,
     },
     {
       id: 'card',
@@ -128,7 +128,7 @@ export default function Payments() {
       cell: ({ row }) => {
         const p = row.original
         return p.renewals.length > 0 ? (
-          <Link to={`/admin/renewals/${p.renewals[0].id}`} className="text-sm font-medium text-link hover:text-link whitespace-nowrap">
+          <Link to={`/admin/renewals/${p.renewals[0].id}`} className="whitespace-nowrap text-sm font-medium text-link hover:underline">
             {p.renewals.length > 1 ? `${p.renewals.length} renewals →` : 'Renewal →'}
           </Link>
         ) : null
@@ -139,17 +139,16 @@ export default function Payments() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="OPS"
         title="Payments"
-        subtitle="Every Stripe attempt — succeeded charges and the declines customers hit at checkout."
+        subtitle="Every Stripe attempt, paid or declined."
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatTile kicker="30D" label="Collected" value={fmtMoney0(stats.succeededValue30d)} sub={`${stats.succeeded30d} payment${stats.succeeded30d === 1 ? '' : 's'}`} tone="emerald" />
-        <StatTile kicker="30D" label="Failed attempts" value={String(stats.failed30d)} tone={stats.failed30d > 0 ? 'red' : 'zinc'} />
-        <StatTile kicker="ALL TIME" label="Collected" value={fmtMoney0(stats.succeededValue)} sub={`${stats.succeededCount} payment${stats.succeededCount === 1 ? '' : 's'}`} />
-      </div>
+      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <Stat label="Collected" value={fmtMoney0(stats.succeededValue30d)} sub={`Last 30 days · ${stats.succeeded30d} payment${stats.succeeded30d === 1 ? '' : 's'}`} />
+        <Stat label="Failed attempts" value={String(stats.failed30d)} sub="Last 30 days" dot={stats.failed30d > 0 ? 'bg-warning' : undefined} />
+        <Stat label="Collected" value={fmtMoney0(stats.succeededValue)} sub={`All time · ${stats.succeededCount} payment${stats.succeededCount === 1 ? '' : 's'}`} />
+      </Card>
 
       {/* Filter toolbar — every facet is resolved server-side with live counts */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -157,25 +156,39 @@ export default function Payments() {
           value={searchInput}
           onChange={(e) => { setPage(1); setSearchInput(e.target.value) }}
           placeholder="ABN, email, name…"
-          className="h-9 w-56"
+          className="h-8 w-56"
         />
         <FacetedFilter title="Result" options={resultOptions} selected={results} onChange={withPageReset(setResults)} />
         <FacetedFilter title="Card brand" options={brandOptions} selected={brands} onChange={withPageReset(setBrands)} />
         <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onFrom={withPageReset(setDateFrom)} onTo={withPageReset(setDateTo)} />
         {hasActiveFilters ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={resetFilters}>
+          <Button variant="ghost" size="sm" onClick={resetFilters}>
             Reset
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         ) : null}
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={items} empty={<EmptyState title="No payments match the current filters." />} />
+        <DataTable columns={columns} data={items} empty={<EmptyState title={hasActiveFilters ? 'Nothing matches these filters' : 'No payments yet'} />} />
         <Pagination page={page} pageSize={PAGE_SIZE} total={data?.totalCount ?? 0} onPage={setPage} />
       </div>
 
       <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Payment error details" />
+    </div>
+  )
+}
+
+/** One number in the page's stat strip: black, a muted label, one line under it. */
+function Stat({ label, value, sub, dot }: { label: string; value: string; sub?: string; dot?: string }) {
+  return (
+    <div className="flex min-w-0 flex-col px-5 py-4">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
     </div>
   )
 }
@@ -190,21 +203,19 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 border-dashed whitespace-nowrap">
-          <CalendarRange className="h-4 w-4" />
+        <Button variant="outline" size="sm" className="border-dashed">
+          <CalendarRange />
           Dates
-          {active ? <span className="font-mono text-xs text-muted-foreground">{dateFrom || '…'} → {dateTo || '…'}</span> : null}
+          {active ? <span className="text-caption text-muted-foreground tabular-nums">{dateFrom || '…'} → {dateTo || '…'}</span> : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
-        <div>
-          <div className="text-xs font-medium text-muted-foreground mb-1">From</div>
-          <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
-        </div>
-        <div>
-          <div className="text-xs font-medium text-muted-foreground mb-1">To</div>
-          <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
-        </div>
+        <Field label="From">
+          <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="tabular-nums" />
+        </Field>
+        <Field label="To">
+          <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="tabular-nums" />
+        </Field>
         {active ? (
           <Button variant="ghost" size="sm" className="w-full" onClick={() => { onFrom(''); onTo('') }}>Clear dates</Button>
         ) : null}
@@ -217,28 +228,26 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
 
 function ResultCell({ p, onError }: { p: Payment; onError: (m: string) => void }) {
   return (
-    <div>
-      <div className="flex items-center gap-1.5">
+    <div className="max-w-64">
+      <div className="flex items-center gap-1">
         <Status kind="payment" status={p.kind} />
         {p.error ? (
-          <button onClick={() => onError(p.error ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-destructive/5 text-destructive hover:bg-destructive/10" title="View error">
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-          </button>
+          <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={() => onError(p.error ?? '')} title="View error" aria-label="View error">
+            <CircleAlert />
+          </Button>
         ) : null}
       </div>
-      {p.error ? <div className="mt-1 text-xxs text-destructive max-w-[16rem] truncate" title={p.error}>{p.error}</div> : null}
+      {p.error ? <div className="mt-1 truncate text-caption text-muted-foreground" title={p.error}>{p.error}</div> : null}
     </div>
   )
 }
 
 function CardCell({ p }: { p: Payment }) {
   if (p.cardLast4) {
-    return <span className="text-xxs font-mono text-muted-foreground whitespace-nowrap">{(p.cardBrand ?? 'card').toUpperCase()} •••• {p.cardLast4}</span>
+    return <span className="whitespace-nowrap text-sm text-muted-foreground"><span className="capitalize">{p.cardBrand ?? 'card'}</span> •••• <span className="font-mono">{p.cardLast4}</span></span>
   }
   if (p.cardholderName) {
-    return <span className="text-xxs font-mono text-muted-foreground truncate max-w-[10rem] inline-block" title={p.cardholderName}>{p.cardholderName}</span>
+    return <span className="inline-block max-w-40 truncate text-sm text-muted-foreground" title={p.cardholderName}>{p.cardholderName}</span>
   }
-  return <span className="text-xxs font-mono text-muted-foreground/70">—</span>
+  return <span className="text-sm text-muted-foreground">—</span>
 }

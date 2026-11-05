@@ -1,12 +1,17 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, Loader2 } from 'lucide-react'
+import { Check, ChevronLeft, Loader2, TriangleAlert } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientDetail } from '../api/client'
-import { EmptyState, PageHeader, StatusPill } from './_ui'
+import { EmptyState, PageHeader } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 
 /**
  * Possible duplicates one pair at a time: the flagged client beside the one it may be, with
@@ -46,31 +51,28 @@ export default function ClientDuplicates() {
   const busy = merge.isPending || dismiss.isPending
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-4">
-        <Link to="/admin/clients" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ChevronLeft className="h-3 w-3" /> Back to clients
-        </Link>
-      </div>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2 text-muted-foreground">
+        <Link to="/admin/clients"><ChevronLeft /> Clients</Link>
+      </Button>
       <PageHeader
-        kicker="CLIENTS"
-        title="Review possible duplicates"
-        subtitle="Same ABN and the same name or mobile, under a different email. Merge if it's one person; keep them apart if it's two people at the business."
-        right={queue.length ? <span className="text-sm font-mono tabular-nums text-muted-foreground">{remaining.length} left{skipped.length ? ` · ${skipped.length} skipped` : ''}</span> : null}
+        title="Possible duplicates"
+        subtitle="Same ABN and name or mobile, under a different email."
+        right={queue.length ? <span className="text-sm text-muted-foreground tabular-nums">{remaining.length} left{skipped.length ? ` · ${skipped.length} skipped` : ''}</span> : null}
       />
 
       {isPending ? (
-        <div className="py-12 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-link" /></div>
+        <div className="py-12 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
       ) : !current ? (
-        <div className="mt-6">
+        <div className="space-y-3">
           <EmptyState
-            title={queue.length ? 'You skipped the rest.' : 'Nothing to review.'}
+            title={queue.length ? 'You skipped the rest' : 'All clear'}
             message={queue.length ? undefined : 'Every possible duplicate has been decided.'}
           />
-          {skipped.length ? <div className="mt-3 text-center"><Button variant="outline" size="sm" onClick={() => setSkipped([])}>Go through the skipped ones</Button></div> : null}
+          {skipped.length ? <div className="text-center"><Button variant="outline" size="sm" onClick={() => setSkipped([])}>Go through the skipped ones</Button></div> : null}
         </div>
       ) : !a.data || !b.data ? (
-        <div className="py-12 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-link" /></div>
+        <div className="py-12 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
       ) : (
         <Pair
           key={current.id}
@@ -104,49 +106,52 @@ function Pair({ a, b, busy, onMerge, onApart, onSkip }: {
   const rows = useMemo(() => compareRows(a, b), [a, b])
 
   return (
-    <div className="mt-6 space-y-4">
-      <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-border shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left">
-              <th className="w-36 px-4 py-3" />
+    <div className="space-y-4">
+      <Card className="gap-0 overflow-hidden py-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-36 px-4" />
               {[a, b].map((c) => (
-                <th key={c.id} className="px-4 py-3 align-top">
-                  <Link to={`/admin/clients/${c.id}`} className="text-base font-semibold text-foreground hover:underline">{c.fullName || 'Unnamed client'}</Link>
+                <TableHead key={c.id} className="h-auto px-4 py-3 align-top whitespace-normal">
+                  <Link to={`/admin/clients/${c.id}`} className="text-heading text-link hover:underline">{c.fullName || 'Unnamed client'}</Link>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    {c.hasPurchased ? <StatusPill tone="emerald">CUSTOMER</StatusPill> : <StatusPill tone="zinc">LEAD</StatusPill>}
-                    {c === keep ? <StatusPill tone="indigo">KEEP IF MERGING</StatusPill> : null}
+                    {c.hasPurchased ? <Badge variant="secondary">Customer</Badge> : <Badge variant="outline">Lead</Badge>}
+                    {c === keep ? <Badge variant="outline">Kept if merged</Badge> : null}
                   </div>
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-border last:border-0 align-top">
-                <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                  {r.label}
-                  {r.same ? <div className="mt-1 inline-flex items-center gap-1 normal-case tracking-normal text-success"><Check className="h-3 w-3" /> same</div> : null}
-                </td>
-                <td className={`px-4 py-2.5 ${r.same ? 'bg-success/5/50' : ''}`}>{r.a}</td>
-                <td className={`px-4 py-2.5 ${r.same ? 'bg-success/5/50' : ''}`}>{r.b}</td>
-              </tr>
+              <TableRow key={r.label} className={cn('align-top', r.same && 'bg-muted/40')}>
+                <TableCell className="px-4 py-2.5 align-top">
+                  <div className="text-caption text-muted-foreground">{r.label}</div>
+                  {r.same ? <div className="mt-0.5 inline-flex items-center gap-1 text-caption text-muted-foreground"><Check className="size-3" /> Same</div> : null}
+                </TableCell>
+                <TableCell className="px-4 py-2.5 align-top whitespace-normal">{r.a}</TableCell>
+                <TableCell className="px-4 py-2.5 align-top whitespace-normal">{r.b}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
+
+      <Alert>
+        <TriangleAlert />
+        <AlertDescription title="Merging moves the emails, ABNs and history onto the kept client and deletes the other. The ASIC key enquiry goes out in one person's name, so merge only when you're sure.">
+          Merging deletes the other client and can’t be undone.
+        </AlertDescription>
+      </Alert>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button disabled={busy} onClick={() => onMerge(other.id, keep.id)}>Same person: merge into {firstName(keep)}</Button>
         <Button variant="outline" disabled={busy} onClick={() => onMerge(keep.id, other.id)}>Merge into {firstName(other)} instead</Button>
         <Button variant="outline" disabled={busy} onClick={onApart}>Different people</Button>
         <Button variant="ghost" disabled={busy} onClick={onSkip}>Skip for now</Button>
-        {busy ? <Loader2 className="h-4 w-4 animate-spin text-link" /> : null}
+        {busy ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
       </div>
-      <p className="text-xxs text-muted-foreground max-w-3xl">
-        Merging moves the emails, ABNs and history onto the kept client and deletes the other. It can't be undone. The ASIC key
-        enquiry goes out in one person's name, so merge only when you're sure it's the same person.
-      </p>
     </div>
   )
 }
@@ -164,17 +169,17 @@ function compareRows(a: ClientDetail, b: ClientDetail): Array<{ label: string; a
   const names = (c: ClientDetail) => c.abns.flatMap((x) => x.businessNames).filter((n) => n.status === 'Active').map((n) => n.name)
   const overlap = (x: string[], y: string[]) => x.some((v) => y.includes(v))
   const list = (items: string[], mono = false) => items.length
-    ? <ul className={`space-y-0.5 ${mono ? 'font-mono text-xs' : ''}`}>{items.map((i) => <li key={i} className="break-all">{i}</li>)}</ul>
-    : <span className="text-muted-foreground/70">—</span>
-  const text = (v: string | null | undefined, mono = false) => v ? <span className={mono ? 'font-mono tabular-nums' : ''}>{v}</span> : <span className="text-muted-foreground/70">—</span>
+    ? <ul className={cn('space-y-0.5', mono && 'font-mono tabular-nums')}>{items.map((i) => <li key={i} className="break-all">{i}</li>)}</ul>
+    : <span className="text-muted-foreground">—</span>
+  const text = (v: string | null | undefined, mono = false) => v ? <span className={cn(mono && 'font-mono tabular-nums')}>{v}</span> : <span className="text-muted-foreground">—</span>
   const history = (c: ClientDetail) =>
     `${c.renewals.length} renewal${c.renewals.length === 1 ? '' : 's'} · ${c.sales.length} sale${c.sales.length === 1 ? '' : 's'} · ${c.leads.length} wizard visit${c.leads.length === 1 ? '' : 's'}`
 
   return [
     { label: 'Name', a: text(a.fullName), b: text(b.fullName), same: !!norm(a.fullName) && norm(a.fullName) === norm(b.fullName) },
-    { label: 'Mobile', a: text(a.mobileNumber, true), b: text(b.mobileNumber, true), same: mobileKey(a.mobileNumber).length === 9 && mobileKey(a.mobileNumber) === mobileKey(b.mobileNumber) },
-    { label: 'Date of birth', a: text(a.dateOfBirth ? fmtDate(a.dateOfBirth) : null, true), b: text(b.dateOfBirth ? fmtDate(b.dateOfBirth) : null, true), same: !!a.dateOfBirth && a.dateOfBirth === b.dateOfBirth },
-    { label: 'Emails', a: list(emails(a), true), b: list(emails(b), true), same: overlap(emails(a), emails(b)) },
+    { label: 'Mobile', a: text(a.mobileNumber), b: text(b.mobileNumber), same: mobileKey(a.mobileNumber).length === 9 && mobileKey(a.mobileNumber) === mobileKey(b.mobileNumber) },
+    { label: 'Date of birth', a: text(a.dateOfBirth ? fmtDate(a.dateOfBirth) : null), b: text(b.dateOfBirth ? fmtDate(b.dateOfBirth) : null), same: !!a.dateOfBirth && a.dateOfBirth === b.dateOfBirth },
+    { label: 'Emails', a: list(emails(a)), b: list(emails(b)), same: overlap(emails(a), emails(b)) },
     { label: 'Address', a: text(a.address), b: text(b.address), same: !!norm(a.address) && norm(a.address) === norm(b.address) },
     { label: 'ABNs', a: list(abns(a).map(formatAbn), true), b: list(abns(b).map(formatAbn), true), same: overlap(abns(a), abns(b)) },
     { label: 'Business names', a: list(names(a)), b: list(names(b)), same: false },
