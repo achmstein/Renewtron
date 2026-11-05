@@ -180,6 +180,7 @@ export interface ClientLinkResult {
   keyRequestsLinked: number
   bulkUploadsLinked: number
   renewalsLinked: number
+  renewalsCompletedLater: number
   messagesLinked: number
   keyLettersLinked: number
   keyLettersResolved: number

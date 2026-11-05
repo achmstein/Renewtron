@@ -288,6 +288,7 @@ function LinkResult({ result }: { result: ClientLinkResult }) {
     ['Ontraport sales linked', result.salesLinked],
     ['Wizard leads linked', result.leadsLinked],
     ['Renewals linked', result.renewalsLinked],
+    ['Renewals completed since linking', result.renewalsCompletedLater],
     ['Key requests linked', result.keyRequestsLinked],
     ['Bulk uploads linked', result.bulkUploadsLinked],
     ['Messages linked', result.messagesLinked],

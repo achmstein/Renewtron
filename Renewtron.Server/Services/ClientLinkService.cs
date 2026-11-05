@@ -82,6 +82,7 @@ public sealed class ClientLinkService(
             await ReadRegisterAsync(ct);
             await LinkBulkUploadsAsync(ct);
             await LinkRenewalsAsync(ct);
+            await CatchUpCompletedRenewalsAsync(ct);
             await LinkMessagesAsync(ct);
             await ReadRegisterAsync(ct);
             await LinkKeyLettersAsync(ct);
@@ -326,19 +327,52 @@ public sealed class ClientLinkService(
             if (string.IsNullOrEmpty(name.AsicAccountNumber) && !string.IsNullOrWhiteSpace(r.SearchResult.AccountNumber))
                 name.AsicAccountNumber = Truncate(r.SearchResult.AccountNumber.Trim(), 50);
 
-            if (r.Status == RenewalStatus.Completed && r.CompletedAt is { } done)
+            ApplyCompletedRenewal(name, r);
+        }
+    }
+
+    private void ApplyCompletedRenewal(ClientBusinessName name, RenewalRequest r)
+    {
+        if (r.Status != RenewalStatus.Completed || r.CompletedAt is not { } done) return;
+        if (name.LastRenewedAt == null || done > name.LastRenewedAt)
+        {
+            name.LastRenewedAt = done;
+            name.LastRenewalYears = r.RenewalYears;
+            name.LastRenewalRequestId = r.Id;
+            Touch(name);
+        }
+        if (NextDueAfterRenewal(name.RegistrationDate, done, r.RenewalYears) is { } next)
+            SetDue(name, next, RenewalDueDateSource.Renewal);
+    }
+
+    /// <summary>
+    /// Renewals are usually linked while still pending (the wizard makes the client first), and
+    /// linking only looks at unlinked ones, so a renewal that completes afterwards is picked up
+    /// here: its client becomes a customer and its name gets the last-renewed and due dates.
+    /// </summary>
+    private async Task CatchUpCompletedRenewalsAsync(CancellationToken ct)
+    {
+        var done = await db.RenewalRequests
+            .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null && r.ClientId != null && r.ClientBusinessNameId != null
+                        && db.ClientBusinessNames.Any(n => n.Id == r.ClientBusinessNameId && (n.LastRenewedAt == null || n.LastRenewedAt < r.CompletedAt)))
+            .ToListAsync(ct);
+        if (done.Count > 0)
+        {
+            var namesById = _names.Values.ToDictionary(n => n.Id);
+            foreach (var r in done)
             {
-                if (name.LastRenewedAt == null || done > name.LastRenewedAt)
-                {
-                    name.LastRenewedAt = done;
-                    name.LastRenewalYears = r.RenewalYears;
-                    name.LastRenewalRequestId = r.Id;
-                    Touch(name);
-                }
-                if (NextDueAfterRenewal(name.RegistrationDate, done, r.RenewalYears) is { } next)
-                    SetDue(name, next, RenewalDueDateSource.Renewal);
+                if (!namesById.TryGetValue(r.ClientBusinessNameId!.Value, out var name)) continue;
+                ApplyCompletedRenewal(name, r);
+                _result.RenewalsCompletedLater++;
             }
         }
+
+        var notYetCustomers = await db.Clients
+            .Where(c => !c.HasPurchased && db.RenewalRequests.Any(r => r.ClientId == c.Id && r.Status == RenewalStatus.Completed))
+            .Select(c => c.Id)
+            .ToListAsync(ct);
+        foreach (var id in notYetCustomers)
+            if (_byId.TryGetValue(id, out var c)) { c.HasPurchased = true; c.UpdatedAt = DateTime.UtcNow; }
     }
 
     private static Dictionary<Guid, Guid> ClientsByRenewal(IEnumerable<(Guid RenewalId, Guid? ClientId)> rows)

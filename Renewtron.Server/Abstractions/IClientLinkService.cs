@@ -48,6 +48,8 @@ public sealed class ClientLinkResult
     public int KeyRequestsLinked { get; set; }
     public int BulkUploadsLinked { get; set; }
     public int RenewalsLinked { get; set; }
+    /// <summary>Renewals linked earlier that have since completed, now applied to their name.</summary>
+    public int RenewalsCompletedLater { get; set; }
     public int MessagesLinked { get; set; }
     public int KeyLettersLinked { get; set; }
     /// <summary>"No contact" key letters closed off because the key now sits on a client's name.</summary>
