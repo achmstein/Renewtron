@@ -15,12 +15,12 @@ export function TrendChart({ data, valueLabel = 'renewals' }: {
       <AreaChart data={data} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
         <defs>
           <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0052A4" stopOpacity={0.12} />
-            <stop offset="100%" stopColor="#0052A4" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--link, #0052A4)" stopOpacity={0.12} />
+            <stop offset="100%" stopColor="var(--link, #0052A4)" stopOpacity={0} />
           </linearGradient>
         </defs>
         <Tooltip
-          cursor={{ stroke: '#A3C5E6', strokeWidth: 1 }}
+          cursor={{ stroke: 'var(--border, #A3C5E6)', strokeWidth: 1 }}
           wrapperStyle={{ zIndex: 30, outline: 'none' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
@@ -36,11 +36,11 @@ export function TrendChart({ data, valueLabel = 'renewals' }: {
         <Area
           type="monotone"
           dataKey="count"
-          stroke="#0052A4"
+          stroke="var(--link, #0052A4)"
           strokeWidth={2}
           fill="url(#trend-fill)"
           dot={false}
-          activeDot={{ r: 3.5, fill: '#0052A4', stroke: '#FFFFFF', strokeWidth: 1.5 }}
+          activeDot={{ r: 3.5, fill: 'var(--link, #0052A4)', stroke: '#FFFFFF', strokeWidth: 1.5 }}
           isAnimationActive={false}
         />
       </AreaChart>

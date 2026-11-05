@@ -70,7 +70,7 @@ export function RecordHeader({ title, sub, status, children }: {
     <Card className="gap-5 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-title">{title}</h1>
           {sub ? <div className="mt-1 text-sm text-muted-foreground">{sub}</div> : null}
         </div>
         {status ? <Status entry={status} size="lg" /> : null}
@@ -136,7 +136,7 @@ export function StoryStrip({ steps }: { steps: StoryStep[] }) {
               <span aria-hidden className={cn('size-2 shrink-0 rounded-full', DOT[s.meaning])} />
               <span className={cn('truncate text-sm font-medium', s.meaning === 'quiet' && 'text-muted-foreground')}>{s.label}</span>
             </div>
-            <div className="mt-0.5 truncate pl-4 text-xs text-muted-foreground">
+            <div className="mt-0.5 truncate pl-4 text-caption text-muted-foreground">
               {s.note ?? (s.at ? <When at={s.at} /> : s.meaning === 'quiet' ? 'Not yet' : '')}
             </div>
           </>
@@ -157,7 +157,7 @@ export function TechnicalDetail({ children, defaultOpen = false }: { children: R
   return (
     <Collapsible defaultOpen={defaultOpen} className="mt-6">
       <Card className="gap-0 py-0">
-        <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-sm font-medium">
+        <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-heading">
           Technical detail
           <ChevronRight className="size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         </CollapsibleTrigger>

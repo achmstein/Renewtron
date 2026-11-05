@@ -83,7 +83,7 @@ export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
       <span aria-hidden className={cn('size-2 shrink-0 self-start mt-1.5 rounded-full', DOT[meaning])} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{what}</div>
-        {why ? <div className="mt-0.5 truncate text-xs text-muted-foreground">{why}</div> : null}
+        {why ? <div className="mt-0.5 truncate text-caption text-muted-foreground">{why}</div> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
     </div>
@@ -107,7 +107,7 @@ export function Queue({ title, count, total, action, children, empty, tone }: {
   return (
     <Card className="gap-0 overflow-hidden py-0">
       <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <h3 className="flex items-center gap-2 text-heading">
           {title}
           {count != null ? <Badge variant="secondary" className="tabular-nums">{count.toLocaleString()}</Badge> : null}
           {total ? <span className="text-sm font-normal text-muted-foreground tabular-nums">{total}</span> : null}

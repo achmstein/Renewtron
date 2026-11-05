@@ -75,7 +75,7 @@
     --info: #4F46E5;
     --border: #E4E4E7;
     --input: #E4E4E7;
-    --ring: #3478BF;
+    --ring: #0052A4;
     --sidebar: #09090B;
     --sidebar-foreground: #A1A1AA;
     --sidebar-primary: #0052A4;
@@ -83,7 +83,7 @@
     --sidebar-accent: #18181B;
     --sidebar-accent-foreground: #FAFAFA;
     --sidebar-border: #27272A;
-    --sidebar-ring: #3478BF;
+    --sidebar-ring: #0052A4;
 }
 .admin body { background: var(--background); color: var(--foreground); }
 /* @tailwindcss/forms (kept for the public site) gives every input its own border and a blue
@@ -92,7 +92,10 @@
 @layer base {
     /* shadcn's base: borders default to the theme's border colour, not the text colour. */
     .admin *, .admin ::before, .admin ::after { border-color: var(--color-border); outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent); }
-    .admin :is(input, textarea, select):focus { outline: none; box-shadow: none; }
+    /* Inputs not on a shadcn component get the same focus as shadcn's Input: brand-blue border, faint halo. */
+    .admin :is(input, textarea, select):focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 15%, transparent); }
+    .admin :is(h1, h2, h3) { text-wrap: balance; }
+    .admin p { text-wrap: pretty; }
 }
 
 @theme inline {
@@ -198,6 +201,18 @@
     --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --font-display: 'Geist Mono', ui-monospace, monospace;
 
+    /* Admin type scale (see src/admin/STYLE.md). */
+    --text-title: 1.5rem;
+    --text-title--line-height: 2rem;
+    --text-title--letter-spacing: -0.025em;
+    --text-title--font-weight: 600;
+    --text-heading: 0.9375rem;
+    --text-heading--line-height: 1.375rem;
+    --text-heading--letter-spacing: -0.011em;
+    --text-heading--font-weight: 600;
+    --text-caption: 0.8125rem;
+    --text-caption--line-height: 1.125rem;
+
     --text-xxs: 0.6875rem;
     --text-xxs--line-height: 1rem;
 
@@ -246,6 +261,17 @@ select:not([multiple]) {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+/* App loading screen (components/AppLoading.tsx): appears after 200ms, logo breathes. */
+.app-loading { animation: fade-in-up 320ms ease-out 200ms both; }
+.app-loading-logo { animation: logo-breathe 2.4s ease-in-out infinite; }
+@keyframes logo-breathe {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(0.94); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .app-loading-logo { animation: none; }
+}
+
 .fade-in {
     animation: fade-in-up 240ms ease-out both;
 }

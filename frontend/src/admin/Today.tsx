@@ -77,8 +77,8 @@ export default function Today() {
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <p className="text-sm text-muted-foreground">{now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+          <p className="text-caption text-muted-foreground">{now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+          <h1 className="mt-1 text-title">
             {!data ? 'Today' : open <= 0 ? 'All clear for now' : `${open.toLocaleString()} thing${open === 1 ? '' : 's'} need${open === 1 ? 's' : ''} you`}
           </h1>
         </div>
@@ -122,8 +122,8 @@ export default function Today() {
                     <span aria-hidden className={cn('size-2 rounded-full', n ? DOT[l.meaning] : 'bg-muted-foreground/30')} />
                     {l.label}
                   </span>
-                  <span className="mt-1 block text-2xl font-semibold tabular-nums">{n}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
+                  <span className="mt-1 block text-2xl font-semibold tracking-tight tabular-nums">{n}</span>
+                  <span className="block truncate text-caption text-muted-foreground">
                     {n === 0 ? 'All clear' : l.key === 'urgent' && urgentMoney ? `${fmtMoney0(urgentMoney)} waiting on us` : l.hint}
                   </span>
                 </button>
@@ -136,7 +136,7 @@ export default function Today() {
             if (groups.length === 0) return null
             return (
               <section key={l.key} className="space-y-3">
-                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <h2 className="flex items-center gap-2 text-heading">
                   <span aria-hidden className={cn('size-2 rounded-full', DOT[l.meaning])} />
                   {l.label}
                   <span className="font-normal text-muted-foreground">{l.hint}</span>

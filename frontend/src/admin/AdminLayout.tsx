@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../auth/AuthContext'
 import { api, type SidebarCounts } from '../api/client'
 import { ClientSearch, ClientSearchButton } from './ClientSearch'
+import { Wordmark } from '@/components/Wordmark'
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu,
   SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, useSidebar,
@@ -118,16 +119,6 @@ function activeItem(pathname: string, search: string): NavItem | undefined {
   return best
 }
 
-function Wordmark() {
-  return (
-    <span className="flex items-baseline font-display text-sm font-bold leading-none tracking-wide text-white">
-      <span>RENEW</span>
-      <span className="mx-1.5 font-normal text-muted-foreground">/</span>
-      <span className="text-brand-400">TRON</span>
-    </span>
-  )
-}
-
 function AdminSidebar({ onSearch }: { onSearch: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -151,7 +142,7 @@ function AdminSidebar({ onSearch }: { onSearch: () => void }) {
     <Sidebar className="border-sidebar-border">
       <SidebarHeader className="gap-3 px-4 pt-5">
         <Link to="/admin" onClick={close} className="flex items-center gap-2 px-1">
-          <Wordmark />
+          <Wordmark tone="dark" className="text-sm" />
         </Link>
         <ClientSearchButton onClick={() => { close(); onSearch() }} />
       </SidebarHeader>
@@ -215,7 +206,7 @@ export default function AdminLayout() {
       <SidebarInset>
         <header className="sticky top-0 z-40 flex h-12 items-center gap-3 border-b bg-sidebar px-4 md:hidden">
           <SidebarTrigger className="text-muted-foreground/70 hover:bg-card/10 hover:text-white" />
-          <Wordmark />
+          <Wordmark tone="dark" className="text-sm" />
         </header>
         <div key={location.pathname} className="fade-in">
           <Outlet />

@@ -26,6 +26,11 @@ No coloured numbers, coloured backgrounds or icon circles. A status shows only a
 (`size-2 rounded-full bg-destructive`) beside the label. Group related stats in one `Card`
 split with `divide-x` rather than a row of separate cards.
 
+Trend lines are welcome: a stat that changes over time (today vs the last 14 days, revenue this
+month) shows a small sparkline (`SparklineTile` in `_ui.tsx`, `TrendChart`) in brand blue with a
+light fill. The sparkline is the only colour in the stat; the number stays black. Period labels
+are sentence case ("Last 30 days", "This month"), never "30D" or "MTD".
+
 ## Words
 
 - Sentence case everywhere. No uppercase, no mono "kicker" labels, no letter-spacing.
@@ -54,8 +59,18 @@ split with `divide-x` rather than a row of separate cards.
 
 ## Type and spacing
 
-- Page title `text-2xl font-semibold tracking-tight`; section/card title `text-base font-semibold`
-  (or `CardTitle`); body `text-sm`; facts and hints `text-xs text-muted-foreground`.
+One scale, defined as tokens in `index.css`. Don't mix in other sizes or weights for these roles.
+
+| Role | Class | Notes |
+|---|---|---|
+| Page title | `text-title` | 24px semibold, tight. One per page. |
+| Card / section title | `text-heading` (`CardTitle` already uses it) | 15px semibold. |
+| Body | `text-sm` | 14px. Emphasis with `font-medium`, not bold. |
+| Secondary line (facts, hints, labels) | `text-caption text-muted-foreground` | 13px. Use instead of `text-xs`. |
+| Tiny meta (counts in badges, kbd) | `text-xs` | Only inside Badge/kbd. |
+| Big numbers in stats | `text-2xl font-semibold tracking-tight tabular-nums` | |
+
+- Two text colours only: `text-foreground` and `text-muted-foreground` (plus `text-link` for links).
 - `font-mono` only for identifiers people copy or compare: ABNs, keys, references, ids, amounts in tables.
 - No arbitrary values (`text-[13px]`, `tracking-[0.14em]`, `w-[7rem]`) when a scale step exists.
 - Page container: `mx-auto max-w-5xl` (or `max-w-7xl` for wide tables) `px-4 py-8 sm:px-6 lg:px-8`.

@@ -1,3 +1,4 @@
+import { Wordmark } from '../components/Wordmark'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -33,7 +34,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col justify-center bg-zinc-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto w-full max-w-md">
         <div className="flex justify-center">
-          <Wordmark />
+          <Wordmark className="text-lg" />
         </div>
         <div className="mt-2 text-center text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">
           OPS · SIGN IN
@@ -118,15 +119,5 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
-  )
-}
-
-function Wordmark() {
-  return (
-    <span className="font-display font-bold text-lg tracking-[0.04em] text-zinc-900 leading-none inline-flex items-baseline">
-      <span>RENEW</span>
-      <span className="mx-1.5 font-normal text-zinc-300">/</span>
-      <span className="text-brand-600">TRON</span>
-    </span>
   )
 }

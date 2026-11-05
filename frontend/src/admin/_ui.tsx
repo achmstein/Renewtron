@@ -21,7 +21,7 @@ export function PageHeader({ title, subtitle, right }: { kicker?: string; title:
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-title">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       {right ? <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{right}</div> : null}
@@ -33,7 +33,7 @@ export function PageHeader({ title, subtitle, right }: { kicker?: string; title:
 export function SectionTitle({ title, right }: { kicker?: string; title: string; right?: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <h2 className="text-base font-semibold">{title}</h2>
+      <h2 className="text-heading">{title}</h2>
       {right ? <div className="text-sm text-muted-foreground tabular-nums">{right}</div> : null}
     </div>
   )
@@ -58,7 +58,7 @@ export function Th({ children, className }: { children: ReactNode; className?: s
 export function Cell({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dt className="text-caption text-muted-foreground">{label}</dt>
       <dd className={cn('mt-0.5 text-sm', mono && 'font-mono tabular-nums')}>{value}</dd>
     </div>
   )
@@ -104,7 +104,7 @@ export function StatTile({ kicker, label, value, sub, tone = 'zinc' }: { kicker?
         {tone !== 'zinc' ? <span aria-hidden className={cn('size-2 rounded-full', TONE_DOT[tone])} /> : null}
         {value}
       </div>
-      {sub ? <div className="text-xs text-muted-foreground tabular-nums">{sub}</div> : null}
+      {sub ? <div className="text-caption text-muted-foreground tabular-nums">{sub}</div> : null}
     </Card>
   )
 }
@@ -137,7 +137,7 @@ export function SparklineTile({ kicker, label, value, sub, deltaPct, data, label
         </span>
       </div>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      {sub ? <div className="text-xs text-muted-foreground tabular-nums">{sub}</div> : null}
+      {sub ? <div className="text-caption text-muted-foreground tabular-nums">{sub}</div> : null}
       <div className="mt-2 -mb-1 min-h-8 flex-1">
         <TrendChart data={points} />
       </div>
