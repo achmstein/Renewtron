@@ -37,7 +37,7 @@ export default function Dashboard() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <PageHeader kicker="OPS" title="Today's opportunity" subtitle="Where the revenue is hiding right now — and what to do about it." />
+      <PageHeader kicker="REPORTS" title="Overview" subtitle="Where the revenue is hiding, and how the machine is running. The day’s work is on Today." />
 
       <Hero stats={stats} />
 

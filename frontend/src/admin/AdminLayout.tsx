@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Archive, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
+  Archive, ChartColumn, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
   Landmark, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -17,7 +17,8 @@ interface NavItem { to: string; label: string; icon: ReactNode; badge?: keyof Si
 interface NavSection { kicker: string; items: NavItem[] }
 
 const Icon = {
-  Dashboard: <House strokeWidth={1.5} className="size-4 shrink-0" />,
+  Today: <House strokeWidth={1.5} className="size-4 shrink-0" />,
+  Dashboard: <ChartColumn strokeWidth={1.5} className="size-4 shrink-0" />,
   Search: <Search strokeWidth={1.5} className="size-4 shrink-0" />,
   Refresh: <RefreshCw strokeWidth={1.5} className="size-4 shrink-0" />,
   Wrench: <Wrench strokeWidth={1.5} className="size-4 shrink-0" />,
@@ -45,6 +46,7 @@ const navSections: NavSection[] = [
   {
     kicker: 'Work',
     items: [
+      { to: '/admin', label: 'Today', icon: Icon.Today, badge: 'today' },
       { to: '/admin/renewals?view=to-fix', label: 'Renewals to fix', icon: Icon.Wrench, badge: 'renewalsToFix' },
       { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank, badge: 'bpayToPay' },
       { to: '/admin/asic-key-requests', label: 'Key requests', icon: Icon.Inbox, badge: 'asicKeyRequests' },
@@ -68,7 +70,7 @@ const navSections: NavSection[] = [
   {
     kicker: 'Reports',
     items: [
-      { to: '/admin', label: 'Overview', icon: Icon.Dashboard },
+      { to: '/admin/overview', label: 'Overview', icon: Icon.Dashboard },
       { to: '/admin/funnel', label: 'Funnel', icon: Icon.Funnel },
     ],
   },

@@ -87,7 +87,30 @@ export interface BpayBill {
 }
 
 /** Work waiting on staff, shown as sidebar badges. */
-export interface SidebarCounts { renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
+/** One thing on the Today page; `reason` is the record's own status or error category. */
+export interface TodayItem {
+  kind: 'renewal' | 'sale' | 'bpay' | 'keyRequests' | 'keyRequest' | 'keyLetter' | 'duplicate'
+  id: string
+  reason: string
+  clientId: string | null
+  clientName: string | null
+  businessName: string | null
+  abn: string | null
+  amount: number | null
+  years: number | null
+  at: string
+  dueAt: string | null
+  detail: string | null
+  failedAtStep: string | null
+  canRetry: boolean
+  count: number | null
+  otherClientId: string | null
+  otherClientName: string | null
+}
+export interface TodayGroup { key: 'paid' | 'bpay' | 'keys' | 'decide'; count: number; total: number | null; items: TodayItem[] }
+export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; groups: TodayGroup[] }
+
+export interface SidebarCounts { today: number; renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
 
 export interface ClientListItem {
   id: string
@@ -982,6 +1005,7 @@ export const api = {
     updateAirwallex: (body: AirwallexSettings) => apiFetch<void>('/api/admin/settings/airwallex', { method: 'PUT', body: JSON.stringify(body) }),
     testAirwallex: () => apiFetch<{ ok: boolean }>('/api/admin/settings/airwallex/test', { method: 'POST' }),
     sidebarCounts: () => apiFetch<SidebarCounts>('/api/admin/sidebar-counts'),
+    today: () => apiFetch<TodayResponse>('/api/admin/today'),
     /** The client a record belongs to; 404 (thrown) when it isn't on one yet. */
     clientLookup: (kind: 'lead' | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter', id: string) =>
       apiFetch<{ id: string; fullName: string; possibleDuplicate: boolean }>(`/api/admin/clients/lookup?kind=${kind}&id=${encodeURIComponent(id)}`),

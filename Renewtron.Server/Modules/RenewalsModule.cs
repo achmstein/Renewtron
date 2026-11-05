@@ -487,7 +487,7 @@ public sealed class RenewalsModule : ICarterModule
             var scheduledRetryValue = pipelineRows
                 .Where(r => r.Status == RenewalStatus.Failed && r.NextRetryAt != null)
                 .Sum(r => r.Amount);
-            // Same test as WorkQueues.RenewalNeedsPerson (the "Renewals to fix" queue), in memory.
+            // Close to WorkQueues.RenewalNeedsPerson (the "Renewals to fix" queue), which also requires the client paid.
             var needsReviewRows = pipelineRows
                 .Where(r => r.Status == RenewalStatus.Failed && r.NextRetryAt == null && r.ErrorCategory != RenewalErrorCategories.NotDueYet)
                 .ToList();

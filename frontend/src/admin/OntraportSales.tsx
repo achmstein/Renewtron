@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { sileo } from 'sileo'
@@ -53,11 +53,15 @@ function statusLabel(status: string): string {
 }
 
 export default function OntraportSales() {
+  // Links from Today and the client page arrive with ?search= or ?status=; those show every
+  // due date, not just the next 30 days.
+  const [searchParams] = useSearchParams()
+  const linked = searchParams.has('search') || searchParams.has('status')
   const [page, setPage] = useState(1)
-  const [dueFilter, setDueFilterRaw] = useState<DueFilter>('30d')
-  const [searchInput, setSearchInputRaw] = useState('')
+  const [dueFilter, setDueFilterRaw] = useState<DueFilter>(linked ? 'all' : '30d')
+  const [searchInput, setSearchInputRaw] = useState(() => searchParams.get('search') ?? '')
   const search = useDebouncedValue(searchInput, 300)
-  const [statuses, setStatusesRaw] = useState<string[]>([])
+  const [statuses, setStatusesRaw] = useState<string[]>(() => searchParams.get('status')?.split(',').filter(Boolean) ?? [])
   const setDueFilter = (v: DueFilter) => { setPage(1); setDueFilterRaw(v) }
   const setSearchInput = (v: string) => { setPage(1); setSearchInputRaw(v) }
   const setStatuses = (v: string[]) => { setPage(1); setStatusesRaw(v) }

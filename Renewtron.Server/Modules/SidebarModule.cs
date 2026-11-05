@@ -1,12 +1,11 @@
 using Carter;
-using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
-using Renewtron.Services;
 
 namespace Renewtron.Modules;
 
 /// <summary>
-/// Counts of work waiting on staff, shown as badges in the admin sidebar.
+/// Counts of work waiting on staff, shown as badges in the admin sidebar. The same counts head
+/// the Today page's groups (<see cref="TodayModule.CountAsync"/>).
 /// </summary>
 public sealed class SidebarModule : ICarterModule
 {
@@ -14,37 +13,16 @@ public sealed class SidebarModule : ICarterModule
     {
         app.MapGet("/api/admin/sidebar-counts", async (ApplicationDbContext db) =>
         {
-            // Same test as BPAY to pay's "payable": lodged to pay by BPAY, unpaid, no transfer under way.
-            var ended = BpayPaymentService.Ended.Append(BpayPaymentService.Unknown).ToList();
-            var bpayToPay = await db.RenewalRequests.AsNoTracking()
-                .Where(r => !r.IsTest && r.BpayReference != null && r.BpayReference != ""
-                    && r.BpayBillerCode != null && r.BpayBillerCode != "" && r.BpayPaidAt == null)
-                .Where(r => r.AirwallexTransferStatus == null || ended.Contains(r.AirwallexTransferStatus))
-                .CountAsync();
-
-            // Same queue as the key tool's /manual list: still needs someone to submit it.
-            var asicKeyRequests = await db.AsicKeyRequests.AsNoTracking()
-                .Where(r => !r.IsTest)
-                .Where(r => r.Status == AsicKeyRequestStatus.Pending
-                    || r.Status == AsicKeyRequestStatus.Failed
-                    || r.Status == AsicKeyRequestStatus.Manual)
-                .CountAsync();
-
-            // Clients the linker couldn't tell apart from another on the same ABN.
-            var clientDuplicates = await db.Clients.AsNoTracking()
-                .CountAsync(c => !c.IsTest && c.PossibleDuplicateOfId != null);
-
-            // Failed renewals nothing will retry on its own.
-            var renewalsToFix = await db.RenewalRequests.AsNoTracking()
-                .Where(r => !r.IsTest)
-                .Where(WorkQueues.RenewalNeedsPerson)
-                .CountAsync();
-
-            // Key letters we couldn't read or place; the Keys page's "Needs attention".
-            var keysToSort = await db.AsicKeyNotifications.AsNoTracking()
-                .CountAsync(n => !WorkQueues.KeyLetterSettled.Contains(n.Status));
-
-            return Results.Ok(new { renewalsToFix, bpayToPay, asicKeyRequests, keysToSort, clientDuplicates });
+            var c = await TodayModule.CountAsync(db, DateTime.UtcNow);
+            return Results.Ok(new
+            {
+                today = c.Total,
+                renewalsToFix = c.RenewalsToFix,
+                bpayToPay = c.BpayToPay,
+                asicKeyRequests = c.KeyRequests,
+                keysToSort = c.KeysToSort,
+                clientDuplicates = c.Duplicates,
+            });
         }).RequireAuthorization().WithTags("Admin.Sidebar");
     }
 }

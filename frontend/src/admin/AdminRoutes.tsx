@@ -4,6 +4,7 @@ import { Toaster } from 'sileo'
 import 'sileo/styles.css'
 import AdminLayout from './AdminLayout'
 import Dashboard from './Dashboard'
+import Today from './Today'
 import Searches from './Searches'
 import SearchDetails from './SearchDetails'
 import Clients from './Clients'
@@ -34,7 +35,8 @@ export default function AdminRoutes() {
     <QueryClientProvider client={queryClient}>
       <Routes>
         <Route element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Today />} />
+          <Route path="overview" element={<Dashboard />} />
           <Route path="searches" element={<Searches />} />
           <Route path="searches/:id" element={<SearchDetails />} />
           <Route path="clients" element={<Clients />} />
