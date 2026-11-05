@@ -171,7 +171,7 @@ export default function PaymentPage() {
             <div className="lg:col-span-3 order-1 lg:order-2">
               <div className="rounded-lg bg-white shadow ring-1 ring-gray-200 p-6">
                 {stripePromise ? (
-                  <Elements stripe={stripePromise}>
+                  <Elements stripe={stripePromise} options={{ fonts: [{ cssSrc: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap' }] }}>
                     <PaymentForm
                       leadId={leadId}
                       abn={lead.abn}
@@ -347,7 +347,7 @@ function PaymentForm({ leadId, abn, ids, years, total, waitUntilVerified, cardho
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
         <div className="mt-1 block w-full rounded-md border-0 py-3 px-3 shadow-sm ring-1 ring-inset ring-gray-300 bg-white">
-          <CardElement options={{ hidePostalCode: true, style: { base: { fontSize: '16px', color: '#1f2937', fontFamily: 'Inter, system-ui, sans-serif' } } }} />
+          <CardElement options={{ hidePostalCode: true, style: { base: { fontSize: '16px', color: '#1f2937', fontFamily: 'Geist, system-ui, sans-serif' } } }} />
         </div>
       </div>
 

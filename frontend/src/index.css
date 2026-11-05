@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/forms";
@@ -78,8 +78,7 @@
 
     body {
         margin: 0;
-        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
-        font-feature-settings: "cv11" on, "ss01" on, "cv02" on, "cv03" on, "cv04" on;
+        font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
@@ -88,7 +87,7 @@
     }
 
     code, pre, .font-mono {
-        font-feature-settings: "liga" off, "calt" off, "zero" on;
+        font-feature-settings: "liga" off, "calt" off;
     }
 
     .tabular-nums {
@@ -123,9 +122,9 @@
 }
 
 @theme {
-    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --font-display: 'Space Mono', 'JetBrains Mono', ui-monospace, monospace;
+    --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-display: 'Geist Mono', ui-monospace, monospace;
 
     --text-xxs: 0.6875rem;
     --text-xxs--line-height: 1rem;
