@@ -26,9 +26,9 @@ export function TrendChart({ data, valueLabel = 'renewals' }: {
             if (!active || !payload?.length) return null
             const p = payload[0].payload as { date?: string; count: number }
             return (
-              <div className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs shadow-md">
-                {p.date ? <div className="font-mono text-xxs text-zinc-500 tabular-nums">{p.date}</div> : null}
-                <div className="font-mono font-medium tabular-nums text-zinc-900">{p.count} {valueLabel}</div>
+              <div className="rounded-md border border-border bg-card px-2 py-1 text-xs shadow-md">
+                {p.date ? <div className="font-mono text-xxs text-muted-foreground tabular-nums">{p.date}</div> : null}
+                <div className="font-mono font-medium tabular-nums text-foreground">{p.count} {valueLabel}</div>
               </div>
             )
           }}

@@ -28,8 +28,8 @@ export default function SearchDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
-        <p className="mt-3 text-sm text-zinc-500">Loading…</p>
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
@@ -37,9 +37,9 @@ export default function SearchDetails() {
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-zinc-900">Search not found</h3>
-        <p className="mt-1 text-sm text-zinc-500">The search you’re looking for doesn’t exist.</p>
-        <Link to="/admin/searches" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to searches</Link>
+        <h3 className="text-base font-semibold text-foreground">Search not found</h3>
+        <p className="mt-1 text-sm text-muted-foreground">The search you’re looking for doesn’t exist.</p>
+        <Link to="/admin/searches" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to searches</Link>
       </div>
     )
   }
@@ -65,20 +65,20 @@ export default function SearchDetails() {
         <StoryStrip steps={story(data)} />
       </RecordHeader>
 
-      <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+      <div className="mt-6 rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
         <div className="mb-4">
           <KickerLabel>Names</KickerLabel>
-          <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">What ASIC returned</h2>
+          <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">What ASIC returned</h2>
         </div>
         {data.results.length === 0 ? (
-          <p className="text-sm text-zinc-500">{data.success ? 'No business names on this ABN.' : 'Nothing: the search failed.'}</p>
+          <p className="text-sm text-muted-foreground">{data.success ? 'No business names on this ABN.' : 'Nothing: the search failed.'}</p>
         ) : (
-          <div className="divide-y divide-zinc-100">
+          <div className="divide-y divide-border">
             {data.results.map((r) => (
               <div key={r.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-zinc-900">{r.businessName}</div>
-                  <div className="text-xs text-zinc-500">
+                  <div className="truncate text-sm font-medium text-foreground">{r.businessName}</div>
+                  <div className="text-xs text-muted-foreground">
                     {r.renewalRequest
                       ? <>{r.renewalRequest.renewalYears}-year renewal, {fmtMoney2(r.renewalRequest.amount)}, <When at={r.renewalRequest.initiatedAt} /></>
                       : 'No renewal started'}
@@ -107,7 +107,7 @@ export default function SearchDetails() {
         {data.errorMessage ? (
           <div className="mt-4">
             <KickerLabel>Error</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{data.errorMessage}</pre>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{data.errorMessage}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -162,8 +162,8 @@ function story(d: Detail): StoryStep[] {
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="truncate text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className="font-mono text-sm tabular-nums text-zinc-900">{value}</dd>
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-sm tabular-nums text-foreground">{value}</dd>
     </div>
   )
 }

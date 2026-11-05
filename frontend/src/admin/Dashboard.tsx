@@ -15,14 +15,14 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error instanceof Error ? error.message : 'Load failed.'}</div>
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">{error instanceof Error ? error.message : 'Load failed.'}</div>
       </div>
     )
   }
   if (!data) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="text-sm text-zinc-500">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
@@ -129,7 +129,7 @@ export default function Dashboard() {
 
       {/* MTD summary */}
       <div className="mt-10">
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm flex flex-col">
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm flex flex-col">
           <SectionTitle kicker="MTD" title="This month" />
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
             <KpiMini label="Revenue" value={fmtMoney2(mtdRevenue)} />
@@ -137,7 +137,7 @@ export default function Dashboard() {
             <KpiMini label="Direct" value={fmtMoney2(stats.renewtronDirectRevenue)} sub={`${stats.renewtronDirectCount} sales`} />
             <KpiMini label="Ontraport" value={fmtMoney2(stats.ontraportRevenue)} sub={`${stats.ontraportCount} sales`} />
           </div>
-          <div className="mt-auto pt-5 border-t border-zinc-100 grid grid-cols-2 gap-4">
+          <div className="mt-auto pt-5 border-t border-border grid grid-cols-2 gap-4">
             <KpiMini label="Lead conv." value={`${conv.toFixed(1)}%`} sub={`${stats.convertedLeads} of ${stats.totalLeads}`} />
             <KpiMini label="Avg basket" value={fmtMoney0(stats.avgBasket)} sub={`${stats.renewalsCompleted.toLocaleString()} renewals`} />
           </div>
@@ -154,23 +154,23 @@ export default function Dashboard() {
         </div>
 
         <div>
-          <SectionTitle kicker="LATEST" title="Recent renewals" right={<Link to="/admin/renewals" className="text-sm font-medium text-brand-700 hover:text-brand-800">View all →</Link>} />
-          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+          <SectionTitle kicker="LATEST" title="Recent renewals" right={<Link to="/admin/renewals" className="text-sm font-medium text-link hover:text-link">View all →</Link>} />
+          <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
             <table className="min-w-full">
-              <thead className="bg-zinc-50/80 backdrop-blur">
+              <thead className="bg-muted/50 backdrop-blur">
                 <tr>
                   <Th>Business</Th>
                   <Th>Initiated</Th>
                   <Th>Status</Th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100">
+              <tbody className="divide-y divide-border">
                 {recentRenewals.length === 0 ? (
-                  <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-zinc-500">No renewals yet.</td></tr>
+                  <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-muted-foreground">No renewals yet.</td></tr>
                 ) : recentRenewals.map((r) => (
-                  <tr key={r.id} className="hover:bg-zinc-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-zinc-900">{r.businessName ?? '—'}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-500 tabular-nums">{new Date(r.initiatedAt).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                  <tr key={r.id} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-foreground">{r.businessName ?? '—'}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground tabular-nums">{new Date(r.initiatedAt).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
                     <td className="px-4 py-3"><RenewalStatusBadge status={r.status} /></td>
                   </tr>
                 ))}
@@ -210,17 +210,17 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
   const attention = !!health.otpProblem || health.stuckCount > 0 || health.outboxDead > 0 || jobs.some((j) => j.state === 'stale')
 
   return (
-    <div className="mt-6 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+    <div className="mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       {/* Header — the one-glance verdict */}
       <div className="flex items-center justify-between gap-3 px-5 py-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="relative flex h-2 w-2 shrink-0">
             {attention ? <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60 motion-reduce:hidden"></span> : null}
-            <span className={`relative inline-flex h-2 w-2 rounded-full ${attention ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${attention ? 'bg-warning' : 'bg-success'}`}></span>
           </span>
           <div className="min-w-0">
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">System</div>
-            <div className="text-sm font-semibold text-zinc-900 truncate">
+            <div className="text-xs font-medium text-muted-foreground">System</div>
+            <div className="text-sm font-semibold text-foreground truncate">
               {attention ? 'Something needs a look' : 'All systems running'}
             </div>
           </div>
@@ -230,10 +230,10 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
 
       {/* OTP — without it no renewal can pay ASIC, so it outranks everything else here */}
       {health.otpProblem ? (
-        <div className="border-t border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900">
+        <div className="border-t border-warning/25 bg-warning/5 px-5 py-3 text-sm text-warning">
           <div className="font-semibold">Renewals are on hold: the OTP SMS can't be read</div>
-          <div className="mt-0.5 text-amber-800">{health.otpProblem}</div>
-          <div className="mt-1 text-xs text-amber-700">
+          <div className="mt-0.5 text-warning">{health.otpProblem}</div>
+          <div className="mt-1 text-xs text-warning">
             {health.otpHeldCount > 0
               ? `${health.otpHeldCount} ${health.otpHeldCount === 1 ? 'renewal is' : 'renewals are'} waiting and will start within an hour of this being fixed.`
               : 'New renewals will wait, without being started at ASIC, until this is fixed.'}{' '}
@@ -243,7 +243,7 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
       ) : null}
 
       {/* Metrics band */}
-      <div className="grid grid-cols-3 divide-x divide-zinc-100 border-t border-zinc-100">
+      <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
         <HealthMetric
           label="Queue"
           value={String(health.queueDepth)}
@@ -266,16 +266,16 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
 
       {/* Recurring jobs — freshness per job */}
       {jobs.length > 0 ? (
-        <div className="border-t border-zinc-100 bg-zinc-50/50 px-5 py-3">
+        <div className="border-t border-border bg-muted/50 px-5 py-3">
           <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {jobs.map((j) => (
               <div key={j.id} className="flex items-start gap-2 min-w-0" title={j.nextExecution ? `Next run: ${new Date(j.nextExecution).toLocaleString()}` : undefined}>
                 <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                  j.state === 'ok' ? 'bg-emerald-500' : j.state === 'stale' ? 'bg-amber-500' : 'bg-zinc-300'
+                  j.state === 'ok' ? 'bg-success' : j.state === 'stale' ? 'bg-warning' : 'bg-zinc-300'
                 }`}></span>
                 <div className="min-w-0">
-                  <div className="text-xs font-medium text-zinc-700 truncate">{j.label}</div>
-                  <div className={`text-xxs font-mono tabular-nums ${j.state === 'stale' ? 'text-amber-700 font-semibold' : 'text-zinc-400'}`}>
+                  <div className="text-xs font-medium text-foreground truncate">{j.label}</div>
+                  <div className={`text-xxs font-mono tabular-nums ${j.state === 'stale' ? 'text-warning font-semibold' : 'text-muted-foreground/70'}`}>
                     {j.lastExecution ? relativeTime(j.lastExecution) : 'never ran'}
                   </div>
                 </div>
@@ -291,25 +291,25 @@ function HealthStrip({ health }: { health: NonNullable<DashboardResponse['health
 function HealthMetric({ label, value, sub, warn = false, link }: { label: string; value: string; sub: string; warn?: boolean; link?: string }) {
   const body = (
     <div className="px-5 py-3">
-      <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">{label}</div>
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="mt-0.5 flex items-baseline gap-1.5">
-        <span className={`text-lg font-semibold tabular-nums leading-none ${warn ? 'text-amber-700' : 'text-zinc-900'}`}>{value}</span>
-        <span className={`text-xxs font-mono ${warn ? 'text-amber-700' : 'text-zinc-400'}`}>{sub}</span>
+        <span className={`text-lg font-semibold tabular-nums leading-none ${warn ? 'text-warning' : 'text-foreground'}`}>{value}</span>
+        <span className={`text-xxs font-mono ${warn ? 'text-warning' : 'text-muted-foreground/70'}`}>{sub}</span>
       </div>
     </div>
   )
-  return link ? <Link to={link} className="block transition-colors hover:bg-zinc-50">{body}</Link> : body
+  return link ? <Link to={link} className="block transition-colors hover:bg-muted/50">{body}</Link> : body
 }
 
 function CaughtUp() {
   return (
-    <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/50 p-8 text-center">
-      <div className="mx-auto h-10 w-10 rounded-full bg-brand-100 flex items-center justify-center">
-        <Check className="h-5 w-5 text-brand-600" />
+    <div className="rounded-xl border border-dashed border-brand-200 bg-primary/5/50 p-8 text-center">
+      <div className="mx-auto h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+        <Check className="h-5 w-5 text-link" />
       </div>
-      <div className="mt-3 text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">All clear</div>
-      <h3 className="mt-1 text-base font-semibold text-zinc-900">Nothing in the queue right now</h3>
-      <p className="mt-1 text-sm text-zinc-500 max-w-sm mx-auto">No abandoned leads, stuck renewals, or pending pipeline work. The system is healthy — check back as new activity rolls in.</p>
+      <div className="mt-3 text-xs font-medium text-link">All clear</div>
+      <h3 className="mt-1 text-base font-semibold text-foreground">Nothing in the queue right now</h3>
+      <p className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto">No abandoned leads, stuck renewals, or pending pipeline work. The system is healthy — check back as new activity rolls in.</p>
     </div>
   )
 }
@@ -347,14 +347,14 @@ function Hero({ stats }: { stats: DashboardResponse['stats'] }) {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-zinc-950 px-6 py-8 sm:px-10 sm:py-10 ring-1 ring-white/5">
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand-500/10 blur-3xl" />
+        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
         <div className="absolute -left-24 -bottom-24 h-72 w-72 rounded-full bg-brand-400/5 blur-3xl" />
       </div>
       <div className="relative grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
         <div className="lg:col-span-2">
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-400">Recoverable revenue</div>
+          <div className="text-xs font-medium text-brand-400">Recoverable revenue</div>
           <div className="mt-2 font-display text-5xl sm:text-6xl font-bold tracking-tight text-white tabular-nums">{headline}</div>
-          <p className="mt-3 max-w-xl text-sm text-zinc-300">
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground/50">
             Across {stats.abandonedAtPaymentCount + stats.ontraportPipelineCount + stats.failedRenewalCount + stats.pastCustomersDueSoonCount} leads, paid-but-pending Ontraport sales, failed renewals, and customers due to renew again — sitting in the action queue below.
           </p>
         </div>
@@ -371,10 +371,10 @@ function Hero({ stats }: { stats: DashboardResponse['stats'] }) {
 
 function HeroStat({ label, value, count }: { label: string; value: string; count: number }) {
   return (
-    <div className="rounded-lg bg-white/5 ring-1 ring-white/10 px-3 py-2.5">
-      <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-400">{label}</div>
+    <div className="rounded-lg bg-card/5 ring-1 ring-white/10 px-3 py-2.5">
+      <div className="text-xs text-muted-foreground/70">{label}</div>
       <div className="mt-0.5 text-lg font-semibold text-white tabular-nums">{value}</div>
-      <div className="text-xxs font-mono text-zinc-500 tabular-nums">{count} item{count === 1 ? '' : 's'}</div>
+      <div className="text-xxs font-mono text-muted-foreground tabular-nums">{count} item{count === 1 ? '' : 's'}</div>
     </div>
   )
 }
@@ -382,11 +382,11 @@ function HeroStat({ label, value, count }: { label: string; value: string; count
 type Tone = 'emerald' | 'indigo' | 'amber' | 'red' | 'zinc'
 
 const toneStyles: Record<Tone, { kicker: string; ring: string; cta: string; dot: string }> = {
-  emerald: { kicker: 'text-brand-700', ring: 'hover:ring-brand-200', cta: 'text-brand-700 hover:text-brand-800', dot: 'bg-brand-500' },
-  indigo:  { kicker: 'text-indigo-700',  ring: 'hover:ring-indigo-200',  cta: 'text-indigo-700 hover:text-indigo-800',   dot: 'bg-indigo-500' },
-  amber:   { kicker: 'text-amber-700',   ring: 'hover:ring-amber-200',   cta: 'text-amber-700 hover:text-amber-800',     dot: 'bg-amber-500' },
-  red:     { kicker: 'text-red-700',     ring: 'hover:ring-red-200',     cta: 'text-red-700 hover:text-red-800',         dot: 'bg-red-500' },
-  zinc:    { kicker: 'text-zinc-600',    ring: 'hover:ring-zinc-300',    cta: 'text-zinc-700 hover:text-zinc-900',       dot: 'bg-zinc-400' },
+  emerald: { kicker: 'text-link', ring: 'hover:ring-primary/20', cta: 'text-link hover:text-link', dot: 'bg-primary' },
+  indigo:  { kicker: 'text-info',  ring: 'hover:ring-info/20',  cta: 'text-info hover:text-info',   dot: 'bg-info' },
+  amber:   { kicker: 'text-warning',   ring: 'hover:ring-warning/25',   cta: 'text-warning hover:text-warning',     dot: 'bg-warning' },
+  red:     { kicker: 'text-destructive',     ring: 'hover:ring-destructive/20',     cta: 'text-destructive hover:text-destructive',         dot: 'bg-destructive' },
+  zinc:    { kicker: 'text-muted-foreground',    ring: 'hover:ring-border',    cta: 'text-foreground hover:text-foreground',       dot: 'bg-zinc-400' },
 }
 
 function ActionCard({ tone, kicker, count, value, title, detail, ctaLabel, to, hideValue, countPrefix }: {
@@ -405,7 +405,7 @@ function ActionCard({ tone, kicker, count, value, title, detail, ctaLabel, to, h
   return (
     <Link
       to={to}
-      className={`group relative flex flex-col rounded-xl bg-white p-5 ring-1 ring-zinc-200 ${t.ring} hover:shadow-md transition-all`}
+      className={`group relative flex flex-col rounded-xl bg-card p-5 ring-1 ring-border ${t.ring} hover:shadow-md transition-all`}
     >
       <div className="flex items-center justify-between">
         <div className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] ${t.kicker} flex items-center gap-1.5`}>
@@ -413,14 +413,14 @@ function ActionCard({ tone, kicker, count, value, title, detail, ctaLabel, to, h
           {kicker}
         </div>
         {!hideValue && value ? (
-          <div className="text-sm font-semibold text-zinc-900 tabular-nums">{value}</div>
+          <div className="text-sm font-semibold text-foreground tabular-nums">{value}</div>
         ) : null}
       </div>
       <div className="mt-3 flex items-baseline gap-2">
-        <div className="font-display text-3xl font-bold text-zinc-900 tabular-nums">{countPrefix ?? ''}{count.toLocaleString()}</div>
-        <div className="text-sm font-medium text-zinc-700">{title}</div>
+        <div className="font-display text-3xl font-bold text-foreground tabular-nums">{countPrefix ?? ''}{count.toLocaleString()}</div>
+        <div className="text-sm font-medium text-foreground">{title}</div>
       </div>
-      <p className="mt-2 text-sm text-zinc-500 leading-relaxed">{detail}</p>
+      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{detail}</p>
       <div className={`mt-4 text-sm font-medium ${t.cta}`}>{ctaLabel}</div>
     </Link>
   )
@@ -429,13 +429,13 @@ function ActionCard({ tone, kicker, count, value, title, detail, ctaLabel, to, h
 function ActivityFeed({ items }: { items: ActivityItem[] }) {
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-200 bg-white/60 p-6 text-center">
-        <p className="text-sm text-zinc-500">No activity in the last 48 hours.</p>
+      <div className="rounded-xl border border-dashed border-border bg-card/60 p-6 text-center">
+        <p className="text-sm text-muted-foreground">No activity in the last 48 hours.</p>
       </div>
     )
   }
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white shadow-sm divide-y divide-zinc-100">
+    <div className="rounded-xl border border-border bg-card shadow-sm divide-y divide-border">
       {items.map((item, i) => (
         <ActivityRow key={i} item={item} />
       ))}
@@ -447,15 +447,15 @@ function ActivityRow({ item }: { item: ActivityItem }) {
   const tag = activityTag(item.kind)
   return (
     <div className="flex items-start gap-3 px-4 py-3">
-      <div className="mt-0.5 shrink-0 text-xxs font-mono font-medium uppercase tracking-[0.12em] tabular-nums text-zinc-400 w-12">
+      <div className="mt-0.5 shrink-0 text-xs font-medium tabular-nums text-muted-foreground/70 w-12">
         {relativeTime(item.at)}
       </div>
       <div className={`mt-0.5 shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ${tag.cls}`}>
         {tag.label}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-zinc-900 truncate">{item.label ?? '—'}</div>
-        <div className="text-xs text-zinc-500 truncate">
+        <div className="text-sm font-medium text-foreground truncate">{item.label ?? '—'}</div>
+        <div className="text-xs text-muted-foreground truncate">
           {item.detail ?? ''}
           {item.amount != null ? <span className="font-mono tabular-nums"> · {fmtMoney2(item.amount)}</span> : null}
           {item.source ? <span className="font-mono"> · {item.source}</span> : null}
@@ -467,28 +467,28 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 
 function activityTag(kind: ActivityKind) {
   switch (kind) {
-    case 'paid':      return { label: 'PAID',     cls: 'bg-brand-50 text-brand-700 ring-1 ring-brand-100' }
-    case 'lead-warm': return { label: 'LEAD',     cls: 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' }
+    case 'paid':      return { label: 'PAID',     cls: 'bg-primary/5 text-link ring-1 ring-primary/20' }
+    case 'lead-warm': return { label: 'LEAD',     cls: 'bg-warning/5 text-warning ring-1 ring-warning/25' }
   }
 }
 
 function KpiMini({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</div>
-      <div className="mt-1 text-base font-semibold text-zinc-900 tabular-nums">{value}</div>
-      {sub ? <div className="text-xs text-zinc-500 tabular-nums">{sub}</div> : null}
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 text-base font-semibold text-foreground tabular-nums">{value}</div>
+      {sub ? <div className="text-xs text-muted-foreground tabular-nums">{sub}</div> : null}
     </div>
   )
 }
 
 function RenewalStatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    Completed:  'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
-    Processing: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100',
-    Pending:    'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
-    Failed:     'bg-red-50 text-red-700 ring-1 ring-red-100',
+    Completed:  'bg-primary/5 text-link ring-1 ring-primary/20',
+    Processing: 'bg-info/5 text-info ring-1 ring-info/20',
+    Pending:    'bg-warning/5 text-warning ring-1 ring-warning/25',
+    Failed:     'bg-destructive/5 text-destructive ring-1 ring-destructive/20',
   }
-  const cls = map[status] ?? 'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200'
+  const cls = map[status] ?? 'bg-muted text-foreground ring-1 ring-border'
   return <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ${cls}`}>{status.toUpperCase()}</span>
 }

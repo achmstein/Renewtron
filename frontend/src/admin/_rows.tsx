@@ -124,7 +124,7 @@ export function ClientName({ id, name }: { id?: string | null; name?: string | n
   const text = name?.trim() || 'Unnamed client'
   if (!id) return <span className="font-medium">{text}</span>
   return (
-    <Link to={`/admin/clients/${id}`} className="font-medium text-primary hover:underline">
+    <Link to={`/admin/clients/${id}`} className="font-medium text-link hover:underline">
       {text}
     </Link>
   )

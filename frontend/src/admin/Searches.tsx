@@ -80,23 +80,23 @@ export default function Searches() {
         return (
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-mono tabular-nums text-zinc-900">{s.abn}</span>
+              <span className="text-sm font-mono tabular-nums text-foreground">{s.abn}</span>
               {s.repeatCount7d >= 3 ? <StatusPill tone="amber">×{s.repeatCount7d} 7D</StatusPill> : null}
             </div>
             {s.resultsCount === 0 ? (
-              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400">no names found</div>
+              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70">no names found</div>
             ) : (
-              <div className="hidden sm:block mt-0.5 text-sm text-zinc-700 truncate">
+              <div className="hidden sm:block mt-0.5 text-sm text-foreground truncate">
                 {s.firstBusinessName ?? '—'}
-                {s.resultsCount > 1 ? <span className="ml-1 text-xxs font-mono text-zinc-400 tabular-nums">+{s.resultsCount - 1}</span> : null}
+                {s.resultsCount > 1 ? <span className="ml-1 text-xxs font-mono text-muted-foreground/70 tabular-nums">+{s.resultsCount - 1}</span> : null}
               </div>
             )}
             {s.lead ? (
-              <Link to={`/admin/leads/${s.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">
+              <Link to={`/admin/leads/${s.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70 hover:underline truncate">
                 {s.lead.fullName} · {s.lead.email}
               </Link>
             ) : (
-              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400">no lead</div>
+              <div className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70">no lead</div>
             )}
           </div>
         )
@@ -111,9 +111,9 @@ export default function Searches() {
     {
       accessorKey: 'resultsCount',
       header: 'Names',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-zinc-700', headerClassName: 'text-right' },
+      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
       cell: ({ row }) => row.original.resultsCount === 0
-        ? <span className="text-xxs text-zinc-400">—</span>
+        ? <span className="text-xxs text-muted-foreground/70">—</span>
         : row.original.resultsCount,
     },
     {
@@ -129,11 +129,11 @@ export default function Searches() {
       meta: { className: 'text-right', headerClassName: 'text-right' },
       cell: ({ row }) => row.original.renewal ? (
         <div>
-          <div className="text-sm font-mono tabular-nums text-zinc-900">{fmtMoney0(row.original.renewal.amount)}</div>
+          <div className="text-sm font-mono tabular-nums text-foreground">{fmtMoney0(row.original.renewal.amount)}</div>
           <RenewalStatusPill status={row.original.renewal.status} />
         </div>
       ) : (
-        <span className="text-xxs font-mono text-zinc-400">—</span>
+        <span className="text-xxs font-mono text-muted-foreground/70">—</span>
       ),
     },
     {
@@ -147,8 +147,8 @@ export default function Searches() {
       header: 'When',
       cell: ({ row }) => (
         <div>
-          <div className="text-sm text-zinc-700 tabular-nums whitespace-nowrap">{relativeTime(row.original.searchedAt)}</div>
-          <div className="text-xxs font-mono text-zinc-400 tabular-nums whitespace-nowrap">{fmtDate(row.original.searchedAt)} · {fmtTime(row.original.searchedAt)}</div>
+          <div className="text-sm text-foreground tabular-nums whitespace-nowrap">{relativeTime(row.original.searchedAt)}</div>
+          <div className="text-xxs font-mono text-muted-foreground/70 tabular-nums whitespace-nowrap">{fmtDate(row.original.searchedAt)} · {fmtTime(row.original.searchedAt)}</div>
         </div>
       ),
     },
@@ -158,7 +158,7 @@ export default function Searches() {
       enableSorting: false,
       meta: { className: 'text-right' },
       cell: ({ row }) => (
-        <Link to={`/admin/searches/${row.original.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800 whitespace-nowrap">View →</Link>
+        <Link to={`/admin/searches/${row.original.id}`} className="text-sm font-medium text-link hover:text-link whitespace-nowrap">View →</Link>
       ),
     },
   ], [])
@@ -194,7 +194,7 @@ export default function Searches() {
           variant="outline"
           size="sm"
           onClick={() => { setPage(1); setIncludeSystem((v) => !v) }}
-          className={`h-9 border-dashed whitespace-nowrap ${includeSystem ? 'bg-brand-50 text-brand-800 border-brand-200 hover:bg-brand-100' : 'text-zinc-500'}`}
+          className={`h-9 border-dashed whitespace-nowrap ${includeSystem ? 'bg-primary/5 text-link border-brand-200 hover:bg-primary/10' : 'text-muted-foreground'}`}
           title="System searches are background lookups for Ontraport sync and bulk renewals — hidden by default, noisy for daily ops. Selecting System under Initiated by also shows them."
         >
           {includeSystem ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
@@ -245,11 +245,11 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">From</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">From</div>
           <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
         </div>
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">To</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">To</div>
           <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
         </div>
         {active ? (
@@ -318,22 +318,22 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
         <Link
           key={s.id}
           to={`/admin/searches/${s.id}`}
-          className="group relative rounded-xl bg-white p-5 ring-1 ring-zinc-200 hover:ring-brand-200 hover:shadow-md transition-all flex flex-col"
+          className="group relative rounded-xl bg-card p-5 ring-1 ring-border hover:ring-primary/20 hover:shadow-md transition-all flex flex-col"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">ABN</div>
+                <div className="text-xs text-muted-foreground">ABN</div>
                 {s.repeatCount7d >= 3 ? <StatusPill tone="amber">×{s.repeatCount7d} 7D</StatusPill> : null}
               </div>
-              <div className="mt-0.5 font-mono text-sm tabular-nums text-zinc-900">{s.abn}</div>
+              <div className="mt-0.5 font-mono text-sm tabular-nums text-foreground">{s.abn}</div>
               {s.lead ? (
                 <div className="mt-2">
-                  <div className="text-sm text-zinc-700">{s.lead.fullName}</div>
-                  <div className="text-xxs font-mono text-zinc-400">{s.lead.email}</div>
+                  <div className="text-sm text-foreground">{s.lead.fullName}</div>
+                  <div className="text-xxs font-mono text-muted-foreground/70">{s.lead.email}</div>
                 </div>
               ) : (
-                <div className="mt-2 text-xxs font-mono text-zinc-400">no lead captured</div>
+                <div className="mt-2 text-xxs font-mono text-muted-foreground/70">no lead captured</div>
               )}
             </div>
             <div className="flex flex-col items-end gap-1.5">
@@ -342,18 +342,18 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-zinc-100">
-            <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">Funnel</div>
+          <div className="mt-4 pt-4 border-t border-border">
+            <div className="text-xs text-muted-foreground">Funnel</div>
             <div className="mt-1.5"><FunnelPills stages={searchFunnelStages(s.funnel)} /></div>
           </div>
 
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <Cell label="Names found" value={
               s.resultsCount === 0
-                ? <span className="text-xxs font-mono text-zinc-400">none</span>
+                ? <span className="text-xxs font-mono text-muted-foreground/70">none</span>
                 : <>
-                    <div className="text-zinc-900 truncate">{s.firstBusinessName ?? '—'}</div>
-                    {s.resultsCount > 1 ? <div className="text-xxs font-mono text-zinc-400">+{s.resultsCount - 1} more</div> : null}
+                    <div className="text-foreground truncate">{s.firstBusinessName ?? '—'}</div>
+                    {s.resultsCount > 1 ? <div className="text-xxs font-mono text-muted-foreground/70">+{s.resultsCount - 1} more</div> : null}
                   </>
             } />
             <Cell label="Renewal" value={
@@ -362,18 +362,18 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
                     <div className="font-mono tabular-nums">{fmtMoney2(s.renewal.amount)}</div>
                     <RenewalStatusPill status={s.renewal.status} />
                   </div>
-                : <span className="text-xxs font-mono text-zinc-400">—</span>
+                : <span className="text-xxs font-mono text-muted-foreground/70">—</span>
             } />
             <Cell label="When" value={
               <div>
                 <div>{relativeTime(s.searchedAt)}</div>
-                <div className="text-xxs font-mono text-zinc-400">{fmtDate(s.searchedAt)} · {fmtTime(s.searchedAt)}</div>
+                <div className="text-xxs font-mono text-muted-foreground/70">{fmtDate(s.searchedAt)} · {fmtTime(s.searchedAt)}</div>
               </div>
             } />
             <Cell label="IP" value={s.ipAddress ?? '—'} mono />
           </dl>
 
-          <div className="mt-4 pt-4 border-t border-zinc-100 text-sm font-medium text-brand-700 group-hover:text-brand-800">
+          <div className="mt-4 pt-4 border-t border-border text-sm font-medium text-link group-hover:text-link">
             View details →
           </div>
         </Link>
@@ -392,7 +392,7 @@ function OutcomeCell({ s, onError }: { s: Search; onError: (m: string) => void }
         {s.errorMessage ? (
           <button
             onClick={(e) => { e.preventDefault(); onError(s.errorMessage ?? '') }}
-            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100"
+            className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-destructive/5 text-destructive hover:bg-destructive/10"
             title="View error"
           >
             <CircleAlert className="h-3 w-3" />

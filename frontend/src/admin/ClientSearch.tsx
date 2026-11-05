@@ -19,7 +19,7 @@ export function ClientSearchButton({ onClick }: { onClick: () => void }) {
     >
       <Search className="size-4 shrink-0" />
       <span className="flex-1 text-left">Find a client</span>
-      <kbd className="hidden rounded border border-sidebar-border px-1.5 font-mono text-xxs text-zinc-500 lg:inline">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+      <kbd className="hidden rounded border border-sidebar-border px-1.5 font-mono text-xxs text-muted-foreground lg:inline">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
     </button>
   )
 }
@@ -67,7 +67,7 @@ export function ClientSearch({ open, setOpen }: { open: boolean; setOpen: (open:
           {debounced.length < 2 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">Type at least two characters.</div>
           ) : isFetching && items.length === 0 ? (
-            <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-link" /></div>
           ) : (
             <CommandEmpty>No client matches “{debounced}”.</CommandEmpty>
           )}

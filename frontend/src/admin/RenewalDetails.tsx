@@ -67,8 +67,8 @@ export default function RenewalDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
-        <p className="mt-3 text-sm text-zinc-500">Loading…</p>
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
@@ -76,9 +76,9 @@ export default function RenewalDetails() {
   if (!data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-zinc-900">Renewal request not found</h3>
-        <p className="mt-1 text-sm text-zinc-500">The renewal you’re looking for doesn’t exist.</p>
-        <Link to="/admin/renewals" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to renewals</Link>
+        <h3 className="text-base font-semibold text-foreground">Renewal request not found</h3>
+        <p className="mt-1 text-sm text-muted-foreground">The renewal you’re looking for doesn’t exist.</p>
+        <Link to="/admin/renewals" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to renewals</Link>
       </div>
     )
   }
@@ -113,10 +113,10 @@ export default function RenewalDetails() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section kicker="Client" title="Who it’s for">
           {data.client ? (
-            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-brand-700 hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
           {data.lead ? (
-            <Row label="Wizard visit" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-brand-700 hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
+            <Row label="Wizard visit" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-link hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
           ) : null}
           <Row label="Email" value={data.email ?? '—'} />
           <Row label="Mobile" value={data.mobileNumber ?? '—'} mono />
@@ -135,7 +135,7 @@ export default function RenewalDetails() {
                   ? <><StatusPill tone="emerald">BPAY PAID</StatusPill><When at={data.bpayPaidAt} /></>
                   : <StatusPill tone="red">BPAY TO PAY</StatusPill>}
                 <button type="button" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}
-                  className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50">
+                  className="text-sm font-medium text-link hover:text-link disabled:opacity-50">
                   {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
                 </button>
               </span>
@@ -170,7 +170,7 @@ export default function RenewalDetails() {
         {data.errorMessage ? (
           <div className="mt-4">
             <KickerLabel>Last error, as ASIC or the system said it</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{data.errorMessage}</pre>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{data.errorMessage}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -285,10 +285,10 @@ function truncate(s: string, n: number) {
 
 function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+    <div className="rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
       <div className="mb-4">
         <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">{title}</h2>
+        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">{title}</h2>
       </div>
       <dl className="space-y-3">{children}</dl>
     </div>
@@ -298,8 +298,8 @@ function Section({ kicker, title, children }: { kicker: string; title: string; c
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
     </div>
   )
 }

@@ -48,7 +48,7 @@ export default function ClientDuplicates() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-4">
-        <Link to="/admin/clients" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
+        <Link to="/admin/clients" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-3 w-3" /> Back to clients
         </Link>
       </div>
@@ -56,11 +56,11 @@ export default function ClientDuplicates() {
         kicker="CLIENTS"
         title="Review possible duplicates"
         subtitle="Same ABN and the same name or mobile, under a different email. Merge if it's one person; keep them apart if it's two people at the business."
-        right={queue.length ? <span className="text-sm font-mono tabular-nums text-zinc-500">{remaining.length} left{skipped.length ? ` · ${skipped.length} skipped` : ''}</span> : null}
+        right={queue.length ? <span className="text-sm font-mono tabular-nums text-muted-foreground">{remaining.length} left{skipped.length ? ` · ${skipped.length} skipped` : ''}</span> : null}
       />
 
       {isPending ? (
-        <div className="py-12 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" /></div>
+        <div className="py-12 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-link" /></div>
       ) : !current ? (
         <div className="mt-6">
           <EmptyState
@@ -70,7 +70,7 @@ export default function ClientDuplicates() {
           {skipped.length ? <div className="mt-3 text-center"><Button variant="outline" size="sm" onClick={() => setSkipped([])}>Go through the skipped ones</Button></div> : null}
         </div>
       ) : !a.data || !b.data ? (
-        <div className="py-12 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" /></div>
+        <div className="py-12 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-link" /></div>
       ) : (
         <Pair
           key={current.id}
@@ -105,14 +105,14 @@ function Pair({ a, b, busy, onMerge, onApart, onSkip }: {
 
   return (
     <div className="mt-6 space-y-4">
-      <div className="overflow-x-auto rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
+      <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-border shadow-sm">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-100 text-left">
+            <tr className="border-b border-border text-left">
               <th className="w-36 px-4 py-3" />
               {[a, b].map((c) => (
                 <th key={c.id} className="px-4 py-3 align-top">
-                  <Link to={`/admin/clients/${c.id}`} className="text-base font-semibold text-zinc-900 hover:underline">{c.fullName || 'Unnamed client'}</Link>
+                  <Link to={`/admin/clients/${c.id}`} className="text-base font-semibold text-foreground hover:underline">{c.fullName || 'Unnamed client'}</Link>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {c.hasPurchased ? <StatusPill tone="emerald">CUSTOMER</StatusPill> : <StatusPill tone="zinc">LEAD</StatusPill>}
                     {c === keep ? <StatusPill tone="indigo">KEEP IF MERGING</StatusPill> : null}
@@ -123,13 +123,13 @@ function Pair({ a, b, busy, onMerge, onApart, onSkip }: {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-zinc-50 last:border-0 align-top">
-                <td className="px-4 py-2.5 text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">
+              <tr key={r.label} className="border-b border-border last:border-0 align-top">
+                <td className="px-4 py-2.5 text-xs text-muted-foreground">
                   {r.label}
-                  {r.same ? <div className="mt-1 inline-flex items-center gap-1 normal-case tracking-normal text-emerald-700"><Check className="h-3 w-3" /> same</div> : null}
+                  {r.same ? <div className="mt-1 inline-flex items-center gap-1 normal-case tracking-normal text-success"><Check className="h-3 w-3" /> same</div> : null}
                 </td>
-                <td className={`px-4 py-2.5 ${r.same ? 'bg-emerald-50/50' : ''}`}>{r.a}</td>
-                <td className={`px-4 py-2.5 ${r.same ? 'bg-emerald-50/50' : ''}`}>{r.b}</td>
+                <td className={`px-4 py-2.5 ${r.same ? 'bg-success/5/50' : ''}`}>{r.a}</td>
+                <td className={`px-4 py-2.5 ${r.same ? 'bg-success/5/50' : ''}`}>{r.b}</td>
               </tr>
             ))}
           </tbody>
@@ -141,9 +141,9 @@ function Pair({ a, b, busy, onMerge, onApart, onSkip }: {
         <Button variant="outline" disabled={busy} onClick={() => onMerge(keep.id, other.id)}>Merge into {firstName(other)} instead</Button>
         <Button variant="outline" disabled={busy} onClick={onApart}>Different people</Button>
         <Button variant="ghost" disabled={busy} onClick={onSkip}>Skip for now</Button>
-        {busy ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" /> : null}
+        {busy ? <Loader2 className="h-4 w-4 animate-spin text-link" /> : null}
       </div>
-      <p className="text-xxs text-zinc-500 max-w-3xl">
+      <p className="text-xxs text-muted-foreground max-w-3xl">
         Merging moves the emails, ABNs and history onto the kept client and deletes the other. It can't be undone. The ASIC key
         enquiry goes out in one person's name, so merge only when you're sure it's the same person.
       </p>
@@ -165,8 +165,8 @@ function compareRows(a: ClientDetail, b: ClientDetail): Array<{ label: string; a
   const overlap = (x: string[], y: string[]) => x.some((v) => y.includes(v))
   const list = (items: string[], mono = false) => items.length
     ? <ul className={`space-y-0.5 ${mono ? 'font-mono text-xs' : ''}`}>{items.map((i) => <li key={i} className="break-all">{i}</li>)}</ul>
-    : <span className="text-zinc-400">—</span>
-  const text = (v: string | null | undefined, mono = false) => v ? <span className={mono ? 'font-mono tabular-nums' : ''}>{v}</span> : <span className="text-zinc-400">—</span>
+    : <span className="text-muted-foreground/70">—</span>
+  const text = (v: string | null | undefined, mono = false) => v ? <span className={mono ? 'font-mono tabular-nums' : ''}>{v}</span> : <span className="text-muted-foreground/70">—</span>
   const history = (c: ClientDetail) =>
     `${c.renewals.length} renewal${c.renewals.length === 1 ? '' : 's'} · ${c.sales.length} sale${c.sales.length === 1 ? '' : 's'} · ${c.leads.length} wizard visit${c.leads.length === 1 ? '' : 's'}`
 

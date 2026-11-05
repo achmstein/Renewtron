@@ -7,8 +7,8 @@ import { relativeTime } from './_utils'
 
 type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
 
-const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
-const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1'
+const inputCls = 'mt-1 block w-full rounded-md border-border shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
+const labelCls = 'block text-xs font-medium text-muted-foreground mb-1'
 const submitBtnCls = 'inline-flex justify-center rounded-md bg-zinc-900 text-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed transition'
 
 type Settings = Awaited<ReturnType<typeof api.admin.settings>>
@@ -189,10 +189,10 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[18rem_1fr] gap-6 items-start">
         {/* Sidebar nav */}
-        <nav className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden">
+        <nav className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
           {Object.entries(groups).map(([group, sections], i) => (
-            <div key={group} className={i > 0 ? 'border-t border-zinc-100' : ''}>
-              <div className="px-4 pt-4 pb-2 text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-400">{group}</div>
+            <div key={group} className={i > 0 ? 'border-t border-border' : ''}>
+              <div className="px-4 pt-4 pb-2 text-xs font-medium text-muted-foreground/70">{group}</div>
               <ul>
                 {sections.map((s) => {
                   const isActive = s.key === activeKey
@@ -202,12 +202,12 @@ export default function Settings() {
                         type="button"
                         onClick={() => setActiveKey(s.key)}
                         className={`group w-full text-left flex items-start justify-between gap-3 px-4 py-2.5 transition relative ${
-                          isActive ? 'bg-zinc-50' : 'hover:bg-zinc-50'
+                          isActive ? 'bg-muted/50' : 'hover:bg-muted/50'
                         }`}
                       >
-                        {isActive ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r bg-brand-500" /> : null}
+                        {isActive ? <span className="absolute inset-y-2 left-0 w-0.5 rounded-r bg-primary" /> : null}
                         <div className="min-w-0 flex-1">
-                          <div className={`text-sm font-medium ${isActive ? 'text-zinc-900' : 'text-zinc-700 group-hover:text-zinc-900'}`}>{s.title}</div>
+                          <div className={`text-sm font-medium ${isActive ? 'text-foreground' : 'text-foreground group-hover:text-foreground'}`}>{s.title}</div>
                         </div>
                         <ConfiguredDot status={status[s.key]} />
                       </button>
@@ -222,7 +222,7 @@ export default function Settings() {
         {/* Active section */}
         <div className="min-w-0">
           {!data ? (
-            <p className="text-sm text-zinc-500">Loading…</p>
+            <p className="text-sm text-muted-foreground">Loading…</p>
           ) : (
             <Section title={active.title} status={status[active.key]}>
               {activeKey === 'sendgrid' ? (
@@ -284,7 +284,7 @@ export default function Settings() {
 
               {activeKey === 'airwallex' ? (
                 <form onSubmit={onAirwallex} className="space-y-4">
-                  <p className="text-sm text-zinc-600">Pays ASIC's BPAY bills for renewals lodged to pay later (Admin → BPAY to pay). Keys: Airwallex → Settings → Developer → API keys.</p>
+                  <p className="text-sm text-muted-foreground">Pays ASIC's BPAY bills for renewals lodged to pay later (Admin → BPAY to pay). Keys: Airwallex → Settings → Developer → API keys.</p>
                   <Field label="Environment" hint={airwallex.useSandbox ? "Sandbox: payments are simulated and no money moves. Use sandbox keys." : 'Live: payments really leave your Airwallex AUD balance. Use live keys.'}>
                     <select className={inputCls} value={airwallex.useSandbox ? 'sandbox' : 'live'} onChange={(e) => setAirwallex({ ...airwallex, useSandbox: e.target.value === 'sandbox' })}>
                       <option value="sandbox">Sandbox (no money moves)</option>
@@ -299,7 +299,7 @@ export default function Settings() {
                   </Field>
                   <div className="flex items-center gap-3">
                     <button type="submit" className={submitBtnCls}>Save</button>
-                    <button type="button" onClick={testAirwallex} className="rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-800 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50">Test saved keys</button>
+                    <button type="button" onClick={testAirwallex} className="rounded-md bg-card px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border hover:bg-muted/50">Test saved keys</button>
                   </div>
                 </form>
               ) : null}
@@ -309,16 +309,16 @@ export default function Settings() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="1-year renewal price">
                       <div className="relative mt-1">
-                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-zinc-400">$</span>
+                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground/70">$</span>
                         <input type="number" step="0.01" value={pricing.oneYearFee} onChange={(e) => setPricing({ ...pricing, oneYearFee: Number(e.target.value) })}
-                          className="block w-full rounded-md border-zinc-300 pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
+                          className="block w-full rounded-md border-border pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
                       </div>
                     </Field>
                     <Field label="3-year renewal price">
                       <div className="relative mt-1">
-                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-zinc-400">$</span>
+                        <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground/70">$</span>
                         <input type="number" step="0.01" value={pricing.threeYearFee} onChange={(e) => setPricing({ ...pricing, threeYearFee: Number(e.target.value) })}
-                          className="block w-full rounded-md border-zinc-300 pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
+                          className="block w-full rounded-md border-border pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
                       </div>
                     </Field>
                   </div>
@@ -389,8 +389,8 @@ export default function Settings() {
                   <Field label="Conversation ID">
                     <input className={`${inputCls} font-mono`} value={ontraport.conversationId} onChange={(e) => setOntraport({ ...ontraport, conversationId: e.target.value })} />
                   </Field>
-                  <label className="flex items-center gap-2 text-sm text-zinc-700">
-                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={ontraport.pushWizardContacts} onChange={(e) => setOntraport({ ...ontraport, pushWizardContacts: e.target.checked })} />
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={ontraport.pushWizardContacts} onChange={(e) => setOntraport({ ...ontraport, pushWizardContacts: e.target.checked })} />
                     Create or update an Ontraport contact for everyone who uses the renewal wizard
                   </label>
                   <Field label="Wizard form tag ID">
@@ -405,8 +405,8 @@ export default function Settings() {
 
               {activeKey === 'asickeys' ? (
                 <form onSubmit={onAsicKeys} className="space-y-4">
-                  <label className="flex items-center gap-2 text-sm text-zinc-700">
-                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={asicKeys.enabled} onChange={(e) => setAsicKeys({ ...asicKeys, enabled: e.target.checked })} />
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={asicKeys.enabled} onChange={(e) => setAsicKeys({ ...asicKeys, enabled: e.target.checked })} />
                     Scanning enabled
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-[1fr_8rem] gap-4">
@@ -445,7 +445,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={() => setAsicKeys({ ...asicKeys, asicKeyPattern: asicKeys.defaultAsicKeyPattern! })}
-                        className="mt-1 text-xxs font-mono text-brand-700 hover:underline"
+                        className="mt-1 text-xxs font-mono text-link hover:underline"
                       >
                         Use the current default pattern
                       </button>
@@ -457,7 +457,7 @@ export default function Settings() {
                       type="button"
                       onClick={testAsicKeys}
                       disabled={testMutation.isPending}
-                      className="inline-flex justify-center rounded-md bg-white text-zinc-800 px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                      className="inline-flex justify-center rounded-md bg-card text-foreground px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-inset ring-border hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
                       {testMutation.isPending ? 'Testing…' : 'Test connection'}
                     </button>
@@ -468,12 +468,12 @@ export default function Settings() {
 
               {activeKey === 'asickeyrequests' ? (
                 <form onSubmit={onKeyRequests} className="space-y-4">
-                  <label className="flex items-center gap-2 text-sm text-zinc-700">
-                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyRequests.enabled} onChange={(e) => setKeyRequests({ ...keyRequests, enabled: e.target.checked })} />
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={keyRequests.enabled} onChange={(e) => setKeyRequests({ ...keyRequests, enabled: e.target.checked })} />
                     Requests enabled
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-zinc-700">
-                    <input type="checkbox" className="rounded border-zinc-300 text-brand-600 focus:ring-brand-500" checked={keyRequests.autoRequestOnSync} onChange={(e) => setKeyRequests({ ...keyRequests, autoRequestOnSync: e.target.checked })} />
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input type="checkbox" className="rounded border-border text-link focus:ring-brand-500" checked={keyRequests.autoRequestOnSync} onChange={(e) => setKeyRequests({ ...keyRequests, autoRequestOnSync: e.target.checked })} />
                     Queue a request for every eligible sale the Ontraport sync brings in
                   </label>
                   <Field label="Email the key to">
@@ -493,7 +493,7 @@ export default function Settings() {
                       <button
                         type="button"
                         onClick={() => setKeyRequests({ ...keyRequests, messageTemplate: keyRequests.defaultMessageTemplate! })}
-                        className="mt-1 text-xxs font-mono text-brand-700 hover:underline"
+                        className="mt-1 text-xxs font-mono text-link hover:underline"
                       >
                         Use the default wording
                       </button>
@@ -523,7 +523,7 @@ export default function Settings() {
 
               {activeKey === 'testmode' ? (
                 <div className="space-y-6">
-                  <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-1">
+                  <div className="rounded-md bg-warning/5 border border-warning/25 p-4 text-sm text-warning space-y-1">
                     <p>Anyone who enters one of these emails on the website goes through the real site, emails and Business Portal, but:</p>
                     <ul className="list-disc pl-5">
                       <li>pays with Stripe's test keys (card 4242 4242 4242 4242), so no money moves;</li>
@@ -545,13 +545,13 @@ export default function Settings() {
                     </Field>
                     <button type="submit" className={submitBtnCls}>Save</button>
                   </form>
-                  <div className="border-t border-zinc-100 pt-4 flex items-center justify-between gap-4">
-                    <p className="text-sm text-zinc-600">
+                  <div className="border-t border-border pt-4 flex items-center justify-between gap-4">
+                    <p className="text-sm text-muted-foreground">
                       {testData
                         ? `Test data on file: ${testData.leads} lead(s), ${testData.renewals} renewal(s), ${testData.asicKeyRequests} key request(s). The Business Portal keeps its own copy of the test account.`
                         : 'Loading test data…'}
                     </p>
-                    <button type="button" onClick={deleteTestData} className="shrink-0 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50">
+                    <button type="button" onClick={deleteTestData} className="shrink-0 rounded-md border border-destructive/20 bg-card px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/5">
                       Delete test data
                     </button>
                   </div>
@@ -583,7 +583,7 @@ function defaultAsicKeyInbox(): AsicKeyInboxSettings {
 function AsicKeyTestResults({ result }: { result: AsicKeyInboxTestResult }) {
   const { mailbox, ontraportField, keyPattern } = result
   return (
-    <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 divide-y divide-zinc-200 text-sm">
+    <div className="rounded-md bg-muted/50 ring-1 ring-border divide-y divide-border text-sm">
       <TestRow ok={mailbox.ok} label="Mailbox">
         {mailbox.ok ? (
           <>
@@ -611,17 +611,17 @@ function AsicKeyTestResults({ result }: { result: AsicKeyInboxTestResult }) {
 function TestRow({ ok, label, children }: { ok: boolean; label: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-3 px-3 py-2">
-      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-red-500'}`} />
+      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ok ? 'bg-success' : 'bg-destructive'}`} />
       <div className="min-w-0">
-        <div className={`text-xxs font-mono font-medium uppercase tracking-[0.14em] ${ok ? 'text-emerald-700' : 'text-red-700'}`}>{label} · {ok ? 'OK' : 'FAILED'}</div>
-        <div className={`mt-0.5 break-words ${ok ? 'text-zinc-700' : 'text-red-800'}`}>{children}</div>
+        <div className={`text-xxs font-mono font-medium uppercase tracking-[0.14em] ${ok ? 'text-success' : 'text-destructive'}`}>{label} · {ok ? 'OK' : 'FAILED'}</div>
+        <div className={`mt-0.5 break-words ${ok ? 'text-foreground' : 'text-destructive'}`}>{children}</div>
       </div>
     </div>
   )
 }
 
 function ConfiguredDot({ status }: { status: 'configured' | 'partial' | 'empty' }) {
-  const map = { configured: 'bg-emerald-500', partial: 'bg-amber-500', empty: 'bg-zinc-300' }
+  const map = { configured: 'bg-success', partial: 'bg-warning', empty: 'bg-zinc-300' }
   const labels = { configured: 'Configured', partial: 'Incomplete', empty: 'Not configured' }
   return (
     <span className="shrink-0 mt-1.5 inline-flex items-center" title={labels[status]}>
@@ -633,13 +633,13 @@ function ConfiguredDot({ status }: { status: 'configured' | 'partial' | 'empty' 
 function Section({ title, subtitle, status, children }: { title: string; subtitle?: string; status: 'configured' | 'partial' | 'empty'; children: ReactNode }) {
   const tone = status === 'configured' ? 'emerald' : status === 'partial' ? 'amber' : 'zinc'
   const label = status === 'configured' ? 'CONFIGURED' : status === 'partial' ? 'INCOMPLETE' : 'NOT SET'
-  const statusClass = tone === 'emerald' ? 'text-emerald-700' : tone === 'amber' ? 'text-amber-700' : 'text-zinc-500'
+  const statusClass = tone === 'emerald' ? 'text-success' : tone === 'amber' ? 'text-warning' : 'text-muted-foreground'
   return (
-    <div className="rounded-xl bg-white p-6 ring-1 ring-zinc-200 shadow-sm">
+    <div className="rounded-xl bg-card p-6 ring-1 ring-border shadow-sm">
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <h3 className="text-base font-semibold text-zinc-900 tracking-tight">{title}</h3>
-          {subtitle ? <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p> : null}
+          <h3 className="text-base font-semibold text-foreground tracking-tight">{title}</h3>
+          {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
         </div>
         <span className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] ${statusClass}`}>{label}</span>
       </div>
@@ -653,7 +653,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <label className={labelCls}>{label}</label>
       {children}
-      {hint ? <p className="mt-1 text-xxs font-mono text-zinc-500">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-xxs font-mono text-muted-foreground">{hint}</p> : null}
     </div>
   )
 }

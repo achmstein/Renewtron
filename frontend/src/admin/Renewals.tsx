@@ -152,12 +152,12 @@ export default function Renewals() {
         const r = row.original
         return (
           <div>
-            <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
-            <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+            <div className="text-sm font-medium text-foreground truncate">{r.businessName}</div>
+            <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{r.abn}</div>
             {r.lead ? (
-              <Link to={`/admin/leads/${r.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 hover:underline truncate">{r.lead.fullName} · {r.lead.email}</Link>
+              <Link to={`/admin/leads/${r.lead.id}`} className="hidden sm:block mt-0.5 text-xxs font-mono text-muted-foreground/70 hover:underline truncate">{r.lead.fullName} · {r.lead.email}</Link>
             ) : (
-              <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{r.email ?? 'no lead'}</div>
+              <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">{r.email ?? 'no lead'}</div>
             )}
           </div>
         )
@@ -171,13 +171,13 @@ export default function Renewals() {
     {
       accessorKey: 'amount',
       header: 'Amount',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-zinc-900', headerClassName: 'text-right' },
+      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
       cell: ({ row }) => fmtMoney2(row.original.amount),
     },
     {
       accessorKey: 'renewalYears',
       header: 'Years',
-      meta: { className: 'text-sm tabular-nums text-zinc-700' },
+      meta: { className: 'text-sm tabular-nums text-foreground' },
     },
     {
       id: 'sourcePayment',
@@ -212,12 +212,12 @@ export default function Renewals() {
               <button
                 onClick={() => retryOne(r.id)}
                 disabled={retryOneMutation.isPending && retryOneMutation.variables === r.id}
-                className="text-sm font-medium text-amber-700 hover:text-amber-800 disabled:opacity-50"
+                className="text-sm font-medium text-warning hover:text-warning disabled:opacity-50"
               >
                 {retryOneMutation.isPending && retryOneMutation.variables === r.id ? 'Retrying…' : 'Retry'}
               </button>
             ) : null}
-            <Link to={`/admin/renewals/${r.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800 whitespace-nowrap">View →</Link>
+            <Link to={`/admin/renewals/${r.id}`} className="text-sm font-medium text-link hover:text-link whitespace-nowrap">View →</Link>
           </div>
         )
       },
@@ -240,7 +240,7 @@ export default function Renewals() {
                 <RefreshCw className="h-4 w-4" />
                 <span className="hidden sm:inline">Retry all failed</span>
                 <span className="sm:hidden">Retry failed</span>
-                <span className="ml-0.5 inline-flex items-center justify-center rounded bg-white/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{fmtMoney0(stats.failedValue30d)}</span>
+                <span className="ml-0.5 inline-flex items-center justify-center rounded bg-card/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{fmtMoney0(stats.failedValue30d)}</span>
               </Button>
             ) : null}
             <Button variant="outline" className="h-9 whitespace-nowrap" onClick={() => setReconcileOpen(true)}>
@@ -360,17 +360,17 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
     <Dialog open={open} onOpenChange={(o) => { if (!o && !liveMutation.isPending) onClose() }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">RECOVERY</div>
+          <div className="text-xs font-medium text-link">RECOVERY</div>
           <DialogTitle>Reconcile queue &amp; database</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-3">
-          <p className="text-sm text-zinc-700">
+          <p className="text-sm text-foreground">
             Finds renewals whose row and Hangfire job have diverged. Safe rows are re-queued;
             anything that may already hold an ASIC payment is flagged for you instead.
           </p>
 
           {isFetching && !preview ? (
-            <div className="flex items-center gap-2 py-6 justify-center text-sm text-zinc-500">
+            <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Running dry-run…
             </div>
           ) : preview ? (
@@ -384,23 +384,23 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
                 <PreviewStat label="Live job" value={preview.skippedLiveJob} />
               </div>
               {preview.items.length > 0 ? (
-                <div className="max-h-40 overflow-y-auto rounded-md ring-1 ring-zinc-200 divide-y divide-zinc-100">
+                <div className="max-h-40 overflow-y-auto rounded-md ring-1 ring-border divide-y divide-border">
                   {preview.items.slice(0, 25).map((i) => (
                     <div key={i.renewalId} className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs">
-                      <span className="min-w-0 truncate text-zinc-700">{i.businessName ?? i.abn ?? i.renewalId}</span>
-                      <span className="shrink-0 font-mono tabular-nums text-zinc-400">{fmtMoney0(i.amount)} · {i.ageHours}h · {i.action}</span>
+                      <span className="min-w-0 truncate text-foreground">{i.businessName ?? i.abn ?? i.renewalId}</span>
+                      <span className="shrink-0 font-mono tabular-nums text-muted-foreground/70">{fmtMoney0(i.amount)} · {i.ageHours}h · {i.action}</span>
                     </div>
                   ))}
                 </div>
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">Re-queue cap</span>
+                <span className="text-xs font-medium text-muted-foreground">Re-queue cap</span>
                 <Input
                   type="number" min={0} max={500} value={maxRequeue}
                   onChange={(e) => setMaxRequeue(Math.max(0, Math.min(500, Number(e.target.value) || 0)))}
                   className="h-8 w-24 font-mono tabular-nums"
                 />
-                <span className="text-xs text-zinc-500">per run — keeps the ASIC queue manageable</span>
+                <span className="text-xs text-muted-foreground">per run — keeps the ASIC queue manageable</span>
               </div>
             </>
           ) : null}
@@ -417,10 +417,10 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
 }
 
 function PreviewStat({ label, value, tone }: { label: string; value: number; tone?: 'brand' | 'amber' }) {
-  const color = tone === 'brand' ? 'text-brand-700' : tone === 'amber' ? 'text-amber-700' : 'text-zinc-900'
+  const color = tone === 'brand' ? 'text-link' : tone === 'amber' ? 'text-warning' : 'text-foreground'
   return (
-    <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-2.5 py-1.5">
-      <div className="text-xxs font-mono uppercase tracking-[0.12em] text-zinc-500">{label}</div>
+    <div className="rounded-md bg-muted/50 ring-1 ring-border px-2.5 py-1.5">
+      <div className="text-xs text-muted-foreground">{label}</div>
       <div className={`text-base font-semibold tabular-nums ${color}`}>{value.toLocaleString()}</div>
     </div>
   )
@@ -444,11 +444,11 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">From</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">From</div>
           <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
         </div>
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">To</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">To</div>
           <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
         </div>
         {active ? (
@@ -509,12 +509,12 @@ function StatsStrip({ stats }: { stats: Stats }) {
 
 function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (m: string) => void; onRetry: (id: string) => void; retrying: boolean }) {
   return (
-    <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 hover:ring-brand-200 hover:shadow-md transition-all">
+    <div className="rounded-xl bg-card p-5 ring-1 ring-border hover:ring-primary/20 hover:shadow-md transition-all">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
-          <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
-          {r.lead ? <div className="text-xxs font-mono text-zinc-400 mt-0.5 truncate">{r.lead.fullName} · {r.lead.email}</div> : null}
+          <div className="text-sm font-medium text-foreground truncate">{r.businessName}</div>
+          <div className="text-xxs font-mono tabular-nums text-muted-foreground">{r.abn}</div>
+          {r.lead ? <div className="text-xxs font-mono text-muted-foreground/70 mt-0.5 truncate">{r.lead.fullName} · {r.lead.email}</div> : null}
         </div>
         <StatusCell r={r} onError={onError} />
       </div>
@@ -524,15 +524,15 @@ function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (
         <Cell label="Source" value={<SourcePill source={r.source} />} />
         <Cell label="Payment" value={<PaymentPill r={r} />} />
         <Cell label="Time in status" value={<TimeInStatus r={r} />} />
-        <Cell label="Initiated" value={<span className="text-xs font-mono text-zinc-500">{fmtDate(r.initiatedAt)} · {fmtTime(r.initiatedAt)}</span>} />
+        <Cell label="Initiated" value={<span className="text-xs font-mono text-muted-foreground">{fmtDate(r.initiatedAt)} · {fmtTime(r.initiatedAt)}</span>} />
       </dl>
-      <div className="mt-4 pt-4 border-t border-zinc-100 flex items-center justify-end gap-3">
+      <div className="mt-4 pt-4 border-t border-border flex items-center justify-end gap-3">
         {canRetry(r) ? (
-          <button onClick={() => onRetry(r.id)} disabled={retrying} className="inline-flex items-center rounded-md bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100 disabled:opacity-50 transition">
+          <button onClick={() => onRetry(r.id)} disabled={retrying} className="inline-flex items-center rounded-md bg-warning/5 px-3 py-1.5 text-sm font-medium text-warning ring-1 ring-warning/25 hover:bg-warning/10 disabled:opacity-50 transition">
             {retrying ? 'Retrying…' : 'Retry'}
           </button>
         ) : null}
-        <Link to={`/admin/renewals/${r.id}`} className="inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">View details →</Link>
+        <Link to={`/admin/renewals/${r.id}`} className="inline-flex items-center text-sm font-medium text-link hover:text-link">View details →</Link>
       </div>
     </div>
   )
@@ -541,8 +541,8 @@ function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (
 function Cell({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className="mt-1 text-sm text-zinc-900">{value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-sm text-foreground">{value}</dd>
     </div>
   )
 }
@@ -554,7 +554,7 @@ function StatusCell({ r, onError }: { r: Renewal; onError: (m: string) => void }
     <div className="flex items-center gap-1.5">
       <Status entry={renewalStatus(r)} />
       {r.status === 'Failed' && r.errorMessage ? (
-        <button onClick={() => onError(r.errorMessage ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100" title="View error">
+        <button onClick={() => onError(r.errorMessage ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-destructive/5 text-destructive hover:bg-destructive/10" title="View error">
           <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
           </svg>
@@ -575,31 +575,31 @@ function SourcePill({ source }: { source: string }) {
 
 function PaymentPill({ r }: { r: Renewal }) {
   if (r.paymentType === 'External') {
-    return <span className="text-xxs font-mono text-zinc-500">EXTERNAL</span>
+    return <span className="text-xxs font-mono text-muted-foreground">EXTERNAL</span>
   }
   if (!r.stripePaymentSucceeded) {
-    return <span className="text-xxs font-mono text-red-700">STRIPE/UNPAID</span>
+    return <span className="text-xxs font-mono text-destructive">STRIPE/UNPAID</span>
   }
   const last4 = r.cardLast4 ? ` •••• ${r.cardLast4}` : ''
   const brand = r.cardBrand ? ` ${r.cardBrand.toUpperCase()}` : ''
-  return <span className="text-xxs font-mono text-zinc-600">STRIPE{brand}{last4}</span>
+  return <span className="text-xxs font-mono text-muted-foreground">STRIPE{brand}{last4}</span>
 }
 
 function TimeInStatus({ r }: { r: Renewal }) {
   const isInflight = r.status === 'Pending' || r.status === 'Processing'
   const slow = isInflight && r.timeInStatusHours > 2
-  const cls = slow ? 'text-amber-700 font-medium' : 'text-zinc-700'
+  const cls = slow ? 'text-warning font-medium' : 'text-foreground'
   return (
     <div>
       <div className={`text-sm tabular-nums ${cls}`}>{durationShort(r.timeInStatusHours)}{isInflight ? ' in flight' : ''}</div>
       {!isInflight && r.completedAt ? (
-        <div className="text-xxs font-mono text-zinc-400 tabular-nums">closed {fmtDate(r.completedAt)}</div>
+        <div className="text-xxs font-mono text-muted-foreground/70 tabular-nums">closed {fmtDate(r.completedAt)}</div>
       ) : null}
       {r.status === 'Failed' && r.nextRetryAt ? (
-        <div className="text-xxs font-mono text-indigo-600 tabular-nums">auto-retry {fmtDate(r.nextRetryAt)} {fmtTime(r.nextRetryAt)}</div>
+        <div className="text-xxs font-mono text-info tabular-nums">auto-retry {fmtDate(r.nextRetryAt)} {fmtTime(r.nextRetryAt)}</div>
       ) : null}
       {r.attemptCount > 1 ? (
-        <div className="text-xxs font-mono text-zinc-400 tabular-nums">attempt {r.attemptCount}</div>
+        <div className="text-xxs font-mono text-muted-foreground/70 tabular-nums">attempt {r.attemptCount}</div>
       ) : null}
     </div>
   )
@@ -620,19 +620,19 @@ function BulkRetryModal({ stats, dateFrom, dateTo, source, busy, onClose, onConf
     <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose() }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">RETRY</div>
+          <div className="text-xs font-medium text-warning">RETRY</div>
           <DialogTitle>Retry all failed renewals</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-3">
-          <p className="text-sm text-zinc-700">
+          <p className="text-sm text-foreground">
             This will re-queue every <span className="font-medium">Failed</span> renewal in your current filter.
             Stripe-unpaid renewals and rows where ASIC may already hold payment are skipped automatically.
           </p>
-          <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xs font-mono text-zinc-700 space-y-1">
-            <div>Failed (30d): <span className="text-zinc-900 tabular-nums">{fmtMoney0(stats.failedValue30d)}</span></div>
-            {dateFrom ? <div>From: <span className="text-zinc-900 tabular-nums">{dateFrom}</span></div> : null}
-            {dateTo ? <div>To: <span className="text-zinc-900 tabular-nums">{dateTo}</span></div> : null}
-            {source ? <div>Source: <span className="text-zinc-900">{source}</span></div> : null}
+          <div className="rounded-md bg-muted/50 ring-1 ring-border px-3 py-2 text-xs font-mono text-foreground space-y-1">
+            <div>Failed (30d): <span className="text-foreground tabular-nums">{fmtMoney0(stats.failedValue30d)}</span></div>
+            {dateFrom ? <div>From: <span className="text-foreground tabular-nums">{dateFrom}</span></div> : null}
+            {dateTo ? <div>To: <span className="text-foreground tabular-nums">{dateTo}</span></div> : null}
+            {source ? <div>Source: <span className="text-foreground">{source}</span></div> : null}
           </div>
         </DialogBody>
         <DialogFooter>

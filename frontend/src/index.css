@@ -58,8 +58,10 @@
     --card-foreground: #09090B;
     --popover: #FFFFFF;
     --popover-foreground: #09090B;
-    --primary: #0052A4;
+    /* Black for the main action; brand blue for links, selection and focus. */
+    --primary: #18181B;
     --primary-foreground: #FFFFFF;
+    --link: #0052A4;
     --secondary: #F4F4F5;
     --secondary-foreground: #18181B;
     --muted: #F4F4F5;
@@ -130,6 +132,7 @@
     --color-sidebar-primary: var(--sidebar-primary);
     --color-sidebar-foreground: var(--sidebar-foreground);
     --color-sidebar: var(--sidebar);
+    --color-link: var(--link);
     --color-success: var(--success);
     --color-warning: var(--warning);
     --color-info: var(--info);

@@ -122,7 +122,7 @@ function Wordmark() {
   return (
     <span className="flex items-baseline font-display text-sm font-bold leading-none tracking-wide text-white">
       <span>RENEW</span>
-      <span className="mx-1.5 font-normal text-zinc-600">/</span>
+      <span className="mx-1.5 font-normal text-muted-foreground">/</span>
       <span className="text-brand-400">TRON</span>
     </span>
   )
@@ -159,11 +159,11 @@ function AdminSidebar({ onSearch }: { onSearch: () => void }) {
       <SidebarContent className="scrollbar-dark px-2">
         {navSections.map((section) => (
           <SidebarGroup key={section.kicker} className="py-1.5">
-            <SidebarGroupLabel className="text-zinc-500">{section.kicker}</SidebarGroupLabel>
+            <SidebarGroupLabel className="text-muted-foreground">{section.kicker}</SidebarGroupLabel>
             <SidebarMenu>
               {section.items.map((item) => (
                 <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton asChild isActive={item === active} className="text-sidebar-foreground hover:text-sidebar-accent-foreground data-[active=true]:font-medium [&>svg]:text-zinc-500 data-[active=true]:[&>svg]:text-brand-300">
+                  <SidebarMenuButton asChild isActive={item === active} className="text-sidebar-foreground hover:text-sidebar-accent-foreground data-[active=true]:font-medium [&>svg]:text-muted-foreground data-[active=true]:[&>svg]:text-brand-300">
                     <Link to={item.to} onClick={close}>
                       {item.icon}
                       <span>{item.label}</span>
@@ -185,10 +185,10 @@ function AdminSidebar({ onSearch }: { onSearch: () => void }) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={onSignOut} className="h-auto py-2 text-sidebar-foreground hover:text-sidebar-accent-foreground" title="Sign out">
-              <LogOut className="text-zinc-500" />
+              <LogOut className="text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-zinc-200">{user?.email ?? 'Signed in'}</span>
-                <span className="block text-xs text-zinc-500">Sign out</span>
+                <span className="block text-xs text-muted-foreground">Sign out</span>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -214,7 +214,7 @@ export default function AdminLayout() {
       <AdminSidebar onSearch={() => setSearchOpen(true)} />
       <SidebarInset>
         <header className="sticky top-0 z-40 flex h-12 items-center gap-3 border-b bg-sidebar px-4 md:hidden">
-          <SidebarTrigger className="text-zinc-400 hover:bg-white/10 hover:text-white" />
+          <SidebarTrigger className="text-muted-foreground/70 hover:bg-card/10 hover:text-white" />
           <Wordmark />
         </header>
         <div key={location.pathname} className="fade-in">

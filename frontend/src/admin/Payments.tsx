@@ -71,13 +71,13 @@ export default function Payments() {
         return (
           <div>
             {p.leadId ? (
-              <Link to={`/admin/leads/${p.leadId}`} className="block text-sm font-medium text-zinc-900 hover:underline truncate">{p.customerName ?? 'Lead'}</Link>
+              <Link to={`/admin/leads/${p.leadId}`} className="block text-sm font-medium text-foreground hover:underline truncate">{p.customerName ?? 'Lead'}</Link>
             ) : (
-              <div className="text-sm font-medium text-zinc-900 truncate">{p.customerName ?? '—'}</div>
+              <div className="text-sm font-medium text-foreground truncate">{p.customerName ?? '—'}</div>
             )}
-            {p.email ? <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{p.email}</div> : null}
+            {p.email ? <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">{p.email}</div> : null}
             {p.businessNames.length > 0 ? (
-              <div className="hidden sm:block mt-0.5 text-xxs text-zinc-500 truncate" title={p.businessNames.join(', ')}>{p.businessNames.join(', ')}</div>
+              <div className="hidden sm:block mt-0.5 text-xxs text-muted-foreground truncate" title={p.businessNames.join(', ')}>{p.businessNames.join(', ')}</div>
             ) : null}
           </div>
         )
@@ -88,8 +88,8 @@ export default function Payments() {
       header: 'When',
       cell: ({ row }) => (
         <div>
-          <div className="text-sm tabular-nums text-zinc-900">{fmtDate(row.original.when)}</div>
-          <div className="text-xxs font-mono tabular-nums text-zinc-400">{fmtTime(row.original.when)}</div>
+          <div className="text-sm tabular-nums text-foreground">{fmtDate(row.original.when)}</div>
+          <div className="text-xxs font-mono tabular-nums text-muted-foreground/70">{fmtTime(row.original.when)}</div>
         </div>
       ),
     },
@@ -103,16 +103,16 @@ export default function Payments() {
       id: 'amount',
       accessorFn: (p) => p.amount ?? 0,
       header: 'Amount',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-zinc-900', headerClassName: 'text-right' },
-      cell: ({ row }) => row.original.amount != null ? fmtMoney2(row.original.amount) : <span className="text-zinc-400">—</span>,
+      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
+      cell: ({ row }) => row.original.amount != null ? fmtMoney2(row.original.amount) : <span className="text-muted-foreground/70">—</span>,
     },
     {
       id: 'abn',
       header: 'ABN',
       enableSorting: false,
       cell: ({ row }) => row.original.abn
-        ? <span className="text-xxs font-mono tabular-nums text-zinc-500">{row.original.abn}</span>
-        : <span className="text-sm text-zinc-400">—</span>,
+        ? <span className="text-xxs font-mono tabular-nums text-muted-foreground">{row.original.abn}</span>
+        : <span className="text-sm text-muted-foreground/70">—</span>,
     },
     {
       id: 'card',
@@ -128,7 +128,7 @@ export default function Payments() {
       cell: ({ row }) => {
         const p = row.original
         return p.renewals.length > 0 ? (
-          <Link to={`/admin/renewals/${p.renewals[0].id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800 whitespace-nowrap">
+          <Link to={`/admin/renewals/${p.renewals[0].id}`} className="text-sm font-medium text-link hover:text-link whitespace-nowrap">
             {p.renewals.length > 1 ? `${p.renewals.length} renewals →` : 'Renewal →'}
           </Link>
         ) : null
@@ -198,11 +198,11 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">From</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">From</div>
           <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
         </div>
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">To</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">To</div>
           <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
         </div>
         {active ? (
@@ -221,24 +221,24 @@ function ResultCell({ p, onError }: { p: Payment; onError: (m: string) => void }
       <div className="flex items-center gap-1.5">
         <Status kind="payment" status={p.kind} />
         {p.error ? (
-          <button onClick={() => onError(p.error ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-red-50 text-red-600 hover:bg-red-100" title="View error">
+          <button onClick={() => onError(p.error ?? '')} className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-destructive/5 text-destructive hover:bg-destructive/10" title="View error">
             <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
           </button>
         ) : null}
       </div>
-      {p.error ? <div className="mt-1 text-xxs text-red-700 max-w-[16rem] truncate" title={p.error}>{p.error}</div> : null}
+      {p.error ? <div className="mt-1 text-xxs text-destructive max-w-[16rem] truncate" title={p.error}>{p.error}</div> : null}
     </div>
   )
 }
 
 function CardCell({ p }: { p: Payment }) {
   if (p.cardLast4) {
-    return <span className="text-xxs font-mono text-zinc-600 whitespace-nowrap">{(p.cardBrand ?? 'card').toUpperCase()} •••• {p.cardLast4}</span>
+    return <span className="text-xxs font-mono text-muted-foreground whitespace-nowrap">{(p.cardBrand ?? 'card').toUpperCase()} •••• {p.cardLast4}</span>
   }
   if (p.cardholderName) {
-    return <span className="text-xxs font-mono text-zinc-500 truncate max-w-[10rem] inline-block" title={p.cardholderName}>{p.cardholderName}</span>
+    return <span className="text-xxs font-mono text-muted-foreground truncate max-w-[10rem] inline-block" title={p.cardholderName}>{p.cardholderName}</span>
   }
-  return <span className="text-xxs font-mono text-zinc-400">—</span>
+  return <span className="text-xxs font-mono text-muted-foreground/70">—</span>
 }

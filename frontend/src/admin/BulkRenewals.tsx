@@ -116,9 +116,9 @@ export default function BulkRenewals() {
         const u = row.original
         return (
           <div>
-            <div className="text-sm font-medium text-zinc-900 truncate">{u.businessName}</div>
-            <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{u.abn}</div>
-            <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{u.ownerName ?? 'no owner'}</div>
+            <div className="text-sm font-medium text-foreground truncate">{u.businessName}</div>
+            <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{u.abn}</div>
+            <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">{u.ownerName ?? 'no owner'}</div>
           </div>
         )
       },
@@ -133,7 +133,7 @@ export default function BulkRenewals() {
     {
       accessorKey: 'amount',
       header: 'Amount',
-      meta: { className: 'text-right font-mono tabular-nums text-sm text-zinc-900', headerClassName: 'text-right' },
+      meta: { className: 'text-right font-mono tabular-nums text-sm text-foreground', headerClassName: 'text-right' },
       cell: ({ row }) => fmtMoney2(row.original.amount),
     },
     {
@@ -146,7 +146,7 @@ export default function BulkRenewals() {
           <div>
             <BulkStatusPill status={u.status} />
             {u.errorMessage ? (
-              <div className="mt-1 text-xxs font-mono text-red-700 truncate max-w-[12rem]" title={u.errorMessage}>{u.errorMessage}</div>
+              <div className="mt-1 text-xxs font-mono text-destructive truncate max-w-[12rem]" title={u.errorMessage}>{u.errorMessage}</div>
             ) : null}
           </div>
         )
@@ -157,8 +157,8 @@ export default function BulkRenewals() {
       header: 'Source · Uploaded',
       cell: ({ row }) => (
         <div>
-          <div className="text-xxs font-mono text-zinc-500 truncate max-w-[10rem]">{row.original.sourceFile ?? '(direct)'}</div>
-          <div className="text-xs text-zinc-700 tabular-nums">{relativeTime(row.original.uploadedAt)}</div>
+          <div className="text-xxs font-mono text-muted-foreground truncate max-w-[10rem]">{row.original.sourceFile ?? '(direct)'}</div>
+          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.uploadedAt)}</div>
         </div>
       ),
     },
@@ -184,7 +184,7 @@ export default function BulkRenewals() {
             <button
               onClick={processEligible}
               disabled={processMutation.isPending}
-              className="inline-flex items-center whitespace-nowrap rounded-md bg-brand-600 text-white px-3 py-2 text-sm font-medium hover:bg-brand-700 shadow-sm disabled:opacity-50 transition"
+              className="inline-flex items-center whitespace-nowrap rounded-md bg-primary text-white px-3 py-2 text-sm font-medium hover:bg-primary shadow-sm disabled:opacity-50 transition"
             >
               {processMutation.isPending ? 'Queueing…' : 'Process eligible'}
             </button>
@@ -238,11 +238,11 @@ export default function BulkRenewals() {
         <div className="mt-6">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">BATCHES</div>
-              <div className="text-sm text-zinc-500">Click a batch to filter the table.</div>
+              <div className="text-xs font-medium text-muted-foreground">BATCHES</div>
+              <div className="text-sm text-muted-foreground">Click a batch to filter the table.</div>
             </div>
             {batches.length > 0 ? (
-              <button onClick={() => setBatches([])} className="text-xs font-medium text-zinc-600 hover:text-zinc-900 px-2">Show all</button>
+              <button onClick={() => setBatches([])} className="text-xs font-medium text-muted-foreground hover:text-foreground px-2">Show all</button>
             ) : null}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -257,23 +257,23 @@ export default function BulkRenewals() {
                   disabled={!filterable}
                   className={`text-left rounded-xl border p-4 transition ${
                     active
-                      ? 'border-brand-300 bg-brand-50 ring-1 ring-brand-200'
+                      ? 'border-brand-300 bg-primary/5 ring-1 ring-primary/20'
                       : filterable
-                        ? 'border-zinc-200 bg-white hover:border-zinc-300'
-                        : 'border-zinc-200 bg-white cursor-default'
+                        ? 'border-border bg-card hover:border-border'
+                        : 'border-border bg-card cursor-default'
                   }`}
                 >
-                  <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 truncate">{b.sourceFile}</div>
+                  <div className="text-xs text-muted-foreground truncate">{b.sourceFile}</div>
                   <div className="mt-1 flex items-baseline gap-2">
-                    <div className="text-lg font-semibold tabular-nums text-zinc-900">{b.total.toLocaleString()}</div>
-                    <div className="text-xs text-zinc-500">rows</div>
+                    <div className="text-lg font-semibold tabular-nums text-foreground">{b.total.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">rows</div>
                   </div>
                   <div className="mt-1 text-xxs font-mono tabular-nums">
-                    <span className="text-brand-700">{b.completed} done</span>
+                    <span className="text-link">{b.completed} done</span>
                     {' · '}
-                    <span className={b.failed > 0 ? 'text-red-700' : 'text-zinc-400'}>{b.failed} failed</span>
+                    <span className={b.failed > 0 ? 'text-destructive' : 'text-muted-foreground/70'}>{b.failed} failed</span>
                     {' · '}
-                    <span className="text-zinc-700">{fmtMoney0(b.pipelineValue)} pipeline</span>
+                    <span className="text-foreground">{fmtMoney0(b.pipelineValue)} pipeline</span>
                   </div>
                 </button>
               )
@@ -314,10 +314,10 @@ function defaultStats(): Stats {
 
 function DueDateCell({ u }: { u: Upload }) {
   const days = u.renewalDueDate ? Math.floor((new Date(u.renewalDueDate).getTime() - Date.now()) / 86400000) : null
-  const daysClass = days == null ? 'text-zinc-400' : days <= 0 ? 'text-red-700 font-medium' : days <= 30 ? 'text-brand-700 font-medium' : 'text-zinc-500'
+  const daysClass = days == null ? 'text-muted-foreground/70' : days <= 0 ? 'text-destructive font-medium' : days <= 30 ? 'text-link font-medium' : 'text-muted-foreground'
   return (
     <div>
-      <div className="text-sm text-zinc-700 tabular-nums">{u.renewalDueDate ? new Date(u.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</div>
+      <div className="text-sm text-foreground tabular-nums">{u.renewalDueDate ? new Date(u.renewalDueDate).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' }) : '—'}</div>
       <div className={`text-xxs font-mono tabular-nums ${daysClass}`}>{days == null ? '' : `${days} days`}</div>
     </div>
   )

@@ -124,11 +124,11 @@ export default function AsicKeys() {
         const r = row.original
         return (
           <div>
-            <Link to={`/admin/asic-keys/${r.id}`} onClick={(e) => e.stopPropagation()} className={`block text-sm font-medium truncate hover:text-brand-700 hover:underline ${r.businessName ? 'text-zinc-900' : 'text-zinc-400 italic'}`}>
+            <Link to={`/admin/asic-keys/${r.id}`} onClick={(e) => e.stopPropagation()} className={`block text-sm font-medium truncate hover:text-link hover:underline ${r.businessName ? 'text-foreground' : 'text-muted-foreground/70 italic'}`}>
               {r.businessName ?? 'name not parsed'}
             </Link>
-            {r.abn ? <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div> : null}
-            <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate" title={r.subject ?? ''}>{r.subject ?? '—'}</div>
+            {r.abn ? <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{r.abn}</div> : null}
+            <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate" title={r.subject ?? ''}>{r.subject ?? '—'}</div>
           </div>
         )
       },
@@ -139,8 +139,8 @@ export default function AsicKeys() {
       header: 'ASIC key',
       meta: { className: 'font-mono tabular-nums text-sm' },
       cell: ({ row }) => row.original.asicKey
-        ? <span className="text-zinc-900">{row.original.asicKey}</span>
-        : <span className="text-zinc-400">—</span>,
+        ? <span className="text-foreground">{row.original.asicKey}</span>
+        : <span className="text-muted-foreground/70">—</span>,
     },
     {
       id: 'ontraport',
@@ -148,11 +148,11 @@ export default function AsicKeys() {
       header: 'Ontraport',
       cell: ({ row }) => {
         const r = row.original
-        if (!r.ontraportContactIds) return <span className="text-zinc-400">—</span>
+        if (!r.ontraportContactIds) return <span className="text-muted-foreground/70">—</span>
         return (
           <div>
-            <div className="text-xs font-mono text-zinc-700 truncate max-w-[10rem]" title={r.ontraportContactIds}>{r.ontraportContactIds}</div>
-            <div className="text-xxs font-mono tabular-nums text-zinc-500">{r.ontraportContactsUpdated} updated</div>
+            <div className="text-xs font-mono text-foreground truncate max-w-[10rem]" title={r.ontraportContactIds}>{r.ontraportContactIds}</div>
+            <div className="text-xxs font-mono tabular-nums text-muted-foreground">{r.ontraportContactsUpdated} updated</div>
           </div>
         )
       },
@@ -170,7 +170,7 @@ export default function AsicKeys() {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setDetail(r) }}
-                className="mt-1 block text-left text-xxs font-mono text-red-700 truncate max-w-[12rem] hover:underline"
+                className="mt-1 block text-left text-xxs font-mono text-destructive truncate max-w-[12rem] hover:underline"
                 title="Show details"
               >
                 {r.errorMessage}
@@ -185,8 +185,8 @@ export default function AsicKeys() {
       header: 'Received',
       cell: ({ row }) => (
         <div>
-          <div className="text-xs text-zinc-700 tabular-nums">{relativeTime(row.original.receivedAt)}</div>
-          <div className="text-xxs font-mono tabular-nums text-zinc-400">
+          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.receivedAt)}</div>
+          <div className="text-xxs font-mono tabular-nums text-muted-foreground/70">
             {row.original.attemptCount} attempt{row.original.attemptCount === 1 ? '' : 's'}
           </div>
         </div>
@@ -240,7 +240,7 @@ export default function AsicKeys() {
             <button
               onClick={scan}
               disabled={scanning}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-brand-600 text-white px-3 py-2 text-sm font-medium hover:bg-brand-700 shadow-sm disabled:opacity-50 transition"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary text-white px-3 py-2 text-sm font-medium hover:bg-primary shadow-sm disabled:opacity-50 transition"
             >
               {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />}
               {scanning ? 'Scanning…' : 'Scan inbox now'}
@@ -358,33 +358,33 @@ function DetailDialog({ row: listRow, onClose }: { row: Row | null; onClose: () 
         {row ? (
           <>
             <DialogHeader>
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">NOTIFICATION</div>
+              <div className="text-xs font-medium text-muted-foreground">NOTIFICATION</div>
               <DialogTitle>{row.businessName ?? 'Business name not parsed'}</DialogTitle>
             </DialogHeader>
             <DialogBody className="space-y-3">
               <ClientLink kind="keyLetter" id={row.id} />
               <div className="flex flex-wrap items-center gap-2">
                 <KeyStatusPill status={row.status} />
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-muted-foreground">
                   received {fmtDateTime(row.receivedAt)}{row.processedAt ? ` · last attempt ${fmtDateTime(row.processedAt)}` : ''} · {row.attemptCount} attempt{row.attemptCount === 1 ? '' : 's'}
                 </span>
               </div>
 
               <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-sm">
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">ASIC key</dt>
-                <dd className="font-mono tabular-nums text-zinc-900">{row.asicKey ?? '—'}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">ABN</dt>
-                <dd className="font-mono tabular-nums text-zinc-700">{row.abn ?? '—'}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">Contacts</dt>
-                <dd className="font-mono text-zinc-700 break-all">{row.ontraportContactIds ?? '—'}{row.ontraportContactIds ? ` (${row.ontraportContactsUpdated} updated)` : ''}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">From</dt>
-                <dd className="text-zinc-700 break-all">{row.from ?? '—'}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">Subject</dt>
-                <dd className="text-zinc-700 break-words">{row.subject ?? '—'}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">PDF link</dt>
+                <dt className="text-xs text-muted-foreground pt-0.5">ASIC key</dt>
+                <dd className="font-mono tabular-nums text-foreground">{row.asicKey ?? '—'}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">ABN</dt>
+                <dd className="font-mono tabular-nums text-foreground">{row.abn ?? '—'}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">Contacts</dt>
+                <dd className="font-mono text-foreground break-all">{row.ontraportContactIds ?? '—'}{row.ontraportContactIds ? ` (${row.ontraportContactsUpdated} updated)` : ''}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">From</dt>
+                <dd className="text-foreground break-all">{row.from ?? '—'}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">Subject</dt>
+                <dd className="text-foreground break-words">{row.subject ?? '—'}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">PDF link</dt>
                 <dd className="min-w-0">
                   {row.downloadUrl ? (
-                    <a href={row.downloadUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-700 hover:underline break-all">
+                    <a href={row.downloadUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link hover:underline break-all">
                       open <ExternalLink className="h-3 w-3 shrink-0" />
                     </a>
                   ) : '—'}
@@ -392,17 +392,17 @@ function DetailDialog({ row: listRow, onClose }: { row: Row | null; onClose: () 
               </dl>
 
               {row.errorMessage ? (
-                <div className="rounded-md bg-red-50 ring-1 ring-red-100 px-3 py-2 text-xs font-mono text-red-800 whitespace-pre-wrap break-words">{row.errorMessage}</div>
+                <div className="rounded-md bg-destructive/5 ring-1 ring-destructive/20 px-3 py-2 text-xs font-mono text-destructive whitespace-pre-wrap break-words">{row.errorMessage}</div>
               ) : null}
 
               {isFetching && !full ? (
-                <div className="flex items-center gap-2 text-xs text-zinc-500"><Loader2 className="h-3 w-3 animate-spin" /> Loading the PDF details…</div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Loading the PDF details…</div>
               ) : null}
 
               {row.pdfTextExcerpt ? (
                 <div>
-                  <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">PDF text (first 2,000 chars)</div>
-                  <pre className="max-h-48 overflow-auto rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xxs font-mono text-zinc-700 whitespace-pre-wrap break-words">{row.pdfTextExcerpt}</pre>
+                  <div className="text-xs text-muted-foreground mb-1">PDF text (first 2,000 chars)</div>
+                  <pre className="max-h-48 overflow-auto rounded-md bg-muted/50 ring-1 ring-border px-3 py-2 text-xxs font-mono text-foreground whitespace-pre-wrap break-words">{row.pdfTextExcerpt}</pre>
                 </div>
               ) : null}
             </DialogBody>
@@ -436,16 +436,16 @@ function AssignDialog({ row, onClose, onDone }: { row: Row | null; onClose: () =
     <Dialog open={!!row} onOpenChange={(o) => { if (!o && !mutation.isPending) { onClose(); setContactId('') } }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-700">MANUAL MATCH</div>
+          <div className="text-xs font-medium text-warning">MANUAL MATCH</div>
           <DialogTitle>Assign to an Ontraport contact</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-3">
-          <p className="text-sm text-zinc-700">
+          <p className="text-sm text-foreground">
             No contact was found with business name <span className="font-medium">{row?.businessName ?? '—'}</span>.
             Enter the Ontraport contact ID to write key <span className="font-mono">{row?.asicKey}</span> onto it.
           </p>
           <div>
-            <Label htmlFor="assign-contact" className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">Contact ID</Label>
+            <Label htmlFor="assign-contact" className="text-xs font-medium text-muted-foreground">Contact ID</Label>
             <Input
               id="assign-contact"
               value={contactId}

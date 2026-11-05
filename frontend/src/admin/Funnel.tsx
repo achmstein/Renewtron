@@ -93,7 +93,7 @@ export default function Funnel() {
               value={source}
               onChange={(e) => setSource(e.target.value)}
               aria-label="Source"
-              className="rounded-md border-zinc-300 text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2"
+              className="rounded-md border-border text-sm shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 px-3 py-2"
             >
               <option value="">All sources</option>
               {allSources.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -110,7 +110,7 @@ export default function Funnel() {
       ) : null}
 
       {error ? (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">{error instanceof Error ? error.message : 'Could not load the funnel.'}</div>
+        <div className="mb-6 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive shadow-sm">{error instanceof Error ? error.message : 'Could not load the funnel.'}</div>
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -132,35 +132,35 @@ export default function Funnel() {
           delta={prev ? { text: `${signed(round1((data?.conversionPct ?? 0) - prev.conversionPct))} pts`, good: (data?.conversionPct ?? 0) >= prev.conversionPct } : null}
           sub="visitors who renewed"
         />
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-amber-800">Biggest leak</div>
+        <div className="rounded-xl border border-warning/25 bg-warning/5 p-4 shadow-sm">
+          <div className="text-xs font-medium text-warning">Biggest leak</div>
           {leak && leak.stoppedHere > 0 ? (
             <>
               <div className="mt-1 text-lg font-semibold text-amber-950">{leak.title}</div>
-              <div className="text-sm text-amber-900">
+              <div className="text-sm text-warning">
                 <span className="font-semibold tabular-nums">{leak.stoppedHere.toLocaleString()}</span> people stopped here
                 {' '}({pct(leak.stoppedHere, landed)}% of visitors)
               </div>
             </>
           ) : (
-            <div className="mt-1 text-sm text-amber-900">Not enough data yet.</div>
+            <div className="mt-1 text-sm text-warning">Not enough data yet.</div>
           )}
         </div>
       </div>
 
       {/* The journey */}
-      <section className="mt-6 rounded-xl border border-zinc-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-zinc-200 px-5 py-4">
+      <section className="mt-6 rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <KickerLabel>Journey</KickerLabel>
-            <h2 className="mt-0.5 text-base font-semibold text-zinc-900">Where people stop</h2>
+            <h2 className="mt-0.5 text-base font-semibold text-foreground">Where people stop</h2>
           </div>
           <Legend />
         </div>
         {landed === 0 ? (
           <div className="p-6"><EmptyState title="No visitors in this period." message="Steps are recorded as people move through the wizard." /></div>
         ) : (
-          <ol className="divide-y divide-zinc-100">
+          <ol className="divide-y divide-border">
             {stages.map((s, i) => (
               <StageRow
                 key={s.title}
@@ -176,13 +176,13 @@ export default function Funnel() {
       </section>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm lg:col-span-3">
+        <section className="rounded-xl border border-border bg-card p-5 shadow-sm lg:col-span-3">
           <div className="flex items-end justify-between gap-3">
             <div>
               <KickerLabel>Daily</KickerLabel>
-              <h2 className="mt-0.5 text-base font-semibold text-zinc-900">Visitors and renewals</h2>
+              <h2 className="mt-0.5 text-base font-semibold text-foreground">Visitors and renewals</h2>
             </div>
-            <div className="flex items-center gap-4 text-xs text-zinc-600">
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#A3C5E6]" />Visitors</span>
               <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-emerald-600" />Renewed</span>
             </div>
@@ -192,10 +192,10 @@ export default function Funnel() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-zinc-200 bg-white shadow-sm lg:col-span-2">
-          <div className="border-b border-zinc-200 px-5 py-4">
+        <section className="rounded-xl border border-border bg-card shadow-sm lg:col-span-2">
+          <div className="border-b border-border px-5 py-4">
             <KickerLabel>Sources</KickerLabel>
-            <h2 className="mt-0.5 text-base font-semibold text-zinc-900">Which traffic renews</h2>
+            <h2 className="mt-0.5 text-base font-semibold text-foreground">Which traffic renews</h2>
           </div>
           <SourceList rows={data?.bySource ?? []} active={source} onPick={(s) => setSource(source === s ? '' : s)} />
         </section>
@@ -227,43 +227,43 @@ function StageRow({ index, stage, landed, isLeak, isLast }: { index: number; sta
   const reachedPct = pct(stage.reached, landed)
   const donePct = stage.done != null ? pct(stage.done, landed) : reachedPct
   return (
-    <li className={`relative px-5 py-4 ${isLeak ? 'bg-amber-50/60' : ''}`}>
+    <li className={`relative px-5 py-4 ${isLeak ? 'bg-warning/5/60' : ''}`}>
       {isLeak ? <span className="absolute inset-y-0 left-0 w-1 bg-amber-400" aria-hidden /> : null}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
         <div className="flex min-w-0 items-center gap-3 md:w-56 md:shrink-0">
-          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${isLast ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-700'}`}>
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${isLast ? 'bg-success/10 text-success' : 'bg-muted text-foreground'}`}>
             {index}
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-zinc-900">{stage.title}</span>
-              {isLeak ? <span className="rounded bg-amber-200 px-1.5 py-0.5 text-xxs font-semibold uppercase tracking-wide text-amber-900">Biggest leak</span> : null}
+              <span className="text-sm font-semibold text-foreground">{stage.title}</span>
+              {isLeak ? <span className="rounded bg-amber-200 px-1.5 py-0.5 text-xxs font-semibold uppercase tracking-wide text-warning">Biggest leak</span> : null}
             </div>
-            <div className="text-xs text-zinc-500 tabular-nums">{stage.reached.toLocaleString()} people · {reachedPct}%</div>
+            <div className="text-xs text-muted-foreground tabular-nums">{stage.reached.toLocaleString()} people · {reachedPct}%</div>
           </div>
         </div>
 
         <div className="min-w-0 flex-1">
           <div
-            className="relative h-7 w-full overflow-hidden rounded-md bg-zinc-100"
+            className="relative h-7 w-full overflow-hidden rounded-md bg-muted"
             title={`${stage.reached.toLocaleString()} reached${stage.done != null ? `, ${stage.done.toLocaleString()} ${stage.doneLabel}` : ''}`}
           >
             <div className="absolute inset-y-0 left-0 rounded-md bg-[#A3C5E6]" style={{ width: `${reachedPct}%` }} />
-            <div className={`absolute inset-y-0 left-0 rounded-md ${isLast ? 'bg-emerald-600' : 'bg-brand-600'}`} style={{ width: `${donePct}%` }} />
+            <div className={`absolute inset-y-0 left-0 rounded-md ${isLast ? 'bg-emerald-600' : 'bg-primary'}`} style={{ width: `${donePct}%` }} />
           </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {stage.done != null ? (
-              <span><span className="font-semibold tabular-nums text-zinc-900">{stage.done.toLocaleString()}</span> {stage.doneLabel} ({pct(stage.done, stage.reached)}%)</span>
+              <span><span className="font-semibold tabular-nums text-foreground">{stage.done.toLocaleString()}</span> {stage.doneLabel} ({pct(stage.done, stage.reached)}%)</span>
             ) : (
-              <span className="text-emerald-700">Paid and confirmed</span>
+              <span className="text-success">Paid and confirmed</span>
             )}
             {stage.exits.map((e) =>
               e.to ? (
-                <Link key={e.step} to={e.to} className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-zinc-700 ring-1 ring-zinc-200 hover:bg-zinc-200">
+                <Link key={e.step} to={e.to} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-foreground ring-1 ring-border hover:bg-border">
                   <span className="font-semibold tabular-nums">{e.visitors.toLocaleString()}</span> {e.label} →
                 </Link>
               ) : (
-                <span key={e.step} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-red-700 ring-1 ring-red-100">
+                <span key={e.step} className="inline-flex items-center gap-1 rounded-full bg-destructive/5 px-2 py-0.5 text-destructive ring-1 ring-destructive/20">
                   <span className="font-semibold tabular-nums">{e.visitors.toLocaleString()}</span> {e.label}
                 </span>
               ),
@@ -274,11 +274,11 @@ function StageRow({ index, stage, landed, isLeak, isLast }: { index: number; sta
         <div className="md:w-36 md:shrink-0 md:text-right">
           {isLast ? null : stage.stoppedHere > 0 ? (
             <>
-              <div className={`text-sm font-semibold tabular-nums ${isLeak ? 'text-amber-800' : 'text-red-700'}`}>−{stage.stoppedHere.toLocaleString()}</div>
-              <div className="text-xs text-zinc-500">stopped here</div>
+              <div className={`text-sm font-semibold tabular-nums ${isLeak ? 'text-warning' : 'text-destructive'}`}>−{stage.stoppedHere.toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground">stopped here</div>
             </>
           ) : (
-            <div className="text-xs text-zinc-400">nobody stopped</div>
+            <div className="text-xs text-muted-foreground/70">nobody stopped</div>
           )}
         </div>
       </div>
@@ -288,22 +288,22 @@ function StageRow({ index, stage, landed, isLeak, isLast }: { index: number; sta
 
 function Legend() {
   return (
-    <div className="flex items-center gap-4 text-xs text-zinc-600">
+    <div className="flex items-center gap-4 text-xs text-muted-foreground">
       <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-[#A3C5E6]" />Reached the step</span>
-      <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-brand-600" />Completed it</span>
+      <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-primary" />Completed it</span>
     </div>
   )
 }
 
 function KpiTile({ label, value, sub, delta }: { label: string; value: string; sub: string; delta: { text: string; good: boolean } | null }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">{label}</div>
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
-        <span className="text-2xl font-semibold tabular-nums text-zinc-900">{value}</span>
-        {delta ? <span className={`text-xs font-medium tabular-nums ${delta.good ? 'text-emerald-700' : 'text-red-700'}`}>{delta.text}</span> : null}
+        <span className="text-2xl font-semibold tabular-nums text-foreground">{value}</span>
+        {delta ? <span className={`text-xs font-medium tabular-nums ${delta.good ? 'text-success' : 'text-destructive'}`}>{delta.text}</span> : null}
       </div>
-      <div className="text-xs text-zinc-500">{sub}{delta ? ' · vs previous period' : ''}</div>
+      <div className="text-xs text-muted-foreground">{sub}{delta ? ' · vs previous period' : ''}</div>
     </div>
   )
 }
@@ -334,7 +334,7 @@ function Segmented({ value, options, onChange }: { value: string; options: Array
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            className={`${radius} px-3 py-2 text-sm font-medium ring-1 ring-inset transition ${active ? 'z-10 bg-zinc-900 text-white ring-zinc-900' : 'bg-white text-zinc-700 ring-zinc-300 hover:bg-zinc-50'}`}
+            className={`${radius} px-3 py-2 text-sm font-medium ring-1 ring-inset transition ${active ? 'z-10 bg-zinc-900 text-white ring-zinc-900' : 'bg-card text-foreground ring-border hover:bg-muted/50'}`}
           >
             {o.label}
           </button>
@@ -345,7 +345,7 @@ function Segmented({ value, options, onChange }: { value: string; options: Array
 }
 
 function DailyChart({ data }: { data: FunnelResponse['daily'] }) {
-  if (data.length === 0) return <div className="flex h-full items-center justify-center text-sm text-zinc-400">No data</div>
+  if (data.length === 0) return <div className="flex h-full items-center justify-center text-sm text-muted-foreground/70">No data</div>
   const short = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -361,10 +361,10 @@ function DailyChart({ data }: { data: FunnelResponse['daily'] }) {
             if (!active || !payload?.length) return null
             const p = payload[0].payload as FunnelResponse['daily'][number]
             return (
-              <div className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-md">
-                <div className="font-medium text-zinc-900">{short(p.date)}</div>
-                <div className="tabular-nums text-zinc-600">{p.visitors.toLocaleString()} visitors</div>
-                <div className="tabular-nums text-emerald-700">{p.renewed.toLocaleString()} renewed</div>
+              <div className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs shadow-md">
+                <div className="font-medium text-foreground">{short(p.date)}</div>
+                <div className="tabular-nums text-muted-foreground">{p.visitors.toLocaleString()} visitors</div>
+                <div className="tabular-nums text-success">{p.renewed.toLocaleString()} renewed</div>
               </div>
             )
           }}
@@ -380,23 +380,23 @@ function SourceList({ rows, active, onPick }: { rows: FunnelResponse['bySource']
   if (rows.length === 0) return <div className="p-5"><EmptyState title="No traffic recorded yet." /></div>
   const best = Math.max(...rows.map((r) => r.conversionPct), 1)
   return (
-    <ul className="divide-y divide-zinc-100">
+    <ul className="divide-y divide-border">
       {rows.map((r) => (
         <li key={r.source}>
           <button
             type="button"
             onClick={() => onPick(r.source)}
-            className={`w-full px-5 py-3 text-left transition hover:bg-zinc-50 ${active === r.source ? 'bg-brand-50' : ''}`}
+            className={`w-full px-5 py-3 text-left transition hover:bg-muted/50 ${active === r.source ? 'bg-primary/5' : ''}`}
             title={active === r.source ? 'Clear filter' : 'Show only this source'}
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span className={`truncate text-sm font-medium ${active === r.source ? 'text-brand-800' : 'text-zinc-900'}`}>{r.source}</span>
-              <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-900">{r.conversionPct}%</span>
+              <span className={`truncate text-sm font-medium ${active === r.source ? 'text-link' : 'text-foreground'}`}>{r.source}</span>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{r.conversionPct}%</span>
             </div>
-            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(r.conversionPct / best) * 100}%` }} />
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-success" style={{ width: `${(r.conversionPct / best) * 100}%` }} />
             </div>
-            <div className="mt-1 text-xs text-zinc-500 tabular-nums">
+            <div className="mt-1 text-xs text-muted-foreground tabular-nums">
               {r.completed.toLocaleString()} renewed of {r.visitors.toLocaleString()} visitors
             </div>
           </button>

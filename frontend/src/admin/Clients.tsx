@@ -70,12 +70,12 @@ export default function Clients() {
         const c = row.original
         return (
           <div className="min-w-0">
-            <Link to={`/admin/clients/${c.id}`} className="block text-sm font-medium text-zinc-900 hover:underline truncate">{c.fullName || '—'}</Link>
-            <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">
+            <Link to={`/admin/clients/${c.id}`} className="block text-sm font-medium text-foreground hover:underline truncate">{c.fullName || '—'}</Link>
+            <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">
               {c.email ?? '—'}{c.emailCount > 1 ? ` +${c.emailCount - 1}` : ''}
             </div>
             {c.possibleDuplicateOfId ? (
-              <div className="mt-0.5 text-xxs text-amber-700 truncate">
+              <div className="mt-0.5 text-xxs text-warning truncate">
                 May be the same person as <Link to={`/admin/clients/${c.possibleDuplicateOfId}`} className="underline">{c.possibleDuplicateOfName ?? 'another client'}</Link>
               </div>
             ) : null}
@@ -89,11 +89,11 @@ export default function Clients() {
       enableSorting: false,
       cell: ({ row }) => {
         const c = row.original
-        if (c.activeNames === 0) return <span className="text-xxs font-mono text-zinc-400">none</span>
+        if (c.activeNames === 0) return <span className="text-xxs font-mono text-muted-foreground/70">none</span>
         return (
           <div>
-            <div className="text-sm text-zinc-900 truncate max-w-[16rem]">{c.firstName}</div>
-            {c.activeNames > 1 ? <div className="text-xxs font-mono text-zinc-500 tabular-nums">+{c.activeNames - 1} more</div> : null}
+            <div className="text-sm text-foreground truncate max-w-[16rem]">{c.firstName}</div>
+            {c.activeNames > 1 ? <div className="text-xxs font-mono text-muted-foreground tabular-nums">+{c.activeNames - 1} more</div> : null}
           </div>
         )
       },
@@ -103,9 +103,9 @@ export default function Clients() {
       header: 'ABN',
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="text-xs font-mono tabular-nums text-zinc-600">
+        <div className="text-xs font-mono tabular-nums text-muted-foreground">
           {row.original.abns.length ? formatAbn(row.original.abns[0]) : '—'}
-          {row.original.abns.length > 1 ? <span className="text-zinc-400"> +{row.original.abns.length - 1}</span> : null}
+          {row.original.abns.length > 1 ? <span className="text-muted-foreground/70"> +{row.original.abns.length - 1}</span> : null}
         </div>
       ),
     },
@@ -114,8 +114,8 @@ export default function Clients() {
       header: 'Next due',
       enableSorting: false,
       cell: ({ row }) => row.original.nextDue
-        ? <span className="text-sm font-mono tabular-nums text-zinc-900">{fmtDate(row.original.nextDue)}</span>
-        : <span className="text-xxs font-mono text-zinc-400">unknown</span>,
+        ? <span className="text-sm font-mono tabular-nums text-foreground">{fmtDate(row.original.nextDue)}</span>
+        : <span className="text-xxs font-mono text-muted-foreground/70">unknown</span>,
     },
     {
       id: 'flags',
@@ -132,7 +132,7 @@ export default function Clients() {
     {
       accessorKey: 'lastSeenAt',
       header: 'Last seen',
-      cell: ({ row }) => <span className="text-sm text-zinc-700 tabular-nums">{relativeTime(row.original.lastSeenAt)}</span>,
+      cell: ({ row }) => <span className="text-sm text-foreground tabular-nums">{relativeTime(row.original.lastSeenAt)}</span>,
     },
   ], [])
 
@@ -157,8 +157,8 @@ export default function Clients() {
       ) : null}
 
       {stats && stats.possibleDuplicates > 0 ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-5 py-3 ring-1 ring-amber-200">
-          <div className="text-sm text-amber-900">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warning/5 px-5 py-3 ring-1 ring-warning/25">
+          <div className="text-sm text-warning">
             <span className="font-medium">{stats.possibleDuplicates} possible duplicate{stats.possibleDuplicates === 1 ? '' : 's'}</span> to decide:
             merge or keep apart, one pair at a time.
           </div>
@@ -168,13 +168,13 @@ export default function Clients() {
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, ABN or business name…" className="h-9 w-72" />
-        <div className="inline-flex rounded-md ring-1 ring-zinc-300 overflow-hidden" role="group">
+        <div className="inline-flex rounded-md ring-1 ring-border overflow-hidden" role="group">
           {filters.map((f) => (
             <button
               key={f.value}
               type="button"
               onClick={() => update({ filter: f.value })}
-              className={`px-3 h-9 text-sm ${filter === f.value ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-50'}`}
+              className={`px-3 h-9 text-sm ${filter === f.value ? 'bg-zinc-900 text-white' : 'bg-card text-foreground hover:bg-muted/50'}`}
             >
               {f.label}
             </button>
@@ -185,9 +185,9 @@ export default function Clients() {
             Reset <X className="h-4 w-4" />
           </Button>
         ) : null}
-        {loading ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" aria-label="Loading" /> : null}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin text-link" aria-label="Loading" /> : null}
         {data && !loading ? (
-          <span className="text-xs font-mono tabular-nums text-zinc-500">{data.totalCount.toLocaleString()} client{data.totalCount === 1 ? '' : 's'}</span>
+          <span className="text-xs font-mono tabular-nums text-muted-foreground">{data.totalCount.toLocaleString()} client{data.totalCount === 1 ? '' : 's'}</span>
         ) : null}
       </div>
 
@@ -196,7 +196,7 @@ export default function Clients() {
           columns={columns}
           data={items}
           loading={loading || (!data && isFetching)}
-          empty={!data ? <div className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-600" /></div>
+          empty={!data ? <div className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-link" /></div>
             : <EmptyState title="No clients match." message={stats?.clients ? undefined : 'Build the client records above first.'} />}
         />
         {data ? <Pagination page={page} pageSize={PAGE_SIZE} total={data.totalCount} onPage={(p) => update({ page: p })} /> : null}
@@ -233,25 +233,25 @@ function LinkPanel() {
   // Once records exist the recurring job keeps them up to date; the panel shrinks to a status line.
   if (status.hasClients && !running && !(last && last.dryRun)) {
     return (
-      <div className="mt-4 text-xxs font-mono text-zinc-500">
+      <div className="mt-4 text-xxs font-mono text-muted-foreground">
         Kept up to date every 15 minutes{last ? ` · last run ${relativeTime(last.finishedAt)}` : ''}.{' '}
-        <button type="button" className="underline hover:text-zinc-900" onClick={() => run.mutate(false)}>Run now</button>
+        <button type="button" className="underline hover:text-foreground" onClick={() => run.mutate(false)}>Run now</button>
       </div>
     )
   }
 
   return (
-    <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
-      <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">BUILD CLIENT RECORDS</div>
-      <p className="mt-1 text-sm text-zinc-600 max-w-3xl">
+    <div className="mt-6 rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
+      <div className="text-xs font-medium text-link">BUILD CLIENT RECORDS</div>
+      <p className="mt-1 text-sm text-muted-foreground max-w-3xl">
         Groups every Ontraport sale, wizard lead, renewal and key request into one client per person, and adds all the business
         names under their ABNs from the public register. Do a dry run first: it reports what it would do and changes nothing.
         After the real run, new records are added every 15 minutes.
       </p>
 
       {running ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-zinc-700">
-          <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
+        <div className="mt-4 flex items-center gap-2 text-sm text-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-link" />
           {status.runningDry ? 'Dry run' : 'Building client records'} in progress
           {status.runningSince ? ` · started ${relativeTime(status.runningSince)}` : ''}…
         </div>
@@ -274,7 +274,7 @@ function LinkPanel() {
 
 function LinkResult({ result }: { result: ClientLinkResult }) {
   if (result.error) {
-    return <div className="mt-4 rounded-md bg-red-50 ring-1 ring-red-200 px-3 py-2 text-sm text-red-800">The {result.dryRun ? 'dry run' : 'run'} failed: {result.error}</div>
+    return <div className="mt-4 rounded-md bg-destructive/5 ring-1 ring-destructive/20 px-3 py-2 text-sm text-destructive">The {result.dryRun ? 'dry run' : 'run'} failed: {result.error}</div>
   }
   const rows: Array<[string, number]> = [
     ['Clients created', result.clientsCreated],
@@ -298,20 +298,20 @@ function LinkResult({ result }: { result: ClientLinkResult }) {
   ]
   return (
     <div className="mt-4">
-      <div className="text-sm font-medium text-zinc-900">
+      <div className="text-sm font-medium text-foreground">
         {result.dryRun ? 'Dry run' : 'Run'} finished {relativeTime(result.finishedAt)}
-        {result.dryRun ? <span className="text-zinc-500 font-normal"> — nothing was saved. This is what a real run would do:</span> : null}
+        {result.dryRun ? <span className="text-muted-foreground font-normal"> — nothing was saved. This is what a real run would do:</span> : null}
       </div>
       <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between gap-2 border-b border-zinc-100 py-1">
-            <dt className="text-xs text-zinc-500">{label}</dt>
-            <dd className="text-sm font-mono tabular-nums text-zinc-900">{value.toLocaleString()}</dd>
+          <div key={label} className="flex items-baseline justify-between gap-2 border-b border-border py-1">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="text-sm font-mono tabular-nums text-foreground">{value.toLocaleString()}</dd>
           </div>
         ))}
       </dl>
       {result.skipped > 0 ? (
-        <p className="mt-2 text-xxs text-zinc-500">Left unlinked: records with no email to reach the person by (some manual renewals), or bulk uploads whose name isn't on any client yet.</p>
+        <p className="mt-2 text-xxs text-muted-foreground">Left unlinked: records with no email to reach the person by (some manual renewals), or bulk uploads whose name isn't on any client yet.</p>
       ) : null}
     </div>
   )

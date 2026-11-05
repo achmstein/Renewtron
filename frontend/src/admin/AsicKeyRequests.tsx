@@ -91,13 +91,13 @@ export default function AsicKeyRequests() {
         const r = row.original
         return (
           <div>
-            <Link to={`/admin/asic-key-requests/${r.id}`} onClick={(e) => e.stopPropagation()} className="block truncate text-sm font-medium text-zinc-900 hover:text-brand-700 hover:underline">{r.businessName}</Link>
+            <Link to={`/admin/asic-key-requests/${r.id}`} onClick={(e) => e.stopPropagation()} className="block truncate text-sm font-medium text-foreground hover:text-link hover:underline">{r.businessName}</Link>
             {r.otherBusinessNames?.length ? (
-              <div className="text-xxs truncate text-zinc-500" title={r.otherBusinessNames.join('\n')}>
+              <div className="text-xxs truncate text-muted-foreground" title={r.otherBusinessNames.join('\n')}>
                 + {r.otherBusinessNames.length === 1 ? r.otherBusinessNames[0] : `${r.otherBusinessNames.length} more names`}
               </div>
             ) : null}
-            <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
+            <div className="hidden sm:block text-xxs font-mono tabular-nums text-muted-foreground">{r.abn}</div>
           </div>
         )
       },
@@ -110,8 +110,8 @@ export default function AsicKeyRequests() {
         const r = row.original
         return (
           <div>
-            <div className="text-sm text-zinc-800 truncate max-w-[12rem]">{r.contactName}</div>
-            <div className="text-xxs font-mono text-zinc-500 truncate max-w-[12rem]" title={r.email}>{r.email || '—'}</div>
+            <div className="text-sm text-foreground truncate max-w-[12rem]">{r.contactName}</div>
+            <div className="text-xxs font-mono text-muted-foreground truncate max-w-[12rem]" title={r.email}>{r.email || '—'}</div>
           </div>
         )
       },
@@ -126,13 +126,13 @@ export default function AsicKeyRequests() {
           <div>
             <RequestStatusPill status={r.status} />
             {r.asicReferenceNumber ? (
-              <div className="mt-1 text-xxs font-mono tabular-nums text-zinc-500">ref {r.asicReferenceNumber}</div>
+              <div className="mt-1 text-xxs font-mono tabular-nums text-muted-foreground">ref {r.asicReferenceNumber}</div>
             ) : null}
             {r.errorMessage ? (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setDetail(r) }}
-                className={`mt-1 block text-left text-xxs font-mono truncate max-w-[14rem] hover:underline ${r.status === 'Failed' ? 'text-red-700' : 'text-zinc-500'}`}
+                className={`mt-1 block text-left text-xxs font-mono truncate max-w-[14rem] hover:underline ${r.status === 'Failed' ? 'text-destructive' : 'text-muted-foreground'}`}
                 title="Show details"
               >
                 {r.errorMessage}
@@ -147,8 +147,8 @@ export default function AsicKeyRequests() {
       header: 'Queued',
       cell: ({ row }) => (
         <div>
-          <div className="text-xs text-zinc-700 tabular-nums">{relativeTime(row.original.createdAt)}</div>
-          <div className="text-xxs font-mono tabular-nums text-zinc-400">{row.original.source.toLowerCase()}</div>
+          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.createdAt)}</div>
+          <div className="text-xxs font-mono tabular-nums text-muted-foreground/70">{row.original.source.toLowerCase()}</div>
           {row.original.isTest ? <StatusPill tone="amber">TEST</StatusPill> : null}
         </div>
       ),
@@ -189,7 +189,7 @@ export default function AsicKeyRequests() {
             <button
               onClick={runNow}
               disabled={runMutation.isPending}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-white text-zinc-800 px-3 py-2 text-sm font-medium ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 shadow-sm disabled:opacity-50 transition"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-card text-foreground px-3 py-2 text-sm font-medium ring-1 ring-inset ring-border hover:bg-muted/50 shadow-sm disabled:opacity-50 transition"
               title="Match keys that have arrived in the inbox against sent requests"
             >
               <RotateCw className={`h-4 w-4 ${runMutation.isPending ? 'animate-spin' : ''}`} />
@@ -293,7 +293,7 @@ function CopyValue({ value, small }: { value: string; small?: boolean }) {
     <span className="inline-flex items-start gap-1 min-w-0">
       <span className={`break-words ${small ? 'text-xs' : ''}`}>{value || '—'}</span>
       {value ? (
-        <button type="button" onClick={() => copyText(value)} className="shrink-0 mt-0.5 text-zinc-400 hover:text-zinc-700" title="Copy">
+        <button type="button" onClick={() => copyText(value)} className="shrink-0 mt-0.5 text-muted-foreground/70 hover:text-foreground" title="Copy">
           <Copy className="h-3 w-3" />
         </button>
       ) : null}
@@ -316,11 +316,11 @@ function FormValues({ row }: { row: Row }) {
     ['Attach documents', 'No — then tick both declarations'],
   ]
   return (
-    <dl className="grid grid-cols-[10rem_1fr] gap-y-1 text-sm rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2">
+    <dl className="grid grid-cols-[10rem_1fr] gap-y-1 text-sm rounded-md bg-muted/50 ring-1 ring-border px-3 py-2">
       {rows.map(([k, v, small]) => (
         <div key={k} className="contents">
-          <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">{k}</dt>
-          <dd className="text-zinc-900 min-w-0"><CopyValue value={v} small={small} /></dd>
+          <dt className="text-xs text-muted-foreground pt-0.5">{k}</dt>
+          <dd className="text-foreground min-w-0"><CopyValue value={v} small={small} /></dd>
         </div>
       ))}
     </dl>
@@ -352,22 +352,22 @@ function RecordDialog({ row, onClose, onDone }: { row: Row | null; onClose: () =
         {row ? (
           <>
             <DialogHeader>
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-indigo-700">FILL IN ASIC’S FORM</div>
+              <div className="text-xs font-medium text-info">FILL IN ASIC’S FORM</div>
               <DialogTitle>{row.businessName}</DialogTitle>
             </DialogHeader>
             <DialogBody className="space-y-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
-                <a href={ASIC_FORM_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-700 hover:underline">
+                <a href={ASIC_FORM_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link hover:underline">
                   Open ASIC’s enquiry form <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
               <FormValues row={row} />
               <div>
-                <Label htmlFor="record-ref" className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">ASIC reference number from the receipt</Label>
+                <Label htmlFor="record-ref" className="text-xs font-medium text-muted-foreground">ASIC reference number from the receipt</Label>
                 <Input id="record-ref" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. 238824183 — leave blank if it couldn't be sent" className="mt-1 h-9 font-mono tabular-nums" autoFocus />
               </div>
               <div>
-                <Label htmlFor="record-note" className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">Note (optional)</Label>
+                <Label htmlFor="record-note" className="text-xs font-medium text-muted-foreground">Note (optional)</Label>
                 <Input id="record-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="why it couldn't be sent, or anything worth remembering" className="mt-1 h-9" />
               </div>
             </DialogBody>
@@ -391,27 +391,27 @@ function DetailDialog({ row, onClose }: { row: Row | null; onClose: () => void }
         {row ? (
           <>
             <DialogHeader>
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">ASIC KEY REQUEST</div>
+              <div className="text-xs font-medium text-muted-foreground">ASIC KEY REQUEST</div>
               <DialogTitle>{row.businessName}</DialogTitle>
             </DialogHeader>
             <DialogBody className="space-y-3">
               <ClientLink kind="keyRequest" id={row.id} />
               <div className="flex flex-wrap items-center gap-2">
                 <RequestStatusPill status={row.status} />
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-muted-foreground">
                   queued {fmtDateTime(row.createdAt)}{row.submittedAt ? ` · sent ${fmtDateTime(row.submittedAt)}` : ''}{row.keyReceivedAt ? ` · key ${fmtDateTime(row.keyReceivedAt)}` : ''}
                 </span>
               </div>
               <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-sm">
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">Reference</dt>
-                <dd className="font-mono tabular-nums text-zinc-900">{row.asicReferenceNumber ?? '—'}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">Ontraport</dt>
-                <dd className="font-mono text-zinc-700">{row.ontraportContactId ?? '—'}</dd>
-                <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 pt-0.5">Source</dt>
-                <dd className="text-zinc-700">{row.source}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">Reference</dt>
+                <dd className="font-mono tabular-nums text-foreground">{row.asicReferenceNumber ?? '—'}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">Ontraport</dt>
+                <dd className="font-mono text-foreground">{row.ontraportContactId ?? '—'}</dd>
+                <dt className="text-xs text-muted-foreground pt-0.5">Source</dt>
+                <dd className="text-foreground">{row.source}</dd>
               </dl>
               {row.errorMessage ? (
-                <div className={`rounded-md px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words ring-1 ${row.status === 'Failed' ? 'bg-red-50 ring-red-100 text-red-800' : 'bg-zinc-50 ring-zinc-200 text-zinc-700'}`}>{row.errorMessage}</div>
+                <div className={`rounded-md px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words ring-1 ${row.status === 'Failed' ? 'bg-destructive/5 ring-destructive/20 text-destructive' : 'bg-muted/50 ring-border text-foreground'}`}>{row.errorMessage}</div>
               ) : null}
               <FormValues row={row} />
             </DialogBody>

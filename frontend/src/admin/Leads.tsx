@@ -135,9 +135,9 @@ export default function Leads() {
           <div className="flex items-center gap-3">
             <span className="hidden sm:block"><Avatar name={l.fullName} /></span>
             <div className="min-w-0">
-              <Link to={`/admin/leads/${l.id}`} className="block text-sm font-medium text-zinc-900 hover:underline truncate">{l.fullName || '—'}</Link>
-              <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate">{l.email}</div>
-              <div className="hidden sm:block text-xs font-mono tabular-nums text-zinc-500 mt-0.5">
+              <Link to={`/admin/leads/${l.id}`} className="block text-sm font-medium text-foreground hover:underline truncate">{l.fullName || '—'}</Link>
+              <div className="hidden sm:block text-xxs font-mono text-muted-foreground/70 truncate">{l.email}</div>
+              <div className="hidden sm:block text-xs font-mono tabular-nums text-muted-foreground mt-0.5">
                 <button type="button" onClick={() => toggleOutcome(l.outcome)} className="hover:underline" title="Toggle this lead's outcome in the filter">{l.abn}</button>
               </div>
             </div>
@@ -171,10 +171,10 @@ export default function Leads() {
         const r = row.original.renewal
         return r ? (
           <div>
-            <div className="text-sm font-mono tabular-nums text-zinc-900">{fmtMoney0(r.amount)}</div>
+            <div className="text-sm font-mono tabular-nums text-foreground">{fmtMoney0(r.amount)}</div>
             <RenewalStatusPill status={r.status} />
           </div>
-        ) : <span className="text-xxs font-mono text-zinc-400">—</span>
+        ) : <span className="text-xxs font-mono text-muted-foreground/70">—</span>
       },
     },
     {
@@ -182,15 +182,15 @@ export default function Leads() {
       header: 'Reminder',
       enableSorting: false,
       cell: ({ row }) =>
-        row.original.reminderOptIn ? <StatusPill tone="emerald">OPT-IN</StatusPill> : <span className="text-xxs font-mono text-zinc-400">—</span>,
+        row.original.reminderOptIn ? <StatusPill tone="emerald">OPT-IN</StatusPill> : <span className="text-xxs font-mono text-muted-foreground/70">—</span>,
     },
     {
       accessorKey: 'createdAt',
       header: 'Age',
       cell: ({ row }) => (
         <div>
-          <div className="text-sm text-zinc-700 tabular-nums">{relativeTime(row.original.createdAt)}</div>
-          <div className="text-xxs font-mono text-zinc-400 tabular-nums">{fmtDate(row.original.createdAt)} · {fmtTime(row.original.createdAt)}</div>
+          <div className="text-sm text-foreground tabular-nums">{relativeTime(row.original.createdAt)}</div>
+          <div className="text-xxs font-mono text-muted-foreground/70 tabular-nums">{fmtDate(row.original.createdAt)} · {fmtTime(row.original.createdAt)}</div>
         </div>
       ),
     },
@@ -200,7 +200,7 @@ export default function Leads() {
       enableSorting: false,
       meta: { className: 'text-right' },
       cell: ({ row }) => (
-        <Link to={`/admin/leads/${row.original.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800 whitespace-nowrap">View →</Link>
+        <Link to={`/admin/leads/${row.original.id}`} className="text-sm font-medium text-link hover:text-link whitespace-nowrap">View →</Link>
       ),
     },
     // toggleOutcome only calls stable state setters, so the first render's copy stays correct.
@@ -221,13 +221,13 @@ export default function Leads() {
               disabled={!winBackEnabled}
               className={`inline-flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition ${
                 winBackEnabled
-                  ? 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm'
-                  : 'bg-zinc-100 text-zinc-400 cursor-not-allowed'
+                  ? 'bg-primary text-white hover:bg-primary shadow-sm'
+                  : 'bg-muted text-muted-foreground/70 cursor-not-allowed'
               }`}
             >
               <Mail className="h-4 w-4" />
               Send win-back
-              {winBackEnabled ? <span className="ml-0.5 inline-flex items-center justify-center rounded bg-white/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{stats.winBackEligible}</span> : null}
+              {winBackEnabled ? <span className="ml-0.5 inline-flex items-center justify-center rounded bg-card/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{stats.winBackEligible}</span> : null}
             </button>
             <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
@@ -355,11 +355,11 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">From</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">From</div>
           <Input type="date" value={dateFrom} onChange={(e) => onFrom(e.target.value)} className="font-mono tabular-nums" />
         </div>
         <div>
-          <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">To</div>
+          <div className="text-xs font-medium text-muted-foreground mb-1">To</div>
           <Input type="date" value={dateTo} onChange={(e) => onTo(e.target.value)} className="font-mono tabular-nums" />
         </div>
         {active ? (
@@ -431,12 +431,12 @@ function StatsStrip({ stats }: { stats: Stats }) {
 /* ─────── Cell components ─────── */
 
 function NamesCell({ l }: { l: Lead }) {
-  if (l.searchLog == null) return <span className="text-xxs font-mono text-zinc-400">no search</span>
-  if (l.searchLog.resultsCount === 0) return <span className="text-xxs font-mono text-zinc-400">none</span>
+  if (l.searchLog == null) return <span className="text-xxs font-mono text-muted-foreground/70">no search</span>
+  if (l.searchLog.resultsCount === 0) return <span className="text-xxs font-mono text-muted-foreground/70">none</span>
   return (
     <div>
-      <div className="text-sm text-zinc-900 truncate max-w-[16rem]">{l.firstBusinessName ?? '—'}</div>
-      {l.searchLog.resultsCount > 1 ? <div className="text-xxs font-mono text-zinc-400 tabular-nums">+{l.searchLog.resultsCount - 1} more</div> : null}
+      <div className="text-sm text-foreground truncate max-w-[16rem]">{l.firstBusinessName ?? '—'}</div>
+      {l.searchLog.resultsCount > 1 ? <div className="text-xxs font-mono text-muted-foreground/70 tabular-nums">+{l.searchLog.resultsCount - 1} more</div> : null}
     </div>
   )
 }
@@ -472,8 +472,8 @@ function Avatar({ name }: { name: string }) {
     return name.slice(0, 2).toUpperCase()
   })()
   return (
-    <div className="h-9 w-9 shrink-0 rounded-full bg-zinc-100 ring-1 ring-zinc-200 flex items-center justify-center">
-      <span className="text-xxs font-mono font-medium text-zinc-600">{initials}</span>
+    <div className="h-9 w-9 shrink-0 rounded-full bg-muted ring-1 ring-border flex items-center justify-center">
+      <span className="text-xxs font-mono font-medium text-muted-foreground">{initials}</span>
     </div>
   )
 }
@@ -496,27 +496,27 @@ function WinBackModal({ filter, busy, onClose, onConfirm }: {
       <div className="absolute inset-0 bg-zinc-950/70 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute inset-0 overflow-y-auto">
         <div className="flex min-h-full items-center justify-center p-4">
-          <div className="relative w-full max-w-xl rounded-xl bg-white shadow-xl">
-            <div className="px-6 py-5 border-b border-zinc-100">
-              <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">WIN-BACK</div>
-              <h2 className="mt-0.5 text-lg font-semibold text-zinc-900 tracking-tight">Send win-back email</h2>
-              <p className="mt-1 text-sm text-zinc-500">A follow-up email to leads who found a renewable name but never paid.</p>
+          <div className="relative w-full max-w-xl rounded-xl bg-card shadow-xl">
+            <div className="px-6 py-5 border-b border-border">
+              <div className="text-xs font-medium text-link">WIN-BACK</div>
+              <h2 className="mt-0.5 text-lg font-semibold text-foreground tracking-tight">Send win-back email</h2>
+              <p className="mt-1 text-sm text-muted-foreground">A follow-up email to leads who found a renewable name but never paid.</p>
             </div>
             <div className="px-6 py-5">
               {isPending ? (
-                <p className="text-sm text-zinc-500">Loading recipient preview…</p>
+                <p className="text-sm text-muted-foreground">Loading recipient preview…</p>
               ) : error ? (
-                <p className="text-sm text-red-700">{error instanceof Error ? error.message : 'Preview failed'}</p>
+                <p className="text-sm text-destructive">{error instanceof Error ? error.message : 'Preview failed'}</p>
               ) : preview ? (
                 <PreviewBody preview={preview} />
               ) : null}
             </div>
-            <div className="px-6 py-4 border-t border-zinc-100 flex items-center justify-end gap-2">
-              <button onClick={onClose} className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 transition">Cancel</button>
+            <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
+              <button onClick={onClose} className="inline-flex items-center rounded-md bg-card px-3 py-2 text-sm font-medium text-foreground ring-1 ring-inset ring-border hover:bg-muted/50 transition">Cancel</button>
               <button
                 onClick={onConfirm}
                 disabled={!preview || preview.recipientCount === 0 || busy}
-                className="inline-flex items-center gap-2 rounded-md bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                className="inline-flex items-center gap-2 rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 {busy ? 'Sending…' : preview ? `Send to ${preview.recipientCount}` : 'Send'}
               </button>
@@ -534,26 +534,26 @@ function PreviewBody({ preview }: { preview: Awaited<ReturnType<typeof api.admin
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">Recipients</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900">{preview.recipientCount.toLocaleString()}</div>
-          <div className="text-xxs font-mono text-zinc-400 truncate">{preview.sampleNames.length > 0 ? `e.g. ${preview.sampleNames.join(' · ')}` : '—'}</div>
+          <div className="text-xs text-muted-foreground">Recipients</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{preview.recipientCount.toLocaleString()}</div>
+          <div className="text-xxs font-mono text-muted-foreground/70 truncate">{preview.sampleNames.length > 0 ? `e.g. ${preview.sampleNames.join(' · ')}` : '—'}</div>
         </div>
         <div>
-          <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">Recoverable</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-brand-700">{fmtMoney0(preview.recoverableValue)}</div>
-          <div className="text-xxs font-mono text-zinc-400">{fmtMoney0(preview.avgBasket)} avg basket × recipients</div>
+          <div className="text-xs text-muted-foreground">Recoverable</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums text-link">{fmtMoney0(preview.recoverableValue)}</div>
+          <div className="text-xxs font-mono text-muted-foreground/70">{fmtMoney0(preview.avgBasket)} avg basket × recipients</div>
         </div>
       </div>
 
       <div>
-        <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">Subject</div>
-        <div className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-sm text-zinc-900 font-medium">{preview.subject}</div>
+        <div className="text-xs text-muted-foreground mb-1">Subject</div>
+        <div className="rounded-md bg-muted/50 ring-1 ring-border px-3 py-2 text-sm text-foreground font-medium">{preview.subject}</div>
       </div>
 
       <div>
-        <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 mb-1">Body preview</div>
-        <pre className="rounded-md bg-zinc-50 ring-1 ring-zinc-200 px-3 py-2 text-xs text-zinc-700 font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">{preview.bodyPreview}</pre>
-        <p className="mt-1 text-xxs font-mono text-zinc-400">Edit the template in Settings → Win-back. Merge tags: {'{{FullName}}'}, {'{{Abn}}'}, {'{{BusinessName}}'}, {'{{Email}}'}.</p>
+        <div className="text-xs text-muted-foreground mb-1">Body preview</div>
+        <pre className="rounded-md bg-muted/50 ring-1 ring-border px-3 py-2 text-xs text-foreground font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">{preview.bodyPreview}</pre>
+        <p className="mt-1 text-xxs font-mono text-muted-foreground/70">Edit the template in Settings → Win-back. Merge tags: {'{{FullName}}'}, {'{{Abn}}'}, {'{{BusinessName}}'}, {'{{Email}}'}.</p>
       </div>
     </div>
   )

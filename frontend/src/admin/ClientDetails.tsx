@@ -26,16 +26,16 @@ export default function ClientDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
       </div>
     )
   }
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center">
-        <h3 className="text-base font-semibold text-zinc-900">Client not found</h3>
-        <p className="mt-1 text-sm text-zinc-500">It may have been merged into another client.</p>
-        <Link to="/admin/clients" className="mt-4 inline-flex text-sm font-medium text-brand-700">← Back to clients</Link>
+        <h3 className="text-base font-semibold text-foreground">Client not found</h3>
+        <p className="mt-1 text-sm text-muted-foreground">It may have been merged into another client.</p>
+        <Link to="/admin/clients" className="mt-4 inline-flex text-sm font-medium text-link">← Back to clients</Link>
       </div>
     )
   }
@@ -44,17 +44,17 @@ export default function ClientDetails() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <Link to="/admin/clients" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
+        <Link to="/admin/clients" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-3 w-3" /> Back to clients
         </Link>
       </div>
 
-      <div className="rounded-2xl bg-white ring-1 ring-zinc-200 shadow-sm">
+      <div className="rounded-2xl bg-card ring-1 ring-border shadow-sm">
         <div className="flex items-start justify-between gap-4 flex-wrap p-6">
           <div className="min-w-0">
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">CLIENT</div>
-            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight">{data.fullName || '—'}</h1>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-zinc-500">
+            <div className="text-xs font-medium text-link">CLIENT</div>
+            <h1 className="mt-1 text-2xl font-semibold text-foreground tracking-tight">{data.fullName || '—'}</h1>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">
               {primary ? <span className="font-mono">{primary.email}</span> : null}
               {data.mobileNumber ? <><span>·</span><span className="font-mono">{data.mobileNumber}</span></> : null}
               <span>·</span><span>first seen {relativeTime(data.createdAt)}</span>
@@ -93,7 +93,7 @@ export default function ClientDetails() {
                   {data.emails.map((e) => (
                     <li key={e.id} className="text-xs">
                       <div className="font-mono break-all">{e.email}</div>
-                      <div className="text-zinc-400">{e.isPrimary ? 'Primary · ' : ''}{e.source}{e.ontraportContactId ? ` · Ontraport ${e.ontraportContactId}` : ''}</div>
+                      <div className="text-muted-foreground/70">{e.isPrimary ? 'Primary · ' : ''}{e.source}{e.ontraportContactId ? ` · Ontraport ${e.ontraportContactId}` : ''}</div>
                     </li>
                   ))}
                 </ul>
@@ -123,15 +123,15 @@ function NeedsAttention({ client }: { client: ClientDetail }) {
   const items = data.groups.flatMap((g) => g.items).filter((i) => i.kind !== 'duplicate')
   if (items.length === 0) {
     return (
-      <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900 ring-1 ring-emerald-200">
+      <div className="mt-4 rounded-xl bg-success/5 px-4 py-2.5 text-sm text-success ring-1 ring-success/20">
         Nothing needs a person for {client.fullName.split(' ')[0] || 'this client'} right now.
       </div>
     )
   }
   const meaning = items.some((i) => i.kind !== 'keyRequest' || i.reason === 'Pending' || i.reason === 'Failed') ? 'red' : 'amber'
   return (
-    <section className={`mt-4 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${meaning === 'red' ? 'ring-red-200' : 'ring-amber-200'}`}>
-      <header className={`px-4 py-2.5 text-sm font-semibold ${meaning === 'red' ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
+    <section className={`mt-4 overflow-hidden rounded-xl bg-card shadow-sm ring-1 ${meaning === 'red' ? 'ring-destructive/20' : 'ring-warning/25'}`}>
+      <header className={`px-4 py-2.5 text-sm font-semibold ${meaning === 'red' ? 'bg-destructive/5 text-destructive' : 'bg-warning/5 text-warning'}`}>
         Needs attention <span className="ml-1 font-mono text-xs font-normal opacity-70">{items.length}</span>
       </header>
       {items.map((i) => <WorkRow key={`${i.kind}-${i.id}`} item={i} />)}
@@ -166,12 +166,12 @@ function SummaryStrip({ client }: { client: ClientDetail }) {
     { label: 'Renewals with us', value: renewed.length, sub: lastRenewed ? `last ${fmtDate(lastRenewed)}` : client.sales.length ? `${client.sales.length} Ontraport sale${client.sales.length === 1 ? '' : 's'}` : undefined },
   ]
   return (
-    <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border-t border-zinc-100">
+    <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 border-t border-border">
       {items.map((i) => (
-        <div key={i.label} className="px-6 py-4 border-zinc-100 [&:not(:first-child)]:lg:border-l">
-          <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{i.label}</dt>
-          <dd className="mt-1 text-lg font-semibold text-zinc-900 tabular-nums">{i.value}</dd>
-          {i.sub ? <dd className="text-xs text-zinc-500 truncate" title={typeof i.sub === 'string' ? i.sub : undefined}>{i.sub}</dd> : null}
+        <div key={i.label} className="px-6 py-4 border-border [&:not(:first-child)]:lg:border-l">
+          <dt className="text-xs text-muted-foreground">{i.label}</dt>
+          <dd className="mt-1 text-lg font-semibold text-foreground tabular-nums">{i.value}</dd>
+          {i.sub ? <dd className="text-xs text-muted-foreground truncate" title={typeof i.sub === 'string' ? i.sub : undefined}>{i.sub}</dd> : null}
         </div>
       ))}
     </dl>
@@ -220,12 +220,12 @@ function Timeline({ client }: { client: ClientDetail }) {
     return all.sort((a, b) => b.at.localeCompare(a.at))
   }, [client])
 
-  if (events.length === 0) return <div className="text-sm text-zinc-400">Nothing yet.</div>
+  if (events.length === 0) return <div className="text-sm text-muted-foreground/70">Nothing yet.</div>
   const counts = events.reduce<Partial<Record<TimelineKind, number>>>((acc, e) => ({ ...acc, [e.kind]: (acc[e.kind] ?? 0) + 1 }), {})
   const visible = events.filter((e) => !kind || e.kind === kind)
   const chip = (value: TimelineKind | '', label: string, count: number) => (
     <button key={value || 'all'} type="button" onClick={() => { setKind(value); setShown(TIMELINE_STEP) }}
-      className={`rounded-full px-2.5 py-1 text-xs ring-1 ${kind === value ? 'bg-zinc-900 text-white ring-zinc-900' : 'bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50'}`}>
+      className={`rounded-full px-2.5 py-1 text-xs ring-1 ${kind === value ? 'bg-zinc-900 text-white ring-zinc-900' : 'bg-card text-muted-foreground ring-border hover:bg-muted/50'}`}>
       {label} <span className="tabular-nums opacity-60">{count}</span>
     </button>
   )
@@ -236,14 +236,14 @@ function Timeline({ client }: { client: ClientDetail }) {
         {chip('', 'All', events.length)}
         {(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => chip(k, KIND_LABELS[k], counts[k]!))}
       </div>
-      <ol className="relative border-l border-zinc-200 ml-2">
+      <ol className="relative border-l border-border ml-2">
         {visible.slice(0, shown).map((e) => (
           <li key={e.key} className="relative pl-6 pb-4 last:pb-0">
-            <span className="absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-white text-zinc-500 ring-1 ring-zinc-200">{KIND_ICONS[e.kind]}</span>
+            <span className="absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground ring-1 ring-border">{KIND_ICONS[e.kind]}</span>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                {e.to ? <Link to={e.to} className="text-sm text-zinc-900 hover:underline">{e.title}</Link> : <div className="text-sm text-zinc-900">{e.title}</div>}
-                <div className="text-xs text-zinc-500">
+                {e.to ? <Link to={e.to} className="text-sm text-foreground hover:underline">{e.title}</Link> : <div className="text-sm text-foreground">{e.title}</div>}
+                <div className="text-xs text-muted-foreground">
                   <span title={new Date(e.at).toLocaleString()}>{fmtDate(e.at)}</span>{e.sub ? ` · ${e.sub}` : ''}
                 </div>
               </div>
@@ -289,9 +289,9 @@ function DuplicatePanel({ client }: { client: ClientDetail }) {
   const busy = merge.isPending || dismiss.isPending
 
   return (
-    <div className="mt-6 rounded-xl bg-amber-50 p-5 ring-1 ring-amber-200">
-      <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-amber-800">POSSIBLE DUPLICATE</div>
-      <p className="mt-1 text-sm text-amber-900 max-w-3xl">
+    <div className="mt-6 rounded-xl bg-warning/5 p-5 ring-1 ring-warning/25">
+      <div className="text-xs font-medium text-warning">POSSIBLE DUPLICATE</div>
+      <p className="mt-1 text-sm text-warning max-w-3xl">
         Another client on the same ABN has the same name or mobile, under a different email. It may be the same person, or two
         people at the business who share a phone. Merge only if it's the same person: the ASIC key enquiry goes out in one
         person's name.
@@ -299,7 +299,7 @@ function DuplicatePanel({ client }: { client: ClientDetail }) {
       <ul className="mt-3 space-y-2">
         {others.map((o) => (
           <li key={o.id} className="flex flex-wrap items-center gap-2">
-            <Link to={`/admin/clients/${o.id}`} className="text-sm font-medium text-zinc-900 underline">{o.fullName || 'Unnamed client'}</Link>
+            <Link to={`/admin/clients/${o.id}`} className="text-sm font-medium text-foreground underline">{o.fullName || 'Unnamed client'}</Link>
             <Button size="sm" variant="outline" disabled={busy}
               onClick={() => merge.mutate({ from: o.id, into: client.id })}>Merge into this client</Button>
             <Button size="sm" variant="outline" disabled={busy}
@@ -338,17 +338,17 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
   const reminderOther = abn.contacts.find((c) => c.isReminderContact)
 
   return (
-    <div className="rounded-lg ring-1 ring-zinc-200">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 bg-zinc-50/60 px-4 py-3 rounded-t-lg">
+    <div className="rounded-lg ring-1 ring-border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3 rounded-t-lg">
         <div className="min-w-0">
-          <div className="font-mono text-sm text-zinc-900 tabular-nums">ABN {formatAbn(abn.abn)}</div>
-          <div className="mt-0.5 text-xs text-zinc-500">
+          <div className="font-mono text-sm text-foreground tabular-nums">ABN {formatAbn(abn.abn)}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
             {abn.contacts.length === 0 ? 'Only contact' : (
               <>Also on this ABN:{' '}
                 {abn.contacts.map((c, i) => (
                   <span key={c.clientId}>
                     {i > 0 ? ', ' : ''}
-                    <Link to={`/admin/clients/${c.clientId}`} className="text-zinc-700 underline">{c.fullName || 'Unnamed client'}</Link>
+                    <Link to={`/admin/clients/${c.clientId}`} className="text-foreground underline">{c.fullName || 'Unnamed client'}</Link>
                     {c.isReminderContact ? ' (gets reminders)' : ''}
                   </span>
                 ))}
@@ -362,7 +362,7 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
             <StatusPill tone="indigo">GETS REMINDERS</StatusPill>
           ) : (
             <>
-              <span className="text-xs text-zinc-500">Reminders go to {reminderOther?.fullName || 'another contact'}</span>
+              <span className="text-xs text-muted-foreground">Reminders go to {reminderOther?.fullName || 'another contact'}</span>
               <Button size="sm" variant="outline" disabled={makeReminder.isPending} onClick={() => makeReminder.mutate(client.id)}>
                 Send them to {client.fullName.split(' ')[0] || 'this client'}
               </Button>
@@ -372,9 +372,9 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
       </div>
 
       {abn.businessNames.length === 0 ? (
-        <div className="px-4 py-3 text-sm text-zinc-400">No business names on the register for this ABN.</div>
+        <div className="px-4 py-3 text-sm text-muted-foreground/70">No business names on the register for this ABN.</div>
       ) : (
-        <div className="divide-y divide-zinc-100">
+        <div className="divide-y divide-border">
           {abn.businessNames.map((n) => (
             <NameStory key={n.id} client={client} name={n} busy={setStatus.isPending} onStatus={(status) => setStatus.mutate({ id: n.id, status })} />
           ))}
@@ -435,11 +435,11 @@ function NameStory({ client, name: n, busy, onStatus }: {
   }
 
   return (
-    <div className={`px-4 py-3 ${active ? '' : 'text-zinc-400'}`}>
+    <div className={`px-4 py-3 ${active ? '' : 'text-muted-foreground/70'}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className={`font-medium ${active ? 'text-zinc-900' : ''}`}>{n.name}</div>
-          <div className="text-xs text-zinc-500">
+          <div className={`font-medium ${active ? 'text-foreground' : ''}`}>{n.name}</div>
+          <div className="text-xs text-muted-foreground">
             {active ? due : n.status === 'Excluded' ? 'Left out of reminders' : 'No longer on the register'}
             {n.lastRenewedAt ? <> · renewed <When at={n.lastRenewedAt} /> for {n.lastRenewalYears} yr</> : steps.length || !active ? null : ' · not renewed with us yet'}
             {n.asicKey ? <> · key <span className="font-mono">{n.asicKey}</span></> : null}
@@ -451,7 +451,7 @@ function NameStory({ client, name: n, busy, onStatus }: {
         </div>
       </div>
       {active && steps.length ? <div className="mt-2"><StoryStrip steps={steps} /></div> : null}
-      <div className="mt-1 text-xxs font-mono text-zinc-400">
+      <div className="mt-1 text-xxs font-mono text-muted-foreground/70">
         {n.registrationDate ? `reg ${fmtDate(n.registrationDate)}` : 'reg date unknown'}{n.asicAccountNumber ? ` · acct ${n.asicAccountNumber}` : ''} · via {n.source}
       </div>
     </div>
@@ -500,7 +500,7 @@ function Notes({ client }: { client: ClientDetail }) {
   return (
     <div>
       <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} maxLength={2000}
-        className="w-full rounded-md ring-1 ring-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+        className="w-full rounded-md ring-1 ring-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
       <div className="mt-2 flex justify-end">
         <Button size="sm" disabled={save.isPending || notes === (client.notes ?? '')} onClick={() => save.mutate()}>Save notes</Button>
       </div>
@@ -510,10 +510,10 @@ function Notes({ client }: { client: ClientDetail }) {
 
 function Section({ kicker, title, children, className = 'mt-6' }: { kicker: string; title: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm ${className}`}>
+    <div className={`rounded-xl bg-card p-5 ring-1 ring-border shadow-sm ${className}`}>
       <div className="mb-4">
         <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
+        <h2 className="mt-0.5 text-base font-semibold text-foreground tracking-tight">{title}</h2>
       </div>
       {children}
     </div>
@@ -523,8 +523,8 @@ function Section({ kicker, title, children, className = 'mt-6' }: { kicker: stri
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="grid grid-cols-[8rem_1fr] gap-3 items-baseline">
-      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
     </div>
   )
 }

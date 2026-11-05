@@ -8,8 +8,8 @@ import { KickerLabel, PageHeader } from './_ui'
 
 type SearchResult = { id: string; businessName: string; accountNumber: string; registrationDate: string }
 
-const inputCls = 'mt-1 block w-full rounded-md border-zinc-300 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
-const labelCls = 'block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500'
+const inputCls = 'mt-1 block w-full rounded-md border-border shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border'
+const labelCls = 'block text-xs font-medium text-muted-foreground'
 
 export default function ManualRenewal() {
   const navigate = useNavigate()
@@ -140,12 +140,12 @@ export default function ManualRenewal() {
             <div className="space-y-2">
               {searchResults.map((r) => (
                 <label key={r.id} className={`flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition ${
-                  selectedResult?.id === r.id ? 'border-brand-300 bg-brand-50/40 ring-1 ring-brand-200' : 'border-zinc-200 hover:border-zinc-300'
+                  selectedResult?.id === r.id ? 'border-brand-300 bg-primary/5/40 ring-1 ring-primary/20' : 'border-border hover:border-border'
                 }`}>
-                  <input type="radio" name="business" value={r.id} checked={selectedResult?.id === r.id} onChange={() => setSelectedResult(r)} className="mt-1 h-4 w-4 border-zinc-300 accent-brand-600 focus:ring-brand-500" />
+                  <input type="radio" name="business" value={r.id} checked={selectedResult?.id === r.id} onChange={() => setSelectedResult(r)} className="mt-1 h-4 w-4 border-border accent-brand-600 focus:ring-brand-500" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-zinc-900">{r.businessName}</div>
-                    <div className="text-xxs font-mono tabular-nums text-zinc-500">acct {r.accountNumber} · reg {r.registrationDate}</div>
+                    <div className="text-sm font-medium text-foreground">{r.businessName}</div>
+                    <div className="text-xxs font-mono tabular-nums text-muted-foreground">acct {r.accountNumber} · reg {r.registrationDate}</div>
                   </div>
                 </label>
               ))}
@@ -175,13 +175,13 @@ export default function ManualRenewal() {
             </Field>
             <Field label="Amount paid by customer" hint="Pre-filled with default price. Adjust if customer paid different.">
               <div className="relative mt-1">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-zinc-400">$</span>
-                <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="block w-full rounded-md border-zinc-300 pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-muted-foreground/70">$</span>
+                <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="block w-full rounded-md border-border pl-7 shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 sm:text-sm px-3 py-2 border font-mono tabular-nums" />
               </div>
             </Field>
           </div>
         ) : (
-          <p className="text-sm text-zinc-500">Pick a business in step 1 first.</p>
+          <p className="text-sm text-muted-foreground">Pick a business in step 1 first.</p>
         )}
 
         {selectedResult ? (
@@ -189,7 +189,7 @@ export default function ManualRenewal() {
             <button
               onClick={process}
               disabled={processMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-md bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-50 shadow-sm transition"
+              className="inline-flex items-center gap-2 rounded-md bg-primary text-white px-4 py-2 text-sm font-medium hover:bg-primary disabled:opacity-50 shadow-sm transition"
             >
               {processMutation.isPending ? (
                 <>
@@ -212,12 +212,12 @@ export default function ManualRenewal() {
 
 function Step({ kicker, title, subtitle, active, dimmed, children }: { kicker: string; title: string; subtitle?: string; active: boolean; dimmed?: boolean; children: React.ReactNode }) {
   return (
-    <section className={`mt-6 rounded-xl bg-white p-5 ring-1 transition ${dimmed ? 'ring-zinc-100 opacity-70' : active ? 'ring-zinc-200 shadow-sm' : 'ring-zinc-200 shadow-sm'}`}>
+    <section className={`mt-6 rounded-xl bg-card p-5 ring-1 transition ${dimmed ? 'ring-border opacity-70' : active ? 'ring-border shadow-sm' : 'ring-border shadow-sm'}`}>
       <div className="flex items-end justify-between gap-3 mb-4">
         <div>
-          <div className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] ${active ? 'text-brand-700' : 'text-zinc-400'}`}>{kicker}</div>
-          <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-sm text-zinc-500">{subtitle}</p> : null}
+          <div className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] ${active ? 'text-link' : 'text-muted-foreground/70'}`}>{kicker}</div>
+          <h2 className="mt-0.5 text-base font-semibold text-foreground tracking-tight">{title}</h2>
+          {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
         </div>
       </div>
       {children}
@@ -230,7 +230,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <div>
       <label className={labelCls}>{label}</label>
       {children}
-      {hint ? <p className="mt-1 text-xxs font-mono text-zinc-500">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-xxs font-mono text-muted-foreground">{hint}</p> : null}
     </div>
   )
 }

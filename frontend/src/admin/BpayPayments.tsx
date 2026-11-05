@@ -100,8 +100,8 @@ export default function BpayPayments() {
         const b = row.original
         return (
           <div>
-            <Link to={`/admin/renewals/${b.id}`} className="text-sm font-medium text-zinc-900 hover:underline truncate block">{b.businessName}</Link>
-            <div className="text-xxs font-mono tabular-nums text-zinc-500">{b.abn} · {b.renewalYears} {b.renewalYears === 1 ? 'year' : 'years'}</div>
+            <Link to={`/admin/renewals/${b.id}`} className="text-sm font-medium text-foreground hover:underline truncate block">{b.businessName}</Link>
+            <div className="text-xxs font-mono tabular-nums text-muted-foreground">{b.abn} · {b.renewalYears} {b.renewalYears === 1 ? 'year' : 'years'}</div>
           </div>
         )
       },
@@ -111,9 +111,9 @@ export default function BpayPayments() {
       header: 'BPAY',
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="text-xs font-mono tabular-nums text-zinc-700">
+        <div className="text-xs font-mono tabular-nums text-foreground">
           <div>Biller {row.original.billerCode}</div>
-          <div className="text-zinc-500">Ref {row.original.customerReference}</div>
+          <div className="text-muted-foreground">Ref {row.original.customerReference}</div>
         </div>
       ),
     },
@@ -123,8 +123,8 @@ export default function BpayPayments() {
       header: 'Amount',
       meta: { className: 'text-right', headerClassName: 'text-right' },
       cell: ({ row }) => row.original.amount == null
-        ? <span className="text-xs text-amber-700">fee not set</span>
-        : <span className="text-sm font-mono tabular-nums text-zinc-900">{fmtMoney2(row.original.amount)}</span>,
+        ? <span className="text-xs text-warning">fee not set</span>
+        : <span className="text-sm font-mono tabular-nums text-foreground">{fmtMoney2(row.original.amount)}</span>,
     },
     {
       id: 'status',
@@ -136,8 +136,8 @@ export default function BpayPayments() {
           <div className="max-w-[16rem]">
             {b.paidAt ? <StatusPill tone="emerald">PAID {relativeTime(b.paidAt).toUpperCase()}</StatusPill>
               : <Status kind="bpay" status={b.transferStatus ?? 'TO_PAY'} />}
-            {b.error ? <div className="mt-1 text-xxs font-mono text-red-700 break-words">{b.error}</div> : null}
-            {b.transferId ? <div className="mt-1 text-xxs font-mono text-zinc-400">{b.transferId}</div> : null}
+            {b.error ? <div className="mt-1 text-xxs font-mono text-destructive break-words">{b.error}</div> : null}
+            {b.transferId ? <div className="mt-1 text-xxs font-mono text-muted-foreground/70">{b.transferId}</div> : null}
           </div>
         )
       },
@@ -148,8 +148,8 @@ export default function BpayPayments() {
       header: 'Lodged',
       cell: ({ row }) => (
         <div>
-          <div className="text-xs text-zinc-700 tabular-nums">{relativeTime(row.original.lodgedAt)}</div>
-          {row.original.transactionReference ? <div className="text-xxs font-mono text-zinc-400">{row.original.transactionReference}</div> : null}
+          <div className="text-xs text-foreground tabular-nums">{relativeTime(row.original.lodgedAt)}</div>
+          {row.original.transactionReference ? <div className="text-xxs font-mono text-muted-foreground/70">{row.original.transactionReference}</div> : null}
         </div>
       ),
     },
@@ -167,7 +167,7 @@ export default function BpayPayments() {
             <button
               onClick={sync}
               disabled={syncMutation.isPending}
-              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-white text-zinc-800 px-3 py-2 text-sm font-medium ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 shadow-sm disabled:opacity-50 transition"
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-card text-foreground px-3 py-2 text-sm font-medium ring-1 ring-inset ring-border hover:bg-muted/50 shadow-sm disabled:opacity-50 transition"
               title="Read the latest status of payments in flight (also runs every 10 minutes)"
             >
               <RotateCw className={`h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
@@ -179,17 +179,17 @@ export default function BpayPayments() {
       />
 
       {data && !data.airwallexReady ? (
-        <div className="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">
+        <div className="mb-6 rounded-lg bg-warning/5 p-4 text-sm text-warning ring-1 ring-warning/25">
           Airwallex isn't set up. Add the client ID and API key in <Link to="/admin/settings" className="underline">Settings → Airwallex</Link>.
         </div>
       ) : null}
       {data?.airwallexReady && data.sandbox ? (
-        <div className="mb-6 rounded-lg bg-indigo-50 p-4 text-sm text-indigo-800 ring-1 ring-indigo-200">
+        <div className="mb-6 rounded-lg bg-info/5 p-4 text-sm text-info ring-1 ring-info/20">
           Airwallex is in <strong>sandbox</strong> mode: payments are simulated and ASIC is not paid.
         </div>
       ) : null}
       {missingFee ? (
-        <div className="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">
+        <div className="mb-6 rounded-lg bg-warning/5 p-4 text-sm text-warning ring-1 ring-warning/25">
           Some bills have no amount because ASIC's fee for that period isn't set. Add it in <Link to="/admin/settings" className="underline">Settings → ASIC credentials</Link>.
         </div>
       ) : null}
@@ -202,7 +202,7 @@ export default function BpayPayments() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex items-center gap-2 text-sm text-zinc-600">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input type="checkbox" checked={showPaid} onChange={(e) => setShowPaid(e.target.checked)} />
           Show bills paid in the last 30 days
         </label>
@@ -222,21 +222,21 @@ export default function BpayPayments() {
       <Dialog open={confirming} onOpenChange={(o) => { if (!o && !payMutation.isPending) setConfirming(false) }}>
         <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-indigo-700">
+            <div className="text-xs font-medium text-info">
               {data?.sandbox ? 'SANDBOX — NO MONEY MOVES' : 'PAY ASIC THROUGH AIRWALLEX'}
             </div>
             <DialogTitle>Pay {chosen.length} BPAY {chosen.length === 1 ? 'bill' : 'bills'}, {fmtMoney2(total)}</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-2">
-            <ul className="divide-y divide-zinc-100 text-sm">
+            <ul className="divide-y divide-border text-sm">
               {chosen.map((b) => (
                 <li key={b.id} className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="truncate">{b.businessName} <span className="text-xxs font-mono text-zinc-400">ref {b.customerReference}</span></span>
+                  <span className="truncate">{b.businessName} <span className="text-xxs font-mono text-muted-foreground/70">ref {b.customerReference}</span></span>
                   <span className="font-mono tabular-nums">{fmtMoney2(b.amount ?? 0)}</span>
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               {data?.sandbox
                 ? 'Each bill becomes one simulated Airwallex payment.'
                 : 'Each bill becomes one Airwallex payment from your AUD balance to ASIC (biller code and reference as shown). This can’t be undone from here.'}

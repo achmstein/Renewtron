@@ -30,8 +30,8 @@ function useInvalidateKeys() {
 function Loading() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-      <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
-      <p className="mt-3 text-sm text-zinc-500">Loading…</p>
+      <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
+      <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
     </div>
   )
 }
@@ -39,8 +39,8 @@ function Loading() {
 function NotFound({ what, back }: { what: string; back: { to: string; label: string } }) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-      <h3 className="text-base font-semibold text-zinc-900">{what} not found</h3>
-      <Link to={back.to} className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to {back.label}</Link>
+      <h3 className="text-base font-semibold text-foreground">{what} not found</h3>
+      <Link to={back.to} className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to {back.label}</Link>
     </div>
   )
 }
@@ -131,10 +131,10 @@ export function KeyLetterDetails() {
       </RecordHeader>
 
       {k.asicKey ? (
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
           <div>
             <KickerLabel>ASIC key</KickerLabel>
-            <div className="mt-1 font-mono text-2xl font-semibold tracking-wider text-zinc-900">{k.asicKey}</div>
+            <div className="mt-1 font-mono text-2xl font-semibold tracking-wider text-foreground">{k.asicKey}</div>
           </div>
           <Button size="sm" variant="outline" onClick={() => { void navigator.clipboard.writeText(k.asicKey ?? ''); sileo.success({ title: 'Key copied' }) }}><Copy />Copy</Button>
         </div>
@@ -150,7 +150,7 @@ export function KeyLetterDetails() {
           <Row label="Processed" value={k.processedAt ? fmtDateTime(k.processedAt) : '—'} />
           <Row label="Attempts" value={String(k.attemptCount)} />
           <Row label="Ontraport ids" value={k.ontraportContactIds ?? '—'} />
-          <Row label="Download link" value={k.downloadUrl ? <a href={k.downloadUrl} target="_blank" rel="noreferrer" className="break-all text-brand-700 hover:underline">{k.downloadUrl}</a> : '—'} />
+          <Row label="Download link" value={k.downloadUrl ? <a href={k.downloadUrl} target="_blank" rel="noreferrer" className="break-all text-link hover:underline">{k.downloadUrl}</a> : '—'} />
         </dl>
         {k.errorMessage || k.pdfTextExcerpt ? (
           <div className="mt-4 space-y-3">
@@ -241,9 +241,9 @@ export function KeyRequestDetails() {
         <StoryStrip steps={steps} />
       </RecordHeader>
 
-      <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+      <div className="mt-6 rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
         <KickerLabel>What we ask ASIC</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">The key{names.length === 1 ? '' : 's'} for {names.join(', ')}</h2>
+        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">The key{names.length === 1 ? '' : 's'} for {names.join(', ')}</h2>
         <dl className="mt-4 space-y-3">
           <Row label="Contact" value={`${r.contactName} · ${r.email}`} />
           <Row label="Phone" value={r.phone ? `${r.phonePrefix} ${r.phoneNumber}` : '—'} />
@@ -273,7 +273,7 @@ function Pre({ label, text }: { label: string; text: string }) {
   return (
     <div>
       <KickerLabel>{label}</KickerLabel>
-      <pre className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{text}</pre>
+      <pre className="mt-1 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{text}</pre>
     </div>
   )
 }
@@ -281,8 +281,8 @@ function Pre({ label, text }: { label: string; text: string }) {
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="truncate text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className="font-mono text-sm tabular-nums text-zinc-900">{value}</dd>
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-mono text-sm tabular-nums text-foreground">{value}</dd>
     </div>
   )
 }

@@ -47,8 +47,8 @@ declare module '@tanstack/table-core' {
 }
 
 const stickyCellClass =
-  'sticky left-0 z-10 bg-white shadow-[inset_-1px_0_0_#E4E4E7] group-hover/row:bg-zinc-50'
-const stickyHeadClass = 'sticky left-0 z-20 bg-zinc-50 shadow-[inset_-1px_0_0_#E4E4E7]'
+  'sticky left-0 z-10 bg-card shadow-[inset_-1px_0_0_#E4E4E7] group-hover/row:bg-muted/50'
+const stickyHeadClass = 'sticky left-0 z-20 bg-muted/50 shadow-[inset_-1px_0_0_#E4E4E7]'
 
 export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick, loading }: {
   columns: DataTableColumn<TData>[]
@@ -67,15 +67,15 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
   const rows = table.getRowModel().rows
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm" aria-busy={loading || undefined}>
+    <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-sm" aria-busy={loading || undefined}>
       {loading ? (
-        <div className="absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden bg-brand-100" role="progressbar" aria-label="Loading">
-          <div className="h-full w-1/3 bg-brand-500 animate-[table-loading_1s_ease-in-out_infinite]" />
+        <div className="absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden bg-primary/10" role="progressbar" aria-label="Loading">
+          <div className="h-full w-1/3 bg-primary animate-[table-loading_1s_ease-in-out_infinite]" />
         </div>
       ) : null}
       <div className={cn('overflow-x-auto transition-opacity', loading && 'opacity-50 pointer-events-none')}>
         <Table>
-          <TableHeader className="bg-zinc-50/80">
+          <TableHeader className="bg-muted/50">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => {
@@ -86,7 +86,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                     <TableHead
                       key={header.id}
                       className={cn(
-                        'whitespace-nowrap px-4 py-2.5 text-xxs font-mono font-medium uppercase tracking-[0.12em] text-zinc-500 border-b border-zinc-200',
+                        'whitespace-nowrap px-4 py-2.5 text-xs font-medium text-muted-foreground border-b border-border',
                         meta?.sticky && stickyHeadClass,
                         meta?.headerClassName,
                       )}
@@ -95,7 +95,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                         <button
                           type="button"
                           onClick={header.column.getToggleSortingHandler()}
-                          className="inline-flex items-center gap-1 hover:text-zinc-800 transition-colors"
+                          className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {dir === 'asc' ? <ArrowUp className="h-3 w-3" />
@@ -111,7 +111,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody className="divide-y divide-zinc-100">
+          <TableBody className="divide-y divide-border">
             {rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="px-4 py-12">{empty}</TableCell>
@@ -119,7 +119,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
             ) : rows.map((row) => (
               <TableRow
                 key={row.id}
-                className={cn('group/row border-0 transition-colors hover:bg-zinc-50', onRowClick && 'cursor-pointer')}
+                className={cn('group/row border-0 transition-colors hover:bg-muted/50', onRowClick && 'cursor-pointer')}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {row.getAllCells().map((cell) => {

@@ -14,7 +14,7 @@ const B = ({ children }: { children: ReactNode }) => <span className="font-mediu
 /** A list of sentence rows in the admin's card frame, or the empty state. */
 export function SentenceList({ children, empty }: { children: ReactNode[]; empty: ReactNode }) {
   if (children.length === 0) return <>{empty}</>
-  return <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-zinc-200">{children}</div>
+  return <div className="overflow-hidden rounded-xl bg-card shadow-sm ring-1 ring-border">{children}</div>
 }
 
 const ERROR_WORDS: Record<string, string> = {

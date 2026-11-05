@@ -47,16 +47,16 @@ export default function SaleDetails() {
   if (isPending) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
-        <p className="mt-3 text-sm text-zinc-500">Loading…</p>
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-link" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
       </div>
     )
   }
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-base font-semibold text-zinc-900">Sale not found</h3>
-        <Link to="/admin/ontraport-sales" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to Ontraport sales</Link>
+        <h3 className="text-base font-semibold text-foreground">Sale not found</h3>
+        <Link to="/admin/ontraport-sales" className="mt-4 inline-flex items-center text-sm font-medium text-link hover:text-link">← Back to Ontraport sales</Link>
       </div>
     )
   }
@@ -91,7 +91,7 @@ export default function SaleDetails() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section kicker="Client" title="Who bought it">
           {data.client ? (
-            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-brand-700 hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
           <Row label="Name" value={data.contactName || '—'} />
           <Row label="Email" value={data.email || '—'} />
@@ -101,7 +101,7 @@ export default function SaleDetails() {
 
         <Section kicker="Keys" title="ASIC key for this name">
           {data.keyLetters.length === 0 && data.keyRequests.length === 0 ? (
-            <p className="text-sm text-zinc-500">No key requested or received yet.</p>
+            <p className="text-sm text-muted-foreground">No key requested or received yet.</p>
           ) : null}
           {data.keyLetters.map((k) => (
             <Row key={k.id} label="Key letter" value={<Link to={`/admin/asic-keys/${k.id}`} className="flex items-center gap-2 hover:underline"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></Link>} />
@@ -123,12 +123,12 @@ export default function SaleDetails() {
           <Row label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} mono />
           <Row label="Date of birth" value={data.dateOfBirth ?? '—'} mono />
           <Row label="Address" value={data.address || '—'} />
-          {data.renewal ? <Row label="Renewal" value={<Link to={`/admin/renewals/${data.renewal.id}`} className="break-all text-brand-700 hover:underline">{data.renewal.id}</Link>} mono /> : null}
+          {data.renewal ? <Row label="Renewal" value={<Link to={`/admin/renewals/${data.renewal.id}`} className="break-all text-link hover:underline">{data.renewal.id}</Link>} mono /> : null}
         </dl>
         {data.errorMessage ? (
           <div className="mt-4">
             <KickerLabel>Last error</KickerLabel>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{data.errorMessage}</pre>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-xs text-foreground ring-1 ring-border">{data.errorMessage}</pre>
           </div>
         ) : null}
       </TechnicalDetail>
@@ -230,10 +230,10 @@ function story(d: Detail): StoryStep[] {
 
 function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+    <div className="rounded-xl bg-card p-5 ring-1 ring-border shadow-sm">
       <div className="mb-4">
         <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">{title}</h2>
+        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-foreground">{title}</h2>
       </div>
       <dl className="space-y-3">{children}</dl>
     </div>
@@ -243,8 +243,8 @@ function Section({ kicker, title, children }: { kicker: string; title: string; c
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
-      <dt className="truncate text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className={`text-sm text-foreground ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
     </div>
   )
 }
