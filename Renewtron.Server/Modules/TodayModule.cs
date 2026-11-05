@@ -182,10 +182,7 @@ public sealed class TodayModule : ICarterModule
             var clientNames = await db.Clients.AsNoTracking()
                 .Where(c => clientIds.Contains(c.Id))
                 .ToDictionaryAsync(c => c.Id, c => c.FullName);
-            // SQL Server hands times back without a kind; they are UTC, so say so, or the browser
-            // reads them as local time and "2 hours ago" is off by the UTC offset.
             List<TodayItem> Named(IEnumerable<TodayItem> items) => items.Take(RowsPerGroup)
-                .Select(i => i with { At = DateTime.SpecifyKind(i.At, DateTimeKind.Utc) })
                 .Select(i => i.ClientId is { } id && clientNames.TryGetValue(id, out var n) && !string.IsNullOrWhiteSpace(n)
                     ? i with { ClientName = n }
                     : i)

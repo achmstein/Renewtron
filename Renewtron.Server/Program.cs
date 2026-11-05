@@ -33,6 +33,8 @@ builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(overridesPath))!, "dataprotection-keys")));
 
 builder.Services.AddProblemDetails();
+// API times go out as UTC ("…Z"); see UtcDateTimeJsonConverter.
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new Renewtron.Settings.UtcDateTimeJsonConverter()));
 builder.Services.AddOpenApi();
 builder.Services.AddCarter();
 
