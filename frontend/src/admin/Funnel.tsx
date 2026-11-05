@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, type FunnelResponse } from '../api/client'
-import { Chip, EmptyState, PageHeader, RefreshButton } from './_ui'
-import { TrendChart } from '@/components/trend-chart'
+import { Chip, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -134,35 +133,35 @@ export default function Funnel() {
       ) : null}
 
       <div className="space-y-6">
-        <Card className="gap-0 overflow-hidden py-0">
-          <div className="grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
-            <Stat
-              label="Visitors"
-              value={(data?.totalVisitors ?? 0).toLocaleString()}
-              sub={withDelta(period, prev ? change(data?.totalVisitors ?? 0, prev.totalVisitors) : null)}
-              trend={<TrendChart data={daily.map((d) => ({ date: shortDate(d.date), count: d.visitors }))} valueLabel="visitors" />}
-            />
-            <Stat
-              label="Renewed"
-              value={(data?.completedVisitors ?? 0).toLocaleString()}
-              sub={withDelta('Paid and confirmed', prev ? change(data?.completedVisitors ?? 0, prev.completedVisitors) : null)}
-              trend={<TrendChart data={daily.map((d) => ({ date: shortDate(d.date), count: d.renewed }))} valueLabel="renewed" />}
-            />
-            <Stat
-              label="Conversion"
-              value={`${data?.conversionPct ?? 0}%`}
-              sub={withDelta('Visitors who renewed', prev ? `${signed(round1((data?.conversionPct ?? 0) - prev.conversionPct))} pts` : null)}
-            />
-            <Stat
-              label="Biggest leak"
-              dot={!!leak && leak.stoppedHere > 0}
-              value={leak && leak.stoppedHere > 0 ? leak.title : '—'}
-              sub={leak && leak.stoppedHere > 0
-                ? `${leak.stoppedHere.toLocaleString()} stopped here (${pct(leak.stoppedHere, landed)}% of visitors)`
-                : 'Not enough data yet'}
-            />
-          </div>
-        </Card>
+        <StatStrip cols="grid-cols-2 lg:grid-cols-4">
+          <Stat
+            label="Visitors"
+            value={(data?.totalVisitors ?? 0).toLocaleString()}
+            sub={withDelta(period, prev ? change(data?.totalVisitors ?? 0, prev.totalVisitors) : null)}
+            trend={daily.map((d) => ({ date: shortDate(d.date), count: d.visitors }))}
+            trendLabel="visitors"
+          />
+          <Stat
+            label="Renewed"
+            value={(data?.completedVisitors ?? 0).toLocaleString()}
+            sub={withDelta('Paid and confirmed', prev ? change(data?.completedVisitors ?? 0, prev.completedVisitors) : null)}
+            trend={daily.map((d) => ({ date: shortDate(d.date), count: d.renewed }))}
+            trendLabel="renewed"
+          />
+          <Stat
+            label="Conversion"
+            value={`${data?.conversionPct ?? 0}%`}
+            sub={withDelta('Visitors who renewed', prev ? `${signed(round1((data?.conversionPct ?? 0) - prev.conversionPct))} pts` : null)}
+          />
+          <Stat
+            label="Biggest leak"
+            dot={leak && leak.stoppedHere > 0 ? 'waiting' : null}
+            value={leak && leak.stoppedHere > 0 ? leak.title : '—'}
+            sub={leak && leak.stoppedHere > 0
+              ? `${leak.stoppedHere.toLocaleString()} stopped here (${pct(leak.stoppedHere, landed)}% of visitors)`
+              : 'Not enough data yet'}
+          />
+        </StatStrip>
 
         {/* The journey */}
         <Card className="gap-0 py-0">
@@ -207,21 +206,6 @@ export default function Funnel() {
           </Card>
         </div>
       </div>
-    </div>
-  )
-}
-
-/** One quiet stat cell: muted label, black number, one muted line, and a sparkline when it changes over time. */
-function Stat({ label, value, sub, dot, trend }: { label: string; value: string; sub: string; dot?: boolean; trend?: ReactNode }) {
-  return (
-    <div className="flex flex-col bg-card px-5 py-4">
-      <span className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-warning" /> : null}
-        {label}
-      </span>
-      <span className="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums">{value}</span>
-      <span className="truncate text-caption text-muted-foreground tabular-nums">{sub}</span>
-      {trend ? <div className="mt-2 -mb-1 h-8">{trend}</div> : null}
     </div>
   )
 }

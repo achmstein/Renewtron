@@ -5,7 +5,7 @@ import { Loader2, TriangleAlert, Users, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientLinkResult, type ClientListItem } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
 
 const filters = [
   { value: '', label: 'All' },
@@ -151,7 +150,7 @@ export default function Clients() {
 
       <div className="space-y-4">
         {stats && stats.clients > 0 ? (
-          <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+          <StatStrip>
             <Stat label="Clients" value={stats.clients.toLocaleString()} sub={`${stats.purchased.toLocaleString()} bought from us`} />
             <Stat label="Business names" value={stats.names.toLocaleString()} sub="Active, across all clients" />
             <Stat label="Several names" value={stats.severalNames.toLocaleString()} sub="Clients with more than one" />
@@ -159,9 +158,9 @@ export default function Clients() {
               label="Possible duplicates"
               value={stats.possibleDuplicates.toLocaleString()}
               sub="Same name or mobile on an ABN"
-              dot={stats.possibleDuplicates > 0 ? 'bg-warning' : undefined}
+              dot={stats.possibleDuplicates > 0 ? 'waiting' : null}
             />
-          </Card>
+          </StatStrip>
         ) : null}
 
         {stats && stats.possibleDuplicates > 0 ? (
@@ -216,19 +215,6 @@ export default function Clients() {
   )
 }
 
-/** One number in the page's stat strip: black, a muted label, one line under it. */
-function Stat({ label, value, sub, dot }: { label: string; value: string; sub?: string; dot?: string }) {
-  return (
-    <div className="flex min-w-0 flex-col px-5 py-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
-    </div>
-  )
-}
 
 /** Building the records: a dry run reports what would happen, then a real run writes it. */
 function LinkPanel() {

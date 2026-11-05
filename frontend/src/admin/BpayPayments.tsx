@@ -4,13 +4,12 @@ import { Link } from 'react-router-dom'
 import { Info, RotateCw, Send, TriangleAlert } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type BpayBill } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -206,16 +205,16 @@ export default function BpayPayments() {
         ) : null}
       </div>
 
-      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <StatStrip>
         <Stat
           label="To pay"
           value={toPay.length.toLocaleString()}
           sub={toPay.length > 0 ? `${fmtMoney2(owed)} at ASIC’s fees` : 'Nothing owed'}
-          dot={toPay.length > 0 ? 'bg-destructive' : undefined}
+          dot={toPay.length > 0 ? 'action' : null}
         />
         <Stat label="Waiting on Airwallex" value={inFlight.length.toLocaleString()} sub="Sent, not paid yet" />
         <Stat label="Ticked to pay now" value={fmtMoney2(total)} sub={`${chosen.length} ${chosen.length === 1 ? 'bill' : 'bills'}`} />
-      </Card>
+      </StatStrip>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -273,16 +272,3 @@ export default function BpayPayments() {
   )
 }
 
-/** One number in the page's stat strip: black, a muted label, one line under it. */
-function Stat({ label, value, sub, dot }: { label: string; value: string; sub?: string; dot?: string }) {
-  return (
-    <div className="flex min-w-0 flex-col px-5 py-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
-    </div>
-  )
-}

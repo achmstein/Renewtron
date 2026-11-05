@@ -5,15 +5,13 @@ import { ExternalLink, Inbox, Loader2, RotateCw, TriangleAlert, UserPlus, X } fr
 import { sileo } from 'sileo'
 import { api, type AsicKeyJobStatus, type AsicKeyNotificationListItem } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { Cell, EmptyState, PageHeader, RefreshButton } from './_ui'
+import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
-import { TrendChart } from '@/components/trend-chart'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -247,7 +245,7 @@ export default function AsicKeys() {
         }
       />
 
-      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+      <StatStrip>
         <Stat
           label="Keys written"
           value={completedCount.toLocaleString()}
@@ -257,7 +255,7 @@ export default function AsicKeys() {
           label="Needs attention"
           value={attentionCount.toLocaleString()}
           sub={attentionCount > 0 ? 'Retry, or assign a contact' : 'All clear'}
-          dot={attentionCount > 0 ? 'bg-destructive' : undefined}
+          dot={attentionCount > 0 ? 'action' : null}
         />
         <Stat
           label="Last scan"
@@ -265,7 +263,7 @@ export default function AsicKeys() {
           sub={scanFailed
             ? (stats.lastScanError ?? 'Last run failed')
             : stats.nextScanAt ? `Next ${relativeTime(stats.nextScanAt)}` : 'Not scheduled'}
-          dot={scanFailed ? 'bg-destructive' : undefined}
+          dot={scanFailed ? 'action' : null}
         />
         <Stat
           label="Received today"
@@ -274,7 +272,7 @@ export default function AsicKeys() {
           trend={stats.daily14d}
           trendLabel="letters"
         />
-      </Card>
+      </StatStrip>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input
@@ -314,28 +312,6 @@ export default function AsicKeys() {
   )
 }
 
-/** One number in the page's stat strip: black, a muted label, one line under it, an optional trend. */
-function Stat({ label, value, sub, dot, trend, trendLabel }: {
-  label: string
-  value: string
-  sub?: string
-  /** A status dot beside the label, e.g. bg-destructive. */
-  dot?: string
-  trend?: Array<{ date?: string; count: number }>
-  trendLabel?: string
-}) {
-  return (
-    <div className="flex min-w-0 flex-col px-5 py-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
-      {trend?.length ? <div className="mt-2 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
-    </div>
-  )
-}
 
 function defaultStats(): Stats {
   return {

@@ -4,8 +4,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { CircleAlert, Info, KeyRound, ListRestart, Loader2, RefreshCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { ErrorModal, Pagination, Stat, StatStrip, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, ViewToggle } from './_ui'
+import { ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
 import { SaleSentence, SentenceList } from './_sentences'
 import { Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
@@ -276,6 +276,7 @@ export default function OntraportSales() {
             ? `${stats.yesterday.toLocaleString()} yesterday · next at ${new Date(stats.nextSyncAt).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit' })}`
             : `${stats.yesterday.toLocaleString()} yesterday`}
           trend={stats.daily14d.map((d) => ({ count: d.count }))}
+          trendLabel="sales"
           hint="Sales pulled from Ontraport; the line is the last 14 days"
         />
       </StatStrip>

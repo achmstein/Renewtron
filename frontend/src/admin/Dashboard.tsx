@@ -1,10 +1,9 @@
-import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { api, type ActivityItem, type ActivityKind, type DashboardResponse } from '../api/client'
 import { Status } from './_status'
-import { EmptyState, PageHeader, StatusPill, type Tone } from './_ui'
+import { EmptyState, PageHeader, Stat, StatStrip, StatusPill, type Tone } from './_ui'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -62,14 +61,14 @@ function Body({ data }: { data: DashboardResponse }) {
 
       <section className="space-y-3">
         <h2 className="text-heading">This month</h2>
-        <StatGroup className="sm:grid-cols-3 lg:grid-cols-6">
+        <StatStrip cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <Stat label="Revenue" value={fmtMoney2(mtdRevenue)} />
           <Stat label="Sales" value={mtdSales.toLocaleString()} />
           <Stat label="Direct" value={fmtMoney2(stats.renewtronDirectRevenue)} sub={`${stats.renewtronDirectCount} sales`} />
           <Stat label="Ontraport" value={fmtMoney2(stats.ontraportRevenue)} sub={`${stats.ontraportCount} sales`} />
           <Stat label="Lead conversion" value={`${conv.toFixed(1)}%`} sub={`${stats.convertedLeads} of ${stats.totalLeads}`} />
           <Stat label="Average basket" value={fmtMoney0(stats.avgBasket)} sub={`${stats.renewalsCompleted.toLocaleString()} renewals`} />
-        </StatGroup>
+        </StatStrip>
       </section>
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
@@ -120,41 +119,6 @@ function Body({ data }: { data: DashboardResponse }) {
 
 /* ─────────────────── Stats ─────────────────── */
 
-const DOT: Record<Tone, string> = {
-  emerald: 'bg-success',
-  amber: 'bg-warning',
-  red: 'bg-destructive',
-  indigo: 'bg-info',
-  zinc: 'bg-muted-foreground/40',
-}
-
-/** Related stats in one card, split by thin lines. */
-function StatGroup({ className, children }: { className?: string; children: ReactNode }) {
-  return (
-    <Card className="gap-0 overflow-hidden py-0">
-      <div className={cn('grid grid-cols-2 gap-px bg-border', className)}>{children}</div>
-    </Card>
-  )
-}
-
-/** One quiet stat: muted label (with a status dot when it matters), black number, one muted line. */
-function Stat({ label, value, sub, dot, to, title }: { label: string; value: string; sub?: string; dot?: Tone; to?: string; title?: string }) {
-  const body = (
-    <>
-      <span className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className={cn('size-2 shrink-0 rounded-full', DOT[dot])} /> : null}
-        <span className="truncate">{label}</span>
-      </span>
-      <span className="mt-1 block text-2xl font-semibold tracking-tight tabular-nums">{value}</span>
-      {sub ? <span className="block truncate text-caption text-muted-foreground tabular-nums">{sub}</span> : null}
-    </>
-  )
-  const cls = 'block bg-card px-5 py-4'
-  return to
-    ? <Link to={to} title={title} className={cn(cls, 'transition-colors hover:bg-muted/50')}>{body}</Link>
-    : <div title={title} className={cls}>{body}</div>
-}
-
 /** The money worth chasing: the total, then each kind with a way into its list. */
 function Recoverable({ stats }: { stats: DashboardResponse['stats'] }) {
   const total = stats.abandonedAtPaymentValue + stats.ontraportPipelineValue + stats.failedRenewalValue + stats.pastCustomersDueSoonValue
@@ -163,38 +127,38 @@ function Recoverable({ stats }: { stats: DashboardResponse['stats'] }) {
   return (
     <section className="space-y-3">
       <h2 className="text-heading">Worth chasing</h2>
-      <StatGroup className="sm:grid-cols-3 lg:grid-cols-5">
+      <StatStrip cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label="Recoverable revenue" value={total > 0 ? fmtMoney0(total) : '$0'} sub={items === 0 ? 'Nothing to chase' : `across ${items.toLocaleString()} items`} />
         <Stat
           label="Abandoned at payment"
           value={`~${fmtMoney0(stats.abandonedAtPaymentValue)}`}
           sub={count(stats.abandonedAtPaymentCount)}
           to="/admin/leads?outcome=RenewalAvailable"
-          title="Leads found a renewable name but never paid"
+          hint="Leads found a renewable name but never paid"
         />
         <Stat
           label="Ontraport, due in 30 days"
           value={fmtMoney0(stats.ontraportPipelineValue)}
           sub={count(stats.ontraportPipelineCount)}
           to="/admin/ontraport-sales"
-          title="Paid-in-Ontraport sales that are ready, or nearly ready, to lodge at ASIC"
+          hint="Paid-in-Ontraport sales that are ready, or nearly ready, to lodge at ASIC"
         />
         <Stat
           label="Failed renewals (30d)"
           value={fmtMoney0(stats.failedRenewalValue)}
           sub={count(stats.failedRenewalCount)}
-          dot={stats.failedRenewalCount > 0 ? 'red' : undefined}
+          dot={stats.failedRenewalCount > 0 ? 'action' : null}
           to="/admin/renewals?view=to-fix"
-          title="Renewals that broke before completion; each is a paying client waiting on a retry"
+          hint="Renewals that broke before completion; each is a paying client waiting on a retry"
         />
         <Stat
           label="Past clients due soon"
           value={`~${fmtMoney0(stats.pastCustomersDueSoonValue)}`}
           sub={count(stats.pastCustomersDueSoonCount)}
           to="/admin/renewals"
-          title="1-year renewals from 11–13 months ago, due again in the next 60 days"
+          hint="1-year renewals from 11–13 months ago, due again in the next 60 days"
         />
-      </StatGroup>
+      </StatStrip>
     </section>
   )
 }
@@ -256,22 +220,22 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
           </div>
         ) : null}
 
-        <div className="grid grid-cols-3 gap-px border-t bg-border">
+        <StatStrip bare cols="grid-cols-3" className="border-t">
           <Stat label="Queue" value={String(health.queueDepth)} sub={health.queueDepth === 1 ? 'job waiting' : 'jobs waiting'} />
           <Stat
             label="Stuck"
             value={String(health.stuckCount)}
             sub={health.stuckCount > 0 ? 'need review' : 'renewals'}
-            dot={health.stuckCount > 0 ? 'amber' : undefined}
+            dot={health.stuckCount > 0 ? 'waiting' : null}
             to={health.stuckCount > 0 ? '/admin/renewals' : undefined}
           />
           <Stat
             label="Outbox"
             value={String(health.outboxPending)}
             sub={health.outboxDead > 0 ? `pending · ${health.outboxDead} dead` : 'pending'}
-            dot={health.outboxDead > 0 ? 'amber' : undefined}
+            dot={health.outboxDead > 0 ? 'waiting' : null}
           />
-        </div>
+        </StatStrip>
 
         {jobs.length > 0 ? (
           <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t px-5 py-4 sm:grid-cols-3 lg:grid-cols-5">

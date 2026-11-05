@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, TriangleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
-import { DateRangeFilter, ErrorModal, Pagination, Stat, StatStrip, useDebouncedValue } from './_components'
+import { DateRangeFilter, ErrorModal, Pagination, useDebouncedValue } from './_components'
 import { SearchSentence, SentenceList } from './_sentences'
-import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, ViewToggle } from './_ui'
+import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, Stat, StatStrip, ViewToggle } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -252,6 +252,7 @@ function StatsStrip({ stats }: { stats: Stats }) {
         value={stats.today.toLocaleString()}
         sub={`${stats.yesterday.toLocaleString()} yesterday`}
         trend={stats.daily14d.map((d) => ({ date: d.date, count: d.count }))}
+        trendLabel="searches"
         hint="Searches today; the line is the last 14 days"
       />
     </StatStrip>

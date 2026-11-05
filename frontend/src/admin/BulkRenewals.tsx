@@ -3,14 +3,12 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { RotateCw, Upload as UploadIcon, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton, SectionTitle } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, SectionTitle, Stat, StatStrip } from './_ui'
 import { Status, statusLabel } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
-import { TrendChart } from '@/components/trend-chart'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 type BulkResponse = Awaited<ReturnType<typeof api.admin.bulkRenewals>>
@@ -181,7 +179,7 @@ export default function BulkRenewals() {
         }
       />
 
-      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+      <StatStrip>
         <Stat
           label="Due in the next 30 days"
           value={fmtMoney0(stats.pipelineValueNext30d)}
@@ -191,7 +189,7 @@ export default function BulkRenewals() {
           label="Failed"
           value={failedCount.toLocaleString()}
           sub={failedCount > 0 ? 'Retry to queue them again' : 'All clear'}
-          dot={failedCount > 0 ? 'bg-destructive' : undefined}
+          dot={failedCount > 0 ? 'action' : null}
         />
         <Stat
           label="Last upload"
@@ -205,7 +203,7 @@ export default function BulkRenewals() {
           trend={stats.daily14d}
           trendLabel="rows"
         />
-      </Card>
+      </StatStrip>
 
       {/* Batches: clicking one toggles it in the server-side batch facet */}
       {stats.byBatch.length > 0 ? (
@@ -274,28 +272,6 @@ export default function BulkRenewals() {
   )
 }
 
-/** One number in the page's stat strip: black, a muted label, one line under it, an optional trend. */
-function Stat({ label, value, sub, dot, trend, trendLabel }: {
-  label: string
-  value: string
-  sub?: string
-  /** A status dot beside the label, e.g. bg-destructive. */
-  dot?: string
-  trend?: Array<{ date?: string; count: number }>
-  trendLabel?: string
-}) {
-  return (
-    <div className="flex min-w-0 flex-col px-5 py-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
-      {trend?.length ? <div className="mt-2 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
-    </div>
-  )
-}
 
 function defaultStats(): Stats {
   return {

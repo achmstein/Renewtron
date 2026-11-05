@@ -4,8 +4,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { Check, Mail, PlusCircle, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { DateRangeFilter, Pagination, Stat, StatStrip, useDebouncedValue } from './_components'
-import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, ViewToggle, type Tone } from './_ui'
+import { DateRangeFilter, Pagination, useDebouncedValue } from './_components'
+import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle, type Tone } from './_ui'
 import { LeadSentence, SentenceList } from './_sentences'
 import { Status } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
@@ -376,6 +376,7 @@ function StatsStrip({ stats }: { stats: Stats }) {
         value={stats.today.toLocaleString()}
         sub={`${stats.yesterday.toLocaleString()} yesterday`}
         trend={stats.daily14d.map((d) => ({ date: d.date, count: d.count }))}
+        trendLabel="leads"
         hint="Leads today; the line is the last 14 days"
       />
     </StatStrip>

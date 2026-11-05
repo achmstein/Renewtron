@@ -21,15 +21,21 @@ default border colour is already the theme's), `text-destructive`, `bg-success/1
 
 ## Stats
 
+Use `StatStrip` and `Stat` from `_ui.tsx`; don't hand-roll a stat cell.
+
 Quiet. Numbers are black (`text-foreground`); a label and at most one line under it, both muted.
 No coloured numbers, coloured backgrounds or icon circles. A status shows only as a small dot
-(`size-2 rounded-full bg-destructive`) beside the label. Group related stats in one `Card`
-split with `divide-x` rather than a row of separate cards.
+beside the label (`dot="action"` red, `dot="waiting"` amber). Related stats sit in one
+`StatStrip`, split by thin lines, rather than a row of separate cards. Two to four in a row read
+best; for more, pass `cols` (e.g. `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`) and the strip wraps
+onto rows. `bare` puts a strip inside another card. `to` makes the whole cell a link; `hint` is
+the explanation on hover.
 
 Trend lines are welcome: a stat that changes over time (today vs the last 14 days, revenue this
-month) shows a small sparkline (`SparklineTile` in `_ui.tsx`, `TrendChart`) in brand blue with a
-light fill. The sparkline is the only colour in the stat; the number stays black. Period labels
-are sentence case ("Last 30 days", "This month"), never "30D" or "MTD".
+month) passes `trend` (and `trendLabel`, what it counts, for the tooltip) and shows a small
+sparkline (`TrendChart`) in brand blue with a light fill. The sparkline is the only colour in the
+stat; the number stays black. Period labels (`period`) are sentence case ("Last 30 days", "This
+month"), never "30D" or "MTD".
 
 ## Words
 
@@ -54,7 +60,7 @@ are sentence case ("Last 30 days", "This month"), never "30D" or "MTD".
 - Messages: `Alert` for a problem on the page; `sileo` toasts for results of an action.
 - Loading: `Skeleton`. Empty: `EmptyState` from `_ui.tsx`.
 - Record pages: `RecordCrumbs`, `RecordHeader`, `NextStep`, `StoryStrip`, `TechnicalDetail` from `_record.tsx`.
-- List pages: `PageHeader`, `SectionTitle`, `StatTile`, `ViewToggle`, `RefreshButton` from `_ui.tsx`.
+- List pages: `PageHeader`, `SectionTitle`, `StatStrip` + `Stat`, `ViewToggle`, `RefreshButton` from `_ui.tsx`.
 - Use `cn()` from `@/lib/utils` to combine classes.
 
 ## Type and spacing

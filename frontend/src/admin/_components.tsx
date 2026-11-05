@@ -1,11 +1,9 @@
-import { Children, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight, Contact, TriangleAlert } from 'lucide-react'
 import { api } from '../api/client'
-import { TrendChart } from '@/components/trend-chart'
 import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -93,54 +91,6 @@ export function useDebouncedValue<T>(value: T, delay = 300) {
     return () => window.clearTimeout(t)
   }, [value, delay])
   return v
-}
-
-/* ─────────────────── Stats (see STYLE.md "Stats") ─────────────────── */
-
-const STAT_DOT = { action: 'bg-destructive', waiting: 'bg-warning' } as const
-
-/** Related stats in one card, split by thin lines (stacked on phones). Two to four read best. */
-export function StatStrip({ children }: { children: ReactNode }) {
-  const n = Children.toArray(children).filter(Boolean).length
-  return (
-    <Card className={cn(
-      'grid gap-0 divide-y py-0 sm:divide-x sm:divide-y-0',
-      n >= 4 ? 'sm:grid-cols-4' : n === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
-    )}>
-      {children}
-    </Card>
-  )
-}
-
-/**
- * One quiet stat: a label, a black number, one muted line. `dot` marks a status beside the label;
- * `trend` draws a small sparkline under the number (the stat's only colour).
- */
-export function Stat({ label, value, sub, period, dot, hint, trend }: {
-  label: string
-  value: ReactNode
-  sub?: ReactNode
-  /** "Last 30 days", "This month": sentence case, on the right of the label. */
-  period?: string
-  dot?: keyof typeof STAT_DOT | null
-  /** Explanation on hover. */
-  hint?: string
-  trend?: Array<{ date?: string; count: number }>
-}) {
-  return (
-    <div className="flex min-w-0 flex-col px-5 py-4" title={hint}>
-      <div className="flex items-center justify-between gap-2 text-caption text-muted-foreground">
-        <span className="flex min-w-0 items-center gap-2 truncate">
-          {dot ? <span aria-hidden className={cn('size-2 shrink-0 rounded-full', STAT_DOT[dot])} /> : null}
-          {label}
-        </span>
-        {period ? <span className="shrink-0">{period}</span> : null}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {sub ? <div className="truncate text-caption text-muted-foreground tabular-nums">{sub}</div> : null}
-      {trend && trend.length > 0 ? <div className="mt-2 -mb-1 h-8"><TrendChart data={trend} /></div> : null}
-    </div>
-  )
 }
 
 /* ─────────────────── Date range filter (list toolbars) ─────────────────── */

@@ -4,16 +4,14 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CalendarRange, CircleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, Field, PageHeader, RefreshButton } from './_ui'
+import { EmptyState, Field, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
 
 type PaymentsResponse = Awaited<ReturnType<typeof api.admin.payments>>
 type Payment = PaymentsResponse['items'][number]
@@ -144,11 +142,11 @@ export default function Payments() {
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
 
-      <Card className="grid gap-0 divide-y py-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <StatStrip>
         <Stat label="Collected" value={fmtMoney0(stats.succeededValue30d)} sub={`Last 30 days · ${stats.succeeded30d} payment${stats.succeeded30d === 1 ? '' : 's'}`} />
-        <Stat label="Failed attempts" value={String(stats.failed30d)} sub="Last 30 days" dot={stats.failed30d > 0 ? 'bg-warning' : undefined} />
+        <Stat label="Failed attempts" value={String(stats.failed30d)} sub="Last 30 days" dot={stats.failed30d > 0 ? 'waiting' : null} />
         <Stat label="Collected" value={fmtMoney0(stats.succeededValue)} sub={`All time · ${stats.succeededCount} payment${stats.succeededCount === 1 ? '' : 's'}`} />
-      </Card>
+      </StatStrip>
 
       {/* Filter toolbar — every facet is resolved server-side with live counts */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -179,19 +177,6 @@ export default function Payments() {
   )
 }
 
-/** One number in the page's stat strip: black, a muted label, one line under it. */
-function Stat({ label, value, sub, dot }: { label: string; value: string; sub?: string; dot?: string }) {
-  return (
-    <div className="flex min-w-0 flex-col px-5 py-4">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        {dot ? <span aria-hidden className={cn('size-2 rounded-full', dot)} /> : null}
-        {label}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {sub ? <div className="truncate text-caption text-muted-foreground" title={sub}>{sub}</div> : null}
-    </div>
-  )
-}
 
 function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
   dateFrom: string

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { Children, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { AlignLeft, LayoutGrid, Loader2, RefreshCw, Rows3, X } from 'lucide-react'
 import { TrendChart } from '@/components/trend-chart'
 import { Badge } from '@/components/ui/badge'
@@ -91,58 +92,78 @@ export function StatusDot({ tone, label }: { tone: Tone; label: string }) {
   )
 }
 
-/* ─────────────────── Stats ─────────────────── */
+/* ─────────────────── Stats (see STYLE.md "Stats") ─────────────────── */
 
-export function StatTile({ kicker, label, value, sub, tone = 'zinc' }: { kicker?: string; label: string; value: string; sub?: string; tone?: Tone }) {
+/** A stat's status dot: something to act on, or something waiting. */
+const STAT_DOT = { action: 'bg-destructive', waiting: 'bg-warning' } as const
+
+/**
+ * Related stats in one card, split by thin lines (stacked on phones). Two to four in a row read
+ * best. For more, pass `cols` (e.g. `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`): the strip then
+ * wraps onto rows, with the lines drawn by a 1px gap. `bare` drops the card, for a strip inside
+ * another card (needs `cols`).
+ */
+export function StatStrip({ children, cols, bare, className }: {
+  children: ReactNode
+  cols?: string
+  bare?: boolean
+  className?: string
+}) {
+  if (cols) {
+    const grid = <div className={cn('grid gap-px bg-border [&>*]:bg-card', cols, bare && className)}>{children}</div>
+    return bare ? grid : <Card className={cn('gap-0 overflow-hidden py-0', className)}>{grid}</Card>
+  }
+  const n = Children.toArray(children).length
   return (
-    <Card className="gap-1 p-4">
-      <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span>{label}</span>
-        {kicker ? <span className="text-xs">{kicker}</span> : null}
-      </div>
-      <div className="flex items-center gap-2 text-2xl font-semibold tabular-nums">
-        {tone !== 'zinc' ? <span aria-hidden className={cn('size-2 rounded-full', TONE_DOT[tone])} /> : null}
-        {value}
-      </div>
-      {sub ? <div className="text-caption text-muted-foreground tabular-nums">{sub}</div> : null}
+    <Card className={cn(
+      'grid gap-0 divide-y py-0 sm:divide-x sm:divide-y-0',
+      n >= 4 ? 'sm:grid-cols-4' : n === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
+      className,
+    )}>
+      {children}
     </Card>
   )
 }
 
 /**
- * A stat with a small trend line under it and the change since last period.
- * Pass `labels` (same length as data) to show dates in the hover tooltip.
+ * One quiet stat: a muted label, a black number, one muted line. `dot` marks a status beside the
+ * label; `trend` draws a small sparkline under the number (the stat's only colour). With `to` the
+ * whole cell is a link.
  */
-export function SparklineTile({ kicker, label, value, sub, deltaPct, data, labels }: {
-  kicker?: string
+export function Stat({ label, value, sub, period, dot, hint, trend, trendLabel, to }: {
   label: string
-  value: string
-  sub?: string
-  deltaPct?: number | null
-  data: number[]
-  labels?: string[]
+  value: ReactNode
+  sub?: ReactNode
+  /** "Last 30 days", "This month": sentence case, on the right of the label. */
+  period?: string
+  dot?: keyof typeof STAT_DOT | null
+  /** Explanation on hover. */
+  hint?: string
+  trend?: Array<{ date?: string; count: number }>
+  /** What the sparkline counts, for its tooltip: "leads", "letters". */
+  trendLabel?: string
+  to?: string
 }) {
-  const points = data.map((count, i) => ({ count, date: labels?.[i] }))
-  return (
-    <Card className="gap-1 p-4">
+  const body = (
+    <>
       <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span>{label}</span>
-        <span className="flex items-center gap-2 text-xs">
-          {kicker ? <span>{kicker}</span> : null}
-          {deltaPct != null ? (
-            <span className="tabular-nums">
-              {deltaPct >= 0 ? '+' : ''}{deltaPct}%
-            </span>
-          ) : null}
+        <span className="flex min-w-0 items-center gap-2">
+          {dot ? <span aria-hidden className={cn('size-2 shrink-0 rounded-full', STAT_DOT[dot])} /> : null}
+          <span className="truncate">{label}</span>
         </span>
+        {period ? <span className="shrink-0 text-caption">{period}</span> : null}
       </div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      {sub ? <div className="text-caption text-muted-foreground tabular-nums">{sub}</div> : null}
-      <div className="mt-2 -mb-1 min-h-8 flex-1">
-        <TrendChart data={points} />
-      </div>
-    </Card>
+      <div className="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      {sub ? (
+        <div className="truncate text-caption text-muted-foreground tabular-nums" title={!hint && typeof sub === 'string' ? sub : undefined}>{sub}</div>
+      ) : null}
+      {trend && trend.length > 0 ? <div className="mt-2 -mb-1 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
+    </>
   )
+  const cls = 'flex min-w-0 flex-col px-5 py-4'
+  return to
+    ? <Link to={to} title={hint} className={cn(cls, 'transition-colors hover:bg-muted/50')}>{body}</Link>
+    : <div title={hint} className={cls}>{body}</div>
 }
 
 /* ─────────────────── Funnel ─────────────────── */
