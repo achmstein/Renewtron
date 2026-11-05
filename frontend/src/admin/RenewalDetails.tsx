@@ -261,7 +261,7 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
 function story(d: Detail, status: StatusEntry): StoryStep[] {
   const steps: StoryStep[] = []
   if (d.sale) {
-    steps.push({ label: 'Ontraport sale', meaning: 'done', at: d.sale.syncedAt, to: `/admin/ontraport-sales?search=${encodeURIComponent(d.businessName)}` })
+    steps.push({ label: 'Ontraport sale', meaning: 'done', at: d.sale.syncedAt, to: `/admin/ontraport-sales/${d.sale.id}` })
   } else {
     steps.push({ label: d.initiatedByLabel === 'Customer' ? 'Wizard search' : 'Name search', meaning: 'done', at: d.searchedAt, to: `/admin/searches/${d.searchLogId}` })
     steps.push(d.paymentType === 'External'

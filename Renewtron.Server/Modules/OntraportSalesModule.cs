@@ -195,6 +195,89 @@ public sealed class OntraportSalesModule : ICarterModule
         // Puts failed sales back into the processor's eligible pool in controlled batches.
         // Most failures are transient (network blips, the fixed Set-Cookie bug), so a
         // re-run usually clears them. dryRun defaults to true — a plain POST only previews.
+        // One sale as its record page shows it: whose it is, the renewal it started, and the
+        // ASIC key requests and letters for its business name.
+        group.MapGet("/{id:guid}", async (Guid id, ApplicationDbContext db) =>
+        {
+            var s = await db.OntraportSales.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (s is null) return Results.NotFound();
+
+            var client = await ClientRefs.ByIdAsync(db, s.ClientId) ?? await ClientRefs.ByAbnAsync(db, s.Abn);
+            var renewal = s.RenewalRequestId is { } rid
+                ? await db.RenewalRequests.AsNoTracking().Where(r => r.Id == rid).Select(r => new
+                {
+                    id = r.Id,
+                    status = r.Status.ToString(),
+                    errorCategory = r.ErrorCategory,
+                    nextRetryAt = r.NextRetryAt,
+                    initiatedAt = r.InitiatedAt,
+                    completedAt = r.CompletedAt,
+                    bpayReference = r.BpayReference,
+                    bpayPaidAt = r.BpayPaidAt,
+                    transactionReference = r.TransactionReference,
+                }).FirstOrDefaultAsync()
+                : null;
+            var keyRequests = await db.AsicKeyRequests.AsNoTracking()
+                .Where(k => k.OntraportSaleId == id)
+                .OrderByDescending(k => k.CreatedAt)
+                .Select(k => new { id = k.Id, status = k.Status.ToString(), createdAt = k.CreatedAt, referenceNumber = k.AsicReferenceNumber, keyReceivedAt = k.KeyReceivedAt })
+                .ToListAsync();
+            var keyLetters = s.ClientBusinessNameId is { } nameId
+                ? await db.AsicKeyNotifications.AsNoTracking()
+                    .Where(n => n.ClientBusinessNameId == nameId)
+                    .OrderByDescending(n => n.ReceivedAt)
+                    .Select(n => new { id = n.Id, status = n.Status.ToString(), receivedAt = n.ReceivedAt, hasKey = n.AsicKey != null })
+                    .ToListAsync()
+                : [];
+
+            return Results.Ok(new
+            {
+                id = s.Id,
+                client,
+                contactName = s.ContactName,
+                email = s.Email,
+                mobileNumber = s.MobileNumber,
+                dateOfBirth = s.DateOfBirth,
+                businessName = s.BusinessName,
+                abn = s.Abn,
+                businessNameOwner = s.BusinessNameOwner,
+                address = string.Join(", ", new[] { s.Address, s.Suburb, s.State, s.Postcode }.Where(x => !string.IsNullOrWhiteSpace(x))),
+                renewalYears = s.RenewalYears,
+                amountPaid = s.AmountPaid,
+                renewalDueDate = s.RenewalDueDate,
+                status = s.Status.ToString(),
+                syncedAt = s.SyncedAt,
+                processedAt = s.ProcessedAt,
+                errorMessage = s.ErrorMessage,
+                ontraportContactId = s.OntraportContactId,
+                ontraportTransactionId = s.OntraportTransactionId,
+                renewal,
+                keyRequests,
+                keyLetters,
+            });
+        });
+
+        // Puts one failed sale back for the next processing run: the single-sale form of
+        // requeue-failed. Refused when its last renewal reached ASIC's payment step, since ASIC
+        // may already hold the money and a fresh run could pay twice.
+        group.MapPost("/{id:guid}/requeue", async (Guid id, ApplicationDbContext db) =>
+        {
+            var sale = await db.OntraportSales.FirstOrDefaultAsync(x => x.Id == id);
+            if (sale is null) return Results.NotFound();
+            if (sale.Status != OntraportSaleStatus.RenewalFailed)
+                return Results.BadRequest(new { error = "Only a failed sale can be tried again." });
+            if (sale.RenewalRequestId is { } rid && await db.RenewalRequests.AnyAsync(r => r.Id == rid
+                    && (r.FailedAtStep == "Complete Payment Action" || r.HostedTokenizationId != null
+                        || r.ErrorCategory == RenewalErrorCategories.PaymentRisk)))
+                return Results.BadRequest(new { error = "Its last renewal reached ASIC's payment step. Check at ASIC before trying again." });
+
+            sale.Status = OntraportSaleStatus.Synced;
+            sale.RenewalRequestId = null;
+            sale.ProcessedAt = null;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "Back in the queue: the next processing run (07:00, or Process eligible) renews it." });
+        });
+
         group.MapPost("/requeue-failed", async (
             ApplicationDbContext db,
             bool dryRun = true,

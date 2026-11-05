@@ -189,11 +189,11 @@ function RenewalRow({ item }: { item: TodayItem }) {
 
 function SaleRow({ item }: { item: TodayItem }) {
   const ineligible = item.reason === 'IneligibleForRenewal'
-  const to = `/admin/ontraport-sales?search=${encodeURIComponent(item.businessName ?? item.abn ?? '')}`
+  const to = `/admin/ontraport-sales/${item.id}`
   return (
     <SentenceRow
       meaning="action"
-      to={item.clientId ? `/admin/clients/${item.clientId}` : to}
+      to={to}
       what={ineligible
         ? <><Who item={item} /> paid for <Name>{item.businessName}</Name>, but it can’t be renewed with us.</>
         : <><Who item={item} /> paid for <Name>{item.businessName}</Name>; the renewal never started.</>}

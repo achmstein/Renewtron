@@ -1,0 +1,250 @@
+import { type ReactNode } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { KeyRound, Loader2, RefreshCw } from 'lucide-react'
+import { sileo } from 'sileo'
+import { api } from '../api/client'
+import { KickerLabel } from './_ui'
+import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
+import { DueIn, When } from './_rows'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Button } from '@/components/ui/button'
+
+type Detail = Awaited<ReturnType<typeof api.admin.ontraportSale>>
+
+const shortDate = (s: string) => new Date(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+
+export default function SaleDetails() {
+  const { id } = useParams()
+  const queryClient = useQueryClient()
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['admin-ontraport-sale', id],
+    queryFn: () => api.admin.ontraportSale(id!),
+    enabled: !!id,
+  })
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sale', id] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sales'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-today'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-sidebar-counts'] })
+  }
+  const requeue = useMutation({ mutationFn: () => api.admin.requeueOntraportSale(id!), onSettled: invalidate })
+  const keyRequest = useMutation({ mutationFn: () => api.admin.requestAsicKeyForSale(id!), onSettled: invalidate })
+
+  const tryAgain = () => void sileo.promise(requeue.mutateAsync(), {
+    loading: { title: 'Putting the sale back in the queue…' },
+    success: (r) => ({ title: r.message }),
+    error: (e) => ({ title: 'Not queued', description: e instanceof Error ? e.message : undefined }),
+  }).catch(() => {})
+  const askForKey = () => void sileo.promise(keyRequest.mutateAsync(), {
+    loading: { title: 'Adding to the key requests…' },
+    success: () => ({ title: 'Added to the ASIC key requests.' }),
+    error: (e) => ({ title: 'Couldn’t add it', description: e instanceof Error ? e.message : undefined }),
+  }).catch(() => {})
+
+  if (isPending) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
+        <p className="mt-3 text-sm text-zinc-500">Loading…</p>
+      </div>
+    )
+  }
+  if (isError || !data) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+        <h3 className="text-base font-semibold text-zinc-900">Sale not found</h3>
+        <Link to="/admin/ontraport-sales" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to Ontraport sales</Link>
+      </div>
+    )
+  }
+
+  const status = saleStatus(data)
+  const tryAgainButton = (
+    <Button size="sm" onClick={tryAgain} disabled={requeue.isPending}>
+      {requeue.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}Try again
+    </Button>
+  )
+  const keyButton = (
+    <Button size="sm" variant="outline" onClick={askForKey} disabled={keyRequest.isPending}>
+      <KeyRound />Request ASIC key
+    </Button>
+  )
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <RecordCrumbs client={data.client} businessName={data.businessName}
+        list={{ to: '/admin/ontraport-sales', label: 'Ontraport sales' }} here={`Sale of ${shortDate(data.syncedAt)}`} />
+
+      <RecordHeader
+        kicker={`Ontraport sale · ${data.renewalYears} year${data.renewalYears === 1 ? '' : 's'} · ${fmtMoney2(data.amountPaid)}`}
+        title={headline(data)}
+        sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.renewalDueDate ? <> · due <DueIn at={data.renewalDueDate} /></> : ' · no due date'} · synced <When at={data.syncedAt} /></>}
+        status={status}
+      >
+        {nextStep(data, tryAgainButton, keyButton)}
+        <StoryStrip steps={story(data)} />
+      </RecordHeader>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section kicker="Client" title="Who bought it">
+          {data.client ? (
+            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-brand-700 hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+          ) : null}
+          <Row label="Name" value={data.contactName || '—'} />
+          <Row label="Email" value={data.email || '—'} />
+          <Row label="Mobile" value={data.mobileNumber || '—'} mono />
+          {data.businessNameOwner ? <Row label="Name holder" value={data.businessNameOwner} /> : null}
+        </Section>
+
+        <Section kicker="Keys" title="ASIC key for this name">
+          {data.keyLetters.length === 0 && data.keyRequests.length === 0 ? (
+            <p className="text-sm text-zinc-500">No key requested or received yet.</p>
+          ) : null}
+          {data.keyLetters.map((k) => (
+            <Row key={k.id} label="Key letter" value={<span className="flex items-center gap-2"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></span>} />
+          ))}
+          {data.keyRequests.map((k) => (
+            <Row key={k.id} label="Key request" value={<span className="flex items-center gap-2"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</span>} />
+          ))}
+        </Section>
+      </div>
+
+      <TechnicalDetail>
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
+          <Row label="Sale ID" value={<span className="break-all">{data.id}</span>} mono />
+          <Row label="Status" value={data.status} mono />
+          <Row label="Ontraport contact" value={data.ontraportContactId} mono />
+          <Row label="Transaction" value={data.ontraportTransactionId} mono />
+          <Row label="Synced" value={fmtDateTime(data.syncedAt)} mono />
+          <Row label="Processed" value={data.processedAt ? fmtDateTime(data.processedAt) : '—'} mono />
+          <Row label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} mono />
+          <Row label="Date of birth" value={data.dateOfBirth ?? '—'} mono />
+          <Row label="Address" value={data.address || '—'} />
+          {data.renewal ? <Row label="Renewal" value={<Link to={`/admin/renewals/${data.renewal.id}`} className="break-all text-brand-700 hover:underline">{data.renewal.id}</Link>} mono /> : null}
+        </dl>
+        {data.errorMessage ? (
+          <div className="mt-4">
+            <KickerLabel>Last error</KickerLabel>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{data.errorMessage}</pre>
+          </div>
+        ) : null}
+      </TechnicalDetail>
+    </div>
+  )
+}
+
+/** The sale's own status; once it started a renewal, the renewal's status says more. */
+function saleStatus(d: Detail): StatusEntry {
+  if (d.renewal && d.status !== 'IneligibleForRenewal') return renewalStatus(d.renewal)
+  return statusOf('sale', d.status)
+}
+
+function headline(d: Detail): string {
+  const who = d.contactName || 'The client'
+  const r = d.renewal
+  if (r?.status === 'Completed') return r.bpayReference && !r.bpayPaidAt ? `Renewed; ASIC’s BPAY bill still to pay` : `Paid and renewed`
+  if (r && (r.status === 'Pending' || r.status === 'Processing')) return 'Paid; the renewal is going through'
+  switch (d.status) {
+    case 'Synced': return `${who} paid; the renewal starts on the next run`
+    case 'WaitingForRenewalWindow': return `${who} paid early; it renews when ASIC opens the window`
+    case 'RenewalQueued': return 'Paid; the renewal is queued'
+    case 'RenewalFailed': return `${who} paid, and the renewal failed`
+    case 'IneligibleForRenewal': return `${who} paid, but this name can’t be renewed with us`
+    case 'NotDueForRenewal': return 'Paid, but the name isn’t due for renewal'
+    case 'AsicNotYetDue': return 'Paid; ASIC says it isn’t due yet'
+    case 'RenewalInProgress': return 'Paid; ASIC has a renewal open for this ABN'
+    default: return statusOf('sale', d.status).label
+  }
+}
+
+function nextStep(d: Detail, tryAgain: ReactNode, keyButton: ReactNode): ReactNode {
+  const openClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
+  const r = d.renewal
+  if (r) {
+    const s = renewalStatus(r)
+    if (r.status === 'Completed') {
+      const toPay = r.bpayReference && !r.bpayPaidAt
+      return (
+        <NextStep meaning={toPay ? 'action' : d.keyLetters.some((k) => k.hasKey) ? 'done' : 'quiet'}
+          title={toPay ? 'Pay ASIC’s BPAY bill.' : d.keyLetters.some((k) => k.hasKey) ? 'Nothing to do.' : 'Renewed. Get the ASIC key if the client needs it.'}
+          actions={toPay ? <Button asChild size="sm"><Link to="/admin/bpay">Pay in BPAY to pay</Link></Button> : d.keyRequests.length === 0 ? keyButton : openClient}>
+          Renewed <When at={r.completedAt ?? r.initiatedAt} />{r.transactionReference ? `, ASIC reference ${r.transactionReference}` : ''}.
+        </NextStep>
+      )
+    }
+    return (
+      <NextStep meaning={s.meaning} title={s.meaning === 'action' ? 'The renewal needs a person.' : 'Nothing to do here; follow the renewal.'}
+        actions={<Button asChild size="sm"><Link to={`/admin/renewals/${r.id}`}>Open renewal</Link></Button>}>
+        Renewal: {s.label.toLowerCase()}, started <When at={r.initiatedAt} />.
+      </NextStep>
+    )
+  }
+  switch (d.status) {
+    case 'RenewalFailed':
+      return <NextStep meaning="action" title="Try again puts it back for the next processing run." actions={<>{tryAgain}{openClient}</>}>{d.errorMessage ?? 'No error was recorded.'}</NextStep>
+    case 'IneligibleForRenewal':
+      return <NextStep meaning="action" title="Decide: refund, or contact the client." actions={openClient}>{d.errorMessage ?? 'Renewtron won’t retry it.'}</NextStep>
+    case 'WaitingForRenewalWindow':
+    case 'AsicNotYetDue':
+    case 'RenewalInProgress':
+      return <NextStep meaning="waiting" title="Nothing to do; Renewtron tries again on its own." actions={openClient}>{statusOf('sale', d.status).hint}</NextStep>
+    case 'NotDueForRenewal':
+      return <NextStep meaning="quiet" title="Check the due date." actions={openClient}>The due date is outside ASIC’s renewal window, so Renewtron won’t renew it. If it’s wrong in Ontraport, fix it there and sync.</NextStep>
+    default:
+      return <NextStep meaning="working" title="Nothing to do yet.">The next processing run (07:00) starts the renewal.</NextStep>
+  }
+}
+
+/** Sale → renewal → ASIC fee → ASIC key. */
+function story(d: Detail): StoryStep[] {
+  const steps: StoryStep[] = [{ label: `Paid ${fmtMoney2(d.amountPaid)}`, meaning: 'done', at: d.syncedAt, note: undefined, current: true }]
+  const r = d.renewal
+  if (r) {
+    const s = renewalStatus(r)
+    steps.push({ label: `Renewal: ${s.label.toLowerCase()}`, meaning: s.meaning, at: r.completedAt ?? r.initiatedAt, to: `/admin/renewals/${r.id}` })
+    if (r.bpayReference) {
+      steps.push(r.bpayPaidAt
+        ? { label: 'ASIC fee paid', meaning: 'done', at: r.bpayPaidAt, to: '/admin/bpay' }
+        : { label: 'ASIC fee', meaning: r.status === 'Completed' ? 'action' : 'quiet', note: 'BPAY to pay', to: '/admin/bpay' })
+    }
+  } else {
+    const s = statusOf('sale', d.status)
+    steps.push({ label: 'Renewal', meaning: s.meaning === 'done' ? 'done' : s.meaning, note: s.label.toLowerCase() })
+  }
+  const letter = d.keyLetters.find((k) => k.hasKey) ?? d.keyLetters[0]
+  const request = d.keyRequests[0]
+  if (letter) {
+    const s = statusOf('keyLetter', letter.status)
+    steps.push({ label: 'ASIC key', meaning: s.meaning, at: letter.receivedAt, note: s.label.toLowerCase(), to: '/admin/asic-keys' })
+  } else if (request) {
+    const s = statusOf('keyRequest', request.status)
+    steps.push({ label: 'ASIC key', meaning: s.meaning, note: s.label.toLowerCase(), to: '/admin/asic-key-requests' })
+  } else {
+    steps.push({ label: 'ASIC key', meaning: 'quiet', note: 'not requested' })
+  }
+  return steps
+}
+
+function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+      <div className="mb-4">
+        <KickerLabel>{kicker}</KickerLabel>
+        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">{title}</h2>
+      </div>
+      <dl className="space-y-3">{children}</dl>
+    </div>
+  )
+}
+
+function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
+      <dt className="truncate text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
+      <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+    </div>
+  )
+}

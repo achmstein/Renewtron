@@ -150,7 +150,7 @@ export default function OntraportSales() {
         const s = row.original
         return (
           <div>
-            <div className="text-sm font-medium text-zinc-900 truncate">{s.businessName}</div>
+            <Link to={`/admin/ontraport-sales/${s.id}`} className="block truncate text-sm font-medium text-zinc-900 hover:text-brand-700 hover:underline">{s.businessName}</Link>
             <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{s.abn}</div>
             <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 truncate">
               {s.clientId ? (

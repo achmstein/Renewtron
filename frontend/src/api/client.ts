@@ -885,6 +885,34 @@ export const api = {
         }
       }>(`/api/admin/ontraport-sales${suffix}`)
     },
+    ontraportSale: (id: string) => apiFetch<{
+      id: string
+      client: { id: string; fullName: string } | null
+      contactName: string
+      email: string
+      mobileNumber: string
+      dateOfBirth: string | null
+      businessName: string
+      abn: string
+      businessNameOwner: string | null
+      address: string
+      renewalYears: number
+      amountPaid: number
+      renewalDueDate: string | null
+      status: string
+      syncedAt: string
+      processedAt: string | null
+      errorMessage: string | null
+      ontraportContactId: string
+      ontraportTransactionId: string
+      renewal: {
+        id: string; status: string; errorCategory: string | null; nextRetryAt: string | null; initiatedAt: string
+        completedAt: string | null; bpayReference: string | null; bpayPaidAt: string | null; transactionReference: string | null
+      } | null
+      keyRequests: Array<{ id: string; status: string; createdAt: string; referenceNumber: string | null; keyReceivedAt: string | null }>
+      keyLetters: Array<{ id: string; status: string; receivedAt: string; hasKey: boolean }>
+    }>(`/api/admin/ontraport-sales/${id}`),
+    requeueOntraportSale: (id: string) => apiFetch<{ message: string }>(`/api/admin/ontraport-sales/${id}/requeue`, { method: 'POST' }),
     syncOntraport: () => apiFetch<{ syncedCount: number; message: string }>('/api/admin/ontraport-sales/sync', { method: 'POST' }),
     processEligibleOntraport: () => apiFetch<{ jobId: string; message: string }>('/api/admin/ontraport-sales/process-eligible', { method: 'POST' }),
     asicKeys: (params: { status?: string; search?: string; page?: number; pageSize?: number } = {}) => {
