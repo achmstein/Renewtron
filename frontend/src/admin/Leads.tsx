@@ -5,7 +5,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { CalendarRange, Check, Mail, PlusCircle, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { useDebouncedValue } from './_components'
+import { Pagination, useDebouncedValue } from './_components'
 import { EmptyState, FunnelPills, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -25,6 +25,8 @@ type Lead = LeadsResponse['items'][number]
 type Stats = LeadsResponse['stats']
 type Facets = LeadsResponse['facets']
 
+const PAGE_SIZE = 25
+
 /** Operator-friendly names for LeadOutcome values. */
 const outcomeLabels: Record<string, string> = {
   RenewalAvailable: 'Available',
@@ -43,19 +45,30 @@ const reminderLabels: Record<string, string> = {
 export default function Leads() {
   // Deep link from the dashboard ("?outcome=RenewalAvailable") seeds the facet on first render.
   const [searchParams] = useSearchParams()
-  const [outcomes, setOutcomes] = useState<string[]>(() => searchParams.get('outcome')?.split(',').filter(Boolean) ?? [])
-  const [reminders, setReminders] = useState<string[]>([])
-  const [hasRenewal, setHasRenewal] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  // Every filter change goes back to page 1.
+  const paged = <T,>(set: (v: T) => void) => (v: T) => { setPage(1); set(v) }
+  const [outcomes, setOutcomesRaw] = useState<string[]>(() => searchParams.get('outcome')?.split(',').filter(Boolean) ?? [])
+  const [reminders, setRemindersRaw] = useState<string[]>([])
+  const [hasRenewal, setHasRenewalRaw] = useState('')
+  const [dateFrom, setDateFromRaw] = useState('')
+  const [dateTo, setDateToRaw] = useState('')
+  const [search, setSearchRaw] = useState('')
+  const setOutcomes = paged(setOutcomesRaw)
+  const setReminders = paged(setRemindersRaw)
+  const setHasRenewal = paged(setHasRenewalRaw)
+  const setDateFrom = paged(setDateFromRaw)
+  const setDateTo = paged(setDateToRaw)
+  const setSearch = paged(setSearchRaw)
   const [winBackOpen, setWinBackOpen] = useState(false)
   const debouncedSearch = useDebouncedValue(search)
 
   const queryClient = useQueryClient()
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ['admin-leads', { outcomes, reminders, search: debouncedSearch, hasRenewal, dateFrom, dateTo }],
+    queryKey: ['admin-leads', { outcomes, reminders, search: debouncedSearch, hasRenewal, dateFrom, dateTo, page }],
     queryFn: () => api.admin.leads({
+      page,
+      take: PAGE_SIZE,
       outcome: outcomes.join(',') || undefined,
       reminder: reminders.join(',') || undefined,
       search: debouncedSearch || undefined,
@@ -187,6 +200,8 @@ export default function Leads() {
         <Link to={`/admin/leads/${row.original.id}`} className="text-sm font-medium text-brand-700 hover:text-brand-800 whitespace-nowrap">View →</Link>
       ),
     },
+    // toggleOutcome only calls stable state setters, so the first render's copy stays correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [])
 
   return (
@@ -240,8 +255,8 @@ export default function Leads() {
 
       <div className="mt-4">
         <DataTable columns={columns} data={leads} empty={<EmptyState title="No leads match the current filters." />} />
-        {totalCount > leads.length ? (
-          <div className="mt-2 text-xs font-mono text-zinc-400 tabular-nums">Showing the {leads.length} most recent of {totalCount.toLocaleString()} matching leads — narrow with filters to see the rest.</div>
+        {totalCount > PAGE_SIZE ? (
+          <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
         ) : null}
       </div>
 

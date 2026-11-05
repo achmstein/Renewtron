@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Archive, CreditCard, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
+  Archive, Contact, CreditCard, Filter, House, Inbox, KeyRound, LogOut, Menu as MenuIcon,
   Landmark, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, X,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -17,6 +17,7 @@ const Icon = {
   Search: <Search strokeWidth={1.5} className="size-4 shrink-0" />,
   Refresh: <RefreshCw strokeWidth={1.5} className="size-4 shrink-0" />,
   Users: <Users strokeWidth={1.5} className="size-4 shrink-0" />,
+  Contact: <Contact strokeWidth={1.5} className="size-4 shrink-0" />,
   Cart: <ShoppingCart strokeWidth={1.5} className="size-4 shrink-0" />,
   Card: <CreditCard strokeWidth={1.5} className="size-4 shrink-0" />,
   Bank: <Landmark strokeWidth={1.5} className="size-4 shrink-0" />,
@@ -43,6 +44,7 @@ const navSections: NavSection[] = [
   {
     kicker: 'Customers',
     items: [
+      { to: '/admin/clients', label: 'Clients', icon: Icon.Contact, badge: 'clientDuplicates' },
       { to: '/admin/leads', label: 'Leads', icon: Icon.Users },
       { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
       { to: '/admin/ontraport-sales', label: 'Ontraport', icon: Icon.Cart },

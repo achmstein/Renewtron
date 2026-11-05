@@ -6,6 +6,8 @@ namespace Renewtron.Data;
 public class Lead
 {
     public Guid Id { get; set; }
+    /// <summary>The client this lead belongs to (set by the client linker).</summary>
+    public Guid? ClientId { get; set; }
 
     // ABN Information
     public string Abn { get; set; } = string.Empty;

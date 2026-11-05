@@ -3,6 +3,9 @@ namespace Renewtron.Data;
 public class OntraportSale
 {
     public Guid Id { get; set; }
+    /// <summary>The client and business name this sale is for (set by the client linker).</summary>
+    public Guid? ClientId { get; set; }
+    public Guid? ClientBusinessNameId { get; set; }
 
     // Ontraport identifiers
     public string OntraportContactId { get; set; } = string.Empty;

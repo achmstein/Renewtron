@@ -13,6 +13,8 @@ public class AsicKeyRequest
     public Guid? OntraportSaleId { get; set; }
     public OntraportSale? OntraportSale { get; set; }
     public string? OntraportContactId { get; set; }
+    /// <summary>The client asking (set by the client linker).</summary>
+    public Guid? ClientId { get; set; }
 
     // What goes on the form — snapshotted from the sale so a later contact edit can't change
     // what we told ASIC.

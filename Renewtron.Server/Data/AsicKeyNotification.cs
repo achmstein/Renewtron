@@ -21,6 +21,8 @@ public class AsicKeyNotification
     public string? Abn { get; set; }
     public string? DownloadUrl { get; set; }
     public string? AsicKey { get; set; }
+    /// <summary>The client's business name this key belongs to (set by the client linker).</summary>
+    public Guid? ClientBusinessNameId { get; set; }
 
     /// <summary>Comma-separated Ontraport contact IDs the key was written to.</summary>
     public string? OntraportContactIds { get; set; }

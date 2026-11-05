@@ -19,8 +19,10 @@ public sealed class AsicKeysModule : ICarterModule
 
         var group = app.MapGroup("/api/admin/asic-keys").RequireAuthorization().WithTags("Admin.AsicKeys");
 
-        group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? search = null) =>
+        group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? search = null, int page = 1, int pageSize = 25) =>
         {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
             var statusValues = Helpers.ParseEnumList<AsicKeyNotificationStatus>(status);
 
             // Same faceted shape as the Ontraport page: status counts are computed under the
@@ -43,9 +45,13 @@ public sealed class AsicKeysModule : ICarterModule
                 return q;
             }
 
+            // One page of light rows: the PDF text, link and sender (the bulk of each row) come
+            // from /{id} when a row is opened.
+            var filteredCount = await Filtered().CountAsync();
             var items = await Filtered()
                 .OrderByDescending(n => n.ReceivedAt)
-                .Take(500)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(n => new
                 {
                     id = n.Id,
@@ -56,10 +62,7 @@ public sealed class AsicKeysModule : ICarterModule
                     ontraportContactsUpdated = n.OntraportContactsUpdated,
                     status = n.Status.ToString(),
                     errorMessage = n.ErrorMessage,
-                    pdfTextExcerpt = n.PdfTextExcerpt,
                     subject = n.Subject,
-                    from = n.From,
-                    downloadUrl = n.DownloadUrl,
                     receivedAt = n.ReceivedAt,
                     processedAt = n.ProcessedAt,
                     attemptCount = n.AttemptCount,
@@ -74,29 +77,33 @@ public sealed class AsicKeysModule : ICarterModule
                     .Select(f => new { value = f.Key.ToString(), count = f.Count }),
             };
 
-            // Header counts describe the whole table, not the current filter.
-            var all = await db.AsicKeyNotifications.AsNoTracking()
-                .Select(n => new { n.Status, n.ReceivedAt, n.ProcessedAt })
-                .ToListAsync();
+            // Header counts describe the whole table, not the current filter — counted in SQL.
+            var byStatus = string.IsNullOrWhiteSpace(search)
+                ? statusFacet
+                : await db.AsicKeyNotifications.AsNoTracking()
+                    .GroupBy(n => n.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+            var totalCount = byStatus.Sum(s => s.Count);
+            var completedCount = byStatus.Where(s => s.Key == AsicKeyNotificationStatus.Completed).Sum(s => s.Count);
+            var pendingCount = byStatus.Where(s => s.Key == AsicKeyNotificationStatus.Pending).Sum(s => s.Count);
+            // Saved-to-client keys are done: they just have no Ontraport contact to go on.
+            var savedToClientCount = byStatus.Where(s => s.Key == AsicKeyNotificationStatus.SavedToClient).Sum(s => s.Count);
+            var attentionCount = totalCount - completedCount - pendingCount - savedToClientCount;
 
             var now = DateTime.UtcNow;
-            var totalCount = all.Count;
-            var completedCount = all.Count(n => n.Status == AsicKeyNotificationStatus.Completed);
-            var pendingCount = all.Count(n => n.Status == AsicKeyNotificationStatus.Pending);
-            var attentionCount = totalCount - completedCount - pendingCount;
-
             var fourteenDaysAgo = now.Date.AddDays(-13);
-            var dailyMap = all
-                .Where(n => n.ReceivedAt >= fourteenDaysAgo)
-                .GroupBy(n => DateOnly.FromDateTime(n.ReceivedAt))
-                .ToDictionary(g => g.Key, g => g.Count());
+            var dailyMap = (await db.AsicKeyNotifications.AsNoTracking()
+                    .Where(n => n.ReceivedAt >= fourteenDaysAgo)
+                    .GroupBy(n => n.ReceivedAt.Date)
+                    .Select(g => new { Day = g.Key, Count = g.Count() })
+                    .ToListAsync())
+                .ToDictionary(d => DateOnly.FromDateTime(d.Day), d => d.Count);
             var daily14d = Enumerable.Range(0, 14).Select(i =>
             {
                 var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
                 return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
             }).ToList();
-            var todayCount = all.Count(n => n.ReceivedAt.Date == now.Date);
-            var yesterdayCount = all.Count(n => n.ReceivedAt.Date == now.Date.AddDays(-1));
+            var todayCount = dailyMap.GetValueOrDefault(DateOnly.FromDateTime(now.Date), 0);
+            var yesterdayCount = dailyMap.GetValueOrDefault(DateOnly.FromDateTime(now.Date.AddDays(-1)), 0);
             decimal? deltaPct = yesterdayCount > 0
                 ? Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1)
                 : null;
@@ -107,7 +114,8 @@ public sealed class AsicKeysModule : ICarterModule
 
             return Results.Ok(new
             {
-                totalCount, completedCount, pendingCount, attentionCount,
+                totalCount, completedCount, pendingCount, attentionCount, savedToClientCount,
+                filteredCount, page, pageSize,
                 items,
                 facets,
                 stats = new
@@ -125,6 +133,33 @@ public sealed class AsicKeysModule : ICarterModule
             });
         });
 
+        // Everything about one notification, for the detail dialog.
+        group.MapGet("/{id:guid}", async (Guid id, ApplicationDbContext db) =>
+        {
+            var n = await db.AsicKeyNotifications.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    businessName = x.BusinessName,
+                    abn = x.Abn,
+                    asicKey = x.AsicKey,
+                    ontraportContactIds = x.OntraportContactIds,
+                    ontraportContactsUpdated = x.OntraportContactsUpdated,
+                    status = x.Status.ToString(),
+                    errorMessage = x.ErrorMessage,
+                    pdfTextExcerpt = x.PdfTextExcerpt,
+                    subject = x.Subject,
+                    from = x.From,
+                    downloadUrl = x.DownloadUrl,
+                    receivedAt = x.ReceivedAt,
+                    processedAt = x.ProcessedAt,
+                    attemptCount = x.AttemptCount,
+                })
+                .FirstOrDefaultAsync();
+            return n == null ? Results.NotFound() : Results.Ok(n);
+        });
+
         // Enqueued rather than run inline: a backlog of PDFs can take minutes, past nginx's
         // proxy timeout. The UI polls /jobs/{id} and refreshes the table as rows land.
         // DisableConcurrentExecution keeps it from overlapping the recurring scan.
@@ -139,7 +174,8 @@ public sealed class AsicKeysModule : ICarterModule
         group.MapPost("/retry-failed", async (ApplicationDbContext db, IBackgroundJobClient jobs) =>
         {
             var rows = await db.AsicKeyNotifications
-                .Where(n => n.Status != AsicKeyNotificationStatus.Completed && n.Status != AsicKeyNotificationStatus.Pending)
+                .Where(n => n.Status != AsicKeyNotificationStatus.Completed && n.Status != AsicKeyNotificationStatus.Pending
+                            && n.Status != AsicKeyNotificationStatus.SavedToClient)
                 .ToListAsync();
             foreach (var row in rows)
                 row.Status = AsicKeyNotificationStatus.Pending;

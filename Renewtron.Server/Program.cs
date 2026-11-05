@@ -152,6 +152,10 @@ builder.Services.AddHttpClient<IAsicKeyInboxService, AsicKeyInboxService>(client
 // Outbound ASIC key requests: the queue a person works through on ASIC's enquiry form.
 builder.Services.AddScoped<IAsicKeyRequestService, AsicKeyRequestService>();
 
+// Clients: one record per person with all their business names (Admin → Clients).
+builder.Services.AddSingleton<ClientLinkState>();
+builder.Services.AddScoped<IClientLinkService, ClientLinkService>();
+
 builder.Services.AddHangfire(configuration => configuration
     .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
     .UseSimpleAssemblyNameTypeSerializer()
@@ -333,6 +337,13 @@ RecurringJob.AddOrUpdate<IAsicKeyRequestService>(
     Renewtron.Modules.AsicKeyRequestsModule.RecurringJobId,
     service => service.ProcessPendingAsync(CancellationToken.None),
     "7,37 * * * *");
+
+// Puts new sales, leads, renewals and key letters on their clients and refreshes clients'
+// names from the register. Does nothing until the first real run from Admin → Clients.
+RecurringJob.AddOrUpdate<IClientLinkService>(
+    Renewtron.Modules.ClientsModule.RecurringJobId,
+    service => service.RunScheduledAsync(),
+    "*/15 * * * *");
 
 // Our copy of ASIC's public business names register (data.gov.au), used to list a customer's
 // names instantly. Skips quietly when the published file hasn't changed since the last import.

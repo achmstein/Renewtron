@@ -144,7 +144,7 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
             await ProcessRowAsync(row, settings, ct);
             await _db.SaveChangesAsync(ct);
             processed++;
-            if (row.Status == AsicKeyNotificationStatus.Completed) completed++; else failed++;
+            if (row.Status is AsicKeyNotificationStatus.Completed or AsicKeyNotificationStatus.SavedToClient) completed++; else failed++;
         }
 
         var recovered = await BackfillPdfsAsync(since, ct);
@@ -273,6 +273,9 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
                     row.BusinessName = MatchPdfBusinessName(text);
             }
 
+            // The key belongs on the client's business name whatever Ontraport holds.
+            var savedToName = await SaveToClientNameAsync(row, ct);
+
             List<string> contacts;
             try
             {
@@ -283,6 +286,17 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
             {
                 // Auto-retried: credentials or connectivity, not a property of this row.
                 Fail(row, AsicKeyNotificationStatus.OntraportUpdateFailed, $"Ontraport lookup failed: {ex.Message}");
+                return;
+            }
+
+            if (contacts.Count == 0 && savedToName != null)
+            {
+                // One of a client's other names: Ontraport holds one name per contact, so there's
+                // nowhere there to put it, and nothing for staff to fix.
+                row.Status = AsicKeyNotificationStatus.SavedToClient;
+                row.ErrorMessage = null;
+                _logger.LogInformation("ASIC key {AsicKey} for '{BusinessName}' kept on client business name {NameId}; no Ontraport contact carries it",
+                    row.AsicKey, row.BusinessName, savedToName.Id);
                 return;
             }
 
@@ -306,6 +320,40 @@ public sealed class AsicKeyInboxService : IAsicKeyInboxService
                 : AsicKeyNotificationStatus.OntraportUpdateFailed;
             Fail(row, status, $"Unexpected error: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Puts the key on the client's business name: matched on ABN + name, or on the name alone
+    /// when exactly one client holds it. Returns the name, or null when no client holds it
+    /// (yet: the client linker tries again every 15 minutes).
+    /// </summary>
+    private async Task<ClientBusinessName?> SaveToClientNameAsync(AsicKeyNotification row, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(row.AsicKey) || string.IsNullOrWhiteSpace(row.BusinessName)) return null;
+        // A typed-in key from the public form is only trusted where the ABN agrees too.
+        var fromForm = IsFormSubmission(row);
+        var name = Regex.Replace(row.BusinessName, @"\s+", " ").Trim();
+        var abn = new string((row.Abn ?? "").Where(char.IsDigit).ToArray());
+
+        ClientBusinessName? held = null;
+        if (abn.Length == 11)
+            held = await _db.ClientBusinessNames.FirstOrDefaultAsync(n => n.Abn == abn && n.Name == name, ct);
+        if (held == null && !fromForm)
+        {
+            var byName = await _db.ClientBusinessNames.Where(n => n.Name == name).Take(2).ToListAsync(ct);
+            if (byName.Count == 1) held = byName[0];
+        }
+        if (held == null) return null;
+
+        row.ClientBusinessNameId = held.Id;
+        if (held.AsicKeyReceivedAt == null || row.ReceivedAt >= held.AsicKeyReceivedAt)
+        {
+            held.AsicKey = row.AsicKey;
+            held.AsicKeyReceivedAt = row.ReceivedAt;
+            held.AsicKeyNotificationId = row.Id;
+            held.UpdatedAt = DateTime.UtcNow;
+        }
+        return held;
     }
 
     private async Task<List<string>> FindContactsAsync(AsicKeyNotification row)

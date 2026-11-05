@@ -276,9 +276,11 @@ public sealed class LeadsModule : ICarterModule
             DateTime? dateFrom = null,
             DateTime? dateTo = null,
             string? hasRenewal = null,
-            int take = 100) =>
+            int take = 100,
+            int page = 1) =>
         {
             take = Math.Clamp(take, 1, 500);
+            page = Math.Max(1, page);
 
             // Facet params accept comma-separated multi-values ("RenewalAvailable,Pending").
             var outcomeValues = Helpers.ParseEnumList<LeadOutcome>(outcome);
@@ -341,6 +343,7 @@ public sealed class LeadsModule : ICarterModule
 
             var items = await query
                 .OrderByDescending(l => l.CreatedAt)
+                .Skip((page - 1) * take)
                 .Take(take)
                 .Select(l => new
                 {
@@ -456,6 +459,8 @@ public sealed class LeadsModule : ICarterModule
             return Results.Ok(new
             {
                 totalCount,
+                page,
+                pageSize = take,
                 items,
                 facets,
                 stats = new

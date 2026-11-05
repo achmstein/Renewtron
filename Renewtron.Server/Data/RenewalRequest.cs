@@ -8,6 +8,9 @@ public class RenewalRequest
 
     // Link to Lead (for new flow)
     public Guid? LeadId { get; set; }
+    /// <summary>The client and business name renewed (set by the client linker).</summary>
+    public Guid? ClientId { get; set; }
+    public Guid? ClientBusinessNameId { get; set; }
 
     // Renewal details
     public int RenewalYears { get; set; }

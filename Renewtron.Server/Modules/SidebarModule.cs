@@ -30,7 +30,11 @@ public sealed class SidebarModule : ICarterModule
                     || r.Status == AsicKeyRequestStatus.Manual)
                 .CountAsync();
 
-            return Results.Ok(new { bpayToPay, asicKeyRequests });
+            // Clients the linker couldn't tell apart from another on the same ABN.
+            var clientDuplicates = await db.Clients.AsNoTracking()
+                .CountAsync(c => !c.IsTest && c.PossibleDuplicateOfId != null);
+
+            return Results.Ok(new { bpayToPay, asicKeyRequests, clientDuplicates });
         }).RequireAuthorization().WithTags("Admin.Sidebar");
     }
 }

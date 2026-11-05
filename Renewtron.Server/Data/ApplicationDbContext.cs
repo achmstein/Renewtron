@@ -21,6 +21,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<AsicKeyRequest> AsicKeyRequests { get; set; }
     public DbSet<RegisteredBusinessName> RegisteredBusinessNames { get; set; }
     public DbSet<BusinessNameImport> BusinessNameImports { get; set; }
+    public DbSet<Client> Clients { get; set; }
+    public DbSet<ClientEmail> ClientEmails { get; set; }
+    public DbSet<ClientAbn> ClientAbns { get; set; }
+    public DbSet<ClientBusinessName> ClientBusinessNames { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -285,6 +289,86 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasForeignKey<AsicKeyNotificationPdf>(e => e.NotificationId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<Client>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.FullName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.MobileNumber).HasMaxLength(20);
+            entity.Property(e => e.Address).HasMaxLength(200);
+            entity.Property(e => e.Suburb).HasMaxLength(100);
+            entity.Property(e => e.State).HasMaxLength(50);
+            entity.Property(e => e.Postcode).HasMaxLength(10);
+            entity.Property(e => e.TfnEncrypted).HasMaxLength(200);
+            entity.Property(e => e.Notes).HasMaxLength(2000);
+            entity.HasIndex(e => e.FullName);
+            entity.HasIndex(e => e.PossibleDuplicateOfId);
+            entity.HasIndex(e => e.LastSeenAt);
+            entity.HasOne(e => e.PossibleDuplicateOf).WithMany()
+                .HasForeignKey(e => e.PossibleDuplicateOfId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<ClientEmail>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.OntraportContactId).HasMaxLength(20);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(20);
+            entity.HasIndex(e => e.Email).IsUnique();
+            entity.HasIndex(e => e.OntraportContactId);
+            entity.HasOne(e => e.Client).WithMany(c => c.Emails)
+                .HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ClientAbn>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
+            entity.HasIndex(e => new { e.ClientId, e.Abn }).IsUnique();
+            entity.HasIndex(e => e.Abn);
+            entity.HasOne(e => e.Client).WithMany(c => c.Abns)
+                .HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ClientBusinessName>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.RegistrationDate).HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.AsicAccountNumber).HasMaxLength(50);
+            entity.Property(e => e.DueDateSource).HasMaxLength(20);
+            entity.Property(e => e.AsicKey).HasMaxLength(50);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(20);
+            // One owner per name: two people sharing an ABN never both hold it.
+            entity.HasIndex(e => new { e.Abn, e.Name }).IsUnique();
+            entity.HasIndex(e => e.ClientId);
+            entity.HasIndex(e => e.RenewalDueDate);
+            entity.HasOne(e => e.Client).WithMany(c => c.BusinessNames)
+                .HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Links from the older records. NoAction: SQL Server refuses two cascade paths into one
+        // table, and the linker repoints these itself when clients are merged.
+        modelBuilder.Entity<Lead>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<Lead>().HasIndex(e => e.ClientId);
+        modelBuilder.Entity<OntraportSale>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<OntraportSale>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<OntraportSale>().HasIndex(e => e.ClientId);
+        modelBuilder.Entity<OntraportSale>().HasIndex(e => e.ClientBusinessNameId);
+        modelBuilder.Entity<RenewalRequest>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<RenewalRequest>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<RenewalRequest>().HasIndex(e => e.ClientId);
+        modelBuilder.Entity<RenewalRequest>().HasIndex(e => e.ClientBusinessNameId);
+        modelBuilder.Entity<BulkRenewalUpload>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<BulkRenewalUpload>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<BulkRenewalUpload>().HasIndex(e => e.ClientId);
+        modelBuilder.Entity<AsicKeyRequest>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<AsicKeyRequest>().HasIndex(e => e.ClientId);
+        modelBuilder.Entity<AsicKeyNotification>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<AsicKeyNotification>().HasIndex(e => e.ClientBusinessNameId);
+        modelBuilder.Entity<OutboundMessage>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<OutboundMessage>().HasIndex(e => e.ClientId);
 
         modelBuilder.Entity<FunnelEvent>(entity =>
         {

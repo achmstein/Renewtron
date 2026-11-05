@@ -23,8 +23,10 @@ public sealed class AsicKeyRequestsModule : ICarterModule
     {
         var group = app.MapGroup("/api/admin/asic-key-requests").RequireAuthorization().WithTags("Admin.AsicKeyRequests");
 
-        group.MapGet("/", async (ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings, string? status = null, string? search = null) =>
+        group.MapGet("/", async (ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings, string? status = null, string? search = null, int page = 1, int pageSize = 25) =>
         {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
             var statusValues = Helpers.ParseEnumList<AsicKeyRequestStatus>(status);
 
             IQueryable<AsicKeyRequest> Filtered(bool applyStatus = true)
@@ -47,9 +49,11 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             }
 
             var current = settings.CurrentValue;
+            var filteredCount = await Filtered().CountAsync();
             var items = (await Filtered()
                 .OrderByDescending(r => r.CreatedAt)
-                .Take(500)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync())
                 .Select(r => ToDetail(r, current))
                 .ToList();
@@ -62,30 +66,34 @@ public sealed class AsicKeyRequestsModule : ICarterModule
                     .Select(f => new { value = f.Key.ToString(), count = f.Count }),
             };
 
-            var all = await db.AsicKeyRequests.AsNoTracking()
-                .Select(r => new { r.Status, r.CreatedAt, r.SubmittedAt })
-                .ToListAsync();
+            // Header counts are for the whole table, counted in SQL.
+            var byStatus = string.IsNullOrWhiteSpace(search)
+                ? statusFacet
+                : await db.AsicKeyRequests.AsNoTracking()
+                    .GroupBy(r => r.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+            int CountOf(AsicKeyRequestStatus s) => byStatus.Where(x => x.Key == s).Sum(x => x.Count);
+            var totalCount = byStatus.Sum(x => x.Count);
+            var pendingCount = CountOf(AsicKeyRequestStatus.Pending);
+            var manualCount = CountOf(AsicKeyRequestStatus.Manual);
+            var submittedCount = CountOf(AsicKeyRequestStatus.Submitted);
+            var keyReceivedCount = CountOf(AsicKeyRequestStatus.KeyReceived);
+            var failedCount = CountOf(AsicKeyRequestStatus.Failed);
 
             var now = DateTime.UtcNow;
-            var totalCount = all.Count;
-            var pendingCount = all.Count(r => r.Status == AsicKeyRequestStatus.Pending);
-            var manualCount = all.Count(r => r.Status == AsicKeyRequestStatus.Manual);
-            var submittedCount = all.Count(r => r.Status == AsicKeyRequestStatus.Submitted);
-            var keyReceivedCount = all.Count(r => r.Status == AsicKeyRequestStatus.KeyReceived);
-            var failedCount = all.Count(r => r.Status == AsicKeyRequestStatus.Failed);
-
             var fourteenDaysAgo = now.Date.AddDays(-13);
-            var dailyMap = all
-                .Where(r => r.SubmittedAt != null && r.SubmittedAt >= fourteenDaysAgo)
-                .GroupBy(r => DateOnly.FromDateTime(r.SubmittedAt!.Value))
-                .ToDictionary(g => g.Key, g => g.Count());
+            var dailyMap = (await db.AsicKeyRequests.AsNoTracking()
+                    .Where(r => r.SubmittedAt != null && r.SubmittedAt >= fourteenDaysAgo)
+                    .GroupBy(r => r.SubmittedAt!.Value.Date)
+                    .Select(g => new { Day = g.Key, Count = g.Count() })
+                    .ToListAsync())
+                .ToDictionary(d => DateOnly.FromDateTime(d.Day), d => d.Count);
             var daily14d = Enumerable.Range(0, 14).Select(i =>
             {
                 var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
                 return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
             }).ToList();
-            var todayCount = all.Count(r => r.SubmittedAt?.Date == now.Date);
-            var yesterdayCount = all.Count(r => r.SubmittedAt?.Date == now.Date.AddDays(-1));
+            var todayCount = dailyMap.GetValueOrDefault(DateOnly.FromDateTime(now.Date), 0);
+            var yesterdayCount = dailyMap.GetValueOrDefault(DateOnly.FromDateTime(now.Date.AddDays(-1)), 0);
             decimal? deltaPct = yesterdayCount > 0
                 ? Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1)
                 : null;
@@ -95,6 +103,7 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             return Results.Ok(new
             {
                 totalCount, pendingCount, manualCount, submittedCount, keyReceivedCount, failedCount,
+                filteredCount, page, pageSize,
                 items,
                 facets,
                 stats = new

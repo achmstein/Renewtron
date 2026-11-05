@@ -8,12 +8,34 @@ namespace Renewtron.Modules;
 
 public sealed class OntraportSalesModule : ICarterModule
 {
+    /// <summary>Sales still in flight — the page's due-date views only count these.</summary>
+    private static readonly OntraportSaleStatus[] PipelineStatuses =
+    [
+        OntraportSaleStatus.Synced, OntraportSaleStatus.WaitingForRenewalWindow, OntraportSaleStatus.RenewalQueued,
+        OntraportSaleStatus.RenewalFailed, OntraportSaleStatus.IneligibleForRenewal, OntraportSaleStatus.AsicNotYetDue,
+        OntraportSaleStatus.RenewalInProgress,
+    ];
+
+    public sealed record SaleRow(
+        Guid Id, string ContactName, string Email, string Abn, string BusinessName, int RenewalYears, decimal AmountPaid,
+        string Status, DateTime SyncedAt, DateTime? RenewalDueDate, string? ErrorMessage, Guid? RenewalRequestId,
+        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage);
+
+    private static IQueryable<SaleRow> Project(IQueryable<OntraportSale> q) => q.Select(s => new SaleRow(
+        s.Id, s.ContactName, s.Email, s.Abn, s.BusinessName, s.RenewalYears, s.AmountPaid,
+        s.Status.ToString(), s.SyncedAt, s.RenewalDueDate, s.ErrorMessage, s.RenewalRequestId,
+        s.RenewalRequest != null ? s.RenewalRequest.Status.ToString() : null,
+        s.RenewalRequest != null ? s.RenewalRequest.FailedAtStep : null,
+        s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null));
+
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/ontraport-sales").RequireAuthorization().WithTags("Admin.Ontraport");
 
-        group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? search = null) =>
+        group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? search = null, string? due = null, int page = 1, int pageSize = 25) =>
         {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
             // Facet param accepts comma-separated multi-values ("RenewalFailed,RenewalQueued").
             var statusValues = Helpers.ParseEnumList<OntraportSaleStatus>(status);
 
@@ -36,27 +58,38 @@ public sealed class OntraportSalesModule : ICarterModule
                 return q;
             }
 
-            var items = await Filtered()
-                .OrderByDescending(s => s.SyncedAt)
-                .Select(s => new
-                {
-                    id = s.Id,
-                    contactName = s.ContactName,
-                    email = s.Email,
-                    abn = s.Abn,
-                    businessName = s.BusinessName,
-                    renewalYears = s.RenewalYears,
-                    amountPaid = s.AmountPaid,
-                    status = s.Status.ToString(),
-                    syncedAt = s.SyncedAt,
-                    renewalDueDate = s.RenewalDueDate,
-                    errorMessage = s.ErrorMessage,
-                    renewalRequestId = s.RenewalRequestId,
-                    renewalStatus = s.RenewalRequest != null ? s.RenewalRequest.Status.ToString() : null,
-                    renewalFailedAtStep = s.RenewalRequest != null ? s.RenewalRequest.FailedAtStep : null,
-                    renewalErrorMessage = s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null,
-                })
+            // Due-date views. "Pipeline" = still in flight with a known due date; the buckets
+            // match the page's chips (overdue / due in the next 7 or 30 days).
+            var now = DateTime.UtcNow;
+            IQueryable<OntraportSale> Pipeline() =>
+                Filtered().Where(s => PipelineStatuses.Contains(s.Status) && s.RenewalDueDate != null);
+            var in8 = now.AddDays(8);
+            var in31 = now.AddDays(31);
+            IQueryable<OntraportSale> Bucket(string? view) => view switch
+            {
+                "overdue" => Pipeline().Where(s => s.RenewalDueDate < now),
+                "7d" => Pipeline().Where(s => s.RenewalDueDate >= now && s.RenewalDueDate < in8),
+                "30d" => Pipeline().Where(s => s.RenewalDueDate >= now && s.RenewalDueDate < in31),
+                _ => Filtered(),
+            };
+            var view = due is "overdue" or "7d" or "30d" ? due : "all";
+            var buckets = new
+            {
+                overdue = await Bucket("overdue").CountAsync(),
+                overdueValue = await Bucket("overdue").SumAsync(s => s.AmountPaid),
+                soon7 = await Bucket("7d").CountAsync(),
+                soon30 = await Bucket("30d").CountAsync(),
+                all = await Filtered().CountAsync(),
+            };
+            var filteredCount = view switch { "overdue" => buckets.overdue, "7d" => buckets.soon7, "30d" => buckets.soon30, _ => buckets.all };
+
+            // Most urgent first; sales with no due date last.
+            var items = await Project(Bucket(view)
+                    .OrderBy(s => s.RenewalDueDate == null).ThenBy(s => s.RenewalDueDate).ThenByDescending(s => s.SyncedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize))
                 .ToListAsync();
+            var upNext = await Project(Pipeline().OrderBy(s => s.RenewalDueDate).Take(5)).ToListAsync();
 
             var statusFacet = await Filtered(applyStatus: false)
                 .GroupBy(s => s.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
@@ -67,47 +100,51 @@ public sealed class OntraportSalesModule : ICarterModule
             };
 
             // Header counts, stats and totalCount describe the WHOLE pipeline, not the
-            // current filter — computed over all sales regardless of status/search.
-            var all = await db.OntraportSales.AsNoTracking()
-                .Select(s => new { s.Status, s.AmountPaid, s.SyncedAt, s.RenewalDueDate })
-                .ToListAsync();
+            // current filter — counted in SQL over all sales regardless of status/search.
+            var byStatus = string.IsNullOrWhiteSpace(search)
+                ? statusFacet
+                : await db.OntraportSales.AsNoTracking()
+                    .GroupBy(s => s.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+            int CountOf(OntraportSaleStatus st) => byStatus.Where(x => x.Key == st).Sum(x => x.Count);
 
-            var totalCount = all.Count;
-            var waitingCount = all.Count(s => s.Status == OntraportSaleStatus.WaitingForRenewalWindow);
-            var queuedCount = all.Count(s => s.Status == OntraportSaleStatus.RenewalQueued);
-            var completedCount = all.Count(s => s.Status == OntraportSaleStatus.RenewalCompleted);
-            var failedCount = all.Count(s => s.Status == OntraportSaleStatus.RenewalFailed);
-            var ineligibleCount = all.Count(s => s.Status == OntraportSaleStatus.IneligibleForRenewal);
-            var asicNotYetDueCount = all.Count(s => s.Status == OntraportSaleStatus.AsicNotYetDue);
-            var renewalInProgressCount = all.Count(s => s.Status == OntraportSaleStatus.RenewalInProgress);
+            var totalCount = byStatus.Sum(x => x.Count);
+            var waitingCount = CountOf(OntraportSaleStatus.WaitingForRenewalWindow);
+            var queuedCount = CountOf(OntraportSaleStatus.RenewalQueued);
+            var completedCount = CountOf(OntraportSaleStatus.RenewalCompleted);
+            var failedCount = CountOf(OntraportSaleStatus.RenewalFailed);
+            var ineligibleCount = CountOf(OntraportSaleStatus.IneligibleForRenewal);
+            var asicNotYetDueCount = CountOf(OntraportSaleStatus.AsicNotYetDue);
+            var renewalInProgressCount = CountOf(OntraportSaleStatus.RenewalInProgress);
             var blockedCount = ineligibleCount + asicNotYetDueCount + renewalInProgressCount;
 
             // Pipeline value next 30 days — paid in Ontraport, not yet completed at ASIC.
-            var now = DateTime.UtcNow;
             var thirtyDaysAhead = now.AddDays(30);
-            var pipelineValueNext30d = all
-                .Where(s => s.RenewalDueDate.HasValue && s.RenewalDueDate.Value <= thirtyDaysAhead && s.RenewalDueDate.Value >= now.AddDays(-30))
+            var thirtyDaysBack = now.AddDays(-30);
+            var pipelineValueNext30d = await db.OntraportSales.AsNoTracking()
+                .Where(s => s.RenewalDueDate != null && s.RenewalDueDate <= thirtyDaysAhead && s.RenewalDueDate >= thirtyDaysBack)
                 .Where(s => s.Status != OntraportSaleStatus.RenewalCompleted)
-                .Sum(s => s.AmountPaid);
+                .SumAsync(s => s.AmountPaid);
 
             // Daily synced volume for last 14 days
             var fourteenDaysAgo = now.Date.AddDays(-13).ToUniversalTime();
-            var dailyMap = all
-                .Where(s => s.SyncedAt >= fourteenDaysAgo)
-                .GroupBy(s => DateOnly.FromDateTime(s.SyncedAt))
-                .ToDictionary(g => g.Key, g => g.Count());
+            var dailyMap = (await db.OntraportSales.AsNoTracking()
+                    .Where(s => s.SyncedAt >= fourteenDaysAgo)
+                    .GroupBy(s => s.SyncedAt.Date)
+                    .Select(g => new { Day = g.Key, Count = g.Count() })
+                    .ToListAsync())
+                .ToDictionary(d => DateOnly.FromDateTime(d.Day), d => d.Count);
             var daily14d = Enumerable.Range(0, 14).Select(i =>
             {
                 var date = DateOnly.FromDateTime(now.Date.AddDays(-13 + i));
                 return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
             }).ToList();
-            var todayCount = all.Count(s => s.SyncedAt.Date == now.Date);
-            var yesterdayCount = all.Count(s => s.SyncedAt.Date == now.Date.AddDays(-1));
+            var todayCount = dailyMap.GetValueOrDefault(DateOnly.FromDateTime(now.Date), 0);
+            var yesterdayCount = dailyMap.GetValueOrDefault(DateOnly.FromDateTime(now.Date.AddDays(-1)), 0);
             decimal? deltaPct = null;
             if (yesterdayCount > 0)
                 deltaPct = Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1);
 
-            DateTime? lastSyncAt = all.Count > 0 ? all.Max(s => s.SyncedAt) : null;
+            DateTime? lastSyncAt = await db.OntraportSales.AsNoTracking().MaxAsync(s => (DateTime?)s.SyncedAt);
             // Next sync — the recurring job runs at 06:00 AEST. Compute next AEST 06:00 in UTC.
             var aest = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
             var aestNow = TimeZoneInfo.ConvertTimeFromUtc(now, aest);
@@ -119,6 +156,7 @@ public sealed class OntraportSalesModule : ICarterModule
             {
                 totalCount, waitingCount, queuedCount, completedCount, failedCount,
                 ineligibleCount, asicNotYetDueCount, renewalInProgressCount, blockedCount,
+                filteredCount, page, pageSize, view, buckets, upNext,
                 items,
                 facets,
                 stats = new

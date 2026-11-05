@@ -22,6 +22,8 @@ public class OutboundMessage
     public Guid Id { get; set; }
     public Guid LeadId { get; set; }
     public Lead? Lead { get; set; }
+    /// <summary>The client it went to (set by the client linker).</summary>
+    public Guid? ClientId { get; set; }
 
     public OutboundChannel Channel { get; set; }
     public string Template { get; set; } = string.Empty; // e.g. "win-back"

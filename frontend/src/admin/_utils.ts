@@ -41,3 +41,9 @@ export function durationShort(hours: number): string {
   if (hours < 48) return `${Math.round(hours)}h`
   return `${Math.round(hours / 24)}d`
 }
+
+/** "12 345 678 901" for an 11-digit ABN; anything else as given. */
+export function formatAbn(abn: string): string {
+  const clean = (abn ?? '').replace(/\s+/g, '')
+  return clean.length === 11 ? `${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}` : abn
+}

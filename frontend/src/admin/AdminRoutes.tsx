@@ -6,6 +6,8 @@ import AdminLayout from './AdminLayout'
 import Dashboard from './Dashboard'
 import Searches from './Searches'
 import SearchDetails from './SearchDetails'
+import Clients from './Clients'
+import ClientDetails from './ClientDetails'
 import Leads from './Leads'
 import LeadDetails from './LeadDetails'
 import Funnel from './Funnel'
@@ -34,6 +36,8 @@ export default function AdminRoutes() {
           <Route index element={<Dashboard />} />
           <Route path="searches" element={<Searches />} />
           <Route path="searches/:id" element={<SearchDetails />} />
+          <Route path="clients" element={<Clients />} />
+          <Route path="clients/:id" element={<ClientDetails />} />
           <Route path="leads" element={<Leads />} />
           <Route path="leads/:id" element={<LeadDetails />} />
           <Route path="funnel" element={<Funnel />} />

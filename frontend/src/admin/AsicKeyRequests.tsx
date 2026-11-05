@@ -3,7 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyRequestDto } from '../api/client'
-import { useDebouncedValue } from './_components'
+import { Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -18,6 +18,8 @@ type Row = AsicKeyRequestDto
 type Stats = RequestsResponse['stats']
 type Facets = RequestsResponse['facets']
 
+const PAGE_SIZE = 25
+
 const ASIC_FORM_URL = 'https://www.edge.asic.gov.au/008/inquiryV001?start/landingPage'
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -30,16 +32,19 @@ const STATUS: Record<string, { label: string; tone: Tone }> = {
 const statusLabel = (s: string) => STATUS[s]?.label ?? s
 
 export default function AsicKeyRequests() {
-  const [statuses, setStatuses] = useState<string[]>([])
-  const [searchInput, setSearchInput] = useState('')
+  const [statuses, setStatusesRaw] = useState<string[]>([])
+  const [searchInput, setSearchInputRaw] = useState('')
+  const [page, setPage] = useState(1)
+  const setStatuses = (v: string[]) => { setPage(1); setStatusesRaw(v) }
+  const setSearchInput = (v: string) => { setPage(1); setSearchInputRaw(v) }
   const search = useDebouncedValue(searchInput, 300)
   const [detail, setDetail] = useState<Row | null>(null)
   const [record, setRecord] = useState<Row | null>(null)
 
   const queryClient = useQueryClient()
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ['admin-asic-key-requests', { statuses, search }],
-    queryFn: () => api.admin.asicKeyRequests({ status: statuses.join(',') || undefined, search: search || undefined }),
+    queryKey: ['admin-asic-key-requests', { statuses, search, page }],
+    queryFn: () => api.admin.asicKeyRequests({ status: statuses.join(',') || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   })
   const invalidate = () => {
@@ -258,6 +263,9 @@ export default function AsicKeyRequests() {
             message={hasActiveFilters ? undefined : 'Turn on Settings → ASIC key requests, then sync Ontraport or use “Request key” on a sale.'}
           />}
         />
+        {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
+          <Pagination page={page} pageSize={PAGE_SIZE} total={data?.filteredCount ?? 0} onPage={setPage} />
+        ) : null}
       </div>
 
       <DetailDialog row={detail} onClose={() => setDetail(null)} />

@@ -3,6 +3,9 @@ namespace Renewtron.Data;
 public class BulkRenewalUpload
 {
     public Guid Id { get; set; }
+    /// <summary>The client and business name, when the name is already on a client (set by the client linker).</summary>
+    public Guid? ClientId { get; set; }
+    public Guid? ClientBusinessNameId { get; set; }
 
     public string BusinessName { get; set; } = string.Empty;
     public string Abn { get; set; } = string.Empty;

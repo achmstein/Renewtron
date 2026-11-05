@@ -87,7 +87,100 @@ export interface BpayBill {
 }
 
 /** Work waiting on staff, shown as sidebar badges. */
-export interface SidebarCounts { bpayToPay: number; asicKeyRequests: number }
+export interface SidebarCounts { bpayToPay: number; asicKeyRequests: number; clientDuplicates: number }
+
+export interface ClientListItem {
+  id: string
+  fullName: string
+  email: string | null
+  emailCount: number
+  mobileNumber: string | null
+  abns: string[]
+  activeNames: number
+  firstName: string | null
+  nextDue: string | null
+  keys: number
+  hasPurchased: boolean
+  isTest: boolean
+  possibleDuplicateOfId: string | null
+  possibleDuplicateOfName: string | null
+  lastSeenAt: string
+}
+
+export interface ClientBusinessNameDto {
+  id: string
+  name: string
+  abn: string
+  registrationDate: string | null
+  asicAccountNumber: string | null
+  renewalDueDate: string | null
+  dueDateSource: string | null
+  asicKey: string | null
+  asicKeyReceivedAt: string | null
+  lastRenewedAt: string | null
+  lastRenewalYears: number | null
+  status: 'Active' | 'Cancelled' | 'Excluded'
+  source: string
+}
+
+export interface ClientDetail {
+  id: string
+  fullName: string
+  mobileNumber: string | null
+  dateOfBirth: string | null
+  address: string | null
+  hasTfn: boolean
+  hasPurchased: boolean
+  reminderOptIn: boolean
+  unsubscribedAt: string | null
+  isTest: boolean
+  notes: string | null
+  createdAt: string
+  lastSeenAt: string
+  possibleDuplicateOf: { id: string; fullName: string } | null
+  duplicates: Array<{ id: string; fullName: string }>
+  emails: Array<{ id: string; email: string; isPrimary: boolean; ontraportContactId: string | null; source: string }>
+  abns: Array<{ abn: string; registerCheckedAt: string | null }>
+  businessNames: ClientBusinessNameDto[]
+  sales: Array<{ id: string; businessName: string; status: string; syncedAt: string; amountPaid: number; renewalDueDate: string | null; ontraportContactId: string }>
+  leads: Array<{ id: string; createdAt: string; outcome: string; abn: string; email: string }>
+  renewals: Array<{ id: string; businessName: string; status: string; initiatedAt: string; completedAt: string | null; amount: number; renewalYears: number; source: string }>
+  keyRequests: Array<{ id: string; businessName: string; status: string; createdAt: string; asicReferenceNumber: string | null }>
+  messages: Array<{ id: string; template: string; subject: string; status: string; createdAt: string; recipient: string }>
+}
+
+export interface ClientLinkResult {
+  dryRun: boolean
+  startedAt: string
+  finishedAt: string
+  error: string | null
+  clientsCreated: number
+  possibleDuplicates: number
+  emailsAdded: number
+  abnsAdded: number
+  namesAdded: number
+  namesCancelled: number
+  abnsChecked: number
+  dueDatesSet: number
+  keysSet: number
+  salesLinked: number
+  leadsLinked: number
+  keyRequestsLinked: number
+  bulkUploadsLinked: number
+  renewalsLinked: number
+  messagesLinked: number
+  keyLettersLinked: number
+  keyLettersResolved: number
+  skipped: number
+}
+
+export interface ClientLinkStatus {
+  hasClients: boolean
+  running: boolean
+  runningSince: string | null
+  runningDry: boolean
+  last: ClientLinkResult | null
+}
 
 export interface BpayPayOutcome { renewalId: string; sent: boolean; status: string | null; error: string | null }
 
@@ -215,6 +308,9 @@ export interface AsicKeyNotificationDto {
   processedAt: string | null
   attemptCount: number
 }
+
+/** A row of the Keys list: the PDF text, link and sender are fetched when the row is opened. */
+export type AsicKeyNotificationListItem = Omit<AsicKeyNotificationDto, 'pdfTextExcerpt' | 'from' | 'downloadUrl'>
 
 export interface TrackingSettings {
   gtmContainerId: string
@@ -408,8 +504,9 @@ export const api = {
       }>
       funnel: { hasLead: boolean; anyPaid: boolean; anyInflight: boolean; anyFailed: boolean }
     }>(`/api/admin/searches/${id}`),
-    leads: (params: { outcome?: string; reminder?: string; search?: string; dateFrom?: string; dateTo?: string; hasRenewal?: string; take?: number } = {}) => {
+    leads: (params: { outcome?: string; reminder?: string; search?: string; dateFrom?: string; dateTo?: string; hasRenewal?: string; take?: number; page?: number } = {}) => {
       const qs = new URLSearchParams()
+      if (params.page) qs.set('page', String(params.page))
       if (params.outcome) qs.set('outcome', params.outcome)
       if (params.reminder) qs.set('reminder', params.reminder)
       if (params.search) qs.set('search', params.search)
@@ -702,12 +799,22 @@ export const api = {
     }>('/api/admin/manual-search', { method: 'POST', body: JSON.stringify({ abn }) }),
     submitManualRenewal: (input: { searchResultId: string; renewalYears: 1 | 3; email: string; mobileNumber?: string; dateOfBirth?: string; amount: number }) =>
       apiFetch<{ renewalId: string; businessName: string; message: string }>('/api/admin/manual-renewal/submit', { method: 'POST', body: JSON.stringify(input) }),
-    ontraportSales: (params: { status?: string; search?: string } = {}) => {
+    ontraportSales: (params: { status?: string; search?: string; due?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
       if (params.search) qs.set('search', params.search)
+      if (params.due) qs.set('due', params.due)
+      if (params.page) qs.set('page', String(params.page))
+      if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''
+      type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }
       return apiFetch<{
+        filteredCount: number
+        page: number
+        pageSize: number
+        view: string
+        buckets: { overdue: number; overdueValue: number; soon7: number; soon30: number; all: number }
+        upNext: SaleItem[]
         totalCount: number
         waitingCount: number
         queuedCount: number
@@ -717,7 +824,7 @@ export const api = {
         asicNotYetDueCount: number
         renewalInProgressCount: number
         blockedCount: number
-        items: Array<{ id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }>
+        items: SaleItem[]
         facets: {
           status: Facet
         }
@@ -734,17 +841,23 @@ export const api = {
     },
     syncOntraport: () => apiFetch<{ syncedCount: number; message: string }>('/api/admin/ontraport-sales/sync', { method: 'POST' }),
     processEligibleOntraport: () => apiFetch<{ jobId: string; message: string }>('/api/admin/ontraport-sales/process-eligible', { method: 'POST' }),
-    asicKeys: (params: { status?: string; search?: string } = {}) => {
+    asicKeys: (params: { status?: string; search?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
       if (params.search) qs.set('search', params.search)
+      if (params.page) qs.set('page', String(params.page))
+      if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''
       return apiFetch<{
         totalCount: number
         completedCount: number
         pendingCount: number
         attentionCount: number
-        items: AsicKeyNotificationDto[]
+        savedToClientCount: number
+        filteredCount: number
+        page: number
+        pageSize: number
+        items: AsicKeyNotificationListItem[]
         facets: {
           status: Facet
         }
@@ -761,6 +874,7 @@ export const api = {
         }
       }>(`/api/admin/asic-keys${suffix}`)
     },
+    asicKey: (id: string) => apiFetch<AsicKeyNotificationDto>(`/api/admin/asic-keys/${id}`),
     scanAsicKeys: () => apiFetch<{ jobId: string; message: string }>('/api/admin/asic-keys/scan', { method: 'POST' }),
     retryFailedAsicKeys: () => apiFetch<{ jobId: string; requeued: number; message: string }>('/api/admin/asic-keys/retry-failed', { method: 'POST' }),
     asicKeyJob: (jobId: string) => apiFetch<AsicKeyJobStatus>(`/api/admin/asic-keys/jobs/${encodeURIComponent(jobId)}`),
@@ -768,10 +882,12 @@ export const api = {
       apiFetch<Pick<AsicKeyNotificationDto, 'id' | 'businessName' | 'abn' | 'asicKey' | 'ontraportContactIds' | 'ontraportContactsUpdated' | 'status' | 'errorMessage' | 'processedAt' | 'attemptCount'>>(`/api/admin/asic-keys/${id}/retry`, { method: 'POST' }),
     applyAsicKey: (id: string, contactId: string) =>
       apiFetch<Pick<AsicKeyNotificationDto, 'id' | 'businessName' | 'abn' | 'asicKey' | 'ontraportContactIds' | 'ontraportContactsUpdated' | 'status' | 'errorMessage' | 'processedAt' | 'attemptCount'>>(`/api/admin/asic-keys/${id}/apply`, { method: 'POST', body: JSON.stringify({ contactId }) }),
-    asicKeyRequests: (params: { status?: string; search?: string } = {}) => {
+    asicKeyRequests: (params: { status?: string; search?: string; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.status) qs.set('status', params.status)
       if (params.search) qs.set('search', params.search)
+      if (params.page) qs.set('page', String(params.page))
+      if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''
       return apiFetch<{
         totalCount: number
@@ -780,6 +896,9 @@ export const api = {
         submittedCount: number
         keyReceivedCount: number
         failedCount: number
+        filteredCount: number
+        page: number
+        pageSize: number
         items: AsicKeyRequestDto[]
         facets: {
           status: Facet
@@ -849,6 +968,27 @@ export const api = {
     updateAirwallex: (body: AirwallexSettings) => apiFetch<void>('/api/admin/settings/airwallex', { method: 'PUT', body: JSON.stringify(body) }),
     testAirwallex: () => apiFetch<{ ok: boolean }>('/api/admin/settings/airwallex/test', { method: 'POST' }),
     sidebarCounts: () => apiFetch<SidebarCounts>('/api/admin/sidebar-counts'),
+    clients: (params: { search?: string; filter?: string } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.search) qs.set('search', params.search)
+      if (params.filter) qs.set('filter', params.filter)
+      const suffix = qs.toString() ? `?${qs}` : ''
+      return apiFetch<{
+        totalCount: number
+        items: ClientListItem[]
+        stats: { clients: number; purchased: number; severalNames: number; names: number; possibleDuplicates: number }
+      }>(`/api/admin/clients${suffix}`)
+    },
+    client: (id: string) => apiFetch<ClientDetail>(`/api/admin/clients/${id}`),
+    clientLinkStatus: () => apiFetch<ClientLinkStatus>('/api/admin/clients/link-status'),
+    runClientLink: (dryRun: boolean) => apiFetch<void>('/api/admin/clients/link', { method: 'POST', body: JSON.stringify({ dryRun }) }),
+    mergeClient: (id: string, targetId: string) => apiFetch<{ id: string }>(`/api/admin/clients/${id}/merge-into/${targetId}`, { method: 'POST' }),
+    dismissClientDuplicate: (id: string) => apiFetch<void>(`/api/admin/clients/${id}/not-duplicate`, { method: 'POST' }),
+    updateClientNotes: (id: string, notes: string) => apiFetch<void>(`/api/admin/clients/${id}/notes`, { method: 'PUT', body: JSON.stringify({ notes }) }),
+    moveClientBusinessName: (nameId: string, clientId: string) =>
+      apiFetch<void>(`/api/admin/clients/business-names/${nameId}/move`, { method: 'POST', body: JSON.stringify({ clientId }) }),
+    setClientBusinessNameStatus: (nameId: string, status: ClientBusinessNameDto['status']) =>
+      apiFetch<void>(`/api/admin/clients/business-names/${nameId}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
     bpayBills: (includePaid = false) => apiFetch<{
       items: BpayBill[]
       airwallexReady: boolean

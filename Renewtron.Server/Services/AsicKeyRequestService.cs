@@ -163,19 +163,32 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
         var since = waiting.Min(r => r.CreatedAt).AddDays(-1);
         var arrived = await _db.AsicKeyNotifications
             .Where(n => n.AsicKey != null && n.BusinessName != null && n.ReceivedAt >= since)
-            .Select(n => new { n.Id, n.BusinessName, n.Abn, n.ReceivedAt })
+            .Select(n => new { n.Id, n.BusinessName, n.Abn, n.ReceivedAt, n.ClientBusinessNameId })
             .ToListAsync(ct);
+
+        // The client record knows names under the client's other ABNs too.
+        var clientIds = waiting.Where(r => r.ClientId != null).Select(r => r.ClientId!.Value).Distinct().ToList();
+        var clientNames = (await _db.ClientBusinessNames.AsNoTracking()
+                .Where(n => clientIds.Contains(n.ClientId))
+                .Select(n => new { n.Id, n.ClientId, n.Name })
+                .ToListAsync(ct))
+            .GroupBy(n => n.ClientId)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         var matched = 0;
         foreach (var request in waiting)
         {
             // ASIC sends one notification per name; the main name's key closes the request,
             // otherwise any of the client's names (or the ABN) does.
-            var names = request.AllBusinessNames().Select(Normalise).ToList();
+            var held = request.ClientId is { } cid ? clientNames.GetValueOrDefault(cid) ?? [] : [];
+            var names = request.AllBusinessNames().Concat(held.Select(n => n.Name)).Select(Normalise)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var heldIds = held.Select(n => n.Id).ToHashSet();
             var recent = arrived.Where(n => n.ReceivedAt >= request.CreatedAt.AddDays(-1)).ToList();
             var hit = recent.FirstOrDefault(n => string.Equals(Normalise(n.BusinessName), names[0], StringComparison.OrdinalIgnoreCase))
                 ?? recent.FirstOrDefault(n =>
                     names.Contains(Normalise(n.BusinessName), StringComparer.OrdinalIgnoreCase)
+                    || (n.ClientBusinessNameId is { } nameId && heldIds.Contains(nameId))
                     || (n.Abn != null && DigitsOnly(n.Abn) == request.Abn));
             if (hit == null) continue;
 

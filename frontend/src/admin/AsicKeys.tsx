@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Inbox, Loader2, RotateCw, UserPlus, X } from 'lucide-react'
 import { sileo } from 'sileo'
-import { api, type AsicKeyJobStatus, type AsicKeyNotificationDto } from '../api/client'
-import { useDebouncedValue } from './_components'
+import { api, type AsicKeyJobStatus, type AsicKeyNotificationListItem } from '../api/client'
+import { Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -14,8 +14,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 type KeysResponse = Awaited<ReturnType<typeof api.admin.asicKeys>>
-type Row = AsicKeyNotificationDto
+type Row = AsicKeyNotificationListItem
 type Stats = KeysResponse['stats']
+
+const PAGE_SIZE = 25
 type Facets = KeysResponse['facets']
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -25,21 +27,25 @@ const STATUS: Record<string, { label: string; tone: Tone }> = {
   DownloadFailed:        { label: 'Download failed',  tone: 'red' },
   KeyNotFound:           { label: 'Key not found',    tone: 'red' },
   ContactNotFound:       { label: 'No contact',       tone: 'amber' },
+  SavedToClient:         { label: 'Saved to client',  tone: 'emerald' },
   OntraportUpdateFailed: { label: 'Ontraport failed', tone: 'red' },
 }
 const statusLabel = (s: string) => STATUS[s]?.label ?? s
 
 export default function AsicKeys() {
-  const [statuses, setStatuses] = useState<string[]>([])
-  const [searchInput, setSearchInput] = useState('')
+  const [statuses, setStatusesRaw] = useState<string[]>([])
+  const [searchInput, setSearchInputRaw] = useState('')
+  const [page, setPage] = useState(1)
+  const setStatuses = (v: string[]) => { setPage(1); setStatusesRaw(v) }
+  const setSearchInput = (v: string) => { setPage(1); setSearchInputRaw(v) }
   const search = useDebouncedValue(searchInput, 300)
   const [detail, setDetail] = useState<Row | null>(null)
   const [assign, setAssign] = useState<Row | null>(null)
 
   const queryClient = useQueryClient()
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ['admin-asic-keys', { statuses, search }],
-    queryFn: () => api.admin.asicKeys({ status: statuses.join(',') || undefined, search: search || undefined }),
+    queryKey: ['admin-asic-keys', { statuses, search, page }],
+    queryFn: () => api.admin.asicKeys({ status: statuses.join(',') || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   })
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-asic-keys'] })
@@ -193,6 +199,8 @@ export default function AsicKeys() {
       meta: { className: 'text-right whitespace-nowrap', headerClassName: 'text-right' },
       cell: ({ row }) => {
         const r = row.original
+        // A key saved on the client's name is done; it can still be pushed onto a contact by hand.
+        const done = r.status === 'Completed' || r.status === 'SavedToClient'
         const canAssign = !!r.asicKey && r.status !== 'Completed'
         return (
           <div className="flex items-center justify-end gap-1">
@@ -201,7 +209,7 @@ export default function AsicKeys() {
                 <UserPlus className="h-3.5 w-3.5" /> Assign
               </Button>
             ) : null}
-            {r.status !== 'Completed' ? (
+            {!done ? (
               <Button
                 variant="ghost" size="sm" className="h-7 px-2 text-xs"
                 disabled={retryMutation.isPending}
@@ -256,7 +264,7 @@ export default function AsicKeys() {
           kicker="DONE"
           label="Keys written"
           value={completedCount.toLocaleString()}
-          sub={`${totalCount.toLocaleString()} notifications total`}
+          sub={`${data?.savedToClientCount ? `+${data.savedToClientCount.toLocaleString()} saved to client · ` : ''}${totalCount.toLocaleString()} notifications total`}
           tone="emerald"
         />
         <StatTile
@@ -311,6 +319,9 @@ export default function AsicKeys() {
             message={hasActiveFilters ? undefined : 'Configure the inbox under Settings → ASIC key inbox, then run a scan.'}
           />}
         />
+        {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
+          <Pagination page={page} pageSize={PAGE_SIZE} total={data?.filteredCount ?? 0} onPage={setPage} />
+        ) : null}
       </div>
 
       <DetailDialog row={detail} onClose={() => setDetail(null)} />
@@ -331,7 +342,14 @@ function KeyStatusPill({ status }: { status: string }) {
   return <StatusPill tone={s?.tone ?? 'zinc'}>{(s?.label ?? status).toUpperCase()}</StatusPill>
 }
 
-function DetailDialog({ row, onClose }: { row: Row | null; onClose: () => void }) {
+function DetailDialog({ row: listRow, onClose }: { row: Row | null; onClose: () => void }) {
+  // The list row shows straight away; the PDF text, link and sender arrive a moment later.
+  const { data: full, isFetching } = useQuery({
+    queryKey: ['admin-asic-key', listRow?.id],
+    queryFn: () => api.admin.asicKey(listRow!.id),
+    enabled: !!listRow,
+  })
+  const row = listRow ? { ...listRow, from: null, downloadUrl: null, pdfTextExcerpt: null, ...(full?.id === listRow.id ? full : {}) } : null
   return (
     <Dialog open={!!row} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
@@ -372,6 +390,10 @@ function DetailDialog({ row, onClose }: { row: Row | null; onClose: () => void }
 
               {row.errorMessage ? (
                 <div className="rounded-md bg-red-50 ring-1 ring-red-100 px-3 py-2 text-xs font-mono text-red-800 whitespace-pre-wrap break-words">{row.errorMessage}</div>
+              ) : null}
+
+              {isFetching && !full ? (
+                <div className="flex items-center gap-2 text-xs text-zinc-500"><Loader2 className="h-3 w-3 animate-spin" /> Loading the PDF details…</div>
               ) : null}
 
               {row.pdfTextExcerpt ? (

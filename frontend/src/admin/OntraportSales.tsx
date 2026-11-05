@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { ErrorModal, useDebouncedValue } from './_components'
+import { ErrorModal, Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -25,15 +25,11 @@ type SaleRow = Sale & { _daysUntil: number | null }
 
 type DueFilter = 'overdue' | '7d' | '30d' | 'all'
 
-const filledStatuses = [
-  'Synced',
-  'WaitingForRenewalWindow',
-  'RenewalQueued',
-  'RenewalFailed',
-  'IneligibleForRenewal',
-  'AsicNotYetDue',
-  'RenewalInProgress',
-]
+const PAGE_SIZE = 25
+
+function withDaysUntil(s: Sale): SaleRow {
+  return { ...s, _daysUntil: s.renewalDueDate ? Math.floor((new Date(s.renewalDueDate).getTime() - Date.now()) / 86400000) : null }
+}
 
 // Statuses that aren't real failures — they'll retry automatically (AsicNotYetDue, RenewalInProgress)
 // or have been deliberately skipped (IneligibleForRenewal). Render with a yellow/info treatment, not red.
@@ -56,19 +52,26 @@ function statusLabel(status: string): string {
 }
 
 export default function OntraportSales() {
-  const [dueFilter, setDueFilter] = useState<DueFilter>('30d')
-  const [searchInput, setSearchInput] = useState('')
+  const [page, setPage] = useState(1)
+  const [dueFilter, setDueFilterRaw] = useState<DueFilter>('30d')
+  const [searchInput, setSearchInputRaw] = useState('')
   const search = useDebouncedValue(searchInput, 300)
-  const [statuses, setStatuses] = useState<string[]>([])
+  const [statuses, setStatusesRaw] = useState<string[]>([])
+  const setDueFilter = (v: DueFilter) => { setPage(1); setDueFilterRaw(v) }
+  const setSearchInput = (v: string) => { setPage(1); setSearchInputRaw(v) }
+  const setStatuses = (v: string[]) => { setPage(1); setStatusesRaw(v) }
   const [requeueOpen, setRequeueOpen] = useState(false)
   const [errorModal, setErrorModal] = useState<{ title: string; body: string } | null>(null)
 
   const queryClient = useQueryClient()
   const { data, isFetching, refetch } = useQuery({
-    queryKey: ['admin-ontraport-sales', { statuses, search }],
+    queryKey: ['admin-ontraport-sales', { statuses, search, dueFilter, page }],
     queryFn: () => api.admin.ontraportSales({
       status: statuses.join(',') || undefined,
       search: search || undefined,
+      due: dueFilter,
+      page,
+      pageSize: PAGE_SIZE,
     }),
     placeholderData: keepPreviousData,
   })
@@ -100,45 +103,11 @@ export default function OntraportSales() {
 
   const statusOptions: FacetOption[] = facets.status.map((f) => ({ value: f.value, label: statusLabel(f.value), count: f.count }))
 
-  // Server-filtered items, annotated with days until the due date.
-  const items = useMemo<SaleRow[]>(() => {
-    const now = Date.now()
-    return (data?.items ?? []).map((s) => ({
-      ...s,
-      _daysUntil: s.renewalDueDate ? Math.floor((new Date(s.renewalDueDate).getTime() - now) / 86400000) : null,
-    }))
-  }, [data])
-
-  // Sales that are still in-flight (not Completed) and have a due date — the actionable "pipeline".
-  const pipeline = useMemo(
-    () => items
-      .filter((s): s is SaleRow & { _daysUntil: number } => filledStatuses.includes(s.status) && s._daysUntil !== null)
-      .sort((a, b) => a._daysUntil - b._daysUntil),
-    [items],
-  )
-
-  const byBucket = useMemo(() => ({
-    overdue: pipeline.filter((s) => s._daysUntil < 0),
-    soon7:   pipeline.filter((s) => s._daysUntil >= 0 && s._daysUntil <= 7),
-    soon30:  pipeline.filter((s) => s._daysUntil >= 0 && s._daysUntil <= 30),
-  }), [pipeline])
-
-  // The All view shows every fetched row — Completed and no-due-date included — urgency first.
-  const allRows = useMemo(
-    () => items.slice().sort((a, b) => (a._daysUntil ?? Number.POSITIVE_INFINITY) - (b._daysUntil ?? Number.POSITIVE_INFINITY)),
-    [items],
-  )
-
-  const tableRows = useMemo<SaleRow[]>(() => {
-    switch (dueFilter) {
-      case 'overdue': return byBucket.overdue
-      case '7d':      return byBucket.soon7
-      case '30d':     return byBucket.soon30
-      case 'all':     return allRows
-    }
-  }, [dueFilter, byBucket, allRows])
-
-  const upNext = pipeline.slice(0, 5)
+  // One page of the chosen due-date view, already filtered and sorted (most urgent first) by
+  // the server, annotated with days until the due date.
+  const tableRows = useMemo<SaleRow[]>(() => (data?.items ?? []).map(withDaysUntil), [data])
+  const upNext = useMemo<SaleRow[]>(() => (data?.upNext ?? []).map(withDaysUntil), [data])
+  const buckets = data?.buckets ?? { overdue: 0, overdueValue: 0, soon7: 0, soon30: 0, all: 0 }
   const upNextValue = upNext.reduce((sum, s) => sum + s.amountPaid, 0)
 
   const syncMutation = useMutation({
@@ -294,9 +263,9 @@ export default function OntraportSales() {
         <StatTile
           kicker="OVERDUE"
           label="Past their due date"
-          value={byBucket.overdue.length.toLocaleString()}
-          sub={byBucket.overdue.length > 0 ? `${fmtMoney0(byBucket.overdue.reduce((s, x) => s + x.amountPaid, 0))} unrecovered` : 'all on track'}
-          tone={byBucket.overdue.length > 0 ? 'red' : 'zinc'}
+          value={buckets.overdue.toLocaleString()}
+          sub={buckets.overdue > 0 ? `${fmtMoney0(buckets.overdueValue)} unrecovered` : 'all on track'}
+          tone={buckets.overdue > 0 ? 'red' : 'zinc'}
         />
         <StatTile
           kicker="FAILED"
@@ -357,10 +326,10 @@ export default function OntraportSales() {
         {/* Scrolls within itself on narrow screens instead of overflowing the page */}
         <div className="max-w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
           <div className="inline-flex w-max rounded-md bg-white ring-1 ring-zinc-200 shadow-sm" role="group">
-            <FilterTab active={dueFilter === 'overdue'} onClick={() => setDueFilter('overdue')} count={byBucket.overdue.length} tone="red">Overdue</FilterTab>
-            <FilterTab active={dueFilter === '7d'}      onClick={() => setDueFilter('7d')}      count={byBucket.soon7.length}    tone="amber">Next 7d</FilterTab>
-            <FilterTab active={dueFilter === '30d'}     onClick={() => setDueFilter('30d')}     count={byBucket.soon30.length}   tone="emerald">Next 30d</FilterTab>
-            <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={items.length}             tone="zinc">All</FilterTab>
+            <FilterTab active={dueFilter === 'overdue'} onClick={() => setDueFilter('overdue')} count={buckets.overdue} tone="red">Overdue</FilterTab>
+            <FilterTab active={dueFilter === '7d'}      onClick={() => setDueFilter('7d')}      count={buckets.soon7}   tone="amber">Next 7d</FilterTab>
+            <FilterTab active={dueFilter === '30d'}     onClick={() => setDueFilter('30d')}     count={buckets.soon30}  tone="emerald">Next 30d</FilterTab>
+            <FilterTab active={dueFilter === 'all'}     onClick={() => setDueFilter('all')}     count={buckets.all}     tone="zinc">All</FilterTab>
           </div>
         </div>
       </div>
@@ -384,6 +353,9 @@ export default function OntraportSales() {
 
       <div className="mt-4">
         <DataTable columns={columns} data={tableRows} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
+        {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
+          <Pagination page={page} pageSize={PAGE_SIZE} total={data?.filteredCount ?? 0} onPage={setPage} />
+        ) : null}
       </div>
 
       <RequeueFailedDialog open={requeueOpen} onClose={() => setRequeueOpen(false)} onDone={() => void invalidate()} />
@@ -539,7 +511,9 @@ function FilterTab({ active, count, onClick, tone, children }: { active: boolean
   )
 }
 
-function UpNextCard({ s }: { s: Sale & { _daysUntil: number } }) {
+function UpNextCard({ s: row }: { s: SaleRow }) {
+  // Up-next rows all have a due date (the server only picks those).
+  const s = { ...row, _daysUntil: row._daysUntil ?? 0 }
   const days = s._daysUntil
   const tone: Tone = days < 0 ? 'red' : days <= 7 ? 'amber' : 'emerald'
   const toneTextMap = { emerald: 'text-emerald-300', amber: 'text-amber-300', red: 'text-red-300', indigo: 'text-indigo-300', zinc: 'text-zinc-300' }

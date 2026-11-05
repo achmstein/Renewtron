@@ -16,4 +16,9 @@ public enum AsicKeyNotificationStatus
     ContactNotFound,
     /// <summary>Key extracted and contact found, but the Ontraport write failed.</summary>
     OntraportUpdateFailed,
+    /// <summary>
+    /// Key extracted and kept on the client's business name in Renewtron; no Ontraport contact
+    /// carries the name (typically one of a client's other names). Done — nothing to fix.
+    /// </summary>
+    SavedToClient,
 }
