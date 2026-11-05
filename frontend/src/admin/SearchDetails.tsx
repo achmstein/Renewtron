@@ -1,26 +1,21 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, CircleAlert, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
-import { FunnelPills, KickerLabel, searchFunnelStages, StatusPill, type Tone } from './_ui'
-import { Status } from './_status'
-import { fmtMoney2, relativeTime } from './_utils'
+import { KickerLabel } from './_ui'
+import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
+import { When } from './_rows'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Button } from '@/components/ui/button'
 
 type Detail = Awaited<ReturnType<typeof api.admin.search>>
 
-function formatAbn(abn: string) {
-  const clean = (abn ?? '').replace(/\s+/g, '')
-  if (clean.length === 11) return `${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}`
-  return abn
-}
+const shortDate = (s: string) => new Date(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 
-function fmtDateTime(s: string) {
-  const d = new Date(s)
-  const date = d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-  return `${date} · ${time}`
-}
+/** Who ran the search, in words. */
+const BY: Record<string, string> = { Customer: 'A visitor', Admin: 'Staff', System: 'Renewtron' }
 
 export default function SearchDetails() {
   const { id } = useParams()
@@ -32,7 +27,7 @@ export default function SearchDetails() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
         <p className="mt-3 text-sm text-zinc-500">Loading…</p>
       </div>
@@ -41,207 +36,134 @@ export default function SearchDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <h3 className="text-base font-semibold text-zinc-900">Search not found</h3>
-        <p className="mt-1 text-sm text-zinc-500">The search you're looking for doesn't exist.</p>
+        <p className="mt-1 text-sm text-zinc-500">The search you’re looking for doesn’t exist.</p>
         <Link to="/admin/searches" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to searches</Link>
       </div>
     )
   }
 
-  const funnelStages = searchFunnelStages(data.funnel)
+  const status: StatusEntry = data.success
+    ? { label: data.resultsCount ? 'Found names' : 'No names', meaning: data.resultsCount ? 'done' : 'quiet' }
+    : { label: 'Search failed', meaning: 'quiet', hint: 'ASIC didn’t answer; the visitor saw an error.' }
+  const by = BY[data.initiatedBy] ?? data.initiatedBy
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Top bar */}
-      <div className="mb-6">
-        <Link to="/admin/searches" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
-          <ChevronLeft className="h-3 w-3" />
-          Back to searches
-        </Link>
+      <RecordCrumbs client={data.client} list={{ to: '/admin/searches', label: 'Searches' }} here={`ASIC search of ${shortDate(data.searchedAt)}`} />
+
+      <RecordHeader
+        kicker={`ASIC search · ABN ${formatAbn(data.abn)}`}
+        title={!data.success
+          ? `${by} looked up ABN ${formatAbn(data.abn)}; ASIC didn’t answer`
+          : `${by} found ${data.resultsCount} business name${data.resultsCount === 1 ? '' : 's'} on ABN ${formatAbn(data.abn)}`}
+        sub={<><When at={data.searchedAt} />{data.lead ? <> · went on to the wizard as {data.lead.fullName}</> : ' · no wizard visit followed'}</>}
+        status={status}
+      >
+        {nextStep(data)}
+        <StoryStrip steps={story(data)} />
+      </RecordHeader>
+
+      <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
+        <div className="mb-4">
+          <KickerLabel>Names</KickerLabel>
+          <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">What ASIC returned</h2>
+        </div>
+        {data.results.length === 0 ? (
+          <p className="text-sm text-zinc-500">{data.success ? 'No business names on this ABN.' : 'Nothing: the search failed.'}</p>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {data.results.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-zinc-900">{r.businessName}</div>
+                  <div className="text-xs text-zinc-500">
+                    {r.renewalRequest
+                      ? <>{r.renewalRequest.renewalYears}-year renewal, {fmtMoney2(r.renewalRequest.amount)}, <When at={r.renewalRequest.initiatedAt} /></>
+                      : 'No renewal started'}
+                  </div>
+                </div>
+                {r.renewalRequest
+                  ? <Link to={`/admin/renewals/${r.renewalRequest.id}`}><Status entry={renewalStatus(r.renewalRequest)} /></Link>
+                  : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Hero */}
-      <div className="rounded-2xl bg-white p-6 ring-1 ring-zinc-200 shadow-sm">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">
-              SEARCH · DETAIL
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight font-mono tabular-nums">{formatAbn(data.abn)}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
-              <span>{relativeTime(data.searchedAt)}</span>
-              <span>·</span>
-              <InitiatedByBadge value={data.initiatedBy} />
-              <span>·</span>
-              <span><span className="font-mono tabular-nums text-zinc-900">{data.resultsCount}</span> result{data.resultsCount === 1 ? '' : 's'}</span>
-            </div>
-          </div>
-          <div className="text-right">
-            {data.success ? <BigStatusPill tone="emerald" label="SUCCESS" /> : <BigStatusPill tone="red" label="FAILED" />}
-            <div className="mt-2"><FunnelPills stages={funnelStages} /></div>
-          </div>
-        </div>
-
-        {!data.success && data.errorMessage ? (
-          <div className="mt-5 rounded-lg bg-red-50 ring-1 ring-red-100 p-4">
-            <div className="flex items-start gap-3">
-              <CircleAlert className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-red-700">FAILURE</div>
-                <div className="mt-1 text-sm text-red-900 break-words font-mono">{data.errorMessage}</div>
-              </div>
-            </div>
+      <TechnicalDetail>
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
+          <Row label="Search ID" value={<span className="break-all">{data.id}</span>} />
+          <Row label="Searched" value={fmtDateTime(data.searchedAt)} />
+          <Row label="Started by" value={data.initiatedBy} />
+          <Row label="Result" value={`${data.success ? 'success' : 'failed'} · ${data.resultsCount} result(s)`} />
+          <Row label="IP address" value={data.ipAddress ?? '—'} />
+          <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} />
+          <Row label="User agent" value={<span className="break-all text-xs">{data.userAgent ?? '—'}</span>} />
+          {data.results.map((r) => <Row key={r.id} label={r.businessName} value={`acct ${r.accountNumber} · reg ${r.registrationDate}`} />)}
+        </dl>
+        {data.errorMessage ? (
+          <div className="mt-4">
+            <KickerLabel>Error</KickerLabel>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{data.errorMessage}</pre>
           </div>
         ) : null}
-      </div>
-
-      {/* Detail grid */}
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Lead block */}
-        {data.lead ? (
-          <Section kicker="LEAD" title="Captured lead">
-            <Link to={`/admin/leads/${data.lead.id}`} className="block rounded-lg border border-zinc-200 p-3 hover:border-brand-200 hover:bg-brand-50/30 transition">
-              <div className="text-sm font-medium text-zinc-900">{data.lead.fullName}</div>
-              <div className="text-xs font-mono text-zinc-500 mt-0.5">{data.lead.email}</div>
-              {data.lead.mobileNumber ? <div className="text-xs font-mono text-zinc-500 tabular-nums">{data.lead.mobileNumber}</div> : null}
-              <div className="mt-2 flex items-center justify-between">
-                <OutcomePill outcome={data.lead.outcome} />
-                <span className="text-xxs font-mono text-brand-700">View lead →</span>
-              </div>
-            </Link>
-          </Section>
-        ) : (
-          <Section kicker="LEAD" title="Captured lead">
-            <p className="text-sm text-zinc-500">No lead was captured for this search.</p>
-          </Section>
-        )}
-
-        {/* Search meta */}
-        <Section kicker="META" title="Search metadata">
-          <Row label="Searched" value={fmtDateTime(data.searchedAt)} mono />
-          <Row label="Initiated by" value={<InitiatedByBadge value={data.initiatedBy} />} />
-          <Row label="Status" value={data.success ? <StatusPill tone="emerald">SUCCESS</StatusPill> : <StatusPill tone="red">FAILED</StatusPill>} />
-          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
-          <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
-          <Row label="Search ID" value={<span className="break-all">{data.id}</span>} mono />
-        </Section>
-      </div>
-
-      {/* Found names */}
-      <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
-        <div className="mb-4 flex items-end justify-between gap-3">
-          <div>
-            <KickerLabel>RESULTS</KickerLabel>
-            <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">Business names found</h2>
-          </div>
-          <span className="text-xs font-mono tabular-nums text-zinc-500">{data.results.length} {data.results.length === 1 ? 'name' : 'names'}</span>
-        </div>
-
-        {data.results.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-zinc-200 bg-white/60 p-8 text-center">
-            <p className="text-sm text-zinc-500">No business names found in this search.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {data.results.map((r) => <ResultCard key={r.id} r={r} />)}
-          </div>
-        )}
-      </div>
+      </TechnicalDetail>
     </div>
   )
 }
 
-function ResultCard({ r }: { r: Detail['results'][number] }) {
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-300 transition">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
-          <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-mono tabular-nums text-zinc-500 max-w-md">
-            <div className="flex justify-between"><span className="text-zinc-400">acct</span><span className="text-zinc-700">{r.accountNumber}</span></div>
-            <div className="flex justify-between"><span className="text-zinc-400">reg</span><span className="text-zinc-700">{r.registrationDate}</span></div>
-          </div>
-        </div>
-        {r.renewalRequest ? (
-          <Link
-            to={`/admin/renewals/${r.renewalRequest.id}`}
-            className="rounded-lg bg-zinc-50 ring-1 ring-zinc-200 hover:ring-brand-200 hover:bg-brand-50/30 transition px-3 py-2 min-w-[14rem]"
-          >
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <KickerLabel>RENEWAL</KickerLabel>
-              <RenewalStatusPill status={r.renewalRequest.status} />
-            </div>
-            <div className="text-sm font-mono tabular-nums text-zinc-900">{fmtMoney2(r.renewalRequest.amount)}</div>
-            <div className="text-xxs font-mono text-zinc-500 tabular-nums">
-              {r.renewalRequest.renewalYears}-year · {relativeTime(r.renewalRequest.initiatedAt)}
-            </div>
-            <div className="mt-1 text-xxs font-mono text-brand-700">View renewal →</div>
-          </Link>
-        ) : (
-          <div className="rounded-lg border border-dashed border-zinc-200 px-3 py-2 min-w-[14rem]">
-            <KickerLabel>RENEWAL</KickerLabel>
-            <div className="mt-1 text-xs text-zinc-500">No renewal yet.</div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ───── Pills + helpers ───── */
-
-function BigStatusPill({ tone, label }: { tone: Tone; label: string }) {
-  const map: Record<Tone, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-    indigo:  'bg-indigo-50 text-indigo-700 ring-indigo-100',
-    amber:   'bg-amber-50 text-amber-700 ring-amber-100',
-    red:     'bg-red-50 text-red-700 ring-red-100',
-    zinc:    'bg-zinc-100 text-zinc-700 ring-zinc-200',
+function nextStep(d: Detail): ReactNode {
+  const renewals = d.results.map((r) => r.renewalRequest).filter((r): r is NonNullable<typeof r> => !!r)
+  const stuck = renewals.find((r) => renewalStatus(r).meaning === 'action')
+  if (stuck) {
+    return (
+      <NextStep meaning="action" title="A renewal from this search needs a person."
+        actions={<Button asChild size="sm"><Link to={`/admin/renewals/${stuck.id}`}>Open renewal</Link></Button>}>
+        {renewalStatus(stuck).label}, started <When at={stuck.initiatedAt} />.
+      </NextStep>
+    )
   }
-  return (
-    <span className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-mono font-medium tracking-[0.14em] ring-1 ring-inset ${map[tone]}`}>
-      {label}
-    </span>
-  )
-}
-
-function OutcomePill({ outcome }: { outcome: string | null | undefined }) {
-  return <Status kind="lead" status={outcome} />
-}
-
-function RenewalStatusPill({ status }: { status: string | null | undefined }) {
-  return <Status kind="renewal" status={status} />
-}
-
-function InitiatedByBadge({ value }: { value: string | null | undefined }) {
-  switch (value) {
-    case 'Admin':    return <StatusPill tone="indigo">ADMIN</StatusPill>
-    case 'Customer': return <StatusPill tone="zinc">CUSTOMER</StatusPill>
-    case 'System':   return <StatusPill tone="amber">SYSTEM</StatusPill>
-    default:         return <StatusPill tone="zinc">{value ? value.toUpperCase() : '—'}</StatusPill>
+  const openClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
+  if (!d.success) return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>Searches fail when ASIC is slow or down; the visitor can try again.</NextStep>
+  if (renewals.some((r) => r.status === 'Completed')) return <NextStep meaning="done" title="Nothing to do." actions={openClient}>A name from this search was renewed.</NextStep>
+  if (d.lead) {
+    return (
+      <NextStep meaning="quiet" title="Follow the wizard visit." actions={<Button asChild size="sm" variant="outline"><Link to={`/admin/leads/${d.lead.id}`}>Open wizard visit</Link></Button>}>
+        {d.lead.fullName}: {statusOf('lead', d.lead.outcome).label.toLowerCase()}.
+      </NextStep>
+    )
   }
+  return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>They searched and left without giving their details.</NextStep>
 }
 
-function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
-  return (
-    <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
-      <div className="mb-4">
-        <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
-      </div>
-      <dl className="space-y-3">
-        {children}
-      </dl>
-    </div>
-  )
+/** Search → wizard visit → renewal(s). */
+function story(d: Detail): StoryStep[] {
+  const steps: StoryStep[] = [
+    { label: 'ASIC search', meaning: d.success ? 'done' : 'quiet', at: d.searchedAt, note: d.success ? undefined : 'failed', current: true },
+  ]
+  steps.push(d.lead
+    ? { label: 'Wizard visit', meaning: 'done', note: statusOf('lead', d.lead.outcome).label.toLowerCase(), to: `/admin/leads/${d.lead.id}` }
+    : { label: 'Wizard visit', meaning: 'quiet', note: 'didn’t continue' })
+  const renewals = d.results.filter((r) => r.renewalRequest)
+  if (renewals.length === 0) {
+    steps.push({ label: 'Renewal', meaning: 'quiet', note: 'none' })
+  } else {
+    for (const r of renewals.slice(0, 3)) {
+      const s = renewalStatus(r.renewalRequest!)
+      steps.push({ label: r.businessName, meaning: s.meaning, note: s.label.toLowerCase(), to: `/admin/renewals/${r.renewalRequest!.id}` })
+    }
+  }
+  return steps
 }
 
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-3 items-baseline">
-      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
+      <dt className="truncate text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
+      <dd className="font-mono text-sm tabular-nums text-zinc-900">{value}</dd>
     </div>
   )
 }

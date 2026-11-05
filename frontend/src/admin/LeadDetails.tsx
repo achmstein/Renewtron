@@ -1,32 +1,23 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, CircleCheck, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
-import { ClientLink } from './_components'
-import { FunnelPills, KickerLabel, StatusPill, type Tone } from './_ui'
-import { Status } from './_status'
-import { fmtMoney2, relativeTime } from './_utils'
+import { KickerLabel } from './_ui'
+import { Status, renewalStatus, statusOf } from './_status'
+import { When } from './_rows'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Button } from '@/components/ui/button'
 
-function formatAbn(abn: string) {
-  const clean = (abn ?? '').replace(/\s+/g, '')
-  if (clean.length === 11) return `${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8)}`
-  return abn
-}
-
-function fmtDateTime(s: string) {
-  const d = new Date(s)
-  const date = d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-  return `${date} · ${time}`
-}
+type Detail = Awaited<ReturnType<typeof api.admin.lead>>
+type Renewal = Detail['renewalRequests'][number]
 
 function fmtDob(s: string) {
   const d = new Date(s)
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  return `${dd}/${mm}/${d.getFullYear()}`
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
+const shortDate = (s: string) => new Date(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 
 export default function LeadDetails() {
   const { id } = useParams()
@@ -38,7 +29,7 @@ export default function LeadDetails() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
         <p className="mt-3 text-sm text-zinc-500">Loading…</p>
       </div>
@@ -47,187 +38,146 @@ export default function LeadDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
-        <h3 className="text-base font-semibold text-zinc-900">Lead not found</h3>
-        <p className="mt-1 text-sm text-zinc-500">The lead you're looking for doesn't exist.</p>
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+        <h3 className="text-base font-semibold text-zinc-900">Wizard visit not found</h3>
+        <p className="mt-1 text-sm text-zinc-500">The lead you’re looking for doesn’t exist.</p>
         <Link to="/admin/leads" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to leads</Link>
       </div>
     )
   }
 
-  const hasPaid = data.renewalRequests.some((r) => r.status === 'Completed')
-  const hasInflight = data.renewalRequests.some((r) => r.status === 'Pending' || r.status === 'Processing')
-  const hasFailed = data.renewalRequests.some((r) => r.status === 'Failed')
-
-  const funnelStages: Array<{ label: string; tone: Tone; active: boolean }> = [
-    { label: 'SRCH', tone: 'emerald', active: !!data.searchLog },
-    { label: 'LEAD', tone: 'emerald', active: true },
-    hasFailed && !hasPaid
-      ? { label: 'FAIL', tone: 'red',     active: true }
-      : { label: 'PAID', tone: hasPaid ? 'emerald' : hasInflight ? 'amber' : 'zinc', active: hasPaid || hasInflight },
-  ]
+  const latest = [...data.renewalRequests].sort((a, b) => b.initiatedAt.localeCompare(a.initiatedAt))[0]
+  const names = data.searchLog?.results ?? []
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Top bar */}
-      <div className="mb-6">
-        <Link to="/admin/leads" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
-          <ChevronLeft className="h-3 w-3" />
-          Back to leads
-        </Link>
-      </div>
+      <RecordCrumbs client={data.client} list={{ to: '/admin/leads', label: 'Leads' }} here={`Wizard visit of ${shortDate(data.createdAt)}`} />
 
-      {/* Hero */}
-      <div className="rounded-2xl bg-white p-6 ring-1 ring-zinc-200 shadow-sm">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">
-              LEAD · DETAIL
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight truncate">{data.fullName}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500">
-              <span>{relativeTime(data.createdAt)}</span>
-              <span>·</span>
-              <span className="font-mono tabular-nums text-zinc-900">{formatAbn(data.abn)}</span>
-              {data.email ? (<><span>·</span><span className="font-mono">{data.email}</span></>) : null}
-            </div>
-            <ClientLink kind="lead" id={data.id} className="mt-3" />
-          </div>
-          <div className="text-right">
-            <BigOutcomePill outcome={data.outcome} />
-            <div className="mt-2"><FunnelPills stages={funnelStages} /></div>
-            {data.reminderOptIn ? (
-              <div className="mt-2 inline-flex items-center gap-1 text-xxs font-mono uppercase tracking-[0.14em] text-emerald-700">
-                <CircleCheck className="h-3 w-3" />
-                Reminder opt-in
-              </div>
-            ) : null}
-          </div>
-        </div>
+      <RecordHeader
+        kicker={`Wizard visit · ABN ${formatAbn(data.abn)}`}
+        title={headline(data, latest)}
+        sub={<>{data.fullName} · {data.email} · <When at={data.createdAt} />{data.reminderOptIn ? ' · asked for reminders' : ''}</>}
+        status={latest ? renewalStatus(latest) : statusOf('lead', data.outcome)}
+      >
+        {nextStep(data, latest)}
+        <StoryStrip steps={story(data, latest)} />
+      </RecordHeader>
 
-        {data.outcomeMessage ? (
-          <div className="mt-5 rounded-lg bg-zinc-50 ring-1 ring-zinc-100 p-4">
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">OUTCOME MESSAGE</div>
-            <div className="mt-1 text-sm text-zinc-900 break-words font-mono">{data.outcomeMessage}</div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Detail grid */}
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section kicker="CONTACT" title="Contact information">
-          <Row label="Full name" value={data.fullName} />
-          <Row label="Email" value={<a href={`mailto:${data.email}`} className="text-brand-700 hover:text-brand-800 break-all">{data.email}</a>} mono />
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section kicker="Person" title="Who visited">
+          {data.client ? (
+            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-brand-700 hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+          ) : null}
+          <Row label="Name" value={data.fullName} />
+          <Row label="Email" value={<a href={`mailto:${data.email}`} className="break-all text-brand-700 hover:text-brand-800">{data.email}</a>} />
           <Row label="Mobile" value={<a href={`tel:${data.mobileNumber}`} className="text-brand-700 hover:text-brand-800">{data.mobileNumber}</a>} mono />
           <Row label="Date of birth" value={fmtDob(data.dateOfBirth)} mono />
+          <Row label="Reminders" value={data.reminderOptIn ? 'Asked for renewal reminders' : 'Didn’t ask for reminders'} />
         </Section>
 
-        <Section kicker="LEAD" title="Lead info">
+        <Section kicker="Names" title={names.length ? `${names.length} business name${names.length === 1 ? '' : 's'} on the ABN` : 'Business names on the ABN'}>
+          {names.length === 0 ? (
+            <p className="text-sm text-zinc-500">{data.searchLog ? 'ASIC found no business names on this ABN.' : 'No ASIC search is linked to this visit.'}</p>
+          ) : names.map((n) => {
+            const r = data.renewalRequests.filter((x) => x.businessName === n.businessName).sort((a, b) => b.initiatedAt.localeCompare(a.initiatedAt))[0]
+            return (
+              <div key={n.id} className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-zinc-900">{n.businessName}</div>
+                  <div className="text-xs text-zinc-500">{r ? <>Renewal <When at={r.initiatedAt} /> · {fmtMoney2(r.amount)}</> : 'No renewal started'}</div>
+                </div>
+                {r ? <Link to={`/admin/renewals/${r.id}`}><Status entry={renewalStatus(r)} /></Link> : null}
+              </div>
+            )
+          })}
+        </Section>
+      </div>
+
+      <TechnicalDetail>
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
           <Row label="Lead ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="ABN" value={formatAbn(data.abn)} mono />
-          <Row label="Outcome" value={<OutcomePill outcome={data.outcome} />} />
+          <Row label="Outcome" value={data.outcome} mono />
           <Row label="Created" value={fmtDateTime(data.createdAt)} mono />
-          {data.convertedToRenewal && data.convertedAt ? (
-            <Row label="Converted" value={fmtDateTime(data.convertedAt)} mono />
-          ) : null}
-        </Section>
-
-        <Section kicker="TRACKING" title="Tracking">
+          <Row label="Converted" value={data.convertedAt ? fmtDateTime(data.convertedAt) : '—'} mono />
           <Row label="IP address" value={data.ipAddress ?? '—'} mono />
           <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
           <Row label="User agent" value={<span className="break-all text-xs">{data.userAgent ?? '—'}</span>} mono />
-        </Section>
-
-        {data.searchLog ? (
-          <Section kicker="SEARCH" title="ASIC search">
-            <Row label="Searched" value={fmtDateTime(data.searchLog.searchedAt)} mono />
-            <Row label="Status" value={data.searchLog.success
-              ? <StatusPill tone="emerald">SUCCESS</StatusPill>
-              : <StatusPill tone="red">FAILED</StatusPill>} />
-            <Row label="Results" value={`${data.searchLog.resultsCount} business name${data.searchLog.resultsCount === 1 ? '' : 's'}`} />
-            {data.searchLog.errorMessage ? (
-              <Row label="Error" value={<span className="text-red-700 break-words">{data.searchLog.errorMessage}</span>} mono />
-            ) : null}
-          </Section>
+          {data.searchLog ? <Row label="Search" value={`${data.searchLog.success ? 'succeeded' : 'failed'} · ${data.searchLog.resultsCount} result(s) · ${fmtDateTime(data.searchLog.searchedAt)}`} mono /> : null}
+          {names.map((n) => <Row key={n.id} label={n.businessName} value={`acct ${n.accountNumber} · reg ${n.registrationDate}`} mono />)}
+        </dl>
+        {data.outcomeMessage || data.searchLog?.errorMessage ? (
+          <div className="mt-4">
+            <KickerLabel>Messages</KickerLabel>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{[data.outcomeMessage, data.searchLog?.errorMessage].filter(Boolean).join('\n')}</pre>
+          </div>
         ) : null}
-      </div>
-
-      {/* Business names found */}
-      {data.searchLog && data.searchLog.results.length > 0 ? (
-        <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
-          <div className="mb-4 flex items-end justify-between gap-3">
-            <div>
-              <KickerLabel>NAMES</KickerLabel>
-              <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">Business names found</h2>
-            </div>
-            <span className="text-xs font-mono tabular-nums text-zinc-500">{data.searchLog.results.length} {data.searchLog.results.length === 1 ? 'name' : 'names'}</span>
-          </div>
-          <div className="space-y-3">
-            {data.searchLog.results.map((r) => (
-              <div key={r.id} className="rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-300 transition">
-                <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName}</div>
-                <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs font-mono tabular-nums text-zinc-500 max-w-md">
-                  <div className="flex justify-between"><span className="text-zinc-400">acct</span><span className="text-zinc-700">{r.accountNumber}</span></div>
-                  <div className="flex justify-between"><span className="text-zinc-400">reg</span><span className="text-zinc-700">{r.registrationDate}</span></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Renewal requests */}
-      {data.renewalRequests.length > 0 ? (
-        <div className="mt-6 rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
-          <div className="mb-4 flex items-end justify-between gap-3">
-            <div>
-              <KickerLabel>RENEWALS</KickerLabel>
-              <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">Renewal requests</h2>
-            </div>
-            <span className="text-xs font-mono tabular-nums text-zinc-500">{data.renewalRequests.length} {data.renewalRequests.length === 1 ? 'request' : 'requests'}</span>
-          </div>
-          <div className="space-y-3">
-            {data.renewalRequests.map((r) => (
-              <Link
-                key={r.id}
-                to={`/admin/renewals/${r.id}`}
-                className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-brand-200 hover:bg-brand-50/30 transition"
-              >
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-zinc-900 truncate">{r.businessName ?? 'N/A'}</div>
-                    <div className="mt-2 grid grid-cols-3 gap-x-6 gap-y-1.5 text-xs font-mono tabular-nums text-zinc-500 max-w-md">
-                      <div className="flex justify-between"><span className="text-zinc-400">amt</span><span className="text-zinc-700">{fmtMoney2(r.amount)}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-400">yr</span><span className="text-zinc-700">{r.renewalYears}</span></div>
-                      <div className="flex justify-between"><span className="text-zinc-400">init</span><span className="text-zinc-700">{relativeTime(r.initiatedAt)}</span></div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <RenewalStatusPill status={r.status} />
-                    <div className="mt-1 text-xxs font-mono text-brand-700">View renewal →</div>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      </TechnicalDetail>
     </div>
   )
 }
 
-/* ───── Pills + helpers ───── */
-
-function BigOutcomePill({ outcome }: { outcome: string }) {
-  return <Status kind="lead" status={outcome} size="lg" />
+/** What the visit came to, in words. */
+function headline(d: Detail, latest: Renewal | undefined): string {
+  const who = d.fullName || 'Someone'
+  if (latest?.status === 'Completed' || d.outcome === 'RenewalCompleted') return `${who} renewed with us`
+  if (latest && (latest.status === 'Pending' || latest.status === 'Processing')) return `${who} paid; the renewal is under way`
+  if (latest?.status === 'Failed') return `${who}’s renewal failed`
+  switch (d.outcome) {
+    case 'RenewalAvailable': return `${who} found a name due and didn’t pay`
+    case 'NotDueForRenewal': return `${who} looked up their names; nothing was due`
+    case 'RenewalInProgress': return `${who} is paying`
+    case 'NoBusinessNames': return `${who}’s ABN has no business names`
+    default: return `${who} started the wizard; the ASIC check didn’t finish`
+  }
 }
 
-function OutcomePill({ outcome }: { outcome: string }) {
-  return <Status kind="lead" status={outcome} />
+function nextStep(d: Detail, latest: Renewal | undefined): ReactNode {
+  const openClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
+  if (latest && latest.status !== 'Completed') {
+    const s = renewalStatus(latest)
+    return (
+      <NextStep meaning={s.meaning} title={s.meaning === 'action' ? 'The renewal needs a person.' : 'Nothing to do here; follow the renewal.'}
+        actions={<Button asChild size="sm"><Link to={`/admin/renewals/${latest.id}`}>Open renewal</Link></Button>}>
+        {latest.businessName ?? 'Renewal'}: {s.label.toLowerCase()}, started <When at={latest.initiatedAt} />.
+      </NextStep>
+    )
+  }
+  if (latest) {
+    return <NextStep meaning="done" title="Nothing to do." actions={openClient}>Renewed <When at={latest.initiatedAt} />. Any other names on the ABN are on the client’s page.</NextStep>
+  }
+  if (d.outcome === 'RenewalAvailable') {
+    return (
+      <NextStep meaning="waiting" title="Waiting on them to pay." actions={openClient}>
+        {d.reminderOptIn ? 'They asked for reminders, so they’ll hear from us before it’s due.' : 'They didn’t ask for reminders; win-back emails from Leads can reach them.'}
+      </NextStep>
+    )
+  }
+  if (d.outcome === 'NotDueForRenewal') {
+    return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>{d.reminderOptIn ? 'We’ll remind them when a name comes due.' : 'They didn’t ask for reminders.'}</NextStep>
+  }
+  return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>No business name here can be renewed.</NextStep>
 }
 
-function RenewalStatusPill({ status }: { status: string }) {
-  return <Status kind="renewal" status={status} />
+/** Search → visit → renewal. */
+function story(d: Detail, latest: Renewal | undefined): StoryStep[] {
+  const steps: StoryStep[] = []
+  if (d.searchLog) {
+    steps.push({
+      label: 'ASIC search',
+      meaning: d.searchLog.success ? 'done' : 'action',
+      at: d.searchLog.searchedAt,
+      note: d.searchLog.success ? undefined : 'failed',
+      to: `/admin/searches/${d.searchLog.id}`,
+    })
+  }
+  steps.push({ label: 'Wizard visit', meaning: 'done', at: d.createdAt, current: true })
+  if (latest) {
+    const s = renewalStatus(latest)
+    steps.push({ label: `Renewal: ${s.label.toLowerCase()}`, meaning: s.meaning, at: latest.initiatedAt, to: `/admin/renewals/${latest.id}` })
+  } else {
+    steps.push({ label: 'Renewal', meaning: 'quiet', note: d.outcome === 'RenewalAvailable' ? 'not paid' : 'nothing due' })
+  }
+  return steps
 }
 
 function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
@@ -235,19 +185,17 @@ function Section({ kicker, title, children }: { kicker: string; title: string; c
     <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
       <div className="mb-4">
         <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
+        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">{title}</h2>
       </div>
-      <dl className="space-y-3">
-        {children}
-      </dl>
+      <dl className="space-y-3">{children}</dl>
     </div>
   )
 }
 
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-3 items-baseline">
-      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
+    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
+      <dt className="truncate text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
       <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
     </div>
   )

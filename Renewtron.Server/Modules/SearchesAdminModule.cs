@@ -265,7 +265,7 @@ public sealed class SearchesAdminModule : ICarterModule
 
             var lead = await db.Leads.AsNoTracking()
                 .Where(l => l.SearchLogId == s.Id)
-                .Select(l => new { l.Id, l.FullName, l.Email, l.MobileNumber, Outcome = l.Outcome.ToString() })
+                .Select(l => new { l.Id, l.ClientId, l.FullName, l.Email, l.MobileNumber, Outcome = l.Outcome.ToString() })
                 .FirstOrDefaultAsync();
 
             // Latest renewal attempt per result. Pulled flat and grouped in memory to avoid the
@@ -295,9 +295,12 @@ public sealed class SearchesAdminModule : ICarterModule
             var anyInflight = renewalsRaw.Any(r => r.Status is "Pending" or "Processing");
             var anyFailed = renewalsRaw.Any(r => r.Status == "Failed");
 
+            var client = await ClientRefs.ByIdAsync(db, lead?.ClientId) ?? await ClientRefs.ByAbnAsync(db, s.Abn);
+
             return Results.Ok(new
             {
                 id = s.Id,
+                client,
                 abn = s.Abn,
                 sessionId = s.SessionId,
                 searchedAt = s.SearchedAt,

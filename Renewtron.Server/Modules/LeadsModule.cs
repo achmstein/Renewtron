@@ -491,9 +491,11 @@ public sealed class LeadsModule : ICarterModule
                     .ThenInclude(r => r.SearchResult)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (l is null) return Results.NotFound();
+            var client = await ClientRefs.ByIdAsync(db, l.ClientId) ?? await ClientRefs.ByAbnAsync(db, l.Abn);
             return Results.Ok(new
             {
                 id = l.Id,
+                client,
                 abn = l.Abn,
                 fullName = l.FullName,
                 email = l.Email,

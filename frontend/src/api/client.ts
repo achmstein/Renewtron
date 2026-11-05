@@ -521,6 +521,7 @@ export const api = {
     },
     search: (id: string) => apiFetch<{
       id: string
+      client: { id: string; fullName: string } | null
       abn: string
       sessionId?: string | null
       searchedAt: string
@@ -604,6 +605,7 @@ export const api = {
       apiFetch<void>('/api/admin/settings/win-back', { method: 'PUT', body: JSON.stringify(body) }),
     lead: (id: string) => apiFetch<{
       id: string
+      client: { id: string; fullName: string } | null
       abn: string
       fullName: string
       email: string
