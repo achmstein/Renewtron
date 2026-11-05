@@ -59,6 +59,41 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
         return request;
     }
 
+    /// <summary>
+    /// Fills in the client's other business names under the request's ABN from our copy of the
+    /// public register and re-renders the enquiry text, so one enquiry asks for every key.
+    /// A failed lookup leaves the request as it was: asking for the one name still works.
+    /// </summary>
+    public static async Task AddOtherBusinessNamesAsync(ApplicationDbContext db, AsicKeyRequest request, AsicKeyRequestSettings settings, ILogger logger, CancellationToken ct = default)
+    {
+        var abn = DigitsOnly(request.Abn);
+        if (abn.Length != 11) return;
+        try
+        {
+            // The CAST keeps the parameter varchar like the column so SQL Server seeks the index
+            // (see LocalBusinessNameService).
+            var names = await db.Database.SqlQuery<string>($"""
+                SELECT n.Name AS Value
+                FROM RegisteredBusinessNames n WITH (NOLOCK)
+                JOIN BusinessNameImports i ON i.Id = n.ImportId AND i.IsActive = 1
+                WHERE n.Abn = CAST({abn} AS varchar(11))
+                ORDER BY n.Name
+                """).ToListAsync(ct);
+
+            var others = names
+                .Select(Normalise)
+                .Where(n => n.Length > 0 && !string.Equals(n, Normalise(request.BusinessName), StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            request.OtherBusinessNames = others.Count == 0 ? null : string.Join('\n', others);
+            request.Question = Render(request, settings);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not look up other business names for ABN {Abn}; asking for {BusinessName} only", abn, request.BusinessName);
+        }
+    }
+
     public async Task<AsicKeyRequest> QueueForSaleAsync(Guid saleId, CancellationToken ct = default)
     {
         var sale = await _db.OntraportSales.FirstOrDefaultAsync(s => s.Id == saleId, ct)
@@ -73,6 +108,7 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
         if (request == null)
         {
             request = FromSale(sale, "Manual", _settings.CurrentValue);
+            await AddOtherBusinessNamesAsync(_db, request, _settings.CurrentValue, _logger, ct);
             _db.AsicKeyRequests.Add(request);
         }
         else if (request.Status == AsicKeyRequestStatus.Failed)
@@ -80,6 +116,8 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
             request.Status = AsicKeyRequestStatus.Pending;
             request.ErrorMessage = null;
             request.CanAutoRetry = true;
+            // The client may have registered more names since the request was first queued.
+            await AddOtherBusinessNamesAsync(_db, request, _settings.CurrentValue, _logger, ct);
         }
         await _db.SaveChangesAsync(ct);
         return request;
@@ -131,10 +169,13 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
         var matched = 0;
         foreach (var request in waiting)
         {
-            var hit = arrived
-                .Where(n => n.ReceivedAt >= request.CreatedAt.AddDays(-1))
-                .FirstOrDefault(n =>
-                    string.Equals(Normalise(n.BusinessName), Normalise(request.BusinessName), StringComparison.OrdinalIgnoreCase)
+            // ASIC sends one notification per name; the main name's key closes the request,
+            // otherwise any of the client's names (or the ABN) does.
+            var names = request.AllBusinessNames().Select(Normalise).ToList();
+            var recent = arrived.Where(n => n.ReceivedAt >= request.CreatedAt.AddDays(-1)).ToList();
+            var hit = recent.FirstOrDefault(n => string.Equals(Normalise(n.BusinessName), names[0], StringComparison.OrdinalIgnoreCase))
+                ?? recent.FirstOrDefault(n =>
+                    names.Contains(Normalise(n.BusinessName), StringComparer.OrdinalIgnoreCase)
                     || (n.Abn != null && DigitsOnly(n.Abn) == request.Abn));
             if (hit == null) continue;
 
@@ -153,12 +194,21 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
     public static string Render(AsicKeyRequest request, AsicKeyRequestSettings settings)
     {
         var template = string.IsNullOrWhiteSpace(settings.MessageTemplate) ? AsicKeyRequestSettings.DefaultMessageTemplate : settings.MessageTemplate;
+        var names = request.AllBusinessNames();
+        if (names.Count > 1)
+        {
+            // "my business name {BusinessName} … my ASIC key" reads right for one name; for
+            // several, the wording around the placeholder goes plural.
+            template = Regex.Replace(template, @"\bname(\s+\{BusinessName\})", "names$1", RegexOptions.IgnoreCase);
+            template = Regex.Replace(template, @"\bASIC key\b(?!s)", "ASIC keys", RegexOptions.IgnoreCase);
+            template = Regex.Replace(template, @"\ba copy of my ASIC keys\b", "copies of my ASIC keys", RegexOptions.IgnoreCase);
+        }
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["FirstName"] = request.GivenNames.Trim(),
             ["LastName"] = request.FamilyName.Trim(),
             ["Abn"] = DigitsOnly(request.Abn),
-            ["BusinessName"] = request.BusinessName.Trim(),
+            ["BusinessName"] = JoinNames(names),
             ["Email"] = (settings.RequestEmail ?? "").Trim(),
             ["ClientEmail"] = request.Email.Trim(),
             ["DateOfBirth"] = (request.DateOfBirth ?? "").Trim(),
@@ -230,6 +280,14 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
             return ((settings.DefaultPhonePrefix ?? "").Trim(), digits);
         return ((settings.DefaultPhonePrefix ?? "").Trim(), DigitsOnly(settings.DefaultPhoneNumber));
     }
+
+    /// <summary>"A", "A and B", "A, B and C".</summary>
+    private static string JoinNames(IReadOnlyList<string> names) => names.Count switch
+    {
+        0 => "",
+        1 => names[0],
+        _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
+    };
 
     private static string Normalise(string? name) => Regex.Replace(name ?? "", @"\s+", " ").Trim();
 

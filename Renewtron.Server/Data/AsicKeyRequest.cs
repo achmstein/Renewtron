@@ -23,6 +23,11 @@ public class AsicKeyRequest
     public string? Phone { get; set; }
     public string Abn { get; set; } = "";
     public string BusinessName { get; set; } = "";
+    /// <summary>
+    /// The client's other business names under the same ABN (from our copy of the public
+    /// register), one per line, so one enquiry asks ASIC for every key. Null when there are none.
+    /// </summary>
+    public string? OtherBusinessNames { get; set; }
     /// <summary>The client's date of birth as dd/MM/yyyy — ASIC now asks for it to identify the holder.</summary>
     public string? DateOfBirth { get; set; }
     /// <summary>The client's address on one line, e.g. "1 Smith St, Suburb NSW 2000".</summary>
@@ -58,4 +63,12 @@ public class AsicKeyRequest
     public DateTime? ProcessedAt { get; set; }
     public DateTime? SubmittedAt { get; set; }
     public DateTime? KeyReceivedAt { get; set; }
+
+    /// <summary>The main name first, then the others.</summary>
+    public IReadOnlyList<string> AllBusinessNames() =>
+        new[] { BusinessName }
+            .Concat((OtherBusinessNames ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Where(n => n.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 }

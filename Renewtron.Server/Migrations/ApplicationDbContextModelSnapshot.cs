@@ -400,6 +400,10 @@ namespace Renewtron.Migrations
                     b.Property<Guid?>("OntraportSaleId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("OtherBusinessNames")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
@@ -408,8 +412,8 @@ namespace Renewtron.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Question")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("Source")
                         .IsRequired()

@@ -123,7 +123,7 @@ public sealed class PartnerModule : ICarterModule
         // ---- ASIC key requests ------------------------------------------------------
         group.MapPost("/asic-key-requests", async (
             AsicKeyRequestBody body, ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings,
-            IOptionsMonitor<TestModeSettings> testMode) =>
+            IOptionsMonitor<TestModeSettings> testMode, ILogger<AsicKeyRequestService> logger) =>
         {
             var businessName = Regex.Replace(body.BusinessName ?? "", @"\s+", " ").Trim();
             var email = (body.Email ?? "").Trim();
@@ -173,6 +173,7 @@ public sealed class PartnerModule : ICarterModule
                 CreatedAt = DateTime.UtcNow,
             };
             request.Question = AsicKeyRequestService.Render(request, settings.CurrentValue);
+            await AsicKeyRequestService.AddOtherBusinessNamesAsync(db, request, settings.CurrentValue, logger);
             db.AsicKeyRequests.Add(request);
             await db.SaveChangesAsync();
 

@@ -92,6 +92,11 @@ export default function AsicKeyRequests() {
         return (
           <div>
             <div className="text-sm font-medium truncate text-zinc-900">{r.businessName}</div>
+            {r.otherBusinessNames?.length ? (
+              <div className="text-xxs truncate text-zinc-500" title={r.otherBusinessNames.join('\n')}>
+                + {r.otherBusinessNames.length === 1 ? r.otherBusinessNames[0] : `${r.otherBusinessNames.length} more names`}
+              </div>
+            ) : null}
             <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div>
           </div>
         )

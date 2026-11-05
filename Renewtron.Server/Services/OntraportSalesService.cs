@@ -180,7 +180,9 @@ public class OntraportSalesService : IOntraportSalesService
                         && !hasKey
                         && _asicKeyRequestSettings.CurrentValue is { Enabled: true, AutoRequestOnSync: true })
                     {
-                        _dbContext.AsicKeyRequests.Add(AsicKeyRequestService.FromSale(sale, "Sync", _asicKeyRequestSettings.CurrentValue));
+                        var keyRequest = AsicKeyRequestService.FromSale(sale, "Sync", _asicKeyRequestSettings.CurrentValue);
+                        await AsicKeyRequestService.AddOtherBusinessNamesAsync(_dbContext, keyRequest, _asicKeyRequestSettings.CurrentValue, _logger);
+                        _dbContext.AsicKeyRequests.Add(keyRequest);
                     }
 
                     _logger.LogInformation("Synced Ontraport sale: {BusinessName} (ABN: {Abn}), due: {DueDate}, contact: {ContactName}",

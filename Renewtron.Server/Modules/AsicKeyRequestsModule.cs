@@ -223,6 +223,7 @@ public sealed class AsicKeyRequestsModule : ICarterModule
             ontraportSaleId = r.OntraportSaleId,
             ontraportContactId = r.OntraportContactId,
             businessName = r.BusinessName,
+            otherBusinessNames = r.AllBusinessNames().Skip(1).ToList(),
             abn = r.Abn,
             contactName = (r.GivenNames + " " + r.FamilyName).Trim(),
             givenNames = r.GivenNames,

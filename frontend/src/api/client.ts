@@ -172,6 +172,8 @@ export interface AsicKeyRequestDto {
   ontraportSaleId: string | null
   ontraportContactId: string | null
   businessName: string
+  /** The client's other names under the same ABN; the enquiry text asks for their keys too. */
+  otherBusinessNames: string[]
   abn: string
   contactName: string
   givenNames: string

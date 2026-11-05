@@ -234,7 +234,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Phone).HasMaxLength(30);
             entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
             entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Question).HasMaxLength(2000);
+            entity.Property(e => e.OtherBusinessNames).HasMaxLength(4000);
+            entity.Property(e => e.Question).HasMaxLength(4000);
             entity.Property(e => e.Source).IsRequired().HasMaxLength(20);
             entity.Property(e => e.AsicReferenceNumber).HasMaxLength(50);
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
