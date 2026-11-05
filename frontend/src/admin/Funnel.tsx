@@ -83,7 +83,7 @@ export default function Funnel() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <PageHeader
-        kicker="OPS"
+        kicker="REPORTS"
         title="Funnel"
         subtitle="How far people get through the renewal wizard, counted per person."
         right={

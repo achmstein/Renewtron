@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CalendarRange, CircleAlert, Eye, EyeOff, X } from 'lucide-react'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { SearchSentence, SentenceList } from './_sentences'
 import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, SparklineTile, StatTile, StatusPill, ViewToggle } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime, relativeTime } from './_utils'
@@ -18,13 +19,12 @@ type Search = SearchesResponse['items'][number]
 type Stats = SearchesResponse['stats']
 type Facets = SearchesResponse['facets']
 
-type ViewMode = 'Table' | 'Cards'
+type ViewMode = 'Sentences' | 'Table' | 'Cards'
 const PAGE_SIZE = 10
 
 export default function Searches() {
   // Cards are the usable default on phones; the wide table needs a desktop viewport.
-  const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    window.matchMedia('(min-width: 1024px)').matches ? 'Table' : 'Cards')
+  const [viewMode, setViewMode] = useState<ViewMode>('Sentences')
   const [page, setPage] = useState(1)
 
   const [abnInput, setAbnInput] = useState('')
@@ -171,7 +171,7 @@ export default function Searches() {
         subtitle="ABN searches recorded by customers, admins, and the bulk pipelines."
         right={
           <>
-            <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
+            <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
@@ -209,7 +209,11 @@ export default function Searches() {
       </div>
 
       <div className="mt-4">
-        {viewMode === 'Cards' ? (
+        {viewMode === 'Sentences' ? (
+          <SentenceList empty={<EmptyState title="No searches match the current filters." />}>
+            {searches.map((s) => <SearchSentence key={s.id} s={s} />)}
+          </SentenceList>
+        ) : viewMode === 'Cards' ? (
           <CardsView searches={searches} onShowError={setErrorModal} />
         ) : (
           <DataTable columns={columns} data={searches} empty={<EmptyState title="No searches match the current filters." />} />

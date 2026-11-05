@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { LayoutGrid, Loader2, RefreshCw, Rows3 } from 'lucide-react'
+import { AlignLeft, LayoutGrid, Loader2, RefreshCw, Rows3 } from 'lucide-react'
 import { TrendChart } from '@/components/trend-chart'
 
 /* ─────────────────── Page chrome ─────────────────── */
@@ -227,7 +227,8 @@ export function ViewToggle<T extends string>({ value, options, onChange }: {
         const isLast = i === options.length - 1
         const radius = isFirst ? 'rounded-l-md' : isLast ? 'rounded-r-md' : ''
         const cls = active ? 'bg-zinc-900 text-white ring-zinc-900' : 'bg-white text-zinc-700 hover:bg-zinc-50 ring-zinc-300'
-        const icon = opt.label.toLowerCase().includes('table') ? TableIcon : CardsIcon
+        const label = opt.label.toLowerCase()
+        const icon = label.includes('table') ? TableIcon : label.includes('sentence') ? <AlignLeft className="h-4 w-4" /> : CardsIcon
         return (
           <button
             key={opt.value as string}

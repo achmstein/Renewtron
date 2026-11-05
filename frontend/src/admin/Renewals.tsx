@@ -5,6 +5,7 @@ import { CalendarRange, Loader2, RefreshCw, Wrench, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { RenewalSentence, SentenceList } from './_sentences'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, ViewToggle } from './_ui'
 import { renewalStatus, Status, statusLabel } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
@@ -20,7 +21,7 @@ type Renewal = RenewalsResponse['items'][number]
 type Stats = RenewalsResponse['stats']
 type Facets = RenewalsResponse['facets']
 
-type ViewMode = 'Table' | 'Cards'
+type ViewMode = 'Sentences' | 'Table' | 'Cards'
 const PAGE_SIZE = 10
 
 function canRetry(r: Renewal) {
@@ -41,8 +42,8 @@ function categoryLabel(category: string): string {
 
 export default function Renewals() {
   // Cards are the usable default on phones; the wide table needs a desktop viewport.
-  const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    window.matchMedia('(min-width: 1024px)').matches ? 'Table' : 'Cards')
+  // Sentences read on any screen; the table is there for digging.
+  const [viewMode, setViewMode] = useState<ViewMode>('Sentences')
   const [page, setPage] = useState(1)
 
   // ?view=to-fix is the sidebar's "Renewals to fix" queue: the same list, narrowed on the server.
@@ -246,7 +247,7 @@ export default function Renewals() {
               <Wrench className="h-4 w-4" />
               <span className="hidden sm:inline">Reconcile</span>
             </Button>
-            <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
+            <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
@@ -276,7 +277,15 @@ export default function Renewals() {
       </div>
 
       <div className="mt-4">
-        {viewMode === 'Cards' ? (
+        {viewMode === 'Sentences' ? (
+          <SentenceList empty={<EmptyState title="No renewals match the current filters." />}>
+            {renewals.map((r) => (
+              <RenewalSentence key={r.id} r={r} actions={canRetry(r) ? (
+                <Button size="xs" variant="outline" disabled={retryOneMutation.isPending && retryOneMutation.variables === r.id} onClick={() => retryOne(r.id)}>Retry</Button>
+              ) : null} />
+            ))}
+          </SentenceList>
+        ) : viewMode === 'Cards' ? (
           renewals.length === 0 ? (
             <EmptyState title="No renewals match the current filters." />
           ) : (

@@ -43,7 +43,7 @@ export default function Dashboard() {
 
       {health ? <HealthStrip health={health} /> : null}
 
-      {/* Action queue — full width */}
+      {/* Opportunities — the money worth chasing; the day's work itself is on Today */}
       <div className="mt-10">
         {(() => {
           const actionItems = [
@@ -77,8 +77,8 @@ export default function Dashboard() {
               value: fmtMoney0(stats.failedRenewalValue),
               title: 'Failed renewals (30d)',
               detail: 'Renewal attempts that broke before completion. Each is a paying customer waiting on a retry.',
-              ctaLabel: 'Retry queue →',
-              to: '/admin/renewals?status=Failed',
+              ctaLabel: 'Renewals to fix →',
+              to: '/admin/renewals?view=to-fix',
             },
             {
               key: 'repeat',
@@ -95,12 +95,12 @@ export default function Dashboard() {
 
           const visible = actionItems.filter((item) => item.count > 0)
           const headerRight = visible.length > 0
-            ? `${visible.reduce((sum, i) => sum + i.count, 0).toLocaleString()} items need attention`
-            : 'all clear'
+            ? `${visible.reduce((sum, i) => sum + i.count, 0).toLocaleString()} worth chasing`
+            : 'nothing to chase'
 
           return (
             <>
-              <SectionTitle kicker="ACT" title="Action queue" right={headerRight} />
+              <SectionTitle kicker="CHASE" title="Opportunities" right={headerRight} />
               <div className="mt-4">
                 {visible.length === 0 ? (
                   <CaughtUp />

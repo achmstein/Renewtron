@@ -5,7 +5,8 @@ import { CircleAlert, KeyRound, ListRestart, Loader2, RefreshCw, TriangleAlert, 
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, type Tone } from './_ui'
+import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, ViewToggle, type Tone } from './_ui'
+import { SaleSentence, SentenceList } from './_sentences'
 import { Status, statusOf, type Meaning } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -111,6 +112,7 @@ export default function OntraportSales() {
   // One page of the chosen due-date view, already filtered and sorted (most urgent first) by
   // the server, annotated with days until the due date.
   const tableRows = useMemo<SaleRow[]>(() => (data?.items ?? []).map(withDaysUntil), [data])
+  const [viewMode, setViewMode] = useState<'Sentences' | 'Table'>('Sentences')
   const upNext = useMemo<SaleRow[]>(() => (data?.upNext ?? []).map(withDaysUntil), [data])
   const buckets = data?.buckets ?? { overdue: 0, overdueValue: 0, soon7: 0, soon30: 0, all: 0 }
   const upNextValue = upNext.reduce((sum, s) => sum + s.amountPaid, 0)
@@ -256,6 +258,7 @@ export default function OntraportSales() {
                 <span className="sm:hidden">Requeue</span>
               </Button>
             ) : null}
+            <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
@@ -362,7 +365,13 @@ export default function OntraportSales() {
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={tableRows} loading={isFetching && isPlaceholderData} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
+        {viewMode === 'Sentences' ? (
+          <SentenceList empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />}>
+            {tableRows.map((s) => <SaleSentence key={s.id} s={s} />)}
+          </SentenceList>
+        ) : (
+          <DataTable columns={columns} data={tableRows} loading={isFetching && isPlaceholderData} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
+        )}
         {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
           <Pagination page={page} pageSize={PAGE_SIZE} total={data?.filteredCount ?? 0} onPage={setPage} />
         ) : null}

@@ -6,7 +6,8 @@ import { CalendarRange, Check, Mail, PlusCircle, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, FunnelPills, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
+import { EmptyState, FunnelPills, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, ViewToggle, type Tone } from './_ui'
+import { LeadSentence, SentenceList } from './_sentences'
 import { Status } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -82,6 +83,7 @@ export default function Leads() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-leads'] })
 
   const leads = data?.items ?? []
+  const [viewMode, setViewMode] = useState<'Sentences' | 'Table'>('Sentences')
   const totalCount = data?.totalCount ?? 0
   const stats: Stats = data?.stats ?? defaultStats()
   const facets: Facets = data?.facets ?? { outcome: [], reminder: [] }
@@ -227,6 +229,7 @@ export default function Leads() {
               Send win-back
               {winBackEnabled ? <span className="ml-0.5 inline-flex items-center justify-center rounded bg-white/20 text-white text-xxs font-mono tabular-nums px-1.5 py-0.5 leading-none">{stats.winBackEligible}</span> : null}
             </button>
+            <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
             <RefreshButton onClick={() => void refetch()} busy={isFetching} />
           </>
         }
@@ -255,7 +258,13 @@ export default function Leads() {
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={leads} loading={isFetching && isPlaceholderData} empty={<EmptyState title="No leads match the current filters." />} />
+        {viewMode === 'Sentences' ? (
+          <SentenceList empty={<EmptyState title="No leads match the current filters." />}>
+            {leads.map((l) => <LeadSentence key={l.id} l={l} />)}
+          </SentenceList>
+        ) : (
+          <DataTable columns={columns} data={leads} loading={isFetching && isPlaceholderData} empty={<EmptyState title="No leads match the current filters." />} />
+        )}
         {totalCount > PAGE_SIZE ? (
           <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
         ) : null}
