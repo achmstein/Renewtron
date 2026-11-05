@@ -1,112 +1,115 @@
 import type { ReactNode } from 'react'
-import { AlignLeft, LayoutGrid, Loader2, RefreshCw, Rows3 } from 'lucide-react'
+import { AlignLeft, LayoutGrid, Loader2, RefreshCw, Rows3, X } from 'lucide-react'
 import { TrendChart } from '@/components/trend-chart'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
+
+/*
+ * The admin's shared building blocks, on shadcn/ui and the admin theme (see STYLE.md).
+ * Friendly and focused: sentence case, one short line of supporting text at most, details on
+ * the record page or on hover.
+ */
 
 /* ─────────────────── Page chrome ─────────────────── */
 
-export function PageHeader({ kicker, title, subtitle, right }: { kicker: string; title: string; subtitle?: string; right?: ReactNode }) {
+/** Page title, one optional line under it, and the page's actions on the right. */
+export function PageHeader({ title, subtitle, right }: { kicker?: string; title: string; subtitle?: string; right?: ReactNode }) {
   return (
-    <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">{kicker}</div>
-        <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-zinc-500">{subtitle}</p> : null}
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
       </div>
       {right ? <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{right}</div> : null}
     </div>
   )
 }
 
-export function SectionTitle({ kicker, title, right }: { kicker: string; title: string; right?: ReactNode }) {
+/** A section's title, with a short fact (a count, a total) on the right. */
+export function SectionTitle({ title, right }: { kicker?: string; title: string; right?: ReactNode }) {
   return (
-    <div className="flex items-end justify-between gap-3">
-      <div>
-        <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500">{kicker}</div>
-        <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
-      </div>
-      {right ? <div className="text-xs font-mono text-zinc-500 tabular-nums">{right}</div> : null}
+    <div className="flex items-baseline justify-between gap-3">
+      <h2 className="text-base font-semibold">{title}</h2>
+      {right ? <div className="text-sm text-muted-foreground tabular-nums">{right}</div> : null}
     </div>
   )
 }
 
-export function KickerLabel({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`text-xxs font-mono font-medium uppercase tracking-[0.16em] text-zinc-500 ${className}`}>{children}</div>
+/** A small muted label above a value or a group. */
+export function KickerLabel({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('text-xs font-medium text-muted-foreground', className)}>{children}</div>
 }
 
 /* ─────────────────── Table chrome ─────────────────── */
 
-export function Th({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function Th({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <th className={`px-4 py-2.5 text-left text-xxs font-mono font-medium uppercase tracking-[0.12em] text-zinc-500 border-b border-zinc-200 ${className}`}>
+    <th className={cn('h-10 border-b px-4 text-left align-middle text-xs font-medium text-muted-foreground', className)}>
       {children}
     </th>
   )
 }
 
-/** Definition-list cell (used in Cards views): mono kicker label + value below. */
+/** A label and its value, for details laid out in a grid. */
 export function Cell({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div>
-      <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
-      <dd className={`mt-1 text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn('mt-0.5 text-sm', mono && 'font-mono tabular-nums')}>{value}</dd>
     </div>
   )
 }
 
-/* ─────────────────── Pills + dots ─────────────────── */
+/* ─────────────────── Status ─────────────────── */
 
 export type Tone = 'emerald' | 'amber' | 'red' | 'indigo' | 'zinc'
 
-export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode }) {
-  const map: Record<Tone, string> = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
-    amber:   'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
-    red:     'bg-red-50 text-red-700 ring-1 ring-red-100',
-    indigo:  'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100',
-    zinc:    'bg-zinc-100 text-zinc-700 ring-1 ring-zinc-200',
-  }
+export const TONE_BADGE = { emerald: 'success', amber: 'warning', red: 'danger', indigo: 'info', zinc: 'neutral' } as const
+const TONE_DOT: Record<Tone, string> = { emerald: 'bg-success', amber: 'bg-warning', red: 'bg-destructive', indigo: 'bg-info', zinc: 'bg-muted-foreground/50' }
+
+/** A soft status badge with a dot. */
+export function StatusPill({ tone, children, className }: { tone: Tone; children: ReactNode; className?: string }) {
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xxs font-mono font-medium tracking-[0.12em] ${map[tone]}`}>
+    <Badge variant={TONE_BADGE[tone]} className={className}>
+      <span aria-hidden className={cn('size-1.5 rounded-full', TONE_DOT[tone])} />
       {children}
-    </span>
+    </Badge>
   )
 }
 
+/** A status as a dot and a word, for dense places. */
 export function StatusDot({ tone, label }: { tone: Tone; label: string }) {
-  const dotMap: Record<Tone, string> = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500', indigo: 'bg-indigo-500', zinc: 'bg-zinc-400' }
-  const textMap: Record<Tone, string> = { emerald: 'text-emerald-700', amber: 'text-amber-700', red: 'text-red-700', indigo: 'text-indigo-700', zinc: 'text-zinc-500' }
   return (
-    <div className={`inline-flex items-center gap-1.5 text-xxs font-mono uppercase tracking-[0.14em] ${textMap[tone]}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${dotMap[tone]}`}></span>
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span aria-hidden className={cn('size-1.5 rounded-full', TONE_DOT[tone])} />
       {label}
-    </div>
+    </span>
   )
 }
 
 /* ─────────────────── Stats ─────────────────── */
 
+const TONE_TEXT: Record<Tone, string> = { emerald: 'text-success', amber: 'text-warning', red: 'text-destructive', indigo: 'text-info', zinc: '' }
+
 export function StatTile({ kicker, label, value, sub, tone = 'zinc' }: { kicker?: string; label: string; value: string; sub?: string; tone?: Tone }) {
-  const valueColor =
-    tone === 'emerald' ? 'text-emerald-700' :
-    tone === 'amber'   ? 'text-amber-700' :
-    tone === 'red'     ? 'text-red-700' :
-    tone === 'indigo'  ? 'text-indigo-700' :
-    'text-zinc-900'
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">{label}</div>
-        {kicker ? <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-400">{kicker}</div> : null}
+    <Card className="gap-1 p-4">
+      <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+        <span>{label}</span>
+        {kicker ? <span className="text-xs">{kicker}</span> : null}
       </div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${valueColor}`}>{value}</div>
-      {sub ? <div className="text-xxs font-mono text-zinc-400 tabular-nums">{sub}</div> : null}
-    </div>
+      <div className={cn('text-2xl font-semibold tabular-nums', TONE_TEXT[tone])}>{value}</div>
+      {sub ? <div className="text-xs text-muted-foreground tabular-nums">{sub}</div> : null}
+    </Card>
   )
 }
 
 /**
- * SparklineTile — same shape as StatTile but with a hoverable area trend at the
- * bottom and a delta% pill. Used as the "today / 14d trend" tile in stats strips.
+ * A stat with a small trend line under it and the change since last period.
  * Pass `labels` (same length as data) to show dates in the hover tooltip.
  */
 export function SparklineTile({ kicker, label, value, sub, deltaPct, data, labels }: {
@@ -120,39 +123,39 @@ export function SparklineTile({ kicker, label, value, sub, deltaPct, data, label
 }) {
   const points = data.map((count, i) => ({ count, date: labels?.[i] }))
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm flex flex-col">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500">{label}</div>
-        <div className="flex items-center gap-2">
-          {kicker ? <div className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-400">{kicker}</div> : null}
+    <Card className="gap-1 p-4">
+      <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+        <span>{label}</span>
+        <span className="flex items-center gap-2 text-xs">
+          {kicker ? <span>{kicker}</span> : null}
           {deltaPct != null ? (
-            <div className={`text-xxs font-mono tabular-nums ${deltaPct >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+            <span className={cn('tabular-nums font-medium', deltaPct >= 0 ? 'text-success' : 'text-destructive')}>
               {deltaPct >= 0 ? '+' : ''}{deltaPct}%
-            </div>
+            </span>
           ) : null}
-        </div>
+        </span>
       </div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900">{value}</div>
-      {sub ? <div className="text-xxs font-mono text-zinc-400 tabular-nums">{sub}</div> : null}
-      <div className="mt-2 -mb-1 flex-1 min-h-[32px]">
+      <div className="text-2xl font-semibold tabular-nums">{value}</div>
+      {sub ? <div className="text-xs text-muted-foreground tabular-nums">{sub}</div> : null}
+      <div className="mt-2 -mb-1 min-h-8 flex-1">
         <TrendChart data={points} />
       </div>
-    </div>
+    </Card>
   )
 }
 
-/* ─────────────────── Funnel pills ─────────────────── */
+/* ─────────────────── Funnel ─────────────────── */
 
+/** Search → lead → paid, as three small badges; stages not reached are grey. */
 export function FunnelPills({ stages }: { stages: Array<{ label: string; tone: Tone; active: boolean }> }) {
   return (
-    <div className="inline-flex items-center gap-0.5 text-xxs font-mono font-medium tracking-[0.12em]">
+    <span className="inline-flex items-center gap-1">
       {stages.map((s, i) => (
-        <span key={i} className="inline-flex items-center gap-0.5">
-          {i > 0 ? <span className="text-zinc-300 mx-0.5">·</span> : null}
-          <FunnelStage label={s.label} tone={s.tone} active={s.active} />
-        </span>
+        <Badge key={i} variant={s.active ? TONE_BADGE[s.tone] : 'outline'} className={cn(!s.active && 'text-muted-foreground/60')}>
+          {s.label}
+        </Badge>
       ))}
-    </div>
+    </span>
   )
 }
 
@@ -160,55 +163,37 @@ export function FunnelPills({ stages }: { stages: Array<{ label: string; tone: T
  *  the searches list and the search-detail endpoint, so the two views can never disagree. */
 export type SearchFunnel = { hasLead: boolean; anyPaid: boolean; anyInflight: boolean; anyFailed: boolean }
 
-/** Canonical Search → funnel pills, shared by the list column and the detail page.
+/** Canonical Search → funnel badges, shared by the list column and the detail page.
  *  Stage-3 priority: paid > in-flight > failed > none. */
 export function searchFunnelStages(f: SearchFunnel): Array<{ label: string; tone: Tone; active: boolean }> {
   const third = f.anyPaid
-    ? { label: 'PAID', tone: 'emerald' as Tone, active: true }
+    ? { label: 'Paid', tone: 'emerald' as Tone, active: true }
     : f.anyInflight
-      ? { label: 'PAID', tone: 'amber' as Tone, active: true }
+      ? { label: 'Paying', tone: 'amber' as Tone, active: true }
       : f.anyFailed
-        ? { label: 'FAIL', tone: 'red' as Tone, active: true }
-        : { label: 'PAID', tone: 'zinc' as Tone, active: false }
+        ? { label: 'Failed', tone: 'red' as Tone, active: true }
+        : { label: 'Paid', tone: 'zinc' as Tone, active: false }
   return [
-    { label: 'SRCH', tone: 'emerald', active: true },
-    { label: 'LEAD', tone: 'emerald', active: f.hasLead },
+    { label: 'Search', tone: 'emerald', active: true },
+    { label: 'Lead', tone: 'emerald', active: f.hasLead },
     third,
   ]
-}
-
-function FunnelStage({ label, tone, active }: { label: string; tone: Tone; active: boolean }) {
-  // Inactive stages are always zinc-grey regardless of `tone` (greys-out the future).
-  // Active stages render in their tone.
-  if (!active) {
-    return <span className="px-1.5 py-0.5 rounded ring-1 ring-inset bg-zinc-50 text-zinc-400 ring-zinc-200">{label}</span>
-  }
-  const map: Record<Tone, string> = {
-    emerald: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
-    amber:   'bg-amber-100 text-amber-700 ring-amber-200',
-    red:     'bg-red-100 text-red-700 ring-red-200',
-    indigo:  'bg-indigo-100 text-indigo-700 ring-indigo-200',
-    zinc:    'bg-zinc-100 text-zinc-700 ring-zinc-200',
-  }
-  return <span className={`px-1.5 py-0.5 rounded ring-1 ring-inset ${map[tone]}`}>{label}</span>
 }
 
 /* ─────────────────── Filter chip ─────────────────── */
 
 export function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-x-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-800 ring-1 ring-brand-100">
+    <Badge variant="secondary" className="h-7 gap-1 pr-1 pl-2.5 text-xs">
       {label}
-      <button onClick={onRemove} type="button" className="-mr-0.5 h-3.5 w-3.5 rounded hover:bg-brand-100 inline-flex items-center justify-center">
-        <svg className="h-3 w-3" fill="none" viewBox="0 0 8 8" strokeWidth="1.5" stroke="currentColor">
-          <path strokeLinecap="round" d="M1 1l6 6m0-6L1 7" />
-        </svg>
+      <button onClick={onRemove} type="button" aria-label={`Remove ${label}`} className="inline-flex size-5 items-center justify-center rounded-full hover:bg-foreground/10">
+        <X className="size-3" />
       </button>
-    </span>
+    </Badge>
   )
 }
 
-/* ─────────────────── View toggle (Table / Cards) ─────────────────── */
+/* ─────────────────── View toggle (Sentences / Table / Cards) ─────────────────── */
 
 type ViewModeOption<T extends string> = { value: T; label: string }
 
@@ -217,41 +202,28 @@ export function ViewToggle<T extends string>({ value, options, onChange }: {
   options: ViewModeOption<T>[]
   onChange: (v: T) => void
 }) {
-  const TableIcon = <Rows3 className="h-4 w-4" />
-  const CardsIcon = <LayoutGrid className="h-4 w-4" />
   return (
-    <div className="inline-flex" role="group">
-      {options.map((opt, i) => {
-        const active = value === opt.value
-        const isFirst = i === 0
-        const isLast = i === options.length - 1
-        const radius = isFirst ? 'rounded-l-md' : isLast ? 'rounded-r-md' : ''
-        const cls = active ? 'bg-zinc-900 text-white ring-zinc-900' : 'bg-white text-zinc-700 hover:bg-zinc-50 ring-zinc-300'
+    <ToggleGroup type="single" variant="outline" size="sm" value={value} onValueChange={(v) => v && onChange(v as T)}>
+      {options.map((opt) => {
         const label = opt.label.toLowerCase()
-        const icon = label.includes('table') ? TableIcon : label.includes('sentence') ? <AlignLeft className="h-4 w-4" /> : CardsIcon
+        const icon = label.includes('table') ? <Rows3 /> : label.includes('sentence') ? <AlignLeft /> : <LayoutGrid />
         return (
-          <button
-            key={opt.value as string}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            title={opt.label}
-            className={`${cls} ${radius} inline-flex items-center px-2.5 py-2 text-sm font-medium ring-1 ring-inset transition`}
-          >
+          <ToggleGroupItem key={opt.value} value={opt.value} title={opt.label} aria-label={opt.label}>
             {icon}
-          </button>
+          </ToggleGroupItem>
         )
       })}
-    </div>
+    </ToggleGroup>
   )
 }
 
 /* ─────────────────── Form helpers ─────────────────── */
 
-/** Mono uppercase label + child input. Used inside FilterPopover bodies. */
+/** A label and its input, for filter and settings forms. */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <label className="block text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-500 mb-1">{label}</label>
+    <div className="grid gap-1.5">
+      <Label>{label}</Label>
       {children}
     </div>
   )
@@ -259,17 +231,12 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 /* ─────────────────── Toolbar buttons ─────────────────── */
 
-/** Refresh button used in the right-side toolbar of every list page. */
+/** The refresh button in a page's toolbar. */
 export function RefreshButton({ onClick, busy = false, title = 'Refresh' }: { onClick: () => void; busy?: boolean; title?: string }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300 hover:bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-      title={title}
-    >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-    </button>
+    <Button variant="outline" size="icon-sm" onClick={onClick} disabled={busy} title={title} aria-label={title}>
+      {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+    </Button>
   )
 }
 
@@ -277,9 +244,9 @@ export function RefreshButton({ onClick, busy = false, title = 'Refresh' }: { on
 
 export function EmptyState({ title, message }: { title: string; message?: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-200 bg-white/60 p-10 text-center">
-      <p className="text-sm font-medium text-zinc-700">{title}</p>
-      {message ? <p className="mt-1 text-sm text-zinc-500">{message}</p> : null}
+    <div className="rounded-xl border border-dashed bg-card/60 p-10 text-center">
+      <p className="text-sm font-medium">{title}</p>
+      {message ? <p className="mt-1 text-sm text-muted-foreground">{message}</p> : null}
     </div>
   )
 }

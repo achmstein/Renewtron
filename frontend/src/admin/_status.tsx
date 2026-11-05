@@ -158,7 +158,7 @@ export function renewalStatus(r: { status: string; errorCategory?: string | null
   return statusOf('renewal', r.status)
 }
 
-/** The pill for a status, in the shared words and colours; the hint shows on hover. */
+/** The badge for a status, in the shared words and colours; the hint shows on hover. */
 export function Status({ kind, status, entry, size = 'sm', className }: {
   kind?: StatusKind
   status?: string | null
@@ -169,26 +169,11 @@ export function Status({ kind, status, entry, size = 'sm', className }: {
   className?: string
 }) {
   const e = entry ?? (kind ? statusOf(kind, status) : { label: status ?? '—', meaning: 'quiet' as Meaning })
-  if (size === 'lg') {
-    return (
-      <span title={e.hint} className={`inline-flex items-center rounded-md px-3 py-1.5 text-xs font-mono font-medium tracking-[0.14em] ring-1 ring-inset uppercase ${LARGE[e.meaning]} ${className ?? ''}`}>
-        {e.label}
-      </span>
-    )
-  }
   return (
     <span title={e.hint} className={className}>
-      <StatusPill tone={MEANING_TONE[e.meaning]}>{e.label.toUpperCase()}</StatusPill>
+      <StatusPill tone={MEANING_TONE[e.meaning]} className={size === 'lg' ? 'h-7 px-3 text-sm' : undefined}>{e.label}</StatusPill>
     </span>
   )
-}
-
-const LARGE: Record<Meaning, string> = {
-  action: 'bg-red-50 text-red-700 ring-red-100',
-  waiting: 'bg-amber-50 text-amber-700 ring-amber-100',
-  working: 'bg-indigo-50 text-indigo-700 ring-indigo-100',
-  done: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-  quiet: 'bg-zinc-100 text-zinc-700 ring-zinc-200',
 }
 
 /** Facet options for a filter: the raw value with its shared label. */

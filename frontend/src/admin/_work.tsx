@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 
 export function LinkButton({ to, children, primary }: { to: string; children: ReactNode; primary?: boolean }) {
   return (
-    <Button asChild size="xs" variant={primary ? 'default' : 'outline'}>
+    <Button asChild size="sm" variant={primary ? 'default' : 'outline'}>
       <Link to={to}>{children}</Link>
     </Button>
   )
@@ -54,17 +54,20 @@ function Facts({ item, first }: { item: TodayItem; first: ReactNode }) {
   const parts: ReactNode[] = [first]
   if (item.amount != null) parts.push(fmtMoney2(item.amount))
   if (item.years) parts.push(`${item.years} year${item.years === 1 ? '' : 's'}`)
-  if (item.dueAt) parts.push(<>due <DueIn at={item.dueAt} /></>)
+  if (item.dueAt) {
+    const soon = new Date(item.dueAt).getTime() - Date.now() < 7 * 86_400_000
+    parts.push(<span className={soon ? 'font-medium text-destructive' : undefined}>due <DueIn at={item.dueAt} /></span>)
+  }
   return <>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : ''}{p}</span>)}</>
 }
 
-/** Why a renewal failed, in words, and what to do about it. */
+/** Why a renewal failed: a few words for the row, and the next step on hover. */
 const RENEWAL_REASONS: Record<string, { what: string; next: string }> = {
   Stuck: { what: 'is stuck', next: 'Nothing has moved for over 2 hours. The reconcile sweep repairs most; open it if it stays.' },
-  PaymentRisk: { what: 'failed at the payment step', next: 'ASIC may have taken payment. Check at ASIC before retrying.' },
-  AlreadyInProgress: { what: 'is blocked: ASIC has a renewal open for this ABN', next: 'Usually another renewal finishing. Check at ASIC, then retry.' },
+  PaymentRisk: { what: 'stopped at payment', next: 'ASIC may have taken payment. Check at ASIC before retrying.' },
+  AlreadyInProgress: { what: 'is blocked at ASIC', next: 'ASIC has a renewal open for this ABN. Check at ASIC, then retry.' },
   Terminal: { what: 'was refused by ASIC', next: 'The details didn’t pass ASIC’s checks. Open it to see what ASIC said.' },
-  Transient: { what: 'failed and gave up retrying', next: 'Network or ASIC errors on every attempt. Retry once ASIC is reachable.' },
+  Transient: { what: 'failed', next: 'Network or ASIC errors on every attempt. Retry once ASIC is reachable.' },
 }
 
 function RenewalRow({ item }: { item: TodayItem }) {
@@ -74,8 +77,8 @@ function RenewalRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to={`/admin/renewals/${item.id}`}
-      what={<><Who item={item} />: renewal of <Name>{item.businessName}</Name> {reason.what}.</>}
-      why={<><Facts item={item} first={<When at={item.at} />} /><div className="mt-0.5" title={item.detail ?? undefined}>{reason.next}</div></>}
+      what={<span title={reason.next}><Who item={item} />: <Name>{item.businessName}</Name> renewal {reason.what}</span>}
+      why={<Facts item={item} first={<When at={item.at} />} />}
       actions={item.canRetry ? <RetryRenewal id={item.id} /> : <LinkButton to={`/admin/renewals/${item.id}`}>Open</LinkButton>}
     />
   )
@@ -89,15 +92,10 @@ function SaleRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to={to}
-      what={ineligible
-        ? <><Who item={item} /> paid for <Name>{item.businessName}</Name>, but it can’t be renewed with us.</>
-        : <><Who item={item} /> paid for <Name>{item.businessName}</Name>; the renewal never started.</>}
-      why={<>
-        <Facts item={item} first={<>Ontraport sale, <When at={item.at} /></>} />
-        <div className="mt-0.5" title={item.detail ?? undefined}>
-          {ineligible ? 'Decide: refund, or contact the client.' : item.detail ? `Last error: ${truncate(item.detail, 110)}` : 'Open the sale to see why.'}
-        </div>
-      </>}
+      what={<span title={ineligible ? 'Refund, or contact the client.' : item.detail ?? undefined}>
+        <Who item={item} /> paid for <Name>{item.businessName}</Name>{ineligible ? ', can’t renew with us' : ', not renewed yet'}
+      </span>}
+      why={<Facts item={item} first={<When at={item.at} />} />}
       actions={<LinkButton to={to}>Open sale</LinkButton>}
     />
   )
@@ -110,10 +108,10 @@ function BpayRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning={status.meaning}
       to={`/admin/renewals/${item.id}`}
-      what={<>ASIC bill for <Name>{item.businessName}</Name>{item.clientName ? <> (<Who item={item} />)</> : null}{item.amount != null ? `, ${fmtMoney2(item.amount)}` : ''}.</>}
-      why={item.reason === 'TO_PAY'
-        ? <>Lodged <When at={item.at} />. ASIC holds the renewal until it’s paid.</>
-        : <><span title={item.detail ?? undefined}>Airwallex: {status.label.toLowerCase()}.</span> Lodged <When at={item.at} />.</>}
+      what={<span title={item.reason === 'TO_PAY' ? 'ASIC holds the renewal until it’s paid.' : item.detail ?? undefined}>
+        BPAY bill for <Name>{item.businessName}</Name>{item.reason === 'TO_PAY' ? '' : `: ${status.label.toLowerCase()}`}
+      </span>}
+      why={<>{item.clientName ? <><Who item={item} /> · </> : null}<Facts item={item} first={<>lodged <When at={item.at} /></>} /></>}
     />
   )
 }
@@ -125,8 +123,8 @@ function KeyRequestsRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to="/admin/asic-key-requests"
-      what={<>{n} key request{n === 1 ? '' : 's'} to send to ASIC.</>}
-      why={<>The oldest came in <When at={item.at} />. Send them from the key tool on the office PC.</>}
+      what={<span title="Send them from the key tool on the office PC.">{n} key request{n === 1 ? '' : 's'} to send to ASIC</span>}
+      why={<>oldest <When at={item.at} /></>}
     />
   )
 }
@@ -137,8 +135,8 @@ function KeyRequestRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning={statusOf('keyRequest', item.reason).meaning}
       to={`/admin/asic-key-requests/${item.id}`}
-      what={<>Key request for <Name>{item.businessName}</Name>{item.clientName ? <> (<Who item={item} />)</> : null} {item.reason === 'Failed' ? 'couldn’t be sent.' : item.reason === 'Manual' ? 'is being sent by a person now.' : 'is waiting to be sent to ASIC.'}</>}
-      why={<><When at={item.at} />{item.detail ? ` · ${truncate(item.detail, 120)}` : ''}</>}
+      what={<span title={item.detail ?? undefined}>Key request for <Name>{item.businessName}</Name> {item.reason === 'Failed' ? 'couldn’t be sent' : item.reason === 'Manual' ? 'is being sent by hand' : 'is waiting to send'}</span>}
+      why={<>{item.clientName ? <><Who item={item} /> · </> : null}<When at={item.at} /></>}
       actions={<LinkButton to="/admin/asic-key-requests">Open requests</LinkButton>}
     />
   )
@@ -151,8 +149,8 @@ function KeyLetterRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning={status.meaning}
       to={`/admin/asic-keys/${item.id}`}
-      what={<>Key letter for <Name>{item.businessName}</Name>: {status.label.toLowerCase()}.</>}
-      why={<><span>Arrived <When at={item.at} /></span>{status.hint ? ` · ${status.hint}` : ''}</>}
+      what={<span title={status.hint}>Key letter for <Name>{item.businessName}</Name>: {status.label.toLowerCase()}</span>}
+      why={<>arrived <When at={item.at} /></>}
       actions={item.canRetry
         ? <RetryKeyLetter id={item.id} />
         : <LinkButton to="/admin/asic-keys?view=to-sort">Choose client</LinkButton>}
@@ -166,8 +164,8 @@ function DuplicateRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="quiet"
       to={`/admin/clients/${item.id}`}
-      what={<><Who item={item} /> may be the same person as <ClientName id={item.otherClientId} name={item.otherClientName} />.</>}
-      why={<>Same ABN, different email or date of birth · found <When at={item.at} /></>}
+      what={<><Who item={item} /> may be <ClientName id={item.otherClientId} name={item.otherClientName} /></>}
+      why={<>same ABN · found <When at={item.at} /></>}
       actions={<LinkButton to="/admin/clients/duplicates">Review</LinkButton>}
     />
   )
@@ -194,7 +192,7 @@ function RetryRenewal({ id }: { id: string }) {
     success: (r) => ({ title: r.message ?? 'Renewal queued for retry.' }),
     error: (e) => ({ title: 'Retry refused', description: e instanceof Error ? e.message : undefined }),
   }).catch(() => {})
-  return <Button size="xs" onClick={go} disabled={m.isPending}>{m.isPending ? <Loader2 className="animate-spin" /> : null}Retry</Button>
+  return <Button size="sm" onClick={go} disabled={m.isPending}>{m.isPending ? <Loader2 className="animate-spin" /> : null}Retry</Button>
 }
 
 function RetryKeyLetter({ id }: { id: string }) {
@@ -206,10 +204,5 @@ function RetryKeyLetter({ id }: { id: string }) {
       : { title: `Still ${statusOf('keyLetter', r.status).label.toLowerCase()}`, description: r.errorMessage ?? undefined },
     error: (e) => ({ title: 'Retry failed', description: e instanceof Error ? e.message : undefined }),
   }).catch(() => {})
-  return <Button size="xs" variant="outline" onClick={go} disabled={m.isPending}>{m.isPending ? <Loader2 className="animate-spin" /> : null}Retry</Button>
+  return <Button size="sm" variant="outline" onClick={go} disabled={m.isPending}>{m.isPending ? <Loader2 className="animate-spin" /> : null}Retry</Button>
 }
-
-function truncate(s: string, n: number) {
-  return s.length > n ? s.slice(0, n - 1) + '…' : s
-}
-

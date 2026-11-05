@@ -18,6 +18,12 @@ const badgeVariants = cva(
           "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
+        // Soft status tones: the admin's status vocabulary (see admin/_status.tsx).
+        success: "bg-success/10 text-success",
+        warning: "bg-warning/10 text-warning",
+        info: "bg-info/10 text-info",
+        danger: "bg-destructive/10 text-destructive",
+        neutral: "bg-muted text-muted-foreground",
       },
     },
     defaultVariants: {

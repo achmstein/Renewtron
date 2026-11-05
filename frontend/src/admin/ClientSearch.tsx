@@ -15,11 +15,11 @@ export function ClientSearchButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md bg-white/5 px-3 py-1.5 text-sm text-zinc-400 ring-1 ring-white/10 hover:bg-white/10 hover:text-white transition"
+      className="flex h-9 w-full items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent px-3 text-sm text-sidebar-foreground transition hover:text-sidebar-accent-foreground"
     >
-      <Search strokeWidth={1.5} className="size-4 shrink-0" />
+      <Search className="size-4 shrink-0" />
       <span className="flex-1 text-left">Find a client</span>
-      <kbd className="hidden lg:inline text-xxs font-mono text-zinc-500">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+      <kbd className="hidden rounded border border-sidebar-border px-1.5 font-mono text-xxs text-zinc-500 lg:inline">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
     </button>
   )
 }
@@ -61,27 +61,27 @@ export function ClientSearch({ open, setOpen }: { open: boolean; setOpen: (open:
   return (
     <>
       {/* Results come from the server, so cmdk's own filtering is off. */}
-      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false} title="Find a client" description="Search by name, email, mobile, ABN or business name">
+      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false} showCloseButton={false} title="Find a client" description="Search by name, email, mobile, ABN or business name">
         <CommandInput value={term} onValueChange={setTerm} placeholder="Name, email, mobile, ABN or business name…" />
         <CommandList>
           {debounced.length < 2 ? (
-            <div className="py-6 text-center text-sm text-zinc-500">Type at least two characters.</div>
+            <div className="py-6 text-center text-sm text-muted-foreground">Type at least two characters.</div>
           ) : isFetching && items.length === 0 ? (
-            <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-brand-600" /></div>
+            <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
           ) : (
             <CommandEmpty>No client matches “{debounced}”.</CommandEmpty>
           )}
           {items.map((c) => (
             <CommandItem key={c.id} value={c.id} onSelect={() => go(c.id)} className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm font-medium text-zinc-900 truncate">{c.fullName || 'Unnamed client'}</div>
-                <div className="text-xxs font-mono text-zinc-500 truncate">
+                <div className="truncate text-sm font-medium">{c.fullName || 'Unnamed client'}</div>
+                <div className="truncate text-xs text-muted-foreground">
                   {c.email ?? '—'}{c.abns.length ? ` · ${formatAbn(c.abns[0])}` : ''}
                 </div>
               </div>
-              <div className="shrink-0 text-right text-xxs font-mono text-zinc-500">
+              <div className="shrink-0 text-right text-xs text-muted-foreground">
                 {c.activeNames ? `${c.activeNames} name${c.activeNames === 1 ? '' : 's'}` : 'no names'}
-                {c.firstName ? <div className="max-w-[12rem] truncate text-zinc-400">{c.firstName}</div> : null}
+                {c.firstName ? <div className="max-w-48 truncate">{c.firstName}</div> : null}
               </div>
             </CommandItem>
           ))}

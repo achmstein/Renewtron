@@ -1,6 +1,9 @@
-import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { type Meaning } from './_status'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { fmtDateTime } from './_utils'
 
 /*
@@ -16,13 +19,19 @@ import { fmtDateTime } from './_utils'
  *   </Queue>
  */
 
-const STRIPE: Record<Meaning, string> = {
-  action: 'bg-red-500',
-  waiting: 'bg-amber-500',
-  working: 'bg-indigo-500',
-  done: 'bg-emerald-500',
-  quiet: 'bg-zinc-200',
+const DOT: Record<Meaning, string> = {
+  action: 'bg-destructive',
+  waiting: 'bg-warning',
+  working: 'bg-info',
+  done: 'bg-success',
+  quiet: 'bg-muted-foreground/30',
 }
+
+/**
+ * A queue can colour all its rows by how important the queue is (Today's Urgent / To do / Review),
+ * instead of by each record's own status.
+ */
+const RowTone = createContext<Meaning | null>(null)
 
 /** True when the click landed on something that acts on its own (a link, button or input). */
 function fromControl(e: { target: EventTarget | null; currentTarget: EventTarget }) {
@@ -33,9 +42,9 @@ function fromControl(e: { target: EventTarget | null; currentTarget: EventTarget
 
 export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
   meaning: Meaning
-  /** The sentence: what happened, naming the client. */
+  /** The sentence: what happened, naming the client. One short line. */
   what: ReactNode
-  /** Second line: when, how much, why it matters or what happens next. */
+  /** A few facts: when, how much, when it's due. One short line. */
   why?: ReactNode
   /** Buttons for the next step; clicks on them don't open the row. */
   actions?: ReactNode
@@ -45,6 +54,7 @@ export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
   doneKey?: string
 }) {
   const navigate = useNavigate()
+  meaning = useContext(RowTone) ?? meaning
   const open = to
     ? {
         role: 'link' as const,
@@ -65,23 +75,26 @@ export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
       data-row=""
       data-done-key={doneKey}
       data-meaning={meaning}
-      className={`grid grid-cols-[4px_1fr_auto] items-center gap-3 border-b border-zinc-100 py-3 pr-4 last:border-b-0 focus-visible:bg-brand-50/60 focus-visible:outline-none ${
-        to ? 'cursor-pointer hover:bg-zinc-50' : ''
-      }`}
+      className={cn(
+        'flex items-center gap-3 border-b px-4 py-3 last:border-b-0 outline-none focus-visible:bg-accent',
+        to && 'cursor-pointer hover:bg-muted/50',
+      )}
     >
-      <span aria-hidden className={`self-stretch rounded-r ${STRIPE[meaning]}`} />
-      <div className="min-w-0">
-        <div className="text-sm text-zinc-900">{what}</div>
-        {why ? <div className="mt-0.5 text-xs text-zinc-500">{why}</div> : null}
+      <span aria-hidden className={cn('size-2 shrink-0 self-start mt-1.5 rounded-full', DOT[meaning])} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm">{what}</div>
+        {why ? <div className="mt-0.5 truncate text-xs text-muted-foreground">{why}</div> : null}
       </div>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">{actions}</div>
+      {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
     </div>
   )
 }
 
-/** A titled group of sentence rows: one job, how many, how much, and an action for the whole group. */
-export function Queue({ title, count, total, action, children, empty }: {
+/** A titled group of rows: one job, how many, how much, and an action for the whole group. */
+export function Queue({ title, count, total, action, children, empty, tone }: {
   title: ReactNode
+  /** Colours every row the same, by the queue's importance. */
+  tone?: Meaning
   count?: number
   /** Money in the group, already formatted. */
   total?: string
@@ -92,20 +105,17 @@ export function Queue({ title, count, total, action, children, empty }: {
 }) {
   const hasRows = Array.isArray(children) ? children.some(Boolean) : !!children
   return (
-    <section className="overflow-hidden rounded-xl bg-white ring-1 ring-zinc-200 shadow-sm">
-      <header className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-2.5">
-        <h3 className="text-sm font-semibold text-zinc-900">
+    <Card className="gap-0 overflow-hidden py-0">
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
           {title}
-          {count != null || total ? (
-            <span className="ml-2 font-mono text-xs font-normal text-zinc-500 tabular-nums">
-              {[count != null ? count.toLocaleString() : null, total].filter(Boolean).join(' · ')}
-            </span>
-          ) : null}
+          {count != null ? <Badge variant="secondary" className="tabular-nums">{count.toLocaleString()}</Badge> : null}
+          {total ? <span className="text-sm font-normal text-muted-foreground tabular-nums">{total}</span> : null}
         </h3>
         {action}
-      </header>
-      {hasRows ? children : <div className="px-4 py-6 text-center text-sm text-zinc-500">{empty ?? 'Nothing here.'}</div>}
-    </section>
+      </div>
+      {hasRows ? <RowTone.Provider value={tone ?? null}>{children}</RowTone.Provider> : <div className="px-4 py-8 text-center text-sm text-muted-foreground">{empty ?? 'All clear.'}</div>}
+    </Card>
   )
 }
 
@@ -114,7 +124,7 @@ export function ClientName({ id, name }: { id?: string | null; name?: string | n
   const text = name?.trim() || 'Unnamed client'
   if (!id) return <span className="font-medium">{text}</span>
   return (
-    <Link to={`/admin/clients/${id}`} className="font-medium text-brand-700 underline decoration-brand-200 underline-offset-2 hover:decoration-brand-500">
+    <Link to={`/admin/clients/${id}`} className="font-medium text-primary hover:underline">
       {text}
     </Link>
   )

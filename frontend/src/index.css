@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400..700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
+
 @plugin "@tailwindcss/forms";
 
 /* ------------------------------------------------------------------ */
@@ -33,6 +34,63 @@
     --chart-3: #6FA1D2;
     --chart-4: #A3C5E6;
     --chart-5: #CFE1F3;
+    --sidebar: hsl(0 0% 98%);
+    --sidebar-foreground: hsl(240 5.3% 26.1%);
+    --sidebar-primary: hsl(240 5.9% 10%);
+    --sidebar-primary-foreground: hsl(0 0% 98%);
+    --sidebar-accent: hsl(240 4.8% 95.9%);
+    --sidebar-accent-foreground: hsl(240 5.9% 10%);
+    --sidebar-border: hsl(220 13% 91%);
+    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin theme. Scoped to html.admin (set by AdminLayout) so the      */
+/* public site keeps its own look. It sits on <html> so dialogs and   */
+/* menus, which portal into <body>, get it too. Neutrals are zinc,    */
+/* the primary is the brand navy, and status colours are tokens.      */
+/* ------------------------------------------------------------------ */
+.admin {
+    --radius: 0.625rem;
+    --background: #FAFAFA;
+    --foreground: #09090B;
+    --card: #FFFFFF;
+    --card-foreground: #09090B;
+    --popover: #FFFFFF;
+    --popover-foreground: #09090B;
+    --primary: #0052A4;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F4F4F5;
+    --secondary-foreground: #18181B;
+    --muted: #F4F4F5;
+    --muted-foreground: #71717A;
+    --accent: #F4F4F5;
+    --accent-foreground: #18181B;
+    --destructive: #DC2626;
+    --destructive-foreground: #FFFFFF;
+    --success: #059669;
+    --warning: #D97706;
+    --info: #4F46E5;
+    --border: #E4E4E7;
+    --input: #E4E4E7;
+    --ring: #3478BF;
+    --sidebar: #09090B;
+    --sidebar-foreground: #A1A1AA;
+    --sidebar-primary: #0052A4;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #18181B;
+    --sidebar-accent-foreground: #FAFAFA;
+    --sidebar-border: #27272A;
+    --sidebar-ring: #3478BF;
+}
+.admin body { background: var(--background); color: var(--foreground); }
+/* @tailwindcss/forms (kept for the public site) gives every input its own border and a blue
+   focus shadow. In the admin, shadcn's components style their inputs, so drop the plugin's
+   focus look; in the base layer, so the components' own utilities still win. */
+@layer base {
+    /* shadcn's base: borders default to the theme's border colour, not the text colour. */
+    .admin *, .admin ::before, .admin ::after { border-color: var(--color-border); outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent); }
+    .admin :is(input, textarea, select):focus { outline: none; box-shadow: none; }
 }
 
 @theme inline {
@@ -64,6 +122,17 @@
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) + 4px);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-info: var(--info);
 }
 
 @layer base {
@@ -244,3 +313,4 @@ select:not([multiple]) {
 .wizard-line { flex: 1; height: 2px; margin: 0 8px; margin-top: -24px; }
 .wizard-line-completed { background: #0052A4; }
 .wizard-line-upcoming { background: #D1D5DB; }
+
