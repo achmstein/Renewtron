@@ -104,10 +104,10 @@ export default function SaleDetails() {
             <p className="text-sm text-zinc-500">No key requested or received yet.</p>
           ) : null}
           {data.keyLetters.map((k) => (
-            <Row key={k.id} label="Key letter" value={<span className="flex items-center gap-2"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></span>} />
+            <Row key={k.id} label="Key letter" value={<Link to={`/admin/asic-keys/${k.id}`} className="flex items-center gap-2 hover:underline"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></Link>} />
           ))}
           {data.keyRequests.map((k) => (
-            <Row key={k.id} label="Key request" value={<span className="flex items-center gap-2"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</span>} />
+            <Row key={k.id} label="Key request" value={<Link to={`/admin/asic-key-requests/${k.id}`} className="flex items-center gap-2 hover:underline"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</Link>} />
           ))}
         </Section>
       </div>
@@ -218,10 +218,10 @@ function story(d: Detail): StoryStep[] {
   const request = d.keyRequests[0]
   if (letter) {
     const s = statusOf('keyLetter', letter.status)
-    steps.push({ label: 'ASIC key', meaning: s.meaning, at: letter.receivedAt, note: s.label.toLowerCase(), to: '/admin/asic-keys' })
+    steps.push({ label: 'ASIC key', meaning: s.meaning, at: letter.receivedAt, note: s.label.toLowerCase(), to: `/admin/asic-keys/${letter.id}` })
   } else if (request) {
     const s = statusOf('keyRequest', request.status)
-    steps.push({ label: 'ASIC key', meaning: s.meaning, note: s.label.toLowerCase(), to: '/admin/asic-key-requests' })
+    steps.push({ label: 'ASIC key', meaning: s.meaning, note: s.label.toLowerCase(), to: `/admin/asic-key-requests/${request.id}` })
   } else {
     steps.push({ label: 'ASIC key', meaning: 'quiet', note: 'not requested' })
   }

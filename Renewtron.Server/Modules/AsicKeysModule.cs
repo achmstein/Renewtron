@@ -160,6 +160,31 @@ public sealed class AsicKeysModule : ICarterModule
             return n == null ? Results.NotFound() : Results.Ok(n);
         });
 
+        // Where a key letter sits, for its record page: the client, the key request it answered,
+        // and the sale that paid for the name.
+        group.MapGet("/{id:guid}/context", async (Guid id, ApplicationDbContext db) =>
+        {
+            var n = await db.AsicKeyNotifications.AsNoTracking()
+                .Where(x => x.Id == id)
+                .Select(x => new { x.Abn, x.ClientBusinessNameId, NameAbn = db.ClientBusinessNames.Where(b => b.Id == x.ClientBusinessNameId).Select(b => b.Abn).FirstOrDefault() })
+                .FirstOrDefaultAsync();
+            if (n is null) return Results.NotFound();
+            var client = await ClientRefs.ByAbnAsync(db, n.NameAbn ?? n.Abn);
+            var keyRequest = await db.AsicKeyRequests.AsNoTracking()
+                .Where(r => r.AsicKeyNotificationId == id)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(r => new { id = r.Id, status = r.Status.ToString(), createdAt = r.CreatedAt, referenceNumber = r.AsicReferenceNumber })
+                .FirstOrDefaultAsync();
+            var sale = n.ClientBusinessNameId is { } nameId
+                ? await db.OntraportSales.AsNoTracking()
+                    .Where(s => s.ClientBusinessNameId == nameId)
+                    .OrderByDescending(s => s.SyncedAt)
+                    .Select(s => new { id = s.Id, status = s.Status.ToString(), syncedAt = s.SyncedAt })
+                    .FirstOrDefaultAsync()
+                : null;
+            return Results.Ok(new { client, keyRequest, sale });
+        });
+
         // Enqueued rather than run inline: a backlog of PDFs can take minutes, past nginx's
         // proxy timeout. The UI polls /jobs/{id} and refreshes the table as rows land.
         // DisableConcurrentExecution keeps it from overlapping the recurring scan.

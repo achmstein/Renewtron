@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
@@ -90,7 +91,7 @@ export default function AsicKeyRequests() {
         const r = row.original
         return (
           <div>
-            <div className="text-sm font-medium truncate text-zinc-900">{r.businessName}</div>
+            <Link to={`/admin/asic-key-requests/${r.id}`} onClick={(e) => e.stopPropagation()} className="block truncate text-sm font-medium text-zinc-900 hover:text-brand-700 hover:underline">{r.businessName}</Link>
             {r.otherBusinessNames?.length ? (
               <div className="text-xxs truncate text-zinc-500" title={r.otherBusinessNames.join('\n')}>
                 + {r.otherBusinessNames.length === 1 ? r.otherBusinessNames[0] : `${r.otherBusinessNames.length} more names`}

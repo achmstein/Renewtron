@@ -238,7 +238,7 @@ function KeyRequestRow({ item }: { item: TodayItem }) {
   return (
     <SentenceRow
       meaning="action"
-      to={item.clientId ? `/admin/clients/${item.clientId}` : '/admin/asic-key-requests'}
+      to={`/admin/asic-key-requests/${item.id}`}
       what={<>Key request for <Name>{item.businessName}</Name>{item.clientName ? <> (<Who item={item} />)</> : null} couldn’t be sent.</>}
       why={<><When at={item.at} />{item.detail ? ` · ${truncate(item.detail, 120)}` : ''}</>}
       actions={<LinkButton to="/admin/asic-key-requests">Open requests</LinkButton>}
@@ -251,6 +251,7 @@ function KeyLetterRow({ item }: { item: TodayItem }) {
   return (
     <SentenceRow
       meaning={status.meaning}
+      to={`/admin/asic-keys/${item.id}`}
       what={<>Key letter for <Name>{item.businessName}</Name>: {status.label.toLowerCase()}.</>}
       why={<><span>Arrived <When at={item.at} /></span>{status.hint ? ` · ${status.hint}` : ''}</>}
       actions={item.canRetry

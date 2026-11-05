@@ -949,6 +949,17 @@ export const api = {
       }>(`/api/admin/asic-keys${suffix}`)
     },
     asicKey: (id: string) => apiFetch<AsicKeyNotificationDto>(`/api/admin/asic-keys/${id}`),
+    asicKeyContext: (id: string) => apiFetch<{
+      client: { id: string; fullName: string } | null
+      keyRequest: { id: string; status: string; createdAt: string; referenceNumber: string | null } | null
+      sale: { id: string; status: string; syncedAt: string } | null
+    }>(`/api/admin/asic-keys/${id}/context`),
+    asicKeyRequest: (id: string) => apiFetch<{
+      request: AsicKeyRequestDto
+      client: { id: string; fullName: string } | null
+      sale: { id: string; status: string; syncedAt: string } | null
+      letter: { id: string; status: string; receivedAt: string; hasKey: boolean } | null
+    }>(`/api/admin/asic-key-requests/${id}`),
     scanAsicKeys: () => apiFetch<{ jobId: string; message: string }>('/api/admin/asic-keys/scan', { method: 'POST' }),
     retryFailedAsicKeys: () => apiFetch<{ jobId: string; requeued: number; message: string }>('/api/admin/asic-keys/retry-failed', { method: 'POST' }),
     asicKeyJob: (jobId: string) => apiFetch<AsicKeyJobStatus>(`/api/admin/asic-keys/jobs/${encodeURIComponent(jobId)}`),

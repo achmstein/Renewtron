@@ -23,6 +23,7 @@ import SaleDetails from './SaleDetails'
 import BulkRenewals from './BulkRenewals'
 import AsicKeys from './AsicKeys'
 import AsicKeyRequests from './AsicKeyRequests'
+import { KeyLetterDetails, KeyRequestDetails } from './KeyDetails'
 import Settings from './Settings'
 
 const queryClient = new QueryClient({
@@ -56,6 +57,8 @@ export default function AdminRoutes() {
           <Route path="bulk-renewals" element={<BulkRenewals />} />
           <Route path="asic-keys" element={<AsicKeys />} />
           <Route path="asic-key-requests" element={<AsicKeyRequests />} />
+          <Route path="asic-key-requests/:id" element={<KeyRequestDetails />} />
+          <Route path="asic-keys/:id" element={<KeyLetterDetails />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

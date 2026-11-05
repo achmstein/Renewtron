@@ -181,6 +181,24 @@ public sealed class AsicKeyRequestsModule : ICarterModule
         });
 
         // Puts a row back in the queue (a failed one, or one a person took and gave up on).
+        // One request as its record page shows it: the request, whose it is, the sale behind it
+        // and the key letter that answered it.
+        group.MapGet("/{id:guid}", async (Guid id, ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings) =>
+        {
+            var r = await db.AsicKeyRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (r is null) return Results.NotFound();
+            var client = await ClientRefs.ByIdAsync(db, r.ClientId) ?? await ClientRefs.ByAbnAsync(db, r.Abn);
+            var sale = r.OntraportSaleId is { } saleId
+                ? await db.OntraportSales.AsNoTracking().Where(s => s.Id == saleId)
+                    .Select(s => new { id = s.Id, status = s.Status.ToString(), syncedAt = s.SyncedAt }).FirstOrDefaultAsync()
+                : null;
+            var letter = r.AsicKeyNotificationId is { } letterId
+                ? await db.AsicKeyNotifications.AsNoTracking().Where(n => n.Id == letterId)
+                    .Select(n => new { id = n.Id, status = n.Status.ToString(), receivedAt = n.ReceivedAt, hasKey = n.AsicKey != null }).FirstOrDefaultAsync()
+                : null;
+            return Results.Ok(new { request = ToDetail(r, settings.CurrentValue), client, sale, letter });
+        });
+
         group.MapPost("/{id:guid}/requeue", async (Guid id, ApplicationDbContext db, IOptionsMonitor<AsicKeyRequestSettings> settings) =>
         {
             var row = await db.AsicKeyRequests.FirstOrDefaultAsync(r => r.Id == id);

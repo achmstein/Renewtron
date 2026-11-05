@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Inbox, Loader2, RotateCw, UserPlus, X } from 'lucide-react'
 import { sileo } from 'sileo'
@@ -124,9 +124,9 @@ export default function AsicKeys() {
         const r = row.original
         return (
           <div>
-            <div className={`text-sm font-medium truncate ${r.businessName ? 'text-zinc-900' : 'text-zinc-400 italic'}`}>
+            <Link to={`/admin/asic-keys/${r.id}`} onClick={(e) => e.stopPropagation()} className={`block text-sm font-medium truncate hover:text-brand-700 hover:underline ${r.businessName ? 'text-zinc-900' : 'text-zinc-400 italic'}`}>
               {r.businessName ?? 'name not parsed'}
-            </div>
+            </Link>
             {r.abn ? <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{r.abn}</div> : null}
             <div className="hidden sm:block text-xxs font-mono text-zinc-400 truncate" title={r.subject ?? ''}>{r.subject ?? '—'}</div>
           </div>
