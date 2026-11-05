@@ -79,10 +79,19 @@ public sealed class TodayModule : ICarterModule
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         app.MapGet("/api/admin/today", async (ApplicationDbContext db, IOptionsSnapshot<AsicSettings> asic, ISmsProvider sms,
-            ILogger<TodayModule> logger) =>
+            ILogger<TodayModule> logger, Guid? clientId) =>
         {
             var now = DateTime.UtcNow;
             var today = DateOnly.FromDateTime(now);
+
+            // ?clientId= narrows every queue to one client, for the client page's "Needs attention":
+            // all of their items, and their key requests one per line.
+            var forClient = clientId is not null;
+            var clientAbns = clientId is { } cid
+                ? (await db.ClientAbns.AsNoTracking().Where(a => a.ClientId == cid).Select(a => a.Abn).ToListAsync()).ToHashSet()
+                : [];
+            bool Mine(Guid? owner) => !forClient || owner == clientId;
+            var rowsPerGroup = forClient ? int.MaxValue : RowsPerGroup;
 
             // ── Paid, not renewed yet ─────────────────────────────────────────────
             var failed = await Renewals(db).Where(WorkQueues.RenewalNeedsPerson).Select(RenewalRow(db)).ToListAsync();
@@ -110,6 +119,7 @@ public sealed class TodayModule : ICarterModule
             // Riskiest first: names due soonest (or just past due), then those with no due date,
             // then names long past due; oldest first within each.
             var paidOrdered = paid
+                .Where(i => Mine(i.ClientId))
                 .OrderBy(i => i.DueAt is null ? 1 : i.DueAt >= today.AddDays(-30) ? 0 : 2)
                 .ThenBy(i => i.DueAt)
                 .ThenBy(i => i.At)
@@ -130,7 +140,7 @@ public sealed class TodayModule : ICarterModule
             var bpay = bills.Select(b => new TodayItem(
                 "bpay", b.Id.ToString(), b.AirwallexTransferStatus ?? "TO_PAY", b.ClientId, b.LeadName ?? b.Email,
                 b.BusinessName, b.Abn, fees.FeeFor(b.RenewalYears), b.RenewalYears, b.LodgedAt, null,
-                b.BpayPaymentError, null, CanRetry: false)).ToList();
+                b.BpayPaymentError, null, CanRetry: false)).Where(i => Mine(i.ClientId)).ToList();
 
             // ── ASIC keys ─────────────────────────────────────────────────────────
             var requests = await db.AsicKeyRequests.AsNoTracking()
@@ -142,10 +152,15 @@ public sealed class TodayModule : ICarterModule
                     r.CreatedAt, r.ErrorMessage, Status = r.Status.ToString(),
                 })
                 .ToListAsync();
+            requests = requests.Where(r => Mine(r.ClientId)).ToList();
             var keys = new List<TodayItem>();
             // Requests waiting to be sent read as one line: they are worked through the key tool together.
             var toSend = requests.Where(r => r.Status != nameof(AsicKeyRequestStatus.Failed)).ToList();
-            if (toSend.Count > 0)
+            if (forClient)
+                keys.AddRange(toSend.Select(r => new TodayItem(
+                    "keyRequest", r.Id.ToString(), r.Status, r.ClientId, r.Name, r.BusinessName, r.Abn, null, null,
+                    r.CreatedAt, null, r.ErrorMessage, null, CanRetry: false)));
+            else if (toSend.Count > 0)
                 keys.Add(new TodayItem("keyRequests", "to-send", "ToSend", null, null, null, null, null, null,
                     toSend.Min(r => r.CreatedAt), null, null, null, CanRetry: false, Count: toSend.Count));
             keys.AddRange(requests.Where(r => r.Status == nameof(AsicKeyRequestStatus.Failed)).Select(r => new TodayItem(
@@ -156,6 +171,8 @@ public sealed class TodayModule : ICarterModule
                 .OrderBy(n => n.ReceivedAt)
                 .Select(n => new { n.Id, n.BusinessName, n.Abn, n.ReceivedAt, n.ErrorMessage, Status = n.Status.ToString() })
                 .ToListAsync();
+            if (forClient)
+                letters = letters.Where(n => clientAbns.Contains(Helpers.NormalizeAbn(n.Abn))).ToList();
             keys.AddRange(letters.Select(n => new TodayItem(
                 "keyLetter", n.Id.ToString(), n.Status, null, null, n.BusinessName, n.Abn, null, null,
                 n.ReceivedAt, null, n.ErrorMessage, null,
@@ -171,18 +188,20 @@ public sealed class TodayModule : ICarterModule
                     OtherId = c.PossibleDuplicateOfId, OtherName = c.PossibleDuplicateOf != null ? c.PossibleDuplicateOf.FullName : null,
                 })
                 .ToListAsync();
+            if (forClient)
+                duplicates = duplicates.Where(c => c.Id == clientId || c.OtherId == clientId).ToList();
             var decide = duplicates.Select(c => new TodayItem(
                 "duplicate", c.Id.ToString(), "PossibleDuplicate", c.Id, c.FullName, null, null, null, null,
                 c.CreatedAt, null, null, null, CanRetry: false,
                 OtherClientId: c.OtherId, OtherClientName: c.OtherName)).ToList();
 
             // Names come from the client record where the item is linked to one.
-            var all = paidOrdered.Take(RowsPerGroup).Concat(bpay.Take(RowsPerGroup)).Concat(keys.Take(RowsPerGroup)).ToList();
+            var all = paidOrdered.Take(rowsPerGroup).Concat(bpay.Take(rowsPerGroup)).Concat(keys.Take(rowsPerGroup)).ToList();
             var clientIds = all.Where(i => i.ClientId != null).Select(i => i.ClientId!.Value).Distinct().ToList();
             var clientNames = await db.Clients.AsNoTracking()
                 .Where(c => clientIds.Contains(c.Id))
                 .ToDictionaryAsync(c => c.Id, c => c.FullName);
-            List<TodayItem> Named(IEnumerable<TodayItem> items) => items.Take(RowsPerGroup)
+            List<TodayItem> Named(IEnumerable<TodayItem> items) => items.Take(rowsPerGroup)
                 .Select(i => i.ClientId is { } id && clientNames.TryGetValue(id, out var n) && !string.IsNullOrWhiteSpace(n)
                     ? i with { ClientName = n }
                     : i)
@@ -199,7 +218,7 @@ public sealed class TodayModule : ICarterModule
 
             // A broken OTP conversation holds every card renewal: it goes above everything.
             string? otpProblem = null;
-            try { otpProblem = await sms.CheckAsync(); }
+            try { if (!forClient) otpProblem = await sms.CheckAsync(); }
             catch (Exception ex) { logger.LogWarning(ex, "Today: OTP check failed"); }
 
             return Results.Ok(new

@@ -5,7 +5,10 @@ import { ChevronLeft, Copy, KeyRound, Loader2, Mail, MoreHorizontal, RefreshCw, 
 import { sileo } from 'sileo'
 import { api, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
 import { EmptyState, KickerLabel, StatusPill } from './_ui'
-import { Status } from './_status'
+import { Status, statusOf } from './_status'
+import { DueIn, When } from './_rows'
+import { StoryStrip, type StoryStep } from './_record'
+import { WorkRow } from './_work'
 import { fmtDate, fmtMoney2, formatAbn, relativeTime } from './_utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -67,6 +70,8 @@ export default function ClientDetails() {
         <SummaryStrip client={data} />
       </div>
 
+      <NeedsAttention client={data} />
+
       <DuplicatePanel client={data} />
 
       <Section kicker="BUSINESS NAMES" title={`${activeNames(data).length} active, under ${data.abns.length} ABN${data.abns.length === 1 ? '' : 's'}`}>
@@ -101,6 +106,35 @@ export default function ClientDetails() {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * This client's items from the work queues, as Today shows them, so staff act on them here.
+ * Possible duplicates are left to the panel below.
+ */
+function NeedsAttention({ client }: { client: ClientDetail }) {
+  const { data } = useQuery({
+    queryKey: ['admin-client-work', client.id],
+    queryFn: () => api.admin.today(client.id),
+  })
+  if (!data) return null
+  const items = data.groups.flatMap((g) => g.items).filter((i) => i.kind !== 'duplicate')
+  if (items.length === 0) {
+    return (
+      <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900 ring-1 ring-emerald-200">
+        Nothing needs a person for {client.fullName.split(' ')[0] || 'this client'} right now.
+      </div>
+    )
+  }
+  const meaning = items.some((i) => i.kind !== 'keyRequest' || i.reason === 'Pending' || i.reason === 'Failed') ? 'red' : 'amber'
+  return (
+    <section className={`mt-4 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ${meaning === 'red' ? 'ring-red-200' : 'ring-amber-200'}`}>
+      <header className={`px-4 py-2.5 text-sm font-semibold ${meaning === 'red' ? 'bg-red-50 text-red-900' : 'bg-amber-50 text-amber-900'}`}>
+        Needs attention <span className="ml-1 font-mono text-xs font-normal opacity-70">{items.length}</span>
+      </header>
+      {items.map((i) => <WorkRow key={`${i.kind}-${i.id}`} item={i} />)}
+    </section>
   )
 }
 
@@ -339,51 +373,80 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
       {abn.businessNames.length === 0 ? (
         <div className="px-4 py-3 text-sm text-zinc-400">No business names on the register for this ABN.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500 border-b border-zinc-100">
-                <th className="py-2 px-4">Name</th>
-                <th className="py-2 pr-4">Due</th>
-                <th className="py-2 pr-4">Last renewed</th>
-                <th className="py-2 pr-4">ASIC key</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4" />
-              </tr>
-            </thead>
-            <tbody>
-              {abn.businessNames.map((n) => (
-                <tr key={n.id} className={`border-b border-zinc-50 last:border-0 align-top ${n.status === 'Active' ? '' : 'text-zinc-400'}`}>
-                  <td className="py-2 px-4">
-                    <div className={n.status === 'Active' ? 'text-zinc-900' : ''}>{n.name}</div>
-                    <div className="text-xxs font-mono text-zinc-400">
-                      {n.registrationDate ? `reg ${fmtDate(n.registrationDate)}` : 'reg date unknown'}{n.asicAccountNumber ? ` · acct ${n.asicAccountNumber}` : ''} · via {n.source}
-                    </div>
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap">
-                    {n.renewalDueDate ? (
-                      <>
-                        <div className="font-mono tabular-nums">{fmtDate(n.renewalDueDate)}</div>
-                        {n.dueDateSource ? <div className="text-xxs text-zinc-400">from {n.dueDateSource === 'Renewal' ? 'our renewal' : n.dueDateSource}</div> : null}
-                      </>
-                    ) : (
-                      <span className="text-xs text-zinc-400" title="We haven't renewed it and have no due date on file; renewals fall on the registration anniversary.">{anniversary(n.registrationDate)}</span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-4 font-mono tabular-nums whitespace-nowrap">
-                    {n.lastRenewedAt ? `${fmtDate(n.lastRenewedAt)} · ${n.lastRenewalYears} yr` : '—'}
-                  </td>
-                  <td className="py-2 pr-4 font-mono">{n.asicKey ?? '—'}</td>
-                  <td className="py-2 pr-4"><Status kind="businessName" status={n.status} /></td>
-                  <td className="py-2 pr-4 text-right whitespace-nowrap">
-                    <NameMenu name={n} busy={setStatus.isPending} onStatus={(status) => setStatus.mutate({ id: n.id, status })} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="divide-y divide-zinc-100">
+          {abn.businessNames.map((n) => (
+            <NameStory key={n.id} client={client} name={n} busy={setStatus.isPending} onStatus={(status) => setStatus.mutate({ id: n.id, status })} />
+          ))}
         </div>
       )}
+    </div>
+  )
+}
+
+const sameName = (a: string | null | undefined, b: string) => (a ?? '').trim().toUpperCase() === b.trim().toUpperCase()
+const newest = <T,>(xs: T[], at: (x: T) => string) => [...xs].sort((x, y) => at(y).localeCompare(at(x)))[0]
+
+/**
+ * One business name and its story with us: what was paid, the renewal, and the ASIC key.
+ * Each step opens its record; names that are cancelled or left out stay to one quiet line.
+ */
+function NameStory({ client, name: n, busy, onStatus }: {
+  client: ClientDetail
+  name: ClientBusinessNameDto
+  busy: boolean
+  onStatus: (s: ClientBusinessNameDto['status']) => void
+}) {
+  const sale = newest(client.sales.filter((x) => sameName(x.businessName, n.name)), (x) => x.syncedAt)
+  const renewal = newest(client.renewals.filter((x) => sameName(x.businessName, n.name)), (x) => x.initiatedAt)
+  const keyRequest = newest(client.keyRequests.filter((x) => sameName(x.businessName, n.name)), (x) => x.createdAt)
+  const active = n.status === 'Active'
+
+  const due = n.renewalDueDate
+    ? <>due <DueIn at={n.renewalDueDate} />{n.dueDateSource ? ` (from ${n.dueDateSource === 'Renewal' ? 'our renewal' : n.dueDateSource})` : ''}</>
+    : <span title="No due date on file; renewals fall on the registration anniversary.">{anniversary(n.registrationDate)}</span>
+
+  const steps: StoryStep[] = []
+  if (sale) {
+    steps.push({ label: `Paid ${fmtMoney2(sale.amountPaid)}`, meaning: 'done', at: sale.syncedAt, note: undefined, to: `/admin/ontraport-sales/${sale.id}` })
+  } else if (renewal) {
+    steps.push({ label: `Paid ${fmtMoney2(renewal.amount)}`, meaning: 'done', at: renewal.initiatedAt, note: renewal.source === 'Ontraport' ? 'Ontraport' : undefined })
+  }
+  if (renewal) {
+    const st = statusOf('renewal', renewal.status)
+    steps.push({ label: `Renewal: ${st.label.toLowerCase()}`, meaning: st.meaning, at: renewal.completedAt ?? renewal.initiatedAt, to: `/admin/renewals/${renewal.id}` })
+  } else if (sale) {
+    const st = statusOf('sale', sale.status)
+    steps.push({ label: 'Renewal', meaning: st.meaning, note: st.label.toLowerCase(), to: `/admin/ontraport-sales/${sale.id}` })
+  }
+  if (n.asicKey) {
+    steps.push({ label: 'ASIC key', meaning: 'done', at: n.asicKeyReceivedAt, note: n.asicKeyReceivedAt ? undefined : 'on file' })
+  } else if (keyRequest) {
+    const st = statusOf('keyRequest', keyRequest.status)
+    steps.push({ label: 'ASIC key', meaning: st.meaning, note: st.label.toLowerCase(), to: `/admin/asic-key-requests/${keyRequest.id}` })
+  } else if (steps.length) {
+    steps.push({ label: 'ASIC key', meaning: 'quiet', note: 'not requested' })
+  }
+
+  return (
+    <div className={`px-4 py-3 ${active ? '' : 'text-zinc-400'}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className={`font-medium ${active ? 'text-zinc-900' : ''}`}>{n.name}</div>
+          <div className="text-xs text-zinc-500">
+            {active ? due : n.status === 'Excluded' ? 'Left out of reminders' : 'No longer on the register'}
+            {n.lastRenewedAt ? <> · renewed <When at={n.lastRenewedAt} /> for {n.lastRenewalYears} yr</> : steps.length || !active ? null : ' · not renewed with us yet'}
+            {n.asicKey ? <> · key <span className="font-mono">{n.asicKey}</span></> : null}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Status kind="businessName" status={n.status} />
+          <NameMenu name={n} busy={busy} onStatus={onStatus} />
+        </div>
+      </div>
+      {active && steps.length ? <div className="mt-2"><StoryStrip steps={steps} /></div> : null}
+      <div className="mt-1 text-xxs font-mono text-zinc-400">
+        {n.registrationDate ? `reg ${fmtDate(n.registrationDate)}` : 'reg date unknown'}{n.asicAccountNumber ? ` · acct ${n.asicAccountNumber}` : ''} · via {n.source}
+      </div>
     </div>
   )
 }

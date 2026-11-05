@@ -1053,7 +1053,8 @@ export const api = {
     updateAirwallex: (body: AirwallexSettings) => apiFetch<void>('/api/admin/settings/airwallex', { method: 'PUT', body: JSON.stringify(body) }),
     testAirwallex: () => apiFetch<{ ok: boolean }>('/api/admin/settings/airwallex/test', { method: 'POST' }),
     sidebarCounts: () => apiFetch<SidebarCounts>('/api/admin/sidebar-counts'),
-    today: () => apiFetch<TodayResponse>('/api/admin/today'),
+    /** Every queue that needs a person; with clientId, only that client's items, uncapped. */
+    today: (clientId?: string) => apiFetch<TodayResponse>(`/api/admin/today${clientId ? `?clientId=${clientId}` : ''}`),
     /** The client a record belongs to; 404 (thrown) when it isn't on one yet. */
     clientLookup: (kind: 'lead' | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter', id: string) =>
       apiFetch<{ id: string; fullName: string; possibleDuplicate: boolean }>(`/api/admin/clients/lookup?kind=${kind}&id=${encodeURIComponent(id)}`),
