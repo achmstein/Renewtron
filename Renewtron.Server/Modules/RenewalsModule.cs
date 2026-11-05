@@ -391,6 +391,7 @@ public sealed class RenewalsModule : ICarterModule
                     errorCategory = r.ErrorCategory,
                     attemptCount = r.AttemptCount,
                     nextRetryAt = r.NextRetryAt,
+                    handledAt = r.HandledAt,
                     transactionReference = r.TransactionReference,
                     bpayReference = r.BpayReference,
                     bpayPaidAt = r.BpayPaidAt,
@@ -477,11 +478,11 @@ public sealed class RenewalsModule : ICarterModule
             // scheduled retries carry their NextRetryAt, and needs-review is the human queue.
             var pipelineRows = await all
                 .Where(r => r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing || r.Status == RenewalStatus.Failed)
-                .Select(r => new { r.Status, r.Amount, r.InitiatedAt, r.LastAttemptAt, r.NextRetryAt, r.ErrorCategory })
+                .Select(r => new { r.Status, r.Amount, r.InitiatedAt, r.LastAttemptAt, r.NextRetryAt, r.ErrorCategory, r.HandledAt })
                 .ToListAsync();
             var inflight = pipelineRows.Where(r => r.Status != RenewalStatus.Failed).ToList();
             var liveValue = inflight.Where(r => (r.LastAttemptAt ?? r.InitiatedAt) >= staleCutoff).Sum(r => r.Amount);
-            var stuckRows = inflight.Where(r => (r.LastAttemptAt ?? r.InitiatedAt) < staleCutoff).ToList();
+            var stuckRows = inflight.Where(r => r.HandledAt == null && (r.LastAttemptAt ?? r.InitiatedAt) < staleCutoff).ToList();
             var stuckValue = stuckRows.Sum(r => r.Amount);
             var stuckCount = stuckRows.Count;
             var scheduledRetryValue = pipelineRows
@@ -489,7 +490,7 @@ public sealed class RenewalsModule : ICarterModule
                 .Sum(r => r.Amount);
             // Close to WorkQueues.RenewalNeedsPerson (the "Renewals to fix" queue), which also requires the client paid.
             var needsReviewRows = pipelineRows
-                .Where(r => r.Status == RenewalStatus.Failed && r.NextRetryAt == null && r.ErrorCategory != RenewalErrorCategories.NotDueYet)
+                .Where(r => r.Status == RenewalStatus.Failed && r.HandledAt == null && r.NextRetryAt == null && r.ErrorCategory != RenewalErrorCategories.NotDueYet)
                 .ToList();
             var needsReviewCount = needsReviewRows.Count;
             var needsReviewValue = needsReviewRows.Sum(r => r.Amount);
@@ -572,7 +573,7 @@ public sealed class RenewalsModule : ICarterModule
         {
             IQueryable<RenewalRequest> q = db.RenewalRequests
                 .Include(r => r.StripePayment)
-                .Where(r => r.Status == RenewalStatus.Failed);
+                .Where(r => r.Status == RenewalStatus.Failed && r.HandledAt == null);
 
             if (dateFrom.HasValue) q = q.Where(r => r.InitiatedAt >= dateFrom.Value);
             if (dateTo.HasValue)
@@ -693,6 +694,8 @@ public sealed class RenewalsModule : ICarterModule
                 cardFailureCount = r.CardFailureCount,
                 lastAttemptAt = r.LastAttemptAt,
                 nextRetryAt = r.NextRetryAt,
+                handledAt = r.HandledAt,
+                handledNote = r.HandledNote,
                 stripePayment = r.StripePayment == null ? null : new
                 {
                     paymentIntentId = r.StripePayment.PaymentIntentId,
@@ -726,6 +729,17 @@ public sealed class RenewalsModule : ICarterModule
             return Results.Ok(new { bpayPaidAt = renewal.BpayPaidAt });
         });
 
+        // Puts back on the work queues a renewal the old-records cleanup marked handled.
+        admin.MapDelete("/{id:guid}/handled", async (Guid id, ApplicationDbContext db) =>
+        {
+            var renewal = await db.RenewalRequests.FirstOrDefaultAsync(r => r.Id == id);
+            if (renewal is null) return Results.NotFound(new { error = "Renewal request not found" });
+            renewal.HandledAt = null;
+            renewal.HandledNote = null;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { handledAt = (DateTime?)null });
+        });
+
         admin.MapPost("/{id:guid}/retry", async (Guid id, ApplicationDbContext db, IBackgroundJobClient jobs) =>
         {
             var renewal = await db.RenewalRequests
@@ -745,6 +759,8 @@ public sealed class RenewalsModule : ICarterModule
             // then the operator can still see why the last attempt failed.
             renewal.Status = RenewalStatus.Pending;
             renewal.NextRetryAt = null;
+            renewal.HandledAt = null;
+            renewal.HandledNote = null;
             await db.SaveChangesAsync();
 
             jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(id));

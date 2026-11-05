@@ -7,7 +7,7 @@ import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
 import { SaleSentence, SentenceList } from './_sentences'
-import { Status } from './_status'
+import { HANDLED, Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
@@ -524,6 +524,7 @@ function DueCell({ s }: { s: SaleRow }) {
 }
 
 function SaleStatusCell({ s, onShowError }: { s: SaleRow; onShowError: (title: string, body: string) => void }) {
+  if (s.handledAt && s.status !== 'RenewalCompleted') return <Status entry={HANDLED} />
   const isFailed = s.status === 'RenewalFailed'
   const isBlocked = blockedStatuses.includes(s.status)
 

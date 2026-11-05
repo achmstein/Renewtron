@@ -150,7 +150,11 @@ export function statusOf(kind: StatusKind, status: string | null | undefined): S
  * the name isn't in its renewal window yet, is waiting, not waiting on us.
  * Keep in step with RenewalQueues.NeedsPerson on the server.
  */
-export function renewalStatus(r: { status: string; errorCategory?: string | null; nextRetryAt?: string | null }): StatusEntry {
+/** A sale or renewal settled outside Renewtron (renewed by hand at ASIC, refunded): off the queues. */
+export const HANDLED: StatusEntry = { label: 'Handled', meaning: 'done', hint: 'Settled outside Renewtron; off the work queues.' }
+
+export function renewalStatus(r: { status: string; errorCategory?: string | null; nextRetryAt?: string | null; handledAt?: string | null }): StatusEntry {
+  if (r.handledAt && r.status !== 'Completed') return HANDLED
   if (r.status === 'Failed') {
     if (r.nextRetryAt) return { label: 'Retry scheduled', meaning: 'waiting', hint: 'Renewtron will try again on its own.' }
     if (r.errorCategory === 'NotDueYet') return { label: 'ASIC: not due yet', meaning: 'waiting', hint: 'Try again once the name is inside ASIC’s renewal window.' }

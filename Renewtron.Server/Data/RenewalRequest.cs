@@ -37,6 +37,13 @@ public class RenewalRequest
     public string? ErrorMessage { get; set; }
     public string? FailedAtStep { get; set; }
 
+    /// <summary>
+    /// Settled outside Renewtron (renewed by hand at ASIC, refunded, not renewing): off every work
+    /// queue. HandledNote says why when Renewtron marked it itself (see RenewedElsewhereService).
+    /// </summary>
+    public DateTime? HandledAt { get; set; }
+    public string? HandledNote { get; set; }
+
     // Lodged with ASIC's "Pay later -> BPAY": ASIC hasn't been paid until someone pays these
     // at the bank (ASIC shows them only once). BpayPaidAt is set when staff mark it paid.
     public string? BpayBillerCode { get; set; }

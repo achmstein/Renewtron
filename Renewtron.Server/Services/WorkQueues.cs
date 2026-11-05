@@ -17,6 +17,7 @@ public static class WorkQueues
     /// </summary>
     public static readonly Expression<Func<RenewalRequest, bool>> RenewalNeedsPerson = r =>
         r.Status == RenewalStatus.Failed
+        && r.HandledAt == null
         && r.NextRetryAt == null
         && (r.ErrorCategory == null || r.ErrorCategory != RenewalErrorCategories.NotDueYet)
         && (r.PaymentType == PaymentType.External
@@ -30,6 +31,7 @@ public static class WorkQueues
     {
         var cutoff = now - StuckAfter;
         return r => (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)
+            && r.HandledAt == null
             && (r.LastAttemptAt ?? r.InitiatedAt) < cutoff;
     }
 

@@ -1031,6 +1031,13 @@ namespace Renewtron.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<DateTime?>("HandledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HandledNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("MobileNumber")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1308,6 +1315,13 @@ namespace Renewtron.Migrations
 
                     b.Property<string>("FailedAtStep")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("HandledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("HandledNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("HostedTokenizationId")
                         .HasColumnType("nvarchar(max)");

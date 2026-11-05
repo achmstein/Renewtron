@@ -667,6 +667,7 @@ export const api = {
           errorCategory?: string | null
           attemptCount: number
           nextRetryAt?: string | null
+          handledAt?: string | null
           transactionReference?: string | null
           bpayReference?: string | null
           bpayPaidAt?: string | null
@@ -821,6 +822,8 @@ export const api = {
       cardFailureCount: number
       lastAttemptAt?: string | null
       nextRetryAt?: string | null
+      handledAt?: string | null
+      handledNote?: string | null
       stripePayment?: {
         paymentIntentId: string
         paymentStatus: string
@@ -834,6 +837,9 @@ export const api = {
       lead?: { id: string; fullName: string; email: string } | null
     }>(`/api/admin/renewals/${id}`),
     retryRenewal: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewals/${id}/retry`, { method: 'POST' }),
+    /** Puts back on the work queues a renewal the old-records cleanup marked handled. */
+    unmarkRenewalHandled: (id: string) =>
+      apiFetch<{ handledAt: string | null }>(`/api/admin/renewals/${id}/handled`, { method: 'DELETE' }),
     markBpayPaid: (id: string, paid: boolean) =>
       apiFetch<{ bpayPaidAt: string | null }>(`/api/admin/renewals/${id}/bpay-paid?paid=${paid}`, { method: 'POST' }),
     manualRenewal: (input: { abn: string; businessName: string; accountNumber: string; registrationDate?: string; renewalYears: 1 | 3; email?: string }) =>
@@ -853,7 +859,7 @@ export const api = {
       if (params.page) qs.set('page', String(params.page))
       if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''
-      type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null; clientId?: string | null }
+      type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null; clientId?: string | null; handledAt?: string | null }
       return apiFetch<{
         filteredCount: number
         page: number
@@ -903,6 +909,8 @@ export const api = {
       syncedAt: string
       processedAt: string | null
       errorMessage: string | null
+      handledAt: string | null
+      handledNote: string | null
       ontraportContactId: string
       ontraportTransactionId: string
       renewal: {
@@ -912,6 +920,9 @@ export const api = {
       keyRequests: Array<{ id: string; status: string; createdAt: string; referenceNumber: string | null; keyReceivedAt: string | null }>
       keyLetters: Array<{ id: string; status: string; receivedAt: string; hasKey: boolean }>
     }>(`/api/admin/ontraport-sales/${id}`),
+    /** Puts back on the work queues a sale the old-records cleanup marked handled. */
+    unmarkSaleHandled: (id: string) =>
+      apiFetch<{ handledAt: string | null }>(`/api/admin/ontraport-sales/${id}/handled`, { method: 'DELETE' }),
     requeueOntraportSale: (id: string) => apiFetch<{ message: string }>(`/api/admin/ontraport-sales/${id}/requeue`, { method: 'POST' }),
     syncOntraport: () => apiFetch<{ syncedCount: number; message: string }>('/api/admin/ontraport-sales/sync', { method: 'POST' }),
     processEligibleOntraport: () => apiFetch<{ jobId: string; message: string }>('/api/admin/ontraport-sales/process-eligible', { method: 'POST' }),

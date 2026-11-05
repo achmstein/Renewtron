@@ -365,6 +365,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<OntraportSale>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<OntraportSale>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<OntraportSale>().HasIndex(e => e.ClientId);
+        modelBuilder.Entity<OntraportSale>().Property(e => e.HandledNote).HasMaxLength(500);
+        modelBuilder.Entity<RenewalRequest>().Property(e => e.HandledNote).HasMaxLength(500);
         modelBuilder.Entity<OntraportSale>().HasIndex(e => e.ClientBusinessNameId);
         modelBuilder.Entity<RenewalRequest>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<RenewalRequest>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);

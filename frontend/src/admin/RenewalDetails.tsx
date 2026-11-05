@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { StatusPill } from './_ui'
@@ -26,6 +26,7 @@ const paymentAtRisk = (d: Detail) => d.failedAtStep === 'Complete Payment Action
 
 /** The renewal's status, refined for a stuck run. */
 function statusFor(d: Detail): StatusEntry {
+  if (d.handledAt && d.status !== 'Completed') return renewalStatus(d)
   if (d.stuck) return { label: 'Stuck', meaning: 'action', hint: 'Nothing has happened for over 2 hours.' }
   return renewalStatus(d)
 }
@@ -50,6 +51,7 @@ export default function RenewalDetails() {
   }
   const retryMutation = useMutation({ mutationFn: () => api.admin.retryRenewal(id!), onSettled: invalidate })
   const bpayMutation = useMutation({ mutationFn: (paid: boolean) => api.admin.markBpayPaid(id!, paid), onSettled: invalidate })
+  const unhandle = useMutation({ mutationFn: () => api.admin.unmarkRenewalHandled(id!), onSettled: invalidate })
 
   const retry = () => {
     void sileo.promise(retryMutation.mutateAsync(), {
@@ -63,6 +65,14 @@ export default function RenewalDetails() {
       loading: { title: paid ? 'Marking BPAY paid…' : 'Undoing…' },
       success: () => ({ title: paid ? 'Marked BPAY paid.' : 'Marked BPAY unpaid.' }),
       error: (e) => ({ title: 'Couldn’t update it', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
+
+  const putBack = () => {
+    void sileo.promise(unhandle.mutateAsync(), {
+      loading: { title: 'Putting it back…' },
+      success: () => ({ title: 'Back on the work queues.' }),
+      error: (e) => ({ title: 'Didn’t change', description: e instanceof Error ? e.message : undefined }),
     }).catch(() => {})
   }
 
@@ -89,7 +99,18 @@ export default function RenewalDetails() {
       {retryMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}Retry renewal
     </Button>
   )
-  const next = nextStep(data, retryButton, markBpay, bpayMutation.isPending)
+  const undoButton = (
+    <Button size="sm" variant="outline" onClick={putBack} disabled={unhandle.isPending}>
+      <Undo2 />Undo
+    </Button>
+  )
+  const next = data.handledAt && data.status !== 'Completed'
+    ? (
+      <NextStep meaning="done" title="Nothing to do; it was handled outside Renewtron." actions={undoButton}>
+        {data.handledNote ?? <>Marked handled <When at={data.handledAt} />.</>}
+      </NextStep>
+    )
+    : nextStep(data, retryButton, markBpay, bpayMutation.isPending)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -155,6 +176,7 @@ export default function RenewalDetails() {
           <Row label="Next auto-retry" value={data.nextRetryAt ? fmtDateTime(data.nextRetryAt) : '—'} />
           <Row label="Initiated" value={fmtDateTime(data.initiatedAt)} />
           <Row label="Completed" value={data.completedAt ? fmtDateTime(data.completedAt) : '—'} />
+          {data.handledAt ? <Row label="Handled" value={fmtDateTime(data.handledAt)} /> : null}
           <Row label="Source" value={`${data.source} · started by ${data.initiatedByLabel}`} />
           <Row label="ASIC account no." value={data.accountNumber} mono />
           <Row label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
@@ -178,6 +200,7 @@ export default function RenewalDetails() {
 
 /** The page title: what happened to this renewal, in words. */
 function headline(d: Detail): string {
+  if (d.handledAt && d.status !== 'Completed') return 'Handled outside Renewtron'
   const years = `${d.renewalYears} year${d.renewalYears === 1 ? '' : 's'}`
   if (d.stuck) return 'Renewal stuck: nothing has moved for over 2 hours'
   switch (d.status) {

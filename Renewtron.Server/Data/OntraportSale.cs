@@ -42,6 +42,13 @@ public class OntraportSale
     public DateTime? ProcessedAt { get; set; }
     public string? ErrorMessage { get; set; }
 
+    /// <summary>
+    /// Settled outside Renewtron (renewed by hand at ASIC, refunded, not renewing): off every work
+    /// queue. HandledNote says why when Renewtron marked it itself (see RenewedElsewhereService).
+    /// </summary>
+    public DateTime? HandledAt { get; set; }
+    public string? HandledNote { get; set; }
+
     // Link to RenewalRequest when queued
     public Guid? RenewalRequestId { get; set; }
     public RenewalRequest? RenewalRequest { get; set; }

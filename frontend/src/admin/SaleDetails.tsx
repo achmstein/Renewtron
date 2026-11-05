@@ -1,10 +1,10 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, Loader2, RefreshCw } from 'lucide-react'
+import { KeyRound, Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
+import { HANDLED, Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
@@ -33,6 +33,7 @@ export default function SaleDetails() {
   }
   const requeue = useMutation({ mutationFn: () => api.admin.requeueOntraportSale(id!), onSettled: invalidate })
   const keyRequest = useMutation({ mutationFn: () => api.admin.requestAsicKeyForSale(id!), onSettled: invalidate })
+  const unhandle = useMutation({ mutationFn: () => api.admin.unmarkSaleHandled(id!), onSettled: invalidate })
 
   const tryAgain = () => void sileo.promise(requeue.mutateAsync(), {
     loading: { title: 'Putting the sale back in the queue…' },
@@ -43,6 +44,11 @@ export default function SaleDetails() {
     loading: { title: 'Adding to the key requests…' },
     success: () => ({ title: 'Added to the ASIC key requests.' }),
     error: (e) => ({ title: 'Couldn’t add it', description: e instanceof Error ? e.message : undefined }),
+  }).catch(() => {})
+  const putBack = () => void sileo.promise(unhandle.mutateAsync(), {
+    loading: { title: 'Putting it back…' },
+    success: () => ({ title: 'Back on the work queues.' }),
+    error: (e) => ({ title: 'Didn’t change', description: e instanceof Error ? e.message : undefined }),
   }).catch(() => {})
 
   if (isPending) {
@@ -67,6 +73,11 @@ export default function SaleDetails() {
       {requeue.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}Try again
     </Button>
   )
+  const undoButton = (
+    <Button size="sm" variant="outline" onClick={putBack} disabled={unhandle.isPending}>
+      <Undo2 />Undo
+    </Button>
+  )
   const keyButton = (
     <Button size="sm" variant="outline" onClick={askForKey} disabled={keyRequest.isPending}>
       <KeyRound />Request ASIC key
@@ -83,7 +94,7 @@ export default function SaleDetails() {
         sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.renewalDueDate ? <> · due <DueIn at={data.renewalDueDate} /></> : ' · no due date'} · synced <When at={data.syncedAt} /></>}
         status={status}
       >
-        {nextStep(data, tryAgainButton, keyButton)}
+        {nextStep(data, tryAgainButton, keyButton, undoButton)}
         <StoryStrip steps={story(data)} />
       </RecordHeader>
 
@@ -119,6 +130,7 @@ export default function SaleDetails() {
           <Row label="Transaction" value={data.ontraportTransactionId} mono />
           <Row label="Synced" value={fmtDateTime(data.syncedAt)} />
           <Row label="Processed" value={data.processedAt ? fmtDateTime(data.processedAt) : '—'} />
+          {data.handledAt ? <Row label="Handled" value={fmtDateTime(data.handledAt)} /> : null}
           <Row label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} />
           <Row label="Date of birth" value={data.dateOfBirth ?? '—'} />
           <Row label="Address" value={data.address || '—'} />
@@ -137,6 +149,7 @@ export default function SaleDetails() {
 
 /** The sale's own status; once it started a renewal, the renewal's status says more. */
 function saleStatus(d: Detail): StatusEntry {
+  if (d.handledAt && d.renewal?.status !== 'Completed') return HANDLED
   if (d.renewal && d.status !== 'IneligibleForRenewal') return renewalStatus(d.renewal)
   return statusOf('sale', d.status)
 }
@@ -144,6 +157,7 @@ function saleStatus(d: Detail): StatusEntry {
 function headline(d: Detail): string {
   const who = d.contactName || 'The client'
   const r = d.renewal
+  if (d.handledAt && r?.status !== 'Completed') return `${who} paid; handled outside Renewtron`
   if (r?.status === 'Completed') return r.bpayReference && !r.bpayPaidAt ? `Renewed; ASIC’s BPAY bill still to pay` : `Paid and renewed`
   if (r && (r.status === 'Pending' || r.status === 'Processing')) return 'Paid; the renewal is going through'
   switch (d.status) {
@@ -159,9 +173,16 @@ function headline(d: Detail): string {
   }
 }
 
-function nextStep(d: Detail, tryAgain: ReactNode, keyButton: ReactNode): ReactNode {
+function nextStep(d: Detail, tryAgain: ReactNode, keyButton: ReactNode, undoButton: ReactNode): ReactNode {
   const openClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
   const r = d.renewal
+  if (d.handledAt && r?.status !== 'Completed') {
+    return (
+      <NextStep meaning="done" title="Nothing to do; it was handled outside Renewtron." actions={undoButton}>
+        {d.handledNote ?? <>Marked handled <When at={d.handledAt} />.</>}
+      </NextStep>
+    )
+  }
   if (r) {
     const s = renewalStatus(r)
     if (r.status === 'Completed') {
@@ -213,6 +234,8 @@ function story(d: Detail): StoryStep[] {
         ? { label: 'ASIC fee paid', meaning: 'done', at: r.bpayPaidAt, to: '/admin/bpay' }
         : { label: 'ASIC fee', meaning: r.status === 'Completed' ? 'action' : 'quiet', note: 'BPAY to pay', to: '/admin/bpay' })
     }
+  } else if (d.handledAt) {
+    steps.push({ label: 'Renewal', meaning: 'done', note: 'handled outside Renewtron', at: undefined })
   } else {
     const s = statusOf('sale', d.status)
     steps.push({ label: 'Renewal', meaning: s.meaning === 'done' ? 'done' : s.meaning, note: s.label.toLowerCase() })

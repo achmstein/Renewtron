@@ -217,7 +217,7 @@ public class OntraportSalesService : IOntraportSalesService
                      || s.Status == OntraportSaleStatus.AsicNotYetDue
                      || s.Status == OntraportSaleStatus.RenewalInProgress)
             .Where(s => s.RenewalDueDate != null)
-            .Where(s => s.RenewalRequestId == null)
+            .Where(s => s.RenewalRequestId == null && s.HandledAt == null)
             .ToListAsync();
 
         foreach (var sale in eligibleSales)

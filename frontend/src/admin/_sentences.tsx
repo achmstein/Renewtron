@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
-import { renewalStatus, statusOf } from './_status'
+import { HANDLED, renewalStatus, statusOf } from './_status'
 import { fmtMoney2, formatAbn } from './_utils'
 import { Card } from '@/components/ui/card'
 
@@ -62,10 +62,11 @@ export function SaleSentence({ s }: {
   s: {
     id: string; contactName: string; email: string; businessName: string; amountPaid: number; renewalYears: number
     status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; clientId?: string | null
-    renewalStatus?: string | null
+    renewalStatus?: string | null; handledAt?: string | null
   }
 }) {
-  const st = s.renewalStatus && s.status !== 'IneligibleForRenewal' ? statusOf('renewal', s.renewalStatus) : statusOf('sale', s.status)
+  const st = s.handledAt && s.status !== 'RenewalCompleted' ? HANDLED
+    : s.renewalStatus && s.status !== 'IneligibleForRenewal' ? statusOf('renewal', s.renewalStatus) : statusOf('sale', s.status)
   return (
     <SentenceRow
       meaning={st.meaning}

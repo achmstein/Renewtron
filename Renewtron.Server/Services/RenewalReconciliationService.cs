@@ -40,6 +40,7 @@ public class RenewalReconciliationService : IRenewalReconciliationService
         var processingCutoff = now - ProcessingGrace;
 
         var stale = await _dbContext.RenewalRequests
+            .Where(r => r.HandledAt == null)
             .Include(r => r.SearchResult).ThenInclude(sr => sr.SearchLog)
             .Where(r =>
                 (r.Status == RenewalStatus.Pending && r.InitiatedAt < pendingCutoff) ||

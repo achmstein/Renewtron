@@ -124,6 +124,7 @@ builder.Services.AddScoped<IBpayPaymentService, BpayPaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
+builder.Services.AddScoped<IRenewedElsewhereService, RenewedElsewhereService>();
 builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);

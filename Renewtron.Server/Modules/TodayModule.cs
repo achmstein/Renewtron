@@ -58,7 +58,7 @@ public sealed class TodayModule : ICarterModule
     /// </summary>
     private static IQueryable<OntraportSale> SalesNotRenewed(ApplicationDbContext db) =>
         db.OntraportSales.AsNoTracking()
-            .Where(s => s.RenewalRequestId == null
+            .Where(s => s.RenewalRequestId == null && s.HandledAt == null
                 && (s.Status == OntraportSaleStatus.RenewalFailed || s.Status == OntraportSaleStatus.IneligibleForRenewal));
 
     private static IQueryable<RenewalRequest> Renewals(ApplicationDbContext db) =>

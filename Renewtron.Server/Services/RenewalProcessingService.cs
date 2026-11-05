@@ -75,6 +75,14 @@ public class RenewalProcessingService : IRenewalProcessingService
                 return;
             }
 
+            // Settled outside Renewtron (renewed by hand, refunded): a scheduled retry must not
+            // renew it again. A person's Retry clears HandledAt first.
+            if (renewalRequest.HandledAt != null)
+            {
+                _logger.LogWarning("Renewal request {RenewalRequestId} was marked handled on {HandledAt:u}; skipping", renewalRequestId, renewalRequest.HandledAt);
+                return;
+            }
+
             // A recent Processing row means another run is (or was moments ago) live —
             // e.g. Hangfire re-delivered after a crash. Never run the ASIC pipeline twice;
             // if the first run actually died, the reconciliation sweep repairs the row.

@@ -3,6 +3,7 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Abstractions;
 using Renewtron.Data;
+using Renewtron.Services;
 
 namespace Renewtron.Modules;
 
@@ -19,7 +20,7 @@ public sealed class OntraportSalesModule : ICarterModule
     public sealed record SaleRow(
         Guid Id, string ContactName, string Email, string Abn, string BusinessName, int RenewalYears, decimal AmountPaid,
         string Status, DateTime SyncedAt, DateTime? RenewalDueDate, string? ErrorMessage, Guid? RenewalRequestId,
-        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage, Guid? ClientId);
+        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage, Guid? ClientId, DateTime? HandledAt);
 
     private static IQueryable<SaleRow> Project(IQueryable<OntraportSale> q) => q.Select(s => new SaleRow(
         s.Id, s.ContactName, s.Email, s.Abn, s.BusinessName, s.RenewalYears, s.AmountPaid,
@@ -27,7 +28,7 @@ public sealed class OntraportSalesModule : ICarterModule
         s.RenewalRequest != null ? s.RenewalRequest.Status.ToString() : null,
         s.RenewalRequest != null ? s.RenewalRequest.FailedAtStep : null,
         s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null,
-        s.ClientId));
+        s.ClientId, s.HandledAt));
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -63,7 +64,7 @@ public sealed class OntraportSalesModule : ICarterModule
             // match the page's chips (overdue / due in the next 7 or 30 days).
             var now = DateTime.UtcNow;
             IQueryable<OntraportSale> Pipeline() =>
-                Filtered().Where(s => PipelineStatuses.Contains(s.Status) && s.RenewalDueDate != null);
+                Filtered().Where(s => PipelineStatuses.Contains(s.Status) && s.HandledAt == null && s.RenewalDueDate != null);
             var in8 = now.AddDays(8);
             var in31 = now.AddDays(31);
             IQueryable<OntraportSale> Bucket(string? view) => view switch
@@ -123,7 +124,7 @@ public sealed class OntraportSalesModule : ICarterModule
             var thirtyDaysBack = now.AddDays(-30);
             var pipelineValueNext30d = await db.OntraportSales.AsNoTracking()
                 .Where(s => s.RenewalDueDate != null && s.RenewalDueDate <= thirtyDaysAhead && s.RenewalDueDate >= thirtyDaysBack)
-                .Where(s => s.Status != OntraportSaleStatus.RenewalCompleted)
+                .Where(s => s.Status != OntraportSaleStatus.RenewalCompleted && s.HandledAt == null)
                 .SumAsync(s => s.AmountPaid);
 
             // Daily synced volume for last 14 days
@@ -249,12 +250,36 @@ public sealed class OntraportSalesModule : ICarterModule
                 syncedAt = s.SyncedAt,
                 processedAt = s.ProcessedAt,
                 errorMessage = s.ErrorMessage,
+                handledAt = s.HandledAt,
+                handledNote = s.HandledNote,
                 ontraportContactId = s.OntraportContactId,
                 ontraportTransactionId = s.OntraportTransactionId,
                 renewal,
                 keyRequests,
                 keyLetters,
             });
+        });
+
+        // One-off cleanup of old records: marks handled the failed sales and renewals whose name ASIC
+        // still lists as registered well after it was due (renewed by hand). dryRun (the default) only counts.
+        group.MapPost("/renewed-elsewhere", async (IRenewedElsewhereService service, bool dryRun = true, CancellationToken ct = default) =>
+            Results.Ok(await service.MarkAsync(dryRun, ct)));
+
+        // Puts back on the work queues a sale the old-records cleanup marked handled (and its renewal).
+        group.MapDelete("/{id:guid}/handled", async (Guid id, ApplicationDbContext db) =>
+        {
+            var sale = await db.OntraportSales.FirstOrDefaultAsync(x => x.Id == id);
+            if (sale is null) return Results.NotFound();
+            sale.HandledAt = null;
+            sale.HandledNote = null;
+            if (sale.RenewalRequestId is { } rid
+                && await db.RenewalRequests.FirstOrDefaultAsync(r => r.Id == rid) is { } renewal)
+            {
+                renewal.HandledAt = null;
+                renewal.HandledNote = null;
+            }
+            await db.SaveChangesAsync();
+            return Results.Ok(new { handledAt = (DateTime?)null });
         });
 
         // Puts one failed sale back for the next processing run: the single-sale form of
@@ -274,6 +299,8 @@ public sealed class OntraportSalesModule : ICarterModule
             sale.Status = OntraportSaleStatus.Synced;
             sale.RenewalRequestId = null;
             sale.ProcessedAt = null;
+            sale.HandledAt = null;
+            sale.HandledNote = null;
             await db.SaveChangesAsync();
             return Results.Ok(new { message = "Back in the queue: the next processing run (07:00, or Process eligible) renews it." });
         });
@@ -291,7 +318,7 @@ public sealed class OntraportSalesModule : ICarterModule
             // The processor needs a due date to act; sales past the -30d window would only
             // churn to NotDueForRenewal, so they're excluded unless explicitly requested.
             var query = db.OntraportSales
-                .Where(s => s.Status == OntraportSaleStatus.RenewalFailed)
+                .Where(s => s.Status == OntraportSaleStatus.RenewalFailed && s.HandledAt == null)
                 .Where(s => s.RenewalDueDate != null);
             if (!includePastDue)
                 query = query.Where(s => s.RenewalDueDate >= pastDueCutoff);
