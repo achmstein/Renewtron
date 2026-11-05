@@ -25,6 +25,9 @@ export function LinkButton({ to, children, primary }: { to: string; children: Re
 
 /* ─────────────── Rows: each kind of work, in words ─────────────── */
 
+/** An item's identity for "mark done": kind, record and status, so a change brings it back. */
+export const workKey = (i: TodayItem) => `${i.kind}:${i.id}:${i.reason}`
+
 export function WorkRow({ item }: { item: TodayItem }) {
   switch (item.kind) {
     case 'renewal': return <RenewalRow item={item} />
@@ -68,6 +71,7 @@ function RenewalRow({ item }: { item: TodayItem }) {
   const reason = RENEWAL_REASONS[item.reason] ?? { what: 'failed', next: item.failedAtStep ? `Stopped at “${item.failedAtStep}”.` : 'Open it to see what went wrong.' }
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning="action"
       to={`/admin/renewals/${item.id}`}
       what={<><Who item={item} />: renewal of <Name>{item.businessName}</Name> {reason.what}.</>}
@@ -82,6 +86,7 @@ function SaleRow({ item }: { item: TodayItem }) {
   const to = `/admin/ontraport-sales/${item.id}`
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning="action"
       to={to}
       what={ineligible
@@ -102,6 +107,7 @@ function BpayRow({ item }: { item: TodayItem }) {
   const status = statusOf('bpay', item.reason)
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning={status.meaning}
       to={`/admin/renewals/${item.id}`}
       what={<>ASIC bill for <Name>{item.businessName}</Name>{item.clientName ? <> (<Who item={item} />)</> : null}{item.amount != null ? `, ${fmtMoney2(item.amount)}` : ''}.</>}
@@ -116,6 +122,7 @@ function KeyRequestsRow({ item }: { item: TodayItem }) {
   const n = item.count ?? 0
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning="action"
       to="/admin/asic-key-requests"
       what={<>{n} key request{n === 1 ? '' : 's'} to send to ASIC.</>}
@@ -127,6 +134,7 @@ function KeyRequestsRow({ item }: { item: TodayItem }) {
 function KeyRequestRow({ item }: { item: TodayItem }) {
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning={statusOf('keyRequest', item.reason).meaning}
       to={`/admin/asic-key-requests/${item.id}`}
       what={<>Key request for <Name>{item.businessName}</Name>{item.clientName ? <> (<Who item={item} />)</> : null} {item.reason === 'Failed' ? 'couldn’t be sent.' : item.reason === 'Manual' ? 'is being sent by a person now.' : 'is waiting to be sent to ASIC.'}</>}
@@ -140,6 +148,7 @@ function KeyLetterRow({ item }: { item: TodayItem }) {
   const status = statusOf('keyLetter', item.reason)
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning={status.meaning}
       to={`/admin/asic-keys/${item.id}`}
       what={<>Key letter for <Name>{item.businessName}</Name>: {status.label.toLowerCase()}.</>}
@@ -154,6 +163,7 @@ function KeyLetterRow({ item }: { item: TodayItem }) {
 function DuplicateRow({ item }: { item: TodayItem }) {
   return (
     <SentenceRow
+      doneKey={workKey(item)}
       meaning="quiet"
       to={`/admin/clients/${item.id}`}
       what={<><Who item={item} /> may be the same person as <ClientName id={item.otherClientId} name={item.otherClientName} />.</>}

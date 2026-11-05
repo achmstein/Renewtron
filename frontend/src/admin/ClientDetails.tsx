@@ -6,7 +6,7 @@ import { sileo } from 'sileo'
 import { api, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
 import { EmptyState, KickerLabel, StatusPill } from './_ui'
 import { Status, statusOf } from './_status'
-import { DueIn, When } from './_rows'
+import { DueIn, When, useRowKeyboard } from './_rows'
 import { StoryStrip, type StoryStep } from './_record'
 import { WorkRow } from './_work'
 import { fmtDate, fmtMoney2, formatAbn, relativeTime } from './_utils'
@@ -118,6 +118,7 @@ function NeedsAttention({ client }: { client: ClientDetail }) {
     queryKey: ['admin-client-work', client.id],
     queryFn: () => api.admin.today(client.id),
   })
+  useRowKeyboard()
   if (!data) return null
   const items = data.groups.flatMap((g) => g.items).filter((i) => i.kind !== 'duplicate')
   if (items.length === 0) {

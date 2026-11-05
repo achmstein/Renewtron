@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { type Meaning } from './_status'
 import { fmtDateTime } from './_utils'
@@ -31,7 +31,7 @@ function fromControl(e: { target: EventTarget | null; currentTarget: EventTarget
   return !!hit && hit !== e.currentTarget
 }
 
-export function SentenceRow({ meaning, what, why, actions, to }: {
+export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
   meaning: Meaning
   /** The sentence: what happened, naming the client. */
   what: ReactNode
@@ -41,6 +41,8 @@ export function SentenceRow({ meaning, what, why, actions, to }: {
   actions?: ReactNode
   /** The record the row opens. Clicking anywhere outside a link or button goes there. */
   to?: string
+  /** Identifies the row for D (mark done) in useRowKeyboard. */
+  doneKey?: string
 }) {
   const navigate = useNavigate()
   const open = to
@@ -56,13 +58,15 @@ export function SentenceRow({ meaning, what, why, actions, to }: {
           if (e.key === 'Enter' && !fromControl(e)) navigate(to)
         },
       }
-    : {}
+    : { tabIndex: 0 }
   return (
     <div
       {...open}
+      data-row=""
+      data-done-key={doneKey}
       data-meaning={meaning}
-      className={`grid grid-cols-[4px_1fr_auto] items-center gap-3 border-b border-zinc-100 py-3 pr-4 last:border-b-0 ${
-        to ? 'cursor-pointer hover:bg-zinc-50 focus-visible:bg-zinc-50 focus-visible:outline-none' : ''
+      className={`grid grid-cols-[4px_1fr_auto] items-center gap-3 border-b border-zinc-100 py-3 pr-4 last:border-b-0 focus-visible:bg-brand-50/60 focus-visible:outline-none ${
+        to ? 'cursor-pointer hover:bg-zinc-50' : ''
       }`}
     >
       <span aria-hidden className={`self-stretch rounded-r ${STRIPE[meaning]}`} />
@@ -171,3 +175,59 @@ export function DueIn({ at }: { at: string | null | undefined }) {
   return <time dateTime={at} title={new Date(at).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}>{dueWords(at)}</time>
 }
 
+
+/**
+ * Keyboard for a list of sentence rows: ↑/↓ (or k/j) move between rows, Enter opens the focused
+ * row, D marks it done. Ignored while typing in a field or with a dialog open.
+ */
+export function useRowKeyboard(onDone?: (key: string) => void) {
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
+      const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-row]'))
+      if (rows.length === 0) return
+      const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-row]') ?? null
+      const i = current ? rows.indexOf(current) : -1
+      const move = (to: number) => {
+        e.preventDefault()
+        const row = rows[Math.max(0, Math.min(rows.length - 1, to))]
+        row.focus()
+        row.scrollIntoView({ block: 'nearest' })
+      }
+      if (e.key === 'ArrowDown' || e.key === 'j') move(i + 1)
+      else if (e.key === 'ArrowUp' || e.key === 'k') move(i < 0 ? 0 : i - 1)
+      else if ((e.key === 'd' || e.key === 'D') && current?.dataset.doneKey && onDone) {
+        e.preventDefault()
+        const next = rows[i + 1] ?? rows[i - 1]
+        onDone(current.dataset.doneKey)
+        next?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onDone])
+}
+
+const DONE_STORE = 'renewtron.admin.done'
+
+/**
+ * Items staff marked done on this computer. The key includes the item's status, so an item that
+ * changes (a retry fails again, a bill's transfer is refused) comes back by itself.
+ */
+export function useDoneItems() {
+  const [done, setDone] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(DONE_STORE) ?? '[]') as string[]) } catch { return new Set() }
+  })
+  const save = (next: Set<string>) => {
+    setDone(next)
+    // Keep the list from growing without end: the newest 500 marks.
+    localStorage.setItem(DONE_STORE, JSON.stringify([...next].slice(-500)))
+  }
+  return {
+    done,
+    mark: (key: string) => save(new Set([...done, key])),
+    undo: (key: string) => { const next = new Set(done); next.delete(key); save(next) },
+  }
+}

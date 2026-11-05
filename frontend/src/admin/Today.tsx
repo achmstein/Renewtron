@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Loader2, TriangleAlert } from 'lucide-react'
-import { api, type TodayGroup } from '../api/client'
-import { Queue } from './_rows'
+import { useState } from 'react'
+import { api, type TodayGroup, type TodayItem } from '../api/client'
+import { Queue, useDoneItems, useRowKeyboard } from './_rows'
 import { RefreshButton } from './_ui'
 import { fmtMoney0 } from './_utils'
-import { LinkButton, WorkRow } from './_work'
+import { LinkButton, WorkRow, workKey } from './_work'
 import { Button } from '@/components/ui/button'
 
 /*
@@ -30,6 +31,10 @@ export default function Today() {
 
   const now = new Date()
   const paid = data?.groups.find((g) => g.key === 'paid')
+  const { done, mark, undo } = useDoneItems()
+  useRowKeyboard(mark)
+  const marked = data?.groups.flatMap((g) => g.items).filter((i) => done.has(workKey(i))) ?? []
+  const open = data ? data.total - marked.length : 0
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
@@ -39,11 +44,14 @@ export default function Today() {
             {now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">
-            {!data ? 'Today' : data.total === 0 ? 'Nothing needs a person right now' : `${data.total.toLocaleString()} thing${data.total === 1 ? '' : 's'} need${data.total === 1 ? 's' : ''} a person`}
+            {!data ? 'Today' : open <= 0 ? 'Nothing needs a person right now' : `${open.toLocaleString()} thing${open === 1 ? '' : 's'} need${open === 1 ? 's' : ''} a person`}
           </h1>
           {paid && paid.total ? (
             <p className="mt-1 text-sm text-zinc-500">{fmtMoney0(paid.total)} that clients paid is waiting on us.</p>
           ) : null}
+          <p className="mt-1 hidden text-xs text-zinc-400 lg:block">
+            <Kbd>↑</Kbd> <Kbd>↓</Kbd> move · <Kbd>Enter</Kbd> open · <Kbd>D</Kbd> done · <Kbd>Ctrl K</Kbd> find a client
+          </p>
         </div>
         <RefreshButton onClick={() => void refetch()} busy={isFetching} />
       </div>
@@ -66,24 +74,26 @@ export default function Today() {
               <Button asChild size="sm" className="bg-red-700 hover:bg-red-800"><Link to="/admin/settings">Fix in Settings</Link></Button>
             </div>
           ) : null}
-          {data.groups.map((g) => <Group key={g.key} group={g} />)}
+          {data.groups.map((g) => <Group key={g.key} group={g} done={done} />)}
+          {marked.length ? <MarkedDone items={marked} undo={undo} /> : null}
         </div>
       )}
     </div>
   )
 }
 
-function Group({ group }: { group: TodayGroup }) {
+function Group({ group, done }: { group: TodayGroup; done: Set<string> }) {
+  const items = group.items.filter((i) => !done.has(workKey(i)))
   const hidden = group.count - group.items.length
   return (
     <Queue
       title={GROUP_TITLES[group.key]}
-      count={group.count}
+      count={group.count - (group.items.length - items.length)}
       total={group.total ? fmtMoney0(group.total) : undefined}
       action={<GroupActions group={group} />}
       empty={EMPTY[group.key]}
     >
-      {group.items.map((item) => <WorkRow key={`${item.kind}-${item.id}`} item={item} />)}
+      {items.map((item) => <WorkRow key={`${item.kind}-${item.id}`} item={item} />)}
       {hidden > 0 ? (
         <div className="border-t border-zinc-100 px-4 py-2 text-xs text-zinc-500">
           {group.items.length} of {group.count.toLocaleString()} shown, most urgent first. The rest are in the lists linked above.
@@ -91,6 +101,28 @@ function Group({ group }: { group: TodayGroup }) {
       ) : null}
     </Queue>
   )
+}
+
+/** Items marked done on this computer, kept within reach in case of a slip. */
+function MarkedDone({ items, undo }: { items: TodayItem[]; undo: (key: string) => void }) {
+  const [show, setShow] = useState(false)
+  return (
+    <section className="rounded-xl bg-white ring-1 ring-zinc-200">
+      <button type="button" onClick={() => setShow((v) => !v)} className="w-full px-4 py-2.5 text-left text-sm text-zinc-600">
+        {items.length} marked done on this computer. They come back if anything about them changes. <span className="text-brand-700">{show ? 'Hide' : 'Show'}</span>
+      </button>
+      {show ? items.map((i) => (
+        <div key={workKey(i)} className="flex items-center gap-2 border-t border-zinc-100 pr-3 opacity-60">
+          <div className="min-w-0 flex-1"><WorkRow item={i} /></div>
+          <Button size="xs" variant="outline" onClick={() => undo(workKey(i))}>Undo</Button>
+        </div>
+      )) : null}
+    </section>
+  )
+}
+
+function Kbd({ children }: { children: string }) {
+  return <kbd className="rounded border border-zinc-200 bg-white px-1 font-mono text-xxs text-zinc-500">{children}</kbd>
 }
 
 const EMPTY: Record<TodayGroup['key'], string> = {
