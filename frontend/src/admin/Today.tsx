@@ -1,7 +1,7 @@
-import { useState, type ComponentType } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, CircleAlert, CircleCheck, Eye, ListTodo, TriangleAlert } from 'lucide-react'
+import { ChevronRight, CircleCheck, TriangleAlert } from 'lucide-react'
 import { api, type TodayGroup, type TodayItem } from '../api/client'
 import { Queue, useDoneItems, useRowKeyboard } from './_rows'
 import type { Meaning } from './_status'
@@ -29,10 +29,10 @@ import { cn } from '@/lib/utils'
 
 type Level = 'urgent' | 'todo' | 'review'
 
-const LEVELS: Array<{ key: Level; label: string; hint: string; meaning: Meaning; icon: ComponentType<{ className?: string }> }> = [
-  { key: 'urgent', label: 'Urgent', hint: 'Client money at risk', meaning: 'action', icon: CircleAlert },
-  { key: 'todo', label: 'To do', hint: 'The day’s work', meaning: 'waiting', icon: ListTodo },
-  { key: 'review', label: 'Review', hint: 'No deadline', meaning: 'quiet', icon: Eye },
+const LEVELS: Array<{ key: Level; label: string; hint: string; meaning: Meaning }> = [
+  { key: 'urgent', label: 'Urgent', hint: 'Client money at risk', meaning: 'action' },
+  { key: 'todo', label: 'To do', hint: 'The day’s work', meaning: 'waiting' },
+  { key: 'review', label: 'Review', hint: 'No deadline', meaning: 'quiet' },
 ]
 
 const LEVEL_OF: Record<TodayGroup['key'], Level> = { paid: 'urgent', bpay: 'urgent', keys: 'todo', decide: 'review' }
@@ -44,12 +44,12 @@ const GROUP_TITLES: Record<TodayGroup['key'], string> = {
   decide: 'Possible duplicates',
 }
 
-const TONE: Record<Meaning, { icon: string; ring: string }> = {
-  action: { icon: 'bg-destructive/10 text-destructive', ring: 'ring-destructive/40' },
-  waiting: { icon: 'bg-warning/10 text-warning', ring: 'ring-warning/40' },
-  working: { icon: 'bg-info/10 text-info', ring: 'ring-info/40' },
-  done: { icon: 'bg-success/10 text-success', ring: 'ring-success/40' },
-  quiet: { icon: 'bg-muted text-muted-foreground', ring: 'ring-foreground/20' },
+const DOT: Record<Meaning, string> = {
+  action: 'bg-destructive',
+  waiting: 'bg-warning',
+  working: 'bg-info',
+  done: 'bg-success',
+  quiet: 'bg-muted-foreground/40',
 }
 
 export default function Today() {
@@ -105,7 +105,7 @@ export default function Today() {
             </Alert>
           ))}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <Card className="grid gap-0 divide-y py-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             {LEVELS.map((l) => {
               const n = levelCount(l.key)
               const active = filter === l.key
@@ -115,25 +115,21 @@ export default function Today() {
                   type="button"
                   onClick={() => setFilter(active ? null : l.key)}
                   aria-pressed={active}
-                  className={cn(
-                    'flex items-center gap-3 rounded-xl border bg-card p-4 text-left shadow-sm transition hover:bg-muted/40',
-                    active && cn('ring-2', TONE[l.meaning].ring),
-                  )}
+                  title={active ? 'Show everything' : `Show only ${l.label.toLowerCase()}`}
+                  className={cn('px-5 py-4 text-left transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-muted/50 sm:first:rounded-l-xl sm:first:rounded-tr-none sm:last:rounded-r-xl sm:last:rounded-bl-none', active && 'bg-muted')}
                 >
-                  <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-full', n ? TONE[l.meaning].icon : TONE.done.icon)}>
-                    {n ? <l.icon className="size-5" /> : <CircleCheck className="size-5" />}
+                  <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span aria-hidden className={cn('size-2 rounded-full', n ? DOT[l.meaning] : 'bg-muted-foreground/30')} />
+                    {l.label}
                   </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm text-muted-foreground">{l.label}</span>
-                    <span className="block text-2xl font-semibold tabular-nums leading-tight">{n}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {n === 0 ? 'All clear' : l.key === 'urgent' && urgentMoney ? `${fmtMoney0(urgentMoney)} waiting on us` : l.hint}
-                    </span>
+                  <span className="mt-1 block text-2xl font-semibold tabular-nums">{n}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {n === 0 ? 'All clear' : l.key === 'urgent' && urgentMoney ? `${fmtMoney0(urgentMoney)} waiting on us` : l.hint}
                   </span>
                 </button>
               )
             })}
-          </div>
+          </Card>
 
           {LEVELS.filter((l) => !filter || l.key === filter).map((l) => {
             const groups = data.groups.filter((g) => LEVEL_OF[g.key] === l.key && openIn(g) > 0)
@@ -141,7 +137,7 @@ export default function Today() {
             return (
               <section key={l.key} className="space-y-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
-                  <span className={cn('size-2 rounded-full', { action: 'bg-destructive', waiting: 'bg-warning', quiet: 'bg-muted-foreground/40' }[l.meaning as 'action' | 'waiting' | 'quiet'])} />
+                  <span aria-hidden className={cn('size-2 rounded-full', DOT[l.meaning])} />
                   {l.label}
                   <span className="font-normal text-muted-foreground">{l.hint}</span>
                 </h2>

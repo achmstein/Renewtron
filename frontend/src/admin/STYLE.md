@@ -19,6 +19,13 @@ Never write raw palette colours (`zinc-*`, `gray-*`, `brand-*`, `red-*`, hex val
 Use the tokens: `text-foreground`, `text-muted-foreground`, `bg-card`, `bg-muted`, `border` (the
 default border colour is already the theme's), `text-destructive`, `bg-success/10` and so on.
 
+## Stats
+
+Quiet. Numbers are black (`text-foreground`); a label and at most one line under it, both muted.
+No coloured numbers, coloured backgrounds or icon circles. A status shows only as a small dot
+(`size-2 rounded-full bg-destructive`) beside the label. Group related stats in one `Card`
+split with `divide-x` rather than a row of separate cards.
+
 ## Words
 
 - Sentence case everywhere. No uppercase, no mono "kicker" labels, no letter-spacing.

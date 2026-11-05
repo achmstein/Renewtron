@@ -93,8 +93,6 @@ export function StatusDot({ tone, label }: { tone: Tone; label: string }) {
 
 /* ─────────────────── Stats ─────────────────── */
 
-const TONE_TEXT: Record<Tone, string> = { emerald: 'text-success', amber: 'text-warning', red: 'text-destructive', indigo: 'text-info', zinc: '' }
-
 export function StatTile({ kicker, label, value, sub, tone = 'zinc' }: { kicker?: string; label: string; value: string; sub?: string; tone?: Tone }) {
   return (
     <Card className="gap-1 p-4">
@@ -102,7 +100,10 @@ export function StatTile({ kicker, label, value, sub, tone = 'zinc' }: { kicker?
         <span>{label}</span>
         {kicker ? <span className="text-xs">{kicker}</span> : null}
       </div>
-      <div className={cn('text-2xl font-semibold tabular-nums', TONE_TEXT[tone])}>{value}</div>
+      <div className="flex items-center gap-2 text-2xl font-semibold tabular-nums">
+        {tone !== 'zinc' ? <span aria-hidden className={cn('size-2 rounded-full', TONE_DOT[tone])} /> : null}
+        {value}
+      </div>
       {sub ? <div className="text-xs text-muted-foreground tabular-nums">{sub}</div> : null}
     </Card>
   )
@@ -129,7 +130,7 @@ export function SparklineTile({ kicker, label, value, sub, deltaPct, data, label
         <span className="flex items-center gap-2 text-xs">
           {kicker ? <span>{kicker}</span> : null}
           {deltaPct != null ? (
-            <span className={cn('tabular-nums font-medium', deltaPct >= 0 ? 'text-success' : 'text-destructive')}>
+            <span className="tabular-nums">
               {deltaPct >= 0 ? '+' : ''}{deltaPct}%
             </span>
           ) : null}
