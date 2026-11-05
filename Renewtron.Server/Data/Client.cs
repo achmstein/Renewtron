@@ -44,8 +44,30 @@ public class Client
     public DateTime LastSeenAt { get; set; }
 
     public List<ClientEmail> Emails { get; set; } = [];
+    /// <summary>The ABNs this person is a contact for; the business names hang off the ABN.</summary>
     public List<ClientAbn> Abns { get; set; } = [];
-    public List<ClientBusinessName> BusinessNames { get; set; } = [];
+}
+
+/// <summary>Where we first saw a record.</summary>
+public enum RecordSource
+{
+    Ontraport,
+    Wizard,
+    Renewal,
+    Portal,
+    KeyRequest,
+    BulkUpload,
+    Register,
+    Staff,
+}
+
+/// <summary>Where a business name's due date came from, weakest first: a stronger source replaces a weaker one.</summary>
+public enum RenewalDueDateSource
+{
+    Ontraport = 1,
+    BulkUpload = 2,
+    /// <summary>Worked out from a renewal we lodged: the most reliable.</summary>
+    Renewal = 3,
 }
 
 /// <summary>An address the client has used. Ontraport keys contacts on email, so the contact id lives here.</summary>
@@ -58,12 +80,32 @@ public class ClientEmail
     public string Email { get; set; } = "";
     public string? OntraportContactId { get; set; }
     public bool IsPrimary { get; set; }
-    /// <summary>Where we first saw it: Ontraport, Wizard, Renewal, Portal, KeyRequest, Staff.</summary>
-    public string Source { get; set; } = "";
+    public RecordSource Source { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
-/// <summary>An ABN the client holds. A client can hold several (sole trader plus a company, say).</summary>
+/// <summary>
+/// An ABN, the holder ASIC registers business names to. Names belong here rather than to a
+/// person, because that is how the register works: whoever deals with us about the ABN, the
+/// names are the ABN's. People are attached through <see cref="ClientAbn"/>.
+/// </summary>
+public class AbnHolder
+{
+    /// <summary>11 digits; the key.</summary>
+    public string Abn { get; set; } = "";
+    /// <summary>When the public register was last read for names under this ABN.</summary>
+    public DateTime? RegisterCheckedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    public List<ClientAbn> Contacts { get; set; } = [];
+    public List<ClientBusinessName> BusinessNames { get; set; } = [];
+}
+
+/// <summary>
+/// A person who is a contact for an ABN. A sole trader is the only contact on theirs; a
+/// company can have a director and a bookkeeper. Exactly one contact per ABN gets the
+/// renewal reminders and pays (<see cref="IsReminderContact"/>).
+/// </summary>
 public class ClientAbn
 {
     public Guid Id { get; set; }
@@ -71,8 +113,9 @@ public class ClientAbn
     public Client? Client { get; set; }
     /// <summary>11 digits.</summary>
     public string Abn { get; set; } = "";
-    /// <summary>When the public register was last read for names under this ABN.</summary>
-    public DateTime? RegisterCheckedAt { get; set; }
+    public AbnHolder? Holder { get; set; }
+    /// <summary>The one contact on the ABN who gets reminders about its names.</summary>
+    public bool IsReminderContact { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -87,19 +130,18 @@ public enum ClientBusinessNameStatus
 }
 
 /// <summary>
-/// One business name a client holds. A name belongs to exactly one client (unique on ABN +
-/// name), so two people sharing an ABN never both get its reminder or both pay for it.
+/// One business name, under the ABN that holds it (unique on ABN + name). Its people are the
+/// ABN's contacts; the reminder contact is the one who hears about it.
 /// </summary>
 public class ClientBusinessName
 {
     public Guid Id { get; set; }
-    public Guid ClientId { get; set; }
-    public Client? Client { get; set; }
 
     public string Abn { get; set; } = "";
+    public AbnHolder? Holder { get; set; }
     public string Name { get; set; } = "";
-    /// <summary>dd/MM/yyyy, as ASIC and the register give it. Renewals fall on its anniversary.</summary>
-    public string? RegistrationDate { get; set; }
+    /// <summary>Renewals fall on its anniversary.</summary>
+    public DateOnly? RegistrationDate { get; set; }
     public string? AsicAccountNumber { get; set; }
 
     /// <summary>
@@ -108,8 +150,7 @@ public class ClientBusinessName
     /// our own renewals, Ontraport's due-date field or bulk uploads.
     /// </summary>
     public DateOnly? RenewalDueDate { get; set; }
-    /// <summary>Renewal, Ontraport, BulkUpload.</summary>
-    public string? DueDateSource { get; set; }
+    public RenewalDueDateSource? DueDateSource { get; set; }
 
     public string? AsicKey { get; set; }
     public DateTime? AsicKeyReceivedAt { get; set; }
@@ -120,8 +161,7 @@ public class ClientBusinessName
     public Guid? LastRenewalRequestId { get; set; }
 
     public ClientBusinessNameStatus Status { get; set; } = ClientBusinessNameStatus.Active;
-    /// <summary>Where we first saw it: Register, Ontraport, Wizard, Renewal, BulkUpload, KeyRequest.</summary>
-    public string Source { get; set; } = "";
+    public RecordSource Source { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

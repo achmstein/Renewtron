@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { Contact, TriangleAlert } from 'lucide-react'
+import { api } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
@@ -70,6 +73,35 @@ export function Pagination({ page, pageSize, total, onPage }: { page: number; pa
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * "Client: Liza Lange →" for a lead, renewal, sale, key request or key letter. Renders nothing
+ * until the record is on a client (the linker attaches new records every 15 minutes).
+ */
+export function ClientLink({ kind, id, className = '' }: {
+  kind: 'lead' | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter'
+  id: string
+  className?: string
+}) {
+  const { data } = useQuery({
+    queryKey: ['admin-client-lookup', kind, id],
+    queryFn: () => api.admin.clientLookup(kind, id),
+    retry: false,
+    staleTime: 60_000,
+  })
+  if (!data) return null
+  return (
+    <Link
+      to={`/admin/clients/${data.id}`}
+      className={`inline-flex items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-xs font-medium text-brand-800 ring-1 ring-brand-200 hover:bg-brand-100 ${className}`}
+    >
+      <Contact className="h-3.5 w-3.5" />
+      Client: {data.fullName || 'unnamed'}
+      {data.possibleDuplicate ? <span className="text-amber-700">· possible duplicate</span> : null}
+      <span aria-hidden>→</span>
+    </Link>
   )
 }
 

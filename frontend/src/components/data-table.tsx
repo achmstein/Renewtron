@@ -50,11 +50,13 @@ const stickyCellClass =
   'sticky left-0 z-10 bg-white shadow-[inset_-1px_0_0_#E4E4E7] group-hover/row:bg-zinc-50'
 const stickyHeadClass = 'sticky left-0 z-20 bg-zinc-50 shadow-[inset_-1px_0_0_#E4E4E7]'
 
-export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick }: {
+export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick, loading }: {
   columns: DataTableColumn<TData>[]
   data: TData[]
   empty: ReactNode
   onRowClick?: (row: DataTableRow<TData>) => void
+  /** A new page or filter is on its way: the rows dim and a bar runs along the top. */
+  loading?: boolean
 }) {
   const table = useTable({
     features,
@@ -65,8 +67,13 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
   const rows = table.getRowModel().rows
 
   return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
+    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm" aria-busy={loading || undefined}>
+      {loading ? (
+        <div className="absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden bg-brand-100" role="progressbar" aria-label="Loading">
+          <div className="h-full w-1/3 bg-brand-500 animate-[table-loading_1s_ease-in-out_infinite]" />
+        </div>
+      ) : null}
+      <div className={cn('overflow-x-auto transition-opacity', loading && 'opacity-50 pointer-events-none')}>
         <Table>
           <TableHeader className="bg-zinc-50/80">
             {table.getHeaderGroups().map((headerGroup) => (

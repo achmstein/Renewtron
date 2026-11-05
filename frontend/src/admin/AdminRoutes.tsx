@@ -8,6 +8,7 @@ import Searches from './Searches'
 import SearchDetails from './SearchDetails'
 import Clients from './Clients'
 import ClientDetails from './ClientDetails'
+import ClientDuplicates from './ClientDuplicates'
 import Leads from './Leads'
 import LeadDetails from './LeadDetails'
 import Funnel from './Funnel'
@@ -37,6 +38,7 @@ export default function AdminRoutes() {
           <Route path="searches" element={<Searches />} />
           <Route path="searches/:id" element={<SearchDetails />} />
           <Route path="clients" element={<Clients />} />
+          <Route path="clients/duplicates" element={<ClientDuplicates />} />
           <Route path="clients/:id" element={<ClientDetails />} />
           <Route path="leads" element={<Leads />} />
           <Route path="leads/:id" element={<LeadDetails />} />

@@ -64,7 +64,7 @@ export default function Leads() {
   const debouncedSearch = useDebouncedValue(search)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-leads', { outcomes, reminders, search: debouncedSearch, hasRenewal, dateFrom, dateTo, page }],
     queryFn: () => api.admin.leads({
       page,
@@ -254,7 +254,7 @@ export default function Leads() {
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={leads} empty={<EmptyState title="No leads match the current filters." />} />
+        <DataTable columns={columns} data={leads} loading={isFetching && isPlaceholderData} empty={<EmptyState title="No leads match the current filters." />} />
         {totalCount > PAGE_SIZE ? (
           <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
         ) : null}

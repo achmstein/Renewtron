@@ -64,7 +64,7 @@ export default function OntraportSales() {
   const [errorModal, setErrorModal] = useState<{ title: string; body: string } | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-ontraport-sales', { statuses, search, dueFilter, page }],
     queryFn: () => api.admin.ontraportSales({
       status: statuses.join(',') || undefined,
@@ -148,7 +148,12 @@ export default function OntraportSales() {
             <div className="text-sm font-medium text-zinc-900 truncate">{s.businessName}</div>
             <div className="hidden sm:block text-xxs font-mono tabular-nums text-zinc-500">{s.abn}</div>
             <div className="hidden sm:block mt-0.5 text-xxs font-mono text-zinc-400 truncate">
-              {s.contactName ? `${s.contactName} · ${s.email}` : s.email}
+              {s.clientId ? (
+                <Link to={`/admin/clients/${s.clientId}`} className="underline decoration-zinc-300 hover:text-zinc-900" title="Open the client record">
+                  {s.contactName || s.email}
+                </Link>
+              ) : (s.contactName || s.email)}
+              {s.contactName ? ` · ${s.email}` : ''}
             </div>
           </div>
         )
@@ -352,7 +357,7 @@ export default function OntraportSales() {
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={tableRows} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
+        <DataTable columns={columns} data={tableRows} loading={isFetching && isPlaceholderData} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
         {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
           <Pagination page={page} pageSize={PAGE_SIZE} total={data?.filteredCount ?? 0} onPage={setPage} />
         ) : null}

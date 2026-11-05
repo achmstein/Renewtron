@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientLinkResult, type ClientListItem } from '../api/client'
-import { useDebouncedValue } from './_components'
+import { Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, StatTile, StatusPill } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -18,18 +18,47 @@ const filters = [
   { value: 'duplicates', label: 'Possible duplicates' },
 ] as const
 
-export default function Clients() {
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<string>('')
-  const debouncedSearch = useDebouncedValue(search)
+const PAGE_SIZE = 25
 
-  const { data, isFetching, refetch } = useQuery({
-    queryKey: ['admin-clients', { search: debouncedSearch, filter }],
-    queryFn: () => api.admin.clients({ search: debouncedSearch || undefined, filter: filter || undefined }),
+export default function Clients() {
+  // Filter, search and page live in the URL, so Back and refresh keep your place and a view can be shared.
+  const [params, setParams] = useSearchParams()
+  const filter = params.get('filter') ?? ''
+  const page = Math.max(1, Number(params.get('page')) || 1)
+  const urlSearch = params.get('q') ?? ''
+  const [search, setSearch] = useState(urlSearch)
+  const debouncedSearch = useDebouncedValue(search.trim())
+
+  const update = (next: { filter?: string; page?: number; q?: string }) => {
+    setParams((p) => {
+      const n = new URLSearchParams(p)
+      const set = (k: string, v: string | undefined) => (v ? n.set(k, v) : n.delete(k))
+      if (next.filter !== undefined) set('filter', next.filter)
+      if (next.q !== undefined) set('q', next.q)
+      // A new filter or search starts at page one.
+      set('page', next.page && next.page > 1 ? String(next.page) : undefined)
+      return n
+    }, { replace: next.page === undefined })
+  }
+  useEffect(() => {
+    if (debouncedSearch !== urlSearch) update({ q: debouncedSearch })
+    // Only when the typed search settles; update is a fresh closure each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch])
+
+  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
+    queryKey: ['admin-clients', { search: urlSearch, filter, page }],
+    queryFn: () => api.admin.clients({ search: urlSearch || undefined, filter: filter || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   })
+  const { data: stats, refetch: refetchStats } = useQuery({
+    queryKey: ['admin-clients', 'stats'],
+    queryFn: () => api.admin.clientStats(),
+    staleTime: 60_000,
+  })
   const items = data?.items ?? []
-  const stats = data?.stats
+  // Typing ahead of the debounce counts as loading too, so the table never looks finished when it isn't.
+  const loading = (isFetching && isPlaceholderData) || search.trim() !== urlSearch
 
   const columns = useMemo<DataTableColumn<ClientListItem>[]>(() => [
     {
@@ -47,7 +76,7 @@ export default function Clients() {
             </div>
             {c.possibleDuplicateOfId ? (
               <div className="mt-0.5 text-xxs text-amber-700 truncate">
-                Shares an ABN with <Link to={`/admin/clients/${c.possibleDuplicateOfId}`} className="underline">{c.possibleDuplicateOfName ?? 'another client'}</Link>
+                May be the same person as <Link to={`/admin/clients/${c.possibleDuplicateOfId}`} className="underline">{c.possibleDuplicateOfName ?? 'another client'}</Link>
               </div>
             ) : null}
           </div>
@@ -113,7 +142,7 @@ export default function Clients() {
         kicker="CUSTOMERS"
         title="Clients"
         subtitle="One record per person, with every business name they hold."
-        right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
+        right={<RefreshButton onClick={() => { void refetch(); void refetchStats() }} busy={isFetching} />}
       />
 
       <LinkPanel />
@@ -123,7 +152,17 @@ export default function Clients() {
           <StatTile label="Clients" value={stats.clients.toLocaleString()} sub={`${stats.purchased.toLocaleString()} bought from us`} />
           <StatTile label="Business names" value={stats.names.toLocaleString()} sub="active, across all clients" />
           <StatTile label="Several names" value={stats.severalNames.toLocaleString()} sub="clients with more than one" tone={stats.severalNames > 0 ? 'emerald' : 'zinc'} />
-          <StatTile label="Possible duplicates" value={stats.possibleDuplicates.toLocaleString()} sub="share an ABN, need a decision" tone={stats.possibleDuplicates > 0 ? 'amber' : 'zinc'} />
+          <StatTile label="Possible duplicates" value={stats.possibleDuplicates.toLocaleString()} sub="same name or mobile on an ABN" tone={stats.possibleDuplicates > 0 ? 'amber' : 'zinc'} />
+        </div>
+      ) : null}
+
+      {stats && stats.possibleDuplicates > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 px-5 py-3 ring-1 ring-amber-200">
+          <div className="text-sm text-amber-900">
+            <span className="font-medium">{stats.possibleDuplicates} possible duplicate{stats.possibleDuplicates === 1 ? '' : 's'}</span> to decide:
+            merge or keep apart, one pair at a time.
+          </div>
+          <Button size="sm" asChild><Link to="/admin/clients/duplicates">Review duplicates</Link></Button>
         </div>
       ) : null}
 
@@ -134,7 +173,7 @@ export default function Clients() {
             <button
               key={f.value}
               type="button"
-              onClick={() => setFilter(f.value)}
+              onClick={() => update({ filter: f.value })}
               className={`px-3 h-9 text-sm ${filter === f.value ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-700 hover:bg-zinc-50'}`}
             >
               {f.label}
@@ -142,17 +181,25 @@ export default function Clients() {
           ))}
         </div>
         {search || filter ? (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => { setSearch(''); setFilter('') }}>
+          <Button variant="ghost" size="sm" className="h-9" onClick={() => { setSearch(''); update({ filter: '', q: '' }) }}>
             Reset <X className="h-4 w-4" />
           </Button>
+        ) : null}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin text-brand-600" aria-label="Loading" /> : null}
+        {data && !loading ? (
+          <span className="text-xs font-mono tabular-nums text-zinc-500">{data.totalCount.toLocaleString()} client{data.totalCount === 1 ? '' : 's'}</span>
         ) : null}
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={items} empty={<EmptyState title="No clients match." message={stats?.clients ? undefined : 'Build the client records above first.'} />} />
-        {data && data.totalCount > items.length ? (
-          <div className="mt-2 text-xs font-mono text-zinc-400 tabular-nums">Showing the {items.length} most recent of {data.totalCount.toLocaleString()} — search to find the rest.</div>
-        ) : null}
+        <DataTable
+          columns={columns}
+          data={items}
+          loading={loading || (!data && isFetching)}
+          empty={!data ? <div className="py-10 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-brand-600" /></div>
+            : <EmptyState title="No clients match." message={stats?.clients ? undefined : 'Build the client records above first.'} />}
+        />
+        {data ? <Pagination page={page} pageSize={PAGE_SIZE} total={data.totalCount} onPage={(p) => update({ page: p })} /> : null}
       </div>
     </div>
   )

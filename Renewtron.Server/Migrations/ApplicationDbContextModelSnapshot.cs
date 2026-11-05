@@ -155,6 +155,26 @@ namespace Renewtron.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Renewtron.Data.AbnHolder", b =>
+                {
+                    b.Property<string>("Abn")
+                        .HasMaxLength(11)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(11)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RegisterCheckedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Abn");
+
+                    b.HasIndex("RegisterCheckedAt");
+
+                    b.ToTable("AbnHolders");
+                });
+
             modelBuilder.Entity("Renewtron.Data.AppUser", b =>
                 {
                     b.Property<string>("Id")
@@ -657,8 +677,8 @@ namespace Renewtron.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("RegisterCheckedAt")
-                        .HasColumnType("datetime2");
+                    b.Property<bool>("IsReminderContact")
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
@@ -666,6 +686,10 @@ namespace Renewtron.Migrations
 
                     b.HasIndex("ClientId", "Abn")
                         .IsUnique();
+
+                    b.HasIndex(new[] { "Abn" }, "IX_ClientAbns_Abn_ReminderContact")
+                        .IsUnique()
+                        .HasFilter("[IsReminderContact] = 1");
 
                     b.ToTable("ClientAbns");
                 });
@@ -696,9 +720,6 @@ namespace Renewtron.Migrations
                     b.Property<DateTime?>("AsicKeyReceivedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("ClientId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -720,10 +741,8 @@ namespace Renewtron.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("RegistrationDate")
-                        .HasMaxLength(10)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(10)");
+                    b.Property<DateOnly?>("RegistrationDate")
+                        .HasColumnType("date");
 
                     b.Property<DateOnly?>("RenewalDueDate")
                         .HasColumnType("date");
@@ -740,8 +759,6 @@ namespace Renewtron.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ClientId");
 
                     b.HasIndex("RenewalDueDate");
 
@@ -1609,6 +1626,12 @@ namespace Renewtron.Migrations
 
             modelBuilder.Entity("Renewtron.Data.ClientAbn", b =>
                 {
+                    b.HasOne("Renewtron.Data.AbnHolder", "Holder")
+                        .WithMany("Contacts")
+                        .HasForeignKey("Abn")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
                     b.HasOne("Renewtron.Data.Client", "Client")
                         .WithMany("Abns")
                         .HasForeignKey("ClientId")
@@ -1616,17 +1639,19 @@ namespace Renewtron.Migrations
                         .IsRequired();
 
                     b.Navigation("Client");
+
+                    b.Navigation("Holder");
                 });
 
             modelBuilder.Entity("Renewtron.Data.ClientBusinessName", b =>
                 {
-                    b.HasOne("Renewtron.Data.Client", "Client")
+                    b.HasOne("Renewtron.Data.AbnHolder", "Holder")
                         .WithMany("BusinessNames")
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasForeignKey("Abn")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.Navigation("Client");
+                    b.Navigation("Holder");
                 });
 
             modelBuilder.Entity("Renewtron.Data.ClientEmail", b =>
@@ -1751,11 +1776,16 @@ namespace Renewtron.Migrations
                     b.Navigation("RenewalRequest");
                 });
 
+            modelBuilder.Entity("Renewtron.Data.AbnHolder", b =>
+                {
+                    b.Navigation("BusinessNames");
+
+                    b.Navigation("Contacts");
+                });
+
             modelBuilder.Entity("Renewtron.Data.Client", b =>
                 {
                     b.Navigation("Abns");
-
-                    b.Navigation("BusinessNames");
 
                     b.Navigation("Emails");
                 });

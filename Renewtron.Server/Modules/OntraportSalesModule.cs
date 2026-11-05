@@ -19,14 +19,15 @@ public sealed class OntraportSalesModule : ICarterModule
     public sealed record SaleRow(
         Guid Id, string ContactName, string Email, string Abn, string BusinessName, int RenewalYears, decimal AmountPaid,
         string Status, DateTime SyncedAt, DateTime? RenewalDueDate, string? ErrorMessage, Guid? RenewalRequestId,
-        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage);
+        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage, Guid? ClientId);
 
     private static IQueryable<SaleRow> Project(IQueryable<OntraportSale> q) => q.Select(s => new SaleRow(
         s.Id, s.ContactName, s.Email, s.Abn, s.BusinessName, s.RenewalYears, s.AmountPaid,
         s.Status.ToString(), s.SyncedAt, s.RenewalDueDate, s.ErrorMessage, s.RenewalRequestId,
         s.RenewalRequest != null ? s.RenewalRequest.Status.ToString() : null,
         s.RenewalRequest != null ? s.RenewalRequest.FailedAtStep : null,
-        s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null));
+        s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null,
+        s.ClientId));
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {

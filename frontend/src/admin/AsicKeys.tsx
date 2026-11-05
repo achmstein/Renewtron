@@ -3,7 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { ExternalLink, Inbox, Loader2, RotateCw, UserPlus, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyJobStatus, type AsicKeyNotificationListItem } from '../api/client'
-import { Pagination, useDebouncedValue } from './_components'
+import { ClientLink, Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -43,7 +43,7 @@ export default function AsicKeys() {
   const [assign, setAssign] = useState<Row | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-asic-keys', { statuses, search, page }],
     queryFn: () => api.admin.asicKeys({ status: statuses.join(',') || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -314,6 +314,7 @@ export default function AsicKeys() {
           columns={columns}
           data={items}
           onRowClick={(r) => setDetail(r.original)}
+          loading={isFetching && isPlaceholderData}
           empty={<EmptyState
             title={hasActiveFilters ? 'No notifications match the current filters.' : 'No ASIC key notifications yet.'}
             message={hasActiveFilters ? undefined : 'Configure the inbox under Settings → ASIC key inbox, then run a scan.'}
@@ -360,6 +361,7 @@ function DetailDialog({ row: listRow, onClose }: { row: Row | null; onClose: () 
               <DialogTitle>{row.businessName ?? 'Business name not parsed'}</DialogTitle>
             </DialogHeader>
             <DialogBody className="space-y-3">
+              <ClientLink kind="keyLetter" id={row.id} />
               <div className="flex flex-wrap items-center gap-2">
                 <KeyStatusPill status={row.status} />
                 <span className="text-xs text-zinc-500">

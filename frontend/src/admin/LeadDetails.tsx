@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, CircleCheck, Loader2 } from 'lucide-react'
 import { api } from '../api/client'
+import { ClientLink } from './_components'
 import { FunnelPills, KickerLabel, StatusPill, type Tone } from './_ui'
 import { fmtMoney2, relativeTime } from './_utils'
 
@@ -89,6 +90,7 @@ export default function LeadDetails() {
               <span className="font-mono tabular-nums text-zinc-900">{formatAbn(data.abn)}</span>
               {data.email ? (<><span>·</span><span className="font-mono">{data.email}</span></>) : null}
             </div>
+            <ClientLink kind="lead" id={data.id} className="mt-3" />
           </div>
           <div className="text-right">
             <BigOutcomePill outcome={data.outcome} />

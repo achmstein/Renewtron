@@ -35,6 +35,8 @@ public sealed class ClientLinkResult
     public int PossibleDuplicates { get; set; }
     public int EmailsAdded { get; set; }
     public int AbnsAdded { get; set; }
+    /// <summary>People added as a second (or later) contact on an ABN someone else already had.</summary>
+    public int SharedAbnContacts { get; set; }
     public int NamesAdded { get; set; }
     public int NamesCancelled { get; set; }
     public int AbnsChecked { get; set; }

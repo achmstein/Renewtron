@@ -23,6 +23,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<BusinessNameImport> BusinessNameImports { get; set; }
     public DbSet<Client> Clients { get; set; }
     public DbSet<ClientEmail> ClientEmails { get; set; }
+    public DbSet<AbnHolder> AbnHolders { get; set; }
     public DbSet<ClientAbn> ClientAbns { get; set; }
     public DbSet<ClientBusinessName> ClientBusinessNames { get; set; }
 
@@ -313,11 +314,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
             entity.Property(e => e.OntraportContactId).HasMaxLength(20);
-            entity.Property(e => e.Source).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(20).HasConversion<string>();
             entity.HasIndex(e => e.Email).IsUnique();
             entity.HasIndex(e => e.OntraportContactId);
             entity.HasOne(e => e.Client).WithMany(c => c.Emails)
                 .HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AbnHolder>(entity =>
+        {
+            entity.HasKey(e => e.Abn);
+            entity.Property(e => e.Abn).HasMaxLength(11).IsUnicode(false);
+            entity.HasIndex(e => e.RegisterCheckedAt);
         });
 
         modelBuilder.Entity<ClientAbn>(entity =>
@@ -326,8 +334,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
             entity.HasIndex(e => new { e.ClientId, e.Abn }).IsUnique();
             entity.HasIndex(e => e.Abn);
+            // One reminder contact per ABN.
+            entity.HasIndex(e => e.Abn, "IX_ClientAbns_Abn_ReminderContact").IsUnique().HasFilter("[IsReminderContact] = 1");
             entity.HasOne(e => e.Client).WithMany(c => c.Abns)
                 .HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Holder).WithMany(h => h.Contacts)
+                .HasForeignKey(e => e.Abn).OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<ClientBusinessName>(entity =>
@@ -335,17 +347,15 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
             entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.RegistrationDate).HasMaxLength(10).IsUnicode(false);
             entity.Property(e => e.AsicAccountNumber).HasMaxLength(50);
-            entity.Property(e => e.DueDateSource).HasMaxLength(20);
+            entity.Property(e => e.DueDateSource).HasMaxLength(20).HasConversion<string>();
             entity.Property(e => e.AsicKey).HasMaxLength(50);
-            entity.Property(e => e.Source).IsRequired().HasMaxLength(20);
-            // One owner per name: two people sharing an ABN never both hold it.
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(20).HasConversion<string>();
+            // The register's key: a name is held by one ABN.
             entity.HasIndex(e => new { e.Abn, e.Name }).IsUnique();
-            entity.HasIndex(e => e.ClientId);
             entity.HasIndex(e => e.RenewalDueDate);
-            entity.HasOne(e => e.Client).WithMany(c => c.BusinessNames)
-                .HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Holder).WithMany(h => h.BusinessNames)
+                .HasForeignKey(e => e.Abn).OnDelete(DeleteBehavior.NoAction);
         });
 
         // Links from the older records. NoAction: SQL Server refuses two cascade paths into one

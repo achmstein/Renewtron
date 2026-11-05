@@ -100,6 +100,8 @@ export interface ClientListItem {
   firstName: string | null
   nextDue: string | null
   keys: number
+  /** On an ABN where someone else gets the reminders. */
+  sharesAbn: boolean
   hasPurchased: boolean
   isTest: boolean
   possibleDuplicateOfId: string | null
@@ -123,6 +125,16 @@ export interface ClientBusinessNameDto {
   source: string
 }
 
+export interface ClientAbnDto {
+  abn: string
+  /** This client gets the ABN's reminders. */
+  isReminderContact: boolean
+  registerCheckedAt: string | null
+  /** The ABN's other contacts. */
+  contacts: Array<{ clientId: string; fullName: string; isReminderContact: boolean }>
+  businessNames: ClientBusinessNameDto[]
+}
+
 export interface ClientDetail {
   id: string
   fullName: string
@@ -140,8 +152,7 @@ export interface ClientDetail {
   possibleDuplicateOf: { id: string; fullName: string } | null
   duplicates: Array<{ id: string; fullName: string }>
   emails: Array<{ id: string; email: string; isPrimary: boolean; ontraportContactId: string | null; source: string }>
-  abns: Array<{ abn: string; registerCheckedAt: string | null }>
-  businessNames: ClientBusinessNameDto[]
+  abns: ClientAbnDto[]
   sales: Array<{ id: string; businessName: string; status: string; syncedAt: string; amountPaid: number; renewalDueDate: string | null; ontraportContactId: string }>
   leads: Array<{ id: string; createdAt: string; outcome: string; abn: string; email: string }>
   renewals: Array<{ id: string; businessName: string; status: string; initiatedAt: string; completedAt: string | null; amount: number; renewalYears: number; source: string }>
@@ -158,6 +169,7 @@ export interface ClientLinkResult {
   possibleDuplicates: number
   emailsAdded: number
   abnsAdded: number
+  sharedAbnContacts: number
   namesAdded: number
   namesCancelled: number
   abnsChecked: number
@@ -807,7 +819,7 @@ export const api = {
       if (params.page) qs.set('page', String(params.page))
       if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''
-      type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null }
+      type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null; clientId?: string | null }
       return apiFetch<{
         filteredCount: number
         page: number
@@ -968,25 +980,28 @@ export const api = {
     updateAirwallex: (body: AirwallexSettings) => apiFetch<void>('/api/admin/settings/airwallex', { method: 'PUT', body: JSON.stringify(body) }),
     testAirwallex: () => apiFetch<{ ok: boolean }>('/api/admin/settings/airwallex/test', { method: 'POST' }),
     sidebarCounts: () => apiFetch<SidebarCounts>('/api/admin/sidebar-counts'),
-    clients: (params: { search?: string; filter?: string } = {}) => {
+    /** The client a record belongs to; 404 (thrown) when it isn't on one yet. */
+    clientLookup: (kind: 'lead' | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter', id: string) =>
+      apiFetch<{ id: string; fullName: string; possibleDuplicate: boolean }>(`/api/admin/clients/lookup?kind=${kind}&id=${encodeURIComponent(id)}`),
+    clients: (params: { search?: string; filter?: string; page?: number; pageSize?: number; take?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.search) qs.set('search', params.search)
       if (params.filter) qs.set('filter', params.filter)
+      if (params.page) qs.set('page', String(params.page))
+      if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+      if (params.take) qs.set('take', String(params.take))
       const suffix = qs.toString() ? `?${qs}` : ''
-      return apiFetch<{
-        totalCount: number
-        items: ClientListItem[]
-        stats: { clients: number; purchased: number; severalNames: number; names: number; possibleDuplicates: number }
-      }>(`/api/admin/clients${suffix}`)
+      return apiFetch<{ totalCount: number; page: number; pageSize: number; items: ClientListItem[] }>(`/api/admin/clients${suffix}`)
     },
+    clientStats: () => apiFetch<{ clients: number; purchased: number; severalNames: number; names: number; possibleDuplicates: number }>('/api/admin/clients/stats'),
     client: (id: string) => apiFetch<ClientDetail>(`/api/admin/clients/${id}`),
     clientLinkStatus: () => apiFetch<ClientLinkStatus>('/api/admin/clients/link-status'),
     runClientLink: (dryRun: boolean) => apiFetch<void>('/api/admin/clients/link', { method: 'POST', body: JSON.stringify({ dryRun }) }),
     mergeClient: (id: string, targetId: string) => apiFetch<{ id: string }>(`/api/admin/clients/${id}/merge-into/${targetId}`, { method: 'POST' }),
     dismissClientDuplicate: (id: string) => apiFetch<void>(`/api/admin/clients/${id}/not-duplicate`, { method: 'POST' }),
     updateClientNotes: (id: string, notes: string) => apiFetch<void>(`/api/admin/clients/${id}/notes`, { method: 'PUT', body: JSON.stringify({ notes }) }),
-    moveClientBusinessName: (nameId: string, clientId: string) =>
-      apiFetch<void>(`/api/admin/clients/business-names/${nameId}/move`, { method: 'POST', body: JSON.stringify({ clientId }) }),
+    setAbnReminderContact: (abn: string, clientId: string) =>
+      apiFetch<void>(`/api/admin/clients/abns/${abn}/reminder-contact`, { method: 'POST', body: JSON.stringify({ clientId }) }),
     setClientBusinessNameStatus: (nameId: string, status: ClientBusinessNameDto['status']) =>
       apiFetch<void>(`/api/admin/clients/business-names/${nameId}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
     bpayBills: (includePaid = false) => apiFetch<{

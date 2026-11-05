@@ -3,7 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyRequestDto } from '../api/client'
-import { Pagination, useDebouncedValue } from './_components'
+import { ClientLink, Pagination, useDebouncedValue } from './_components'
 import { EmptyState, PageHeader, RefreshButton, SparklineTile, StatTile, StatusPill, type Tone } from './_ui'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -42,7 +42,7 @@ export default function AsicKeyRequests() {
   const [record, setRecord] = useState<Row | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-asic-key-requests', { statuses, search, page }],
     queryFn: () => api.admin.asicKeyRequests({ status: statuses.join(',') || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -258,6 +258,7 @@ export default function AsicKeyRequests() {
           columns={columns}
           data={items}
           onRowClick={(r) => setDetail(r.original)}
+          loading={isFetching && isPlaceholderData}
           empty={<EmptyState
             title={hasActiveFilters ? 'No requests match the current filters.' : 'No ASIC key requests yet.'}
             message={hasActiveFilters ? undefined : 'Turn on Settings → ASIC key requests, then sync Ontraport or use “Request key” on a sale.'}
@@ -400,6 +401,7 @@ function DetailDialog({ row, onClose }: { row: Row | null; onClose: () => void }
               <DialogTitle>{row.businessName}</DialogTitle>
             </DialogHeader>
             <DialogBody className="space-y-3">
+              <ClientLink kind="keyRequest" id={row.id} />
               <div className="flex flex-wrap items-center gap-2">
                 <RequestStatusPill status={row.status} />
                 <span className="text-xs text-zinc-500">

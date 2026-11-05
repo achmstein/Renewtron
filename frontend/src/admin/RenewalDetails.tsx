@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, CircleAlert, Loader2, RefreshCw } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
+import { ClientLink } from './_components'
 import { KickerLabel, StatusPill, type Tone } from './_ui'
 import { fmtMoney2, relativeTime } from './_utils'
 
@@ -139,6 +140,7 @@ export default function RenewalDetails() {
               <span>·</span>
               <span className="font-mono tabular-nums text-zinc-900">{fmtMoney2(data.amount)}</span>
             </div>
+            <ClientLink kind="renewal" id={data.id} className="mt-3" />
           </div>
           <div className="text-right">
             <BigStatusPill status={data.status} />

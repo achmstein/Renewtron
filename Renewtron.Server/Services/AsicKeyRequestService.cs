@@ -168,9 +168,11 @@ public sealed class AsicKeyRequestService : IAsicKeyRequestService
 
         // The client record knows names under the client's other ABNs too.
         var clientIds = waiting.Where(r => r.ClientId != null).Select(r => r.ClientId!.Value).Distinct().ToList();
-        var clientNames = (await _db.ClientBusinessNames.AsNoTracking()
-                .Where(n => clientIds.Contains(n.ClientId))
-                .Select(n => new { n.Id, n.ClientId, n.Name })
+        var clientNames = (await (
+                    from a in _db.ClientAbns.AsNoTracking()
+                    where clientIds.Contains(a.ClientId)
+                    join n in _db.ClientBusinessNames.AsNoTracking() on a.Abn equals n.Abn
+                    select new { n.Id, a.ClientId, n.Name })
                 .ToListAsync(ct))
             .GroupBy(n => n.ClientId)
             .ToDictionary(g => g.Key, g => g.ToList());

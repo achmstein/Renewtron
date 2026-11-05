@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api, type SidebarCounts } from '../api/client'
+import { ClientSearch, ClientSearchButton } from './ClientSearch'
 
 /** Badge = work waiting on staff; the key names a count from /api/admin/sidebar-counts. */
 interface NavItem { to: string; label: string; end?: boolean; icon: ReactNode; badge?: keyof SidebarCounts }
@@ -97,7 +98,7 @@ function OpsBadge() {
   )
 }
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarBody({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const { data: counts } = useQuery({
@@ -119,6 +120,10 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
           <Wordmark />
           <OpsBadge />
         </Link>
+      </div>
+
+      <div className="-mt-3">
+        <ClientSearchButton onClick={() => { onNavigate?.(); onSearch() }} />
       </div>
 
       <nav className="flex flex-1 flex-col">
@@ -182,10 +187,12 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const location = useLocation()
 
   return (
     <div className="min-h-screen bg-zinc-50">
+      <ClientSearch open={searchOpen} setOpen={setSearchOpen} />
       {sidebarOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
           <div className="fixed inset-0 bg-zinc-950/70 backdrop-blur-sm" aria-hidden="true" onClick={() => setSidebarOpen(false)}></div>
@@ -197,14 +204,14 @@ export default function AdminLayout() {
                   {Icon.Close}
                 </button>
               </div>
-              <SidebarBody onNavigate={() => setSidebarOpen(false)} />
+              <SidebarBody onNavigate={() => setSidebarOpen(false)} onSearch={() => setSearchOpen(true)} />
             </div>
           </div>
         </div>
       ) : null}
 
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-        <SidebarBody />
+        <SidebarBody onSearch={() => setSearchOpen(true)} />
       </div>
 
       <div className="sticky top-0 z-40 flex items-center gap-x-4 bg-zinc-950 px-4 py-3 ring-1 ring-white/5 sm:px-6 lg:hidden">

@@ -165,6 +165,12 @@ select:not([multiple]) {
 /* ------------------------------------------------------------------ */
 /* Motion — fade-in on page load, pulse-ring for awaiting state        */
 /* ------------------------------------------------------------------ */
+/* DataTable's loading bar: a short bar sweeping left to right. */
+@keyframes table-loading {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(300%); }
+}
+
 @keyframes fade-in-up {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }

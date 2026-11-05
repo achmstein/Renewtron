@@ -29,9 +29,10 @@ public sealed class ClientLinkState
 
 /// <summary>
 /// Puts every record on its client. Matching, in order: same Ontraport contact → same email →
-/// same ABN and date of birth → (same ABN only) a new client flagged as a possible duplicate.
-/// A client's ABNs are read from our copy of the public register so all their business names
-/// are on the record; each name has exactly one owner.
+/// same ABN and date of birth → otherwise a new client, who joins any ABN they gave as another
+/// contact on it (flagged as a possible duplicate only when the name or mobile also matches
+/// someone already there). Business names belong to the ABN, read from our copy of the public
+/// register; the ABN's reminder contact is the one person who hears about them.
 /// <para>Works in memory over the whole set, then saves once, so a dry run is the same code
 /// with the save left out.</para>
 /// </summary>
@@ -49,6 +50,7 @@ public sealed class ClientLinkService(
     private readonly Dictionary<string, Client> _byOntraport = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Client> _byEmail = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<Client>> _byAbn = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AbnHolder> _holders = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ClientBusinessName> _names = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Guid, Client> _byId = new();
     private readonly HashSet<string> _abnsToCheck = new(StringComparer.Ordinal);
@@ -107,9 +109,16 @@ public sealed class ClientLinkService(
     private async Task LoadClientsAsync(CancellationToken ct)
     {
         var clients = await db.Clients
-            .Include(c => c.Emails).Include(c => c.Abns).Include(c => c.BusinessNames)
+            .Include(c => c.Emails).Include(c => c.Abns)
             .AsSplitQuery()
             .ToListAsync(ct);
+        // Tracked, so each holder's Contacts fill in from the ClientAbns loaded above.
+        var holders = await db.AbnHolders.Include(h => h.BusinessNames).ToListAsync(ct);
+        foreach (var h in holders)
+        {
+            _holders[h.Abn] = h;
+            foreach (var n in h.BusinessNames) _names.TryAdd(NameKey(n.Abn, n.Name), n);
+        }
         foreach (var c in clients) Index(c);
     }
 
@@ -122,7 +131,24 @@ public sealed class ClientLinkService(
             if (!string.IsNullOrEmpty(e.OntraportContactId)) _byOntraport.TryAdd(e.OntraportContactId, c);
         }
         foreach (var a in c.Abns) AbnList(a.Abn).Add(c);
-        foreach (var n in c.BusinessNames) _names.TryAdd(NameKey(n.Abn, n.Name), n);
+    }
+
+    private AbnHolder Holder(string abn)
+    {
+        if (_holders.TryGetValue(abn, out var h)) return h;
+        h = new AbnHolder { Abn = abn, CreatedAt = DateTime.UtcNow };
+        db.AbnHolders.Add(h);
+        _holders[abn] = h;
+        _abnsToCheck.Add(abn);
+        return h;
+    }
+
+    /// <summary>Who hears about the ABN's names: its reminder contact, else its first contact.</summary>
+    private Client? ReminderContact(string abn)
+    {
+        if (!_holders.TryGetValue(abn, out var h)) return null;
+        var link = h.Contacts.FirstOrDefault(a => a.IsReminderContact) ?? h.Contacts.OrderBy(a => a.CreatedAt).FirstOrDefault();
+        return link == null ? null : _byId.GetValueOrDefault(link.ClientId);
     }
 
     private List<Client> AbnList(string abn)
@@ -150,21 +176,21 @@ public sealed class ClientLinkService(
                 TfnEncrypted = s.TfnEncrypted,
                 HasPurchased = s.Status != OntraportSaleStatus.IneligibleForRenewal,
                 SeenAt = s.SyncedAt,
-                Source = "Ontraport",
+                Source = RecordSource.Ontraport,
             });
             if (client == null) { _result.Skipped++; continue; }
 
             s.ClientId = client.Id;
             _result.SalesLinked++;
-            var name = AddName(client, s.Abn, s.BusinessName, "Ontraport");
+            var name = AddName(s.Abn, s.BusinessName, RecordSource.Ontraport);
             if (name == null) continue;
             s.ClientBusinessNameId = name.Id;
             if (s.RenewalDueDate is { } due)
             {
                 if (s.Status == OntraportSaleStatus.RenewalCompleted && s.RenewalYears > 0)
-                    SetDue(name, DateOnly.FromDateTime(due).AddYears(s.RenewalYears), "Renewal");
+                    SetDue(name, DateOnly.FromDateTime(due).AddYears(s.RenewalYears), RenewalDueDateSource.Renewal);
                 else
-                    SetDue(name, DateOnly.FromDateTime(due), "Ontraport");
+                    SetDue(name, DateOnly.FromDateTime(due), RenewalDueDateSource.Ontraport);
             }
         }
     }
@@ -185,7 +211,7 @@ public sealed class ClientLinkService(
                 ReminderOptIn = l.ReminderOptIn,
                 IsTest = l.IsTest,
                 SeenAt = l.CreatedAt,
-                Source = "Wizard",
+                Source = RecordSource.Wizard,
             });
             if (client == null) { _result.Skipped++; continue; }
             l.ClientId = client.Id;
@@ -211,29 +237,24 @@ public sealed class ClientLinkService(
                 Mobile = r.Phone,
                 IsTest = r.IsTest,
                 SeenAt = r.CreatedAt,
-                Source = "KeyRequest",
+                Source = RecordSource.KeyRequest,
             });
             if (client == null) { _result.Skipped++; continue; }
             r.ClientId = client.Id;
             _result.KeyRequestsLinked++;
-            AddName(client, r.Abn, r.BusinessName, "KeyRequest");
+            AddName(r.Abn, r.BusinessName, RecordSource.KeyRequest);
         }
     }
 
-    /// <summary>Bulk uploads carry no email, so they join the client already holding the name (or the only client on the ABN).</summary>
+    /// <summary>Bulk uploads carry no email: the name goes on its ABN and the upload on the ABN's reminder contact.</summary>
     private async Task LinkBulkUploadsAsync(CancellationToken ct)
     {
         var uploads = await db.BulkRenewalUploads.Where(b => b.ClientId == null).OrderBy(b => b.UploadedAt).ToListAsync(ct);
         foreach (var b in uploads)
         {
             var abn = Digits(b.Abn);
-            var name = FindName(abn, b.BusinessName);
-            Client? client = name != null ? _byId.GetValueOrDefault(name.ClientId) : null;
-            if (client == null && _byAbn.TryGetValue(abn, out var onAbn) && onAbn.Count == 1)
-            {
-                client = onAbn[0];
-                name = AddName(client, abn, b.BusinessName, "BulkUpload");
-            }
+            var client = ReminderContact(abn);
+            var name = client == null ? null : AddName(abn, b.BusinessName, RecordSource.BulkUpload);
             if (client == null || name == null) { _result.Skipped++; continue; }
 
             b.ClientId = client.Id;
@@ -243,9 +264,9 @@ public sealed class ClientLinkService(
             if (b.RenewalDueDate is { } due)
             {
                 if (b.Status == BulkRenewalStatus.RenewalCompleted && b.RenewalYears > 0)
-                    SetDue(name, DateOnly.FromDateTime(due).AddYears(b.RenewalYears), "Renewal");
+                    SetDue(name, DateOnly.FromDateTime(due).AddYears(b.RenewalYears), RenewalDueDateSource.Renewal);
                 else
-                    SetDue(name, DateOnly.FromDateTime(due), "BulkUpload");
+                    SetDue(name, DateOnly.FromDateTime(due), RenewalDueDateSource.BulkUpload);
             }
         }
     }
@@ -289,7 +310,7 @@ public sealed class ClientLinkService(
                 Mobile = r.MobileNumber,
                 IsTest = r.IsTest,
                 SeenAt = r.InitiatedAt,
-                Source = "Renewal",
+                Source = RecordSource.Renewal,
             });
             if (client == null) { _result.Skipped++; continue; }
 
@@ -298,11 +319,10 @@ public sealed class ClientLinkService(
             if (r.Status == RenewalStatus.Completed) client.HasPurchased = true;
             if (r.SearchResult == null) continue;
 
-            var name = AddName(client, abn, r.SearchResult.BusinessName, "Renewal");
+            var name = AddName(abn, r.SearchResult.BusinessName, RecordSource.Renewal);
             if (name == null) continue;
             r.ClientBusinessNameId = name.Id;
-            if (string.IsNullOrEmpty(name.RegistrationDate) && !string.IsNullOrWhiteSpace(r.SearchResult.RegistrationDate))
-                name.RegistrationDate = Truncate(r.SearchResult.RegistrationDate.Trim(), 10);
+            name.RegistrationDate ??= ParseDate(r.SearchResult.RegistrationDate);
             if (string.IsNullOrEmpty(name.AsicAccountNumber) && !string.IsNullOrWhiteSpace(r.SearchResult.AccountNumber))
                 name.AsicAccountNumber = Truncate(r.SearchResult.AccountNumber.Trim(), 50);
 
@@ -316,7 +336,7 @@ public sealed class ClientLinkService(
                     Touch(name);
                 }
                 if (NextDueAfterRenewal(name.RegistrationDate, done, r.RenewalYears) is { } next)
-                    SetDue(name, next, "Renewal");
+                    SetDue(name, next, RenewalDueDateSource.Renewal);
             }
         }
     }
@@ -413,7 +433,7 @@ public sealed class ClientLinkService(
         public bool ReminderOptIn { get; init; }
         public bool IsTest { get; init; }
         public DateTime SeenAt { get; init; }
-        public string Source { get; init; } = "";
+        public RecordSource Source { get; init; }
     }
 
     private Client? Resolve(Identity id)
@@ -434,8 +454,11 @@ public sealed class ClientLinkService(
             // Nothing to reach them by: leave the record unlinked rather than make a client we can't contact.
             if (email == null && ontraportId == null) return null;
 
+            // Someone else on the same ABN is normally just another contact for the business
+            // (a director and a bookkeeper). Only the same name or mobile as well suggests it
+            // may be one person under a second email.
             var dupOf = abn != "" && _byAbn.TryGetValue(abn, out var onAbn)
-                ? onAbn.FirstOrDefault(c => c.PossibleDuplicateOfId == null) ?? onAbn.FirstOrDefault()
+                ? onAbn.FirstOrDefault(c => LooksLikeSamePerson(c, id))
                 : null;
             client = new Client
             {
@@ -464,7 +487,22 @@ public sealed class ClientLinkService(
         return client;
     }
 
-    private void AddEmail(Client client, string email, string? ontraportId, string source)
+    private static bool LooksLikeSamePerson(Client c, Identity id)
+    {
+        var name = Clean(id.FullName);
+        if (name.Length > 0 && string.Equals(Clean(c.FullName), name, StringComparison.OrdinalIgnoreCase)) return true;
+        var mobile = MobileKey(id.Mobile);
+        return mobile != null && mobile == MobileKey(c.MobileNumber);
+    }
+
+    /// <summary>Last nine digits, so 0412… and +61 412… compare equal.</summary>
+    private static string? MobileKey(string? mobile)
+    {
+        var d = Digits(mobile);
+        return d.Length >= 9 ? d[^9..] : null;
+    }
+
+    private void AddEmail(Client client, string email, string? ontraportId, RecordSource source)
     {
         var existing = client.Emails.FirstOrDefault(e => string.Equals(e.Email, email, StringComparison.OrdinalIgnoreCase));
         if (existing == null)
@@ -496,11 +534,21 @@ public sealed class ClientLinkService(
     private void AddAbn(Client client, string abn)
     {
         if (client.Abns.Any(a => a.Abn == abn)) return;
-        var row = new ClientAbn { Id = Guid.NewGuid(), ClientId = client.Id, Abn = abn, CreatedAt = DateTime.UtcNow };
+        var holder = Holder(abn);
+        var row = new ClientAbn
+        {
+            Id = Guid.NewGuid(),
+            ClientId = client.Id,
+            Abn = abn,
+            // The first person on an ABN hears about its names; staff can hand that over.
+            IsReminderContact = !holder.Contacts.Any(a => a.IsReminderContact),
+            CreatedAt = DateTime.UtcNow,
+        };
+        if (holder.Contacts.Count > 0) _result.SharedAbnContacts++;
         client.Abns.Add(row);
+        holder.Contacts.Add(row);
         db.ClientAbns.Add(row);
         AbnList(abn).Add(client);
-        _abnsToCheck.Add(abn);
         _result.AbnsAdded++;
     }
 
@@ -528,8 +576,8 @@ public sealed class ClientLinkService(
     private ClientBusinessName? FindName(string abn, string? name) =>
         _names.GetValueOrDefault(NameKey(abn, name));
 
-    /// <summary>The name's row: the existing one whoever owns it, or a new one on this client.</summary>
-    private ClientBusinessName? AddName(Client client, string? abnRaw, string? nameRaw, string source, string? registrationDate = null)
+    /// <summary>The name's row under its ABN: the existing one, or a new one.</summary>
+    private ClientBusinessName? AddName(string? abnRaw, string? nameRaw, RecordSource source, DateOnly? registrationDate = null)
     {
         var abn = Digits(abnRaw);
         var name = Truncate(Clean(nameRaw), 200);
@@ -538,28 +586,29 @@ public sealed class ClientLinkService(
         var key = NameKey(abn, name);
         if (_names.TryGetValue(key, out var existing)) return existing;
 
+        var holder = Holder(abn);
         var row = new ClientBusinessName
         {
             Id = Guid.NewGuid(),
-            ClientId = client.Id,
             Abn = abn,
             Name = name,
-            RegistrationDate = NullIfBlank(registrationDate, 10),
+            RegistrationDate = registrationDate,
             Source = source,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
         };
-        client.BusinessNames.Add(row);
+        holder.BusinessNames.Add(row);
         db.ClientBusinessNames.Add(row);
         _names[key] = row;
         _result.NamesAdded++;
         return row;
     }
 
-    private static int Rank(string? source) => source == "Renewal" ? 2 : source == null ? 0 : 1;
+    private static int Rank(RenewalDueDateSource? source) =>
+        source switch { RenewalDueDateSource.Renewal => 2, null => 0, _ => 1 };
 
     /// <summary>Our own renewals outrank Ontraport's field and bulk uploads; within a rank the later date wins.</summary>
-    private void SetDue(ClientBusinessName name, DateOnly due, string source)
+    private void SetDue(ClientBusinessName name, DateOnly due, RenewalDueDateSource source)
     {
         var take = name.RenewalDueDate == null
                    || Rank(source) > Rank(name.DueDateSource)
@@ -575,10 +624,9 @@ public sealed class ClientLinkService(
     /// Renewals fall on the registration anniversary. The term just renewed is the
     /// anniversary closest to when it was paid; the next due date is that plus the years paid.
     /// </summary>
-    public static DateOnly? NextDueAfterRenewal(string? registrationDate, DateTime renewedAt, int years)
+    public static DateOnly? NextDueAfterRenewal(DateOnly? registrationDate, DateTime renewedAt, int years)
     {
-        if (years <= 0 || !DateOnly.TryParseExact((registrationDate ?? "").Trim(), ["dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var reg))
-            return null;
+        if (years <= 0 || registrationDate is not { } reg) return null;
         var paid = DateOnly.FromDateTime(renewedAt);
         var nearest = Enumerable.Range(paid.Year - 1, 3)
             .Where(y => y > reg.Year)
@@ -592,20 +640,19 @@ public sealed class ClientLinkService(
     private void QueueStaleAbns()
     {
         var before = DateTime.UtcNow - RegisterRefreshAge;
-        var all = _byId.Values.SelectMany(c => c.Abns).ToList();
+        var all = _holders.Values.Where(h => h.Contacts.Count > 0).ToList();
         // Never-checked ABNs all go; ones checked before are refreshed a batch at a time.
-        foreach (var a in all.Where(a => a.RegisterCheckedAt == null)) _abnsToCheck.Add(a.Abn);
-        var stale = all.Where(a => a.RegisterCheckedAt < before)
-            .OrderBy(a => a.RegisterCheckedAt)
-            .Select(a => a.Abn)
-            .Distinct()
+        foreach (var h in all.Where(h => h.RegisterCheckedAt == null)) _abnsToCheck.Add(h.Abn);
+        var stale = all.Where(h => h.RegisterCheckedAt < before)
+            .OrderBy(h => h.RegisterCheckedAt)
+            .Select(h => h.Abn)
             .Take(RegisterRefreshPerRun);
         foreach (var abn in stale) _abnsToCheck.Add(abn);
     }
 
     private sealed record RegisterRow(string Abn, string Name, string RegistrationDate);
 
-    /// <summary>Every name under the queued ABNs, from the active register import, added to the ABN's first client.</summary>
+    /// <summary>Every name under the queued ABNs, from the active register import, put on the ABN.</summary>
     private async Task ReadRegisterAsync(CancellationToken ct)
     {
         if (_abnsToCheck.Count == 0) return;
@@ -629,18 +676,17 @@ public sealed class ClientLinkService(
             foreach (var abn in batch)
             {
                 _result.AbnsChecked++;
-                var clients = _byAbn.GetValueOrDefault(abn) ?? [];
-                foreach (var a in clients.SelectMany(c => c.Abns).Where(a => a.Abn == abn)) a.RegisterCheckedAt = DateTime.UtcNow;
-                if (clients.Count == 0) continue;
+                // Only ABNs someone deals with us about: names nobody would hear about aren't worth holding.
+                if (!_holders.TryGetValue(abn, out var holder) || holder.Contacts.Count == 0) continue;
+                holder.RegisterCheckedAt = DateTime.UtcNow;
 
-                // The first client on the ABN (the one any later "possible duplicate" points at) holds new names.
-                var owner = clients.OrderBy(c => c.PossibleDuplicateOfId != null).ThenBy(c => c.CreatedAt).First();
                 var onRegister = byAbn.GetValueOrDefault(abn) ?? [];
                 foreach (var r in onRegister)
                 {
-                    var name = AddName(owner, abn, r.Name, "Register", r.RegistrationDate);
+                    var registered = ParseDate(r.RegistrationDate);
+                    var name = AddName(abn, r.Name, RecordSource.Register, registered);
                     if (name == null) continue;
-                    if (string.IsNullOrEmpty(name.RegistrationDate)) name.RegistrationDate = NullIfBlank(r.RegistrationDate, 10);
+                    name.RegistrationDate ??= registered;
                     if (name.Status == ClientBusinessNameStatus.Cancelled) { name.Status = ClientBusinessNameStatus.Active; Touch(name); }
                 }
 
@@ -648,7 +694,7 @@ public sealed class ClientLinkService(
                 // could be a cancelled ABN or a gap in the import, so nothing is assumed from it.)
                 if (onRegister.Count == 0) continue;
                 var current = onRegister.Select(r => NameKey(abn, r.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                foreach (var held in clients.SelectMany(c => c.BusinessNames).Where(n => n.Abn == abn && n.Status == ClientBusinessNameStatus.Active))
+                foreach (var held in holder.BusinessNames.Where(n => n.Status == ClientBusinessNameStatus.Active))
                 {
                     if (current.Contains(NameKey(abn, held.Name))) continue;
                     held.Status = ClientBusinessNameStatus.Cancelled;
@@ -664,7 +710,7 @@ public sealed class ClientLinkService(
     public async Task MergeAsync(Guid sourceId, Guid targetId, CancellationToken ct = default)
     {
         if (sourceId == targetId) throw new InvalidOperationException("A client can't be merged into itself.");
-        var source = await db.Clients.Include(c => c.Emails).Include(c => c.Abns).Include(c => c.BusinessNames).AsSplitQuery()
+        var source = await db.Clients.Include(c => c.Emails).Include(c => c.Abns).AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == sourceId, ct) ?? throw new InvalidOperationException("Client to merge not found.");
         var target = await db.Clients.Include(c => c.Emails).Include(c => c.Abns).AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == targetId, ct) ?? throw new InvalidOperationException("Client to merge into not found.");
@@ -676,12 +722,18 @@ public sealed class ClientLinkService(
             e.ClientId = target.Id;
             e.IsPrimary = e.IsPrimary && !target.Emails.Any(x => x.IsPrimary);
         }
+        // ABNs both were on: the target keeps its link, and takes over as reminder contact if
+        // the source was it. The source's link goes first so the one-per-ABN index never sees two.
+        var handOver = new List<ClientAbn>();
         foreach (var a in source.Abns.ToList())
         {
-            if (target.Abns.Any(x => x.Abn == a.Abn)) db.ClientAbns.Remove(a);
-            else a.ClientId = target.Id;
+            var mine = target.Abns.FirstOrDefault(x => x.Abn == a.Abn);
+            if (mine == null) { a.ClientId = target.Id; continue; }
+            if (a.IsReminderContact && !mine.IsReminderContact) handOver.Add(mine);
+            db.ClientAbns.Remove(a);
         }
-        foreach (var n in source.BusinessNames) n.ClientId = target.Id;
+        await db.SaveChangesAsync(ct);
+        foreach (var mine in handOver) mine.IsReminderContact = true;
 
         FillProfile(target, new Identity
         {
@@ -726,6 +778,14 @@ public sealed class ClientLinkService(
     }
 
     private static string Digits(string? value) => AsicKeyRequestService.DigitsOnly(value);
+
+    /// <summary>Register and ASIC dates: dd/MM/yyyy mostly, sometimes ISO, sometimes with a time after.</summary>
+    public static DateOnly? ParseDate(string? raw)
+    {
+        var s = (raw ?? "").Trim().Split(' ', 'T')[0];
+        return DateOnly.TryParseExact(s, ["dd/MM/yyyy", "d/M/yyyy", "yyyy-MM-dd"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) && d.Year > 1900
+            ? d : null;
+    }
 
     private static DateOnly? ParseDob(string? raw) =>
         AsicKeyRequestService.FormatDateOfBirth(raw) is { } s
