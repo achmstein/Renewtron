@@ -178,7 +178,7 @@ export interface ClientDetail {
   abns: ClientAbnDto[]
   sales: Array<{ id: string; businessName: string; status: string; syncedAt: string; amountPaid: number; renewalDueDate: string | null; ontraportContactId: string }>
   leads: Array<{ id: string; createdAt: string; outcome: string; abn: string; email: string }>
-  renewals: Array<{ id: string; businessName: string; status: string; initiatedAt: string; completedAt: string | null; amount: number; renewalYears: number; source: string }>
+  renewals: Array<{ id: string; businessName: string; status: string; initiatedAt: string; completedAt: string | null; amount: number; renewalYears: number; source: string; bpayReference: string | null; bpayPaidAt: string | null }>
   keyRequests: Array<{ id: string; businessName: string; status: string; createdAt: string; asicReferenceNumber: string | null }>
   messages: Array<{ id: string; template: string; subject: string; status: string; createdAt: string; recipient: string }>
 }

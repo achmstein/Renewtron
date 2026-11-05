@@ -415,6 +415,12 @@ function NameStory({ client, name: n, busy, onStatus }: {
   if (renewal) {
     const st = statusOf('renewal', renewal.status)
     steps.push({ label: `Renewal: ${st.label.toLowerCase()}`, meaning: st.meaning, at: renewal.completedAt ?? renewal.initiatedAt, to: `/admin/renewals/${renewal.id}` })
+    // ASIC took the renewal by BPAY: the bill is ours to pay at the bank.
+    if (renewal.bpayReference) {
+      steps.push(renewal.bpayPaidAt
+        ? { label: 'BPAY bill paid', meaning: 'done', at: renewal.bpayPaidAt, to: `/admin/renewals/${renewal.id}` }
+        : { label: 'BPAY bill', meaning: 'action', note: 'to pay', to: '/admin/bpay' })
+    }
   } else if (sale) {
     const st = statusOf('sale', sale.status)
     steps.push({ label: 'Renewal', meaning: st.meaning, note: st.label.toLowerCase(), to: `/admin/ontraport-sales/${sale.id}` })

@@ -164,7 +164,7 @@ public sealed class ClientsModule : ICarterModule
                 .Select(l => new { id = l.Id, createdAt = l.CreatedAt, outcome = l.Outcome.ToString(), abn = l.Abn, email = l.Email })
                 .ToListAsync();
             var renewals = await db.RenewalRequests.AsNoTracking().Where(r => r.ClientId == id).OrderByDescending(r => r.InitiatedAt)
-                .Select(r => new { id = r.Id, businessName = r.SearchResult.BusinessName, status = r.Status.ToString(), initiatedAt = r.InitiatedAt, completedAt = r.CompletedAt, amount = r.Amount, renewalYears = r.RenewalYears, source = r.Source.ToString() })
+                .Select(r => new { id = r.Id, businessName = r.SearchResult.BusinessName, status = r.Status.ToString(), initiatedAt = r.InitiatedAt, completedAt = r.CompletedAt, amount = r.Amount, renewalYears = r.RenewalYears, source = r.Source.ToString(), bpayReference = r.BpayReference, bpayPaidAt = r.BpayPaidAt })
                 .ToListAsync();
             var keyRequests = await db.AsicKeyRequests.AsNoTracking().Where(r => r.ClientId == id).OrderByDescending(r => r.CreatedAt)
                 .Select(r => new { id = r.Id, businessName = r.BusinessName, status = r.Status.ToString(), createdAt = r.CreatedAt, asicReferenceNumber = r.AsicReferenceNumber })
