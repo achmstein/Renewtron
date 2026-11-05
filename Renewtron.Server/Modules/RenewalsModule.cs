@@ -641,9 +641,31 @@ public sealed class RenewalsModule : ICarterModule
                 .Include(x => x.Lead)
                 .FirstOrDefaultAsync(x => x.Id == id);
             if (r is null) return Results.NotFound();
+
+            // Where the renewal sits: whose it is, the business name, and the records either side
+            // of it (the wizard search before, the Ontraport sale that paid for it).
+            var client = r.ClientId is { } clientId
+                ? await db.Clients.AsNoTracking().Where(c => c.Id == clientId)
+                    .Select(c => new { id = c.Id, fullName = c.FullName }).FirstOrDefaultAsync()
+                : null;
+            var sale = await db.OntraportSales.AsNoTracking().Where(s => s.RenewalRequestId == r.Id)
+                .Select(s => new { id = s.Id, syncedAt = s.SyncedAt, amountPaid = s.AmountPaid, renewalDueDate = s.RenewalDueDate })
+                .FirstOrDefaultAsync();
+            var nameDue = r.ClientBusinessNameId is { } nameId
+                ? await db.ClientBusinessNames.AsNoTracking().Where(n => n.Id == nameId).Select(n => n.RenewalDueDate).FirstOrDefaultAsync()
+                : null;
+
             return Results.Ok(new
             {
                 id = r.Id,
+                client,
+                clientBusinessNameId = r.ClientBusinessNameId,
+                searchLogId = r.SearchResult.SearchLogId,
+                searchedAt = r.SearchResult.SearchLog.SearchedAt,
+                sale,
+                dueDate = nameDue ?? (sale?.renewalDueDate is { } d ? DateOnly.FromDateTime(d) : null),
+                stuck = (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)
+                    && (r.LastAttemptAt ?? r.InitiatedAt) < DateTime.UtcNow - WorkQueues.StuckAfter,
                 status = r.Status.ToString(),
                 source = r.Source.ToString(),
                 paymentType = r.PaymentType.ToString(),

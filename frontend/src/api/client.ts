@@ -785,6 +785,13 @@ export const api = {
     },
     renewal: (id: string) => apiFetch<{
       id: string
+      client: { id: string; fullName: string } | null
+      clientBusinessNameId: string | null
+      searchLogId: string
+      searchedAt: string
+      sale: { id: string; syncedAt: string; amountPaid: number; renewalDueDate: string | null } | null
+      dueDate: string | null
+      stuck: boolean
       status: 'Pending' | 'Processing' | 'Completed' | 'Failed'
       source: string
       paymentType: 'Stripe' | 'External'

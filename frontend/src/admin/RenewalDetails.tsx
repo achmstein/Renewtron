@@ -1,27 +1,31 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, CircleAlert, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { ClientLink } from './_components'
-import { KickerLabel, StatusPill, type Tone } from './_ui'
-import { renewalStatus, Status } from './_status'
-import { fmtMoney2, relativeTime } from './_utils'
+import { KickerLabel, StatusPill } from './_ui'
+import { renewalStatus, statusOf, type StatusEntry } from './_status'
+import { DueIn, When, agoWords, dueWords } from './_rows'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Button } from '@/components/ui/button'
 
 type Detail = Awaited<ReturnType<typeof api.admin.renewal>>
 
-function fmtDateTime(s: string) {
-  const d = new Date(s)
-  const date = d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })
-  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-  return `${date} · ${time}`
-}
 function fmtDob(s: string) {
   const d = new Date(s)
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  return `${dd}/${mm}/${d.getFullYear()}`
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+}
+
+const paidByClient = (d: Detail) => d.paymentType === 'External' || d.stripePayment?.paymentStatus === 'succeeded'
+/** ASIC may already hold money for this run: retrying could pay twice. Same rule as the retry endpoint. */
+const paymentAtRisk = (d: Detail) => d.failedAtStep === 'Complete Payment Action' || !!d.hostedTokenizationId || d.errorCategory === 'PaymentRisk'
+
+/** The renewal's status, refined for a stuck run. */
+function statusFor(d: Detail): StatusEntry {
+  if (d.stuck) return { label: 'Stuck', meaning: 'action', hint: 'Nothing has happened for over 2 hours.' }
+  return renewalStatus(d)
 }
 
 export default function RenewalDetails() {
@@ -36,20 +40,22 @@ export default function RenewalDetails() {
     refetchInterval: (query) => (query.state.data?.status === 'Processing' || query.state.data?.status === 'Pending' ? 3000 : false),
   })
 
-  const retryMutation = useMutation({
-    mutationFn: () => api.admin.retryRenewal(id!),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-renewal', id] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
-    },
-  })
-  const bpayMutation = useMutation({
-    mutationFn: (paid: boolean) => api.admin.markBpayPaid(id!, paid),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-renewal', id] })
-      void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
-    },
-  })
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-renewal', id] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-today'] })
+    void queryClient.invalidateQueries({ queryKey: ['admin-sidebar-counts'] })
+  }
+  const retryMutation = useMutation({ mutationFn: () => api.admin.retryRenewal(id!), onSettled: invalidate })
+  const bpayMutation = useMutation({ mutationFn: (paid: boolean) => api.admin.markBpayPaid(id!, paid), onSettled: invalidate })
+
+  const retry = () => {
+    void sileo.promise(retryMutation.mutateAsync(), {
+      loading: { title: 'Retrying renewal…' },
+      success: (r) => ({ title: r.message ?? 'Renewal queued for retry.' }),
+      error: (e) => ({ title: 'Retry refused', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
   const markBpay = (paid: boolean) => {
     void sileo.promise(bpayMutation.mutateAsync(paid), {
       loading: { title: paid ? 'Marking BPAY paid…' : 'Undoing…' },
@@ -58,17 +64,9 @@ export default function RenewalDetails() {
     }).catch(() => {})
   }
 
-  const retry = () => {
-    void sileo.promise(retryMutation.mutateAsync(), {
-      loading: { title: 'Retrying renewal…' },
-      success: (r) => ({ title: r.message ?? 'Renewal queued for retry.' }),
-      error: (e) => ({ title: 'Retry failed', description: e instanceof Error ? e.message : undefined }),
-    }).catch(() => {})
-  }
-
   if (isPending) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
         <p className="mt-3 text-sm text-zinc-500">Loading…</p>
       </div>
@@ -77,241 +75,212 @@ export default function RenewalDetails() {
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8 text-center">
+      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
         <h3 className="text-base font-semibold text-zinc-900">Renewal request not found</h3>
-        <p className="mt-1 text-sm text-zinc-500">The renewal you're looking for doesn't exist.</p>
+        <p className="mt-1 text-sm text-zinc-500">The renewal you’re looking for doesn’t exist.</p>
         <Link to="/admin/renewals" className="mt-4 inline-flex items-center text-sm font-medium text-brand-700 hover:text-brand-800">← Back to renewals</Link>
       </div>
     )
   }
 
-  const canRetry = data.status === 'Failed' && ((data.paymentType === 'Stripe' && data.stripePayment?.paymentStatus === 'succeeded') || data.paymentType === 'External')
+  const status = statusFor(data)
+  const retryButton = (
+    <Button size="sm" onClick={retry} disabled={retryMutation.isPending}>
+      {retryMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}Retry renewal
+    </Button>
+  )
+  const next = nextStep(data, retryButton, markBpay, bpayMutation.isPending)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Top bar — back link + retry */}
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <Link to="/admin/renewals" className="inline-flex items-center gap-1 text-xs font-mono uppercase tracking-[0.14em] text-zinc-500 hover:text-zinc-900">
-          <ChevronLeft className="h-3 w-3" />
-          Back to renewals
-        </Link>
-        {canRetry ? (
-          <button
-            onClick={retry}
-            disabled={retryMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-amber-600 text-white px-3 py-2 text-sm font-medium hover:bg-amber-700 shadow-sm disabled:opacity-50 transition"
-          >
-            {retryMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Retrying…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4" />
-                Retry renewal
-              </>
-            )}
-          </button>
-        ) : null}
-      </div>
+      <RecordCrumbs
+        client={data.client}
+        businessName={data.businessName}
+        list={{ to: '/admin/renewals', label: 'Renewals' }}
+        here={`Renewal of ${new Date(data.initiatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+      />
 
-      {/* Hero */}
-      <div className="rounded-2xl bg-white p-6 ring-1 ring-zinc-200 shadow-sm">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div className="min-w-0 flex-1">
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.16em] text-brand-700">
-              RENEWAL · DETAIL
-            </div>
-            <h1 className="mt-1 text-2xl font-semibold text-zinc-900 tracking-tight truncate">{data.businessName}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-500">
-              <span className="font-mono tabular-nums">{data.abn}</span>
-              <span>·</span>
-              <span>{data.renewalYears}-year renewal</span>
-              <span>·</span>
-              <span className="font-mono tabular-nums text-zinc-900">{fmtMoney2(data.amount)}</span>
-            </div>
-            <ClientLink kind="renewal" id={data.id} className="mt-3" />
-          </div>
-          <div className="text-right">
-            <Status entry={renewalStatus(data)} size="lg" />
-            {data.completedAt ? (
-              <div className="mt-1.5 text-xxs font-mono text-zinc-500 tabular-nums">closed {relativeTime(data.completedAt)}</div>
-            ) : data.status === 'Processing' || data.status === 'Pending' ? (
-              <div className="mt-1.5 text-xxs font-mono text-zinc-500 tabular-nums">started {relativeTime(data.initiatedAt)}</div>
-            ) : null}
-          </div>
-        </div>
+      <RecordHeader
+        kicker={`Renewal · ${data.renewalYears} year${data.renewalYears === 1 ? '' : 's'} · ${fmtMoney2(data.amount)}`}
+        title={headline(data)}
+        sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.dueDate ? <> · due <DueIn at={data.dueDate} /></> : null} · started <When at={data.initiatedAt} /></>}
+        status={status}
+      >
+        {next}
+        <StoryStrip steps={story(data, status)} />
+      </RecordHeader>
 
-        {/* Status timeline */}
-        <div className="mt-6">
-          <Timeline data={data} />
-        </div>
-
-        {/* Error banner — when failed */}
-        {data.status === 'Failed' && (data.errorMessage || data.failedAtStep) ? (
-          <div className="mt-5 rounded-lg bg-red-50 ring-1 ring-red-100 p-4">
-            <div className="flex items-start gap-3">
-              <CircleAlert className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-red-700">FAILED{data.failedAtStep ? ` · ${data.failedAtStep}` : ''}{data.errorCategory ? ` · ${data.errorCategory}` : ''}</div>
-                {data.errorMessage ? <div className="mt-1 text-sm text-red-900 break-words font-mono">{data.errorMessage}</div> : null}
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xxs font-mono text-red-800/70 tabular-nums">
-                  <span>attempt {data.attemptCount || 1}</span>
-                  {data.cardFailureCount > 0 ? <span>card failed {data.cardFailureCount}×</span> : null}
-                  {data.lastAttemptAt ? <span>last run {fmtDateTime(data.lastAttemptAt)}</span> : null}
-                  {data.nextRetryAt ? <span className="text-indigo-700">auto-retry {fmtDateTime(data.nextRetryAt)}</span> : null}
-                  {!data.nextRetryAt && data.errorCategory !== 'NotDueYet' ? <span>no auto-retry — needs you</span> : null}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Detail cards */}
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section kicker="CUSTOMER" title="Customer & lead">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Section kicker="Client" title="Who it’s for">
+          {data.client ? (
+            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-brand-700 hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+          ) : null}
           {data.lead ? (
-            <Link to={`/admin/leads/${data.lead.id}`} className="block rounded-lg border border-zinc-200 p-3 hover:border-brand-200 hover:bg-brand-50/30 transition">
-              <div className="text-sm font-medium text-zinc-900">{data.lead.fullName}</div>
-              <div className="text-xs font-mono text-zinc-500 mt-0.5">{data.lead.email}</div>
-              <div className="mt-2 text-xxs font-mono text-brand-700">View lead →</div>
-            </Link>
-          ) : (
-            <Row label="Email" value={data.email ?? '—'} />
-          )}
+            <Row label="Wizard visit" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-brand-700 hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
+          ) : null}
+          <Row label="Email" value={data.email ?? '—'} />
           <Row label="Mobile" value={data.mobileNumber ?? '—'} mono />
           <Row label="Date of birth" value={data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'} mono />
-          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
-          <Row label="Initiated by" value={<InitiatedByBadge value={data.initiatedByLabel} />} />
         </Section>
 
-        <Section kicker="RENEWAL" title="Renewal info">
-          <Row label="Request ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Initiated" value={<span title={fmtDateTime(data.initiatedAt)}>{fmtDateTime(data.initiatedAt)}</span>} mono />
-          {data.completedAt ? <Row label="Completed" value={fmtDateTime(data.completedAt)} mono /> : null}
-          <Row label="Period" value={`${data.renewalYears} year${data.renewalYears > 1 ? 's' : ''}`} />
-          <Row label="Source" value={<SourcePill source={data.source} />} />
-        </Section>
-
-        <Section kicker="PAYMENT" title="Payment">
-          <Row label="Method" value={
-            data.paymentType === 'External'
-              ? <StatusPill tone="zinc">EXTERNAL</StatusPill>
-              : <StatusPill tone="indigo">STRIPE</StatusPill>
-          } />
-          <Row label="Amount" value={<span className="text-base font-semibold text-zinc-900 font-mono tabular-nums">{fmtMoney2(data.amount)}</span>} />
-          {data.stripePayment ? (
-            <>
-              <Row label="Payment intent" value={<span className="break-all">{data.stripePayment.paymentIntentId}</span>} mono />
-              <Row label="Status" value={
-                data.stripePayment.paymentStatus === 'succeeded'
-                  ? <StatusPill tone="emerald">SUCCEEDED</StatusPill>
-                  : <StatusPill tone="red">{data.stripePayment.paymentStatus.toUpperCase()}</StatusPill>
-              } />
-              {data.stripePayment.paidAt ? <Row label="Paid at" value={fmtDateTime(data.stripePayment.paidAt)} mono /> : null}
-            </>
-          ) : null}
-        </Section>
-
-        <Section kicker="ASIC" title="ASIC transaction">
-          <Row label="Reference" value={data.transactionReference ?? '—'} mono />
-          <Row label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
-          {data.failedAtStep ? <Row label="Failed at step" value={<StatusPill tone="red">{data.failedAtStep}</StatusPill>} /> : null}
-        </Section>
-
-        {data.bpayReference ? (
-          <Section kicker="BPAY" title="Pay later by BPAY">
-            <Row label="Biller code" value={data.bpayBillerCode ?? '—'} mono />
-            <Row label="Customer reference" value={data.bpayReference} mono />
-            <Row label="Paid" value={
-              <span className="flex items-center gap-2">
+        <Section kicker="Money" title="How it was paid">
+          <Row label="Client paid" value={<span className="font-mono tabular-nums">{fmtMoney2(data.amount)}</span>} />
+          <Row label="Through" value={data.paymentType === 'External'
+            ? (data.sale ? <>Ontraport, <When at={data.sale.syncedAt} /></> : 'Outside Renewtron')
+            : <>Card via Stripe · {statusOf('payment', data.stripePayment?.paymentStatus).label.toLowerCase()}{data.stripePayment?.paidAt ? <>, <When at={data.stripePayment.paidAt} /></> : null}</>} />
+          {data.bpayReference ? (
+            <Row label="ASIC fee" value={
+              <span className="flex flex-wrap items-center gap-2">
                 {data.bpayPaidAt
-                  ? <><StatusPill tone="emerald">PAID</StatusPill><span className="font-mono tabular-nums">{fmtDateTime(data.bpayPaidAt)}</span></>
-                  : <StatusPill tone="amber">TO PAY</StatusPill>}
+                  ? <><StatusPill tone="emerald">BPAY PAID</StatusPill><When at={data.bpayPaidAt} /></>
+                  : <StatusPill tone="red">BPAY TO PAY</StatusPill>}
                 <button type="button" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}
                   className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:opacity-50">
                   {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
                 </button>
               </span>
             } />
-          </Section>
-        ) : null}
-
-        {data.stripePayment?.cardLast4 ? (
-          <Section kicker="CARD" title="Customer card on file">
-            <Row label="Cardholder" value={data.stripePayment.cardholderName ?? '—'} />
-            <Row label="Number" value={`•••• •••• •••• ${data.stripePayment.cardLast4}`} mono />
-            <Row label="Brand" value={data.stripePayment.cardBrand?.toUpperCase() ?? '—'} mono />
-            <Row label="Expiry" value={`${data.stripePayment.cardExpMonth ?? '--'} / ${data.stripePayment.cardExpYear ?? '----'}`} mono />
-          </Section>
-        ) : null}
+          ) : data.status === 'Completed' ? (
+            <Row label="ASIC fee" value="Paid by card at lodgement" />
+          ) : null}
+          {data.transactionReference ? <Row label="ASIC reference" value={data.transactionReference} mono /> : null}
+        </Section>
       </div>
-    </div>
-  )
-}
 
-function Timeline({ data }: { data: Detail }) {
-  // Steps:
-  //   Initiated  →  Processing  →  Completed (or Failed)
-  // Each step has a tone (zinc=upcoming, emerald=done, indigo=current, red=failed).
-  const initiatedAt = data.initiatedAt
-  const completedAt = data.completedAt
-  const status = data.status
-  const failed = status === 'Failed'
-
-  type Step = { label: string; tone: Tone; subline?: string; current?: boolean }
-  const steps: Step[] = [
-    { label: 'Initiated', tone: 'emerald', subline: relativeTime(initiatedAt) },
-    {
-      label: 'Processing',
-      tone: status === 'Pending' ? 'amber' : status === 'Processing' ? 'indigo' : failed ? 'red' : 'emerald',
-      current: status === 'Pending' || status === 'Processing',
-      subline: status === 'Processing' ? 'in progress' : status === 'Pending' ? 'queued' : completedAt ? relativeTime(completedAt) : '',
-    },
-    failed
-      ? { label: 'Failed', tone: 'red', subline: data.failedAtStep ?? 'see error below', current: true }
-      : { label: 'Completed', tone: status === 'Completed' ? 'emerald' : 'zinc', subline: completedAt ? relativeTime(completedAt) : '', current: status === 'Completed' },
-  ]
-
-  const dotMap: Record<Tone, string> = { emerald: 'bg-emerald-500', indigo: 'bg-indigo-500', amber: 'bg-amber-500', red: 'bg-red-500', zinc: 'bg-zinc-300' }
-  const ringMap: Record<Tone, string> = { emerald: 'ring-emerald-100', indigo: 'ring-indigo-100', amber: 'ring-amber-100', red: 'ring-red-100', zinc: 'ring-zinc-100' }
-
-  return (
-    <div className="rounded-lg bg-zinc-50 ring-1 ring-zinc-100 p-4">
-      <div className="flex items-start justify-between gap-4">
-        {steps.map((s, i) => (
-          <div key={i} className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={`h-2.5 w-2.5 rounded-full ${dotMap[s.tone]} ring-4 ${ringMap[s.tone]} ${s.current ? 'pulse-ring' : ''}`} />
-              {i < steps.length - 1 ? <span className={`h-px flex-1 ${s.tone === 'zinc' ? 'bg-zinc-200' : 'bg-zinc-300'}`} /> : null}
-            </div>
-            <div className="text-xxs font-mono font-medium uppercase tracking-[0.14em] text-zinc-700">{s.label}</div>
-            {s.subline ? <div className="text-xxs font-mono text-zinc-400 tabular-nums truncate">{s.subline}</div> : null}
+      <TechnicalDetail defaultOpen={false}>
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
+          <Row label="Request ID" value={<span className="break-all">{data.id}</span>} mono />
+          <Row label="Status" value={`${data.status}${data.errorCategory ? ` · ${data.errorCategory}` : ''}`} mono />
+          <Row label="Failed at step" value={data.failedAtStep ?? '—'} mono />
+          <Row label="Attempts" value={`${data.attemptCount || 1}${data.cardFailureCount ? ` · card failed ${data.cardFailureCount}×` : ''}`} mono />
+          <Row label="Last run" value={data.lastAttemptAt ? fmtDateTime(data.lastAttemptAt) : '—'} mono />
+          <Row label="Next auto-retry" value={data.nextRetryAt ? fmtDateTime(data.nextRetryAt) : '—'} mono />
+          <Row label="Initiated" value={fmtDateTime(data.initiatedAt)} mono />
+          <Row label="Completed" value={data.completedAt ? fmtDateTime(data.completedAt) : '—'} mono />
+          <Row label="Source" value={`${data.source} · started by ${data.initiatedByLabel}`} mono />
+          <Row label="ASIC account no." value={data.accountNumber} mono />
+          <Row label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
+          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
+          {data.bpayReference ? <Row label="BPAY" value={`biller ${data.bpayBillerCode ?? '—'} · ref ${data.bpayReference}`} mono /> : null}
+          {data.stripePayment ? <Row label="Payment intent" value={<span className="break-all">{data.stripePayment.paymentIntentId}</span>} mono /> : null}
+          {data.stripePayment?.cardLast4 ? (
+            <Row label="Client’s card" value={`${data.stripePayment.cardBrand?.toUpperCase() ?? ''} •••• ${data.stripePayment.cardLast4} · ${data.stripePayment.cardExpMonth ?? '--'}/${data.stripePayment.cardExpYear ?? '----'} · ${data.stripePayment.cardholderName ?? ''}`} mono />
+          ) : null}
+        </dl>
+        {data.errorMessage ? (
+          <div className="mt-4">
+            <KickerLabel>Last error, as ASIC or the system said it</KickerLabel>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-zinc-50 p-3 text-xs text-zinc-800 ring-1 ring-zinc-200">{data.errorMessage}</pre>
           </div>
-        ))}
-      </div>
+        ) : null}
+      </TechnicalDetail>
     </div>
   )
 }
 
-function SourcePill({ source }: { source: string }) {
-  switch (source) {
-    case 'Renewtron':  return <StatusPill tone="emerald">DIRECT</StatusPill>
-    case 'Ontraport':  return <StatusPill tone="indigo">ONTRAPORT</StatusPill>
-    case 'BulkUpload': return <StatusPill tone="zinc">BULK</StatusPill>
-    default:           return <StatusPill tone="zinc">{source.toUpperCase()}</StatusPill>
+/** The page title: what happened to this renewal, in words. */
+function headline(d: Detail): string {
+  const years = `${d.renewalYears} year${d.renewalYears === 1 ? '' : 's'}`
+  if (d.stuck) return 'Renewal stuck: nothing has moved for over 2 hours'
+  switch (d.status) {
+    case 'Completed': return d.bpayReference && !d.bpayPaidAt ? `Renewed for ${years}; ASIC’s BPAY bill still to pay` : `Renewed for ${years}`
+    case 'Processing': return 'Lodging with ASIC now'
+    case 'Pending': return 'Queued to lodge with ASIC'
   }
+  if (!paidByClient(d)) return 'Not renewed: the client’s card payment didn’t go through'
+  if (d.nextRetryAt) return `Failed; Renewtron retries ${dueWords(d.nextRetryAt)}`
+  if (d.errorCategory === 'NotDueYet') return 'Not renewed yet: ASIC says it isn’t due'
+  if (paymentAtRisk(d)) return 'Failed at the payment step: check ASIC before retrying'
+  if (d.errorCategory === 'AlreadyInProgress') return 'Blocked: ASIC has a renewal open for this ABN'
+  if (d.errorCategory === 'Terminal') return 'Refused by ASIC: the details didn’t pass its checks'
+  return d.failedAtStep ? `Renewal failed at “${d.failedAtStep}”` : 'Renewal failed'
 }
 
-function InitiatedByBadge({ value }: { value: string }) {
-  switch (value) {
-    case 'Admin':    return <StatusPill tone="indigo">ADMIN</StatusPill>
-    case 'Customer': return <StatusPill tone="zinc">CUSTOMER</StatusPill>
-    case 'System':   return <StatusPill tone="amber">SYSTEM</StatusPill>
-    default:         return <StatusPill tone="zinc">{value.toUpperCase()}</StatusPill>
+/** The next-step block: who has to act and the button that does it. */
+function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) => void, busy: boolean): ReactNode {
+  const toClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
+  if (d.stuck) {
+    return (
+      <NextStep meaning="action" title={`Last activity ${agoWords(d.lastAttemptAt ?? d.initiatedAt)}.`}
+        actions={<Button asChild size="sm" variant="outline"><Link to="/admin/renewals">Reconcile on Renewals</Link></Button>}>
+        The reconcile sweep re-queues stale renewals. If it stays stuck, look the name up at ASIC before running it again: it may have lodged.
+      </NextStep>
+    )
   }
+  switch (d.status) {
+    case 'Completed':
+      if (d.bpayReference && !d.bpayPaidAt) {
+        return (
+          <NextStep meaning="action" title="ASIC holds the renewal until its BPAY bill is paid."
+            actions={<>
+              <Button asChild size="sm"><Link to="/admin/bpay">Pay in BPAY to pay</Link></Button>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => markBpay(true)}>Paid at the bank</Button>
+            </>}>
+            Lodged <When at={d.completedAt ?? d.initiatedAt} />{d.transactionReference ? `, ASIC reference ${d.transactionReference}` : ''}.
+          </NextStep>
+        )
+      }
+      return (
+        <NextStep meaning="done" title="Nothing to do." actions={toClient}>
+          ASIC lodged it <When at={d.completedAt ?? d.initiatedAt} />{d.transactionReference ? `, reference ${d.transactionReference}` : ''}.
+        </NextStep>
+      )
+    case 'Processing':
+      return <NextStep meaning="working" title="Nothing to do yet.">This page updates by itself while the renewal goes through ASIC.</NextStep>
+    case 'Pending':
+      return <NextStep meaning="working" title="Nothing to do yet.">The renewal worker picks it up shortly; this page updates by itself.</NextStep>
+  }
+  if (!paidByClient(d)) {
+    return <NextStep meaning="quiet" title="Nothing to deliver." actions={toClient}>No money of theirs was taken. They need to pay again to renew.</NextStep>
+  }
+  if (d.nextRetryAt) {
+    return (
+      <NextStep meaning="waiting" title={`Renewtron tries again ${dueWords(d.nextRetryAt)}.`} actions={retryButton}>
+        You can retry now instead. {d.errorMessage ? `Last error: ${truncate(d.errorMessage, 160)}` : ''}
+      </NextStep>
+    )
+  }
+  if (d.errorCategory === 'NotDueYet') {
+    return <NextStep meaning="waiting" title="Try again once the name is inside ASIC’s renewal window." actions={retryButton}>The client has paid; nothing is lost by waiting.</NextStep>
+  }
+  if (paymentAtRisk(d)) {
+    return (
+      <NextStep meaning="action" title="Look the name up at ASIC first." actions={toClient}>
+        This run reached ASIC’s payment page, so ASIC may already have our money and the renewal. Retrying here is blocked so it can’t pay twice; if ASIC shows it renewed, note it on the client.
+      </NextStep>
+    )
+  }
+  return (
+    <NextStep meaning="action" title="Retry runs the renewal again from the start." actions={<>{retryButton}{toClient}</>}>
+      {d.errorMessage ? truncate(d.errorMessage, 220) : 'No error was recorded.'}
+    </NextStep>
+  )
+}
+
+/** Visit → paid → renewal → ASIC fee: the records either side of this one. */
+function story(d: Detail, status: StatusEntry): StoryStep[] {
+  const steps: StoryStep[] = []
+  if (d.sale) {
+    steps.push({ label: 'Ontraport sale', meaning: 'done', at: d.sale.syncedAt, to: `/admin/ontraport-sales?search=${encodeURIComponent(d.businessName)}` })
+  } else {
+    steps.push({ label: d.initiatedByLabel === 'Customer' ? 'Wizard search' : 'Name search', meaning: 'done', at: d.searchedAt, to: `/admin/searches/${d.searchLogId}` })
+    steps.push(d.paymentType === 'External'
+      ? { label: 'Paid', meaning: 'done', note: 'outside Renewtron' }
+      : paidByClient(d)
+        ? { label: `Paid ${fmtMoney2(d.amount)}`, meaning: 'done', at: d.stripePayment?.paidAt ?? d.initiatedAt }
+        : { label: 'Payment', meaning: 'quiet', note: statusOf('payment', d.stripePayment?.paymentStatus).label.toLowerCase() })
+  }
+  steps.push({ label: `Renewal: ${status.label.toLowerCase()}`, meaning: status.meaning, at: d.completedAt ?? d.lastAttemptAt ?? d.initiatedAt, current: true })
+  if (d.bpayReference) {
+    steps.push(d.bpayPaidAt
+      ? { label: 'ASIC fee paid', meaning: 'done', at: d.bpayPaidAt, to: '/admin/bpay' }
+      : { label: 'ASIC fee', meaning: d.status === 'Completed' ? 'action' : 'quiet', note: 'BPAY to pay', to: '/admin/bpay' })
+  }
+  return steps
+}
+
+function truncate(s: string, n: number) {
+  return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
 
 function Section({ kicker, title, children }: { kicker: string; title: string; children: ReactNode }) {
@@ -319,18 +288,16 @@ function Section({ kicker, title, children }: { kicker: string; title: string; c
     <div className="rounded-xl bg-white p-5 ring-1 ring-zinc-200 shadow-sm">
       <div className="mb-4">
         <KickerLabel>{kicker}</KickerLabel>
-        <h2 className="mt-0.5 text-base font-semibold text-zinc-900 tracking-tight">{title}</h2>
+        <h2 className="mt-0.5 text-base font-semibold tracking-tight text-zinc-900">{title}</h2>
       </div>
-      <dl className="space-y-3">
-        {children}
-      </dl>
+      <dl className="space-y-3">{children}</dl>
     </div>
   )
 }
 
 function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-3 items-baseline">
+    <div className="grid grid-cols-[9rem_1fr] items-baseline gap-3">
       <dt className="text-xxs font-mono uppercase tracking-[0.14em] text-zinc-500">{label}</dt>
       <dd className={`text-sm text-zinc-900 ${mono ? 'font-mono tabular-nums' : ''}`}>{value}</dd>
     </div>
