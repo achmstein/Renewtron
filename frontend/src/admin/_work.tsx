@@ -65,6 +65,7 @@ function Facts({ item, first }: { item: TodayItem; first: ReactNode }) {
 const RENEWAL_REASONS: Record<string, { what: string; next: string }> = {
   Stuck: { what: 'is stuck', next: 'Nothing has moved for over 2 hours. The reconcile sweep repairs most; open it if it stays.' },
   PaymentRisk: { what: 'stopped at payment', next: 'ASIC may have taken payment. Check at ASIC before retrying.' },
+  CardDeclined: { what: 'failed: ASIC declined our card', next: 'No money was taken. Retry: it pays by BPAY while the card is declined.' },
   AlreadyInProgress: { what: 'is blocked at ASIC', next: 'ASIC has a renewal open for this ABN. Check at ASIC, then retry.' },
   Terminal: { what: 'was refused by ASIC', next: 'The details didn’t pass ASIC’s checks. Open it to see what ASIC said.' },
   Transient: { what: 'failed', next: 'Network or ASIC errors on every attempt. Retry once ASIC is reachable.' },

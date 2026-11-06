@@ -69,9 +69,14 @@ export default function Today() {
   const openIn = (g: TodayGroup) => g.count - g.items.filter((i) => done.has(workKey(i))).length
   const levelCount = (l: Level) => data?.groups.filter((g) => LEVEL_OF[g.key] === l).reduce((n, g) => n + openIn(g), 0) ?? 0
   const urgentMoney = data?.groups.filter((g) => LEVEL_OF[g.key] === 'urgent').reduce((n, g) => n + (g.total ?? 0), 0) ?? 0
-  const systemProblems = data?.otpProblem
-    ? [{ title: 'Card renewals are on hold', text: 'Renewtron can’t read ASIC’s one-time codes from Ontraport.', detail: data.otpProblem, to: '/admin/settings', action: 'Fix in Settings' }]
-    : []
+  const systemProblems = [
+    ...(data?.otpProblem
+      ? [{ title: 'Card renewals are on hold', text: 'Renewtron can’t read ASIC’s one-time codes from Ontraport.', detail: data.otpProblem, to: '/admin/settings', action: 'Fix in Settings' }]
+      : []),
+    ...(data?.cardProblem
+      ? [{ title: 'ASIC is declining our card', text: 'Renewals are paying by BPAY instead. Check the card with the bank.', detail: data.cardProblem, to: '/admin/bpay', action: 'BPAY to pay' }]
+      : []),
+  ]
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">

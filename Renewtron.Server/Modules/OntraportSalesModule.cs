@@ -292,6 +292,7 @@ public sealed class OntraportSalesModule : ICarterModule
             if (sale.Status != OntraportSaleStatus.RenewalFailed)
                 return Results.BadRequest(new { error = "Only a failed sale can be tried again." });
             if (sale.RenewalRequestId is { } rid && await db.RenewalRequests.AnyAsync(r => r.Id == rid
+                    && r.ErrorCategory != RenewalErrorCategories.CardDeclined
                     && (r.FailedAtStep == "Complete Payment Action" || r.HostedTokenizationId != null
                         || r.ErrorCategory == RenewalErrorCategories.PaymentRisk)))
                 return Results.BadRequest(new { error = "Its last renewal reached ASIC's payment step. Check at ASIC before trying again." });

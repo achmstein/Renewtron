@@ -18,6 +18,12 @@ public static class RenewalErrorCategories
     /// <summary>The run got to (or past) payment before failing — ASIC may hold money. Human verification only.</summary>
     public const string PaymentRisk = "PaymentRisk";
 
+    /// <summary>
+    /// ASIC declined our card (at the card page or when completing the payment). No money was
+    /// taken, so it is safe to retry, by card once the card works or by BPAY.
+    /// </summary>
+    public const string CardDeclined = "CardDeclined";
+
     /// <summary>Bad data (name not found, invalid ABN) or a declined payment — retrying can't help.</summary>
     public const string Terminal = "Terminal";
 }
@@ -52,6 +58,14 @@ public static class RenewalErrorClassifier
         (failedAtStep == "Complete Payment Action" &&
          (errorMessage ?? "").Contains("declined", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Whether ASIC may already hold money for this run, so re-running it could pay twice: it
+    /// failed at or after the payment step, unless ASIC declined the card (nothing taken).
+    /// </summary>
+    public static bool MayHoldPayment(string? failedAtStep, string? hostedTokenizationId, string? category) =>
+        category != RenewalErrorCategories.CardDeclined
+        && (failedAtStep == "Complete Payment Action" || hostedTokenizationId != null || category == RenewalErrorCategories.PaymentRisk);
+
     public static string Classify(string? failedAtStep, string? errorMessage)
     {
         var message = errorMessage ?? "";
@@ -60,6 +74,11 @@ public static class RenewalErrorClassifier
         // retry it automatically, or ASIC could end up with two.
         if (failedAtStep == "Submit Pay Later")
             return RenewalErrorCategories.PaymentRisk;
+
+        // Declined is a definite "no": ASIC took nothing. Checked before the payment-risk rule,
+        // which would otherwise read a decline at "Complete Payment Action" as money at risk.
+        if (IsCardFailure(failedAtStep, message) && message.Contains("declined", StringComparison.OrdinalIgnoreCase))
+            return RenewalErrorCategories.CardDeclined;
 
         if (failedAtStep == "Complete Payment Action" ||
             message.Contains("Payment processed but completion failed", StringComparison.OrdinalIgnoreCase))

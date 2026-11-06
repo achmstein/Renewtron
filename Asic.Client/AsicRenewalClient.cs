@@ -793,7 +793,12 @@ public class AsicRenewalClient : IAsicRenewalClient
 
         if (!completeResult.Success)
         {
-            var errorMsg = $"Payment processed but completion failed: {completeResult.Message}. " +
+            // ASIC's "declined" is a definite no (nothing taken); anything else at this step
+            // leaves it unclear whether ASIC took the money.
+            var declined = (completeResult.Message ?? "").Contains("declined", StringComparison.OrdinalIgnoreCase);
+            var errorMsg = (declined
+                              ? $"Card declined at ASIC: {completeResult.Message}. "
+                              : $"Payment processed but completion failed: {completeResult.Message}. ") +
                           $"Transaction reference: {data.TransactionReference ?? "Unknown"}";
             return StepResult<RenewalStepData>.Failure(errorMsg, "Complete Payment Action");
         }

@@ -101,6 +101,15 @@ public class RenewalProcessingService : IRenewalProcessingService
             // this name has had as many failed card attempts as Settings allow.
             var cardFailures = await CardFailuresSoFarAsync(renewalRequest);
             var payLater = UsesBpay(cardFailures);
+            // ASIC refusing our card on every payment: with the BPAY fallback on, don't spend this
+            // renewal on a card attempt that will be declined; pay later by BPAY straight away.
+            if (!payLater && !renewalRequest.IsTest && _asicSettings.Value.BpayAfterCardFailures > 0
+                && await AsicCardHealth.CheckAsync(_dbContext, DateTime.UtcNow) is { Down: true } card)
+            {
+                payLater = true;
+                _logger.LogWarning("Renewal {RenewalRequestId}: ASIC declined our card on the last {Declines} card payments; paying later by BPAY without trying it",
+                    renewalRequestId, card.Declines);
+            }
             if (!renewalRequest.IsTest && !payLater && await _smsProvider.CheckAsync() is { } otpProblem)
             {
                 renewalRequest.Status = RenewalStatus.Failed;

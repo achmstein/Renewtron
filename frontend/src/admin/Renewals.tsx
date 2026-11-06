@@ -38,6 +38,7 @@ function categoryLabel(category: string): string {
     case 'NotDueYet':         return 'Not due yet'
     case 'AlreadyInProgress': return 'In progress'
     case 'PaymentRisk':       return 'Verify payment'
+    case 'CardDeclined':      return 'Card declined'
     case 'Terminal':          return 'Bad data'
     default:                  return category
   }

@@ -107,8 +107,7 @@ public sealed class TodayModule : ICarterModule
 
             var paid = new List<TodayItem>();
             paid.AddRange(failed.Select(r => r.ToItem(r.ErrorCategory ?? "Failed",
-                canRetry: r.FailedAtStep != "Complete Payment Action" && !r.HasHostedToken
-                    && r.ErrorCategory != RenewalErrorCategories.PaymentRisk)));
+                canRetry: !RenewalErrorClassifier.MayHoldPayment(r.FailedAtStep, r.HasHostedToken ? "held" : null, r.ErrorCategory))));
             paid.AddRange(stuck.Select(r => r.ToItem("Stuck", canRetry: false)));
             paid.AddRange(sales.Select(s => new TodayItem(
                 "sale", s.Id.ToString(), s.Status, s.ClientId, s.ContactName, s.BusinessName, s.Abn, s.AmountPaid,
@@ -221,11 +220,17 @@ public sealed class TodayModule : ICarterModule
             try { if (!forClient) otpProblem = await sms.CheckAsync(); }
             catch (Exception ex) { logger.LogWarning(ex, "Today: OTP check failed"); }
 
+            // ASIC refusing our card: renewals still go through by BPAY, but the card needs fixing.
+            string? cardProblem = null;
+            try { if (!forClient) cardProblem = (await AsicCardHealth.CheckAsync(db, now)).Problem; }
+            catch (Exception ex) { logger.LogWarning(ex, "Today: card check failed"); }
+
             return Results.Ok(new
             {
                 generatedAt = now,
                 total = groups.Sum(g => g.Count),
                 otpProblem,
+                cardProblem,
                 groups,
             });
         }).RequireAuthorization().WithTags("Admin.Today");

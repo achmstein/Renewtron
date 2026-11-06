@@ -600,12 +600,10 @@ public sealed class RenewalsModule : ICarterModule
                     continue;
                 }
 
-                // A failure after ASIC took payment ("Complete Payment Action", or any run
-                // that got far enough to hold a tokenization id) must not be blindly re-run —
-                // the retry pays ASIC's card again. These need per-row verification first.
-                if (renewal.FailedAtStep == "Submit Pay Later")
-                return Results.BadRequest(new { error = "Cannot retry automatically: ASIC may already have this renewal lodged to pay later by BPAY. Check at ASIC before retrying." });
-            if (renewal.FailedAtStep == "Complete Payment Action" || renewal.HostedTokenizationId != null)
+                // A run that may have paid ASIC, or lodged it to pay later by BPAY, must not be
+                // blindly re-run: it could pay or lodge twice. These need checking at ASIC first.
+                if (renewal.FailedAtStep == "Submit Pay Later"
+                    || RenewalErrorClassifier.MayHoldPayment(renewal.FailedAtStep, renewal.HostedTokenizationId, renewal.ErrorCategory))
                 {
                     skippedPaymentRisk++;
                     continue;
@@ -752,7 +750,7 @@ public sealed class RenewalsModule : ICarterModule
             if (renewal.PaymentType == PaymentType.Stripe &&
                 (renewal.StripePayment is null || renewal.StripePayment.PaymentStatus != "succeeded"))
                 return Results.BadRequest(new { error = "Cannot retry: Payment was not successful. Customer needs to retry payment." });
-            if (renewal.FailedAtStep == "Complete Payment Action" || renewal.HostedTokenizationId != null)
+            if (RenewalErrorClassifier.MayHoldPayment(renewal.FailedAtStep, renewal.HostedTokenizationId, renewal.ErrorCategory))
                 return Results.BadRequest(new { error = "Cannot retry automatically: ASIC may have already taken payment for this run. Verify the renewal at ASIC before retrying." });
 
             // Keep ErrorMessage/FailedAtStep — the next run overwrites them, and until

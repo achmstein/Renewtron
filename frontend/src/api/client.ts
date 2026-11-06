@@ -108,7 +108,7 @@ export interface TodayItem {
   otherClientName: string | null
 }
 export interface TodayGroup { key: 'paid' | 'bpay' | 'keys' | 'decide'; count: number; total: number | null; items: TodayItem[] }
-export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; groups: TodayGroup[] }
+export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; cardProblem?: string | null; groups: TodayGroup[] }
 
 export interface SidebarCounts { today: number; renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
 

@@ -23,6 +23,7 @@ const ERROR_WORDS: Record<string, string> = {
   NotDueYet: 'ASIC says not due yet',
   AlreadyInProgress: 'ASIC has a renewal open',
   PaymentRisk: 'stopped at payment: check ASIC',
+  CardDeclined: 'ASIC declined our card',
   Terminal: 'refused by ASIC',
 }
 

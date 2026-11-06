@@ -22,7 +22,8 @@ function fmtDob(s: string) {
 
 const paidByClient = (d: Detail) => d.paymentType === 'External' || d.stripePayment?.paymentStatus === 'succeeded'
 /** ASIC may already hold money for this run: retrying could pay twice. Same rule as the retry endpoint. */
-const paymentAtRisk = (d: Detail) => d.failedAtStep === 'Complete Payment Action' || !!d.hostedTokenizationId || d.errorCategory === 'PaymentRisk'
+const paymentAtRisk = (d: Detail) => d.errorCategory !== 'CardDeclined'
+  && (d.failedAtStep === 'Complete Payment Action' || !!d.hostedTokenizationId || d.errorCategory === 'PaymentRisk')
 
 /** The renewal's status, refined for a stuck run. */
 function statusFor(d: Detail): StatusEntry {
@@ -213,6 +214,7 @@ function headline(d: Detail): string {
   if (d.errorCategory === 'NotDueYet') return 'Not renewed yet: ASIC says it isn’t due'
   if (paymentAtRisk(d)) return 'Failed at the payment step: check ASIC before retrying'
   if (d.errorCategory === 'AlreadyInProgress') return 'Blocked: ASIC has a renewal open for this ABN'
+  if (d.errorCategory === 'CardDeclined') return 'Not renewed: ASIC declined our card (no money taken)'
   if (d.errorCategory === 'Terminal') return 'Refused by ASIC: the details didn’t pass its checks'
   return d.failedAtStep ? `Renewal failed at “${d.failedAtStep}”` : 'Renewal failed'
 }
