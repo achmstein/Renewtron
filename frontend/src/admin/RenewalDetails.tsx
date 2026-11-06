@@ -7,11 +7,10 @@ import { api } from '../api/client'
 import { StatusPill } from './_ui'
 import { renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When, agoWords, dueWords } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.renewal>>
 
@@ -114,7 +113,7 @@ export default function RenewalDetails() {
     : nextStep(data, retryButton, markBpay, bpayMutation.isPending)
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs
         client={data.client}
         businessName={data.businessName}
@@ -134,58 +133,58 @@ export default function RenewalDetails() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who it’s for">
           {data.client ? (
-            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+            <DetailRow label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
           {data.lead ? (
-            <Row label="Wizard visit" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-link hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
+            <DetailRow label="Wizard visit" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-link hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
           ) : null}
-          <Row label="Email" value={data.email ?? '—'} />
-          <Row label="Mobile" value={data.mobileNumber ?? '—'} mono />
-          <Row label="Date of birth" value={data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'} />
+          <DetailRow label="Email" value={data.email ?? '—'} />
+          <DetailRow label="Mobile" value={data.mobileNumber ?? '—'} mono />
+          <DetailRow label="Date of birth" value={data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'} />
         </Section>
 
         <Section title="How it was paid">
-          <Row label="Client paid" value={<span className="tabular-nums">{fmtMoney2(data.amount)}</span>} />
-          <Row label="Through" value={data.paymentType === 'External'
+          <DetailRow label="Client paid" value={<span className="tabular-nums">{fmtMoney2(data.amount)}</span>} />
+          <DetailRow label="Through" value={data.paymentType === 'External'
             ? (data.sale ? <>Ontraport, <When at={data.sale.syncedAt} /></> : 'Outside Renewtron')
             : <>Card via Stripe · {statusOf('payment', data.stripePayment?.paymentStatus).label.toLowerCase()}{data.stripePayment?.paidAt ? <>, <When at={data.stripePayment.paidAt} /></> : null}</>} />
           {data.bpayReference ? (
-            <Row label="ASIC fee" value={
+            <DetailRow label="ASIC fee" value={
               <span className="flex flex-wrap items-center gap-2">
                 {data.bpayPaidAt
                   ? <><StatusPill tone="emerald">BPAY paid</StatusPill><span className="text-caption text-muted-foreground"><When at={data.bpayPaidAt} /></span></>
                   : <StatusPill tone="red">BPAY to pay</StatusPill>}
-                <Button size="xs" variant={data.bpayPaidAt ? 'ghost' : 'outline'} disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}>
+                <Button size="sm" variant={data.bpayPaidAt ? 'ghost' : 'outline'} className="sm:h-6 sm:px-2 sm:text-xs" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}>
                   {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
                 </Button>
               </span>
             } />
           ) : data.status === 'Completed' ? (
-            <Row label="ASIC fee" value="Paid by card at lodgement" />
+            <DetailRow label="ASIC fee" value="Paid by card at lodgement" />
           ) : null}
-          {data.transactionReference ? <Row label="ASIC reference" value={data.transactionReference} mono /> : null}
+          {data.transactionReference ? <DetailRow label="ASIC reference" value={data.transactionReference} mono /> : null}
         </Section>
       </div>
 
       <TechnicalDetail defaultOpen={false}>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
-          <Row label="Request ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Status" value={`${data.status}${data.errorCategory ? ` · ${data.errorCategory}` : ''}`} />
-          <Row label="Failed at step" value={data.failedAtStep ?? '—'} />
-          <Row label="Attempts" value={`${data.attemptCount || 1}${data.cardFailureCount ? ` · card failed ${data.cardFailureCount}×` : ''}`} />
-          <Row label="Last run" value={data.lastAttemptAt ? fmtDateTime(data.lastAttemptAt) : '—'} />
-          <Row label="Next auto-retry" value={data.nextRetryAt ? fmtDateTime(data.nextRetryAt) : '—'} />
-          <Row label="Initiated" value={fmtDateTime(data.initiatedAt)} />
-          <Row label="Completed" value={data.completedAt ? fmtDateTime(data.completedAt) : '—'} />
-          {data.handledAt ? <Row label="Handled" value={fmtDateTime(data.handledAt)} /> : null}
-          <Row label="Source" value={`${data.source} · started by ${data.initiatedByLabel}`} />
-          <Row label="ASIC account no." value={data.accountNumber} mono />
-          <Row label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
-          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
-          {data.bpayReference ? <Row label="BPAY" value={`biller ${data.bpayBillerCode ?? '—'} · ref ${data.bpayReference}`} mono /> : null}
-          {data.stripePayment ? <Row label="Payment intent" value={<span className="break-all">{data.stripePayment.paymentIntentId}</span>} mono /> : null}
+          <DetailRow label="Request ID" value={<span className="break-all">{data.id}</span>} mono />
+          <DetailRow label="Status" value={`${data.status}${data.errorCategory ? ` · ${data.errorCategory}` : ''}`} />
+          <DetailRow label="Failed at step" value={data.failedAtStep ?? '—'} />
+          <DetailRow label="Attempts" value={`${data.attemptCount || 1}${data.cardFailureCount ? ` · card failed ${data.cardFailureCount}×` : ''}`} />
+          <DetailRow label="Last run" value={data.lastAttemptAt ? fmtDateTime(data.lastAttemptAt) : '—'} />
+          <DetailRow label="Next auto-retry" value={data.nextRetryAt ? fmtDateTime(data.nextRetryAt) : '—'} />
+          <DetailRow label="Initiated" value={fmtDateTime(data.initiatedAt)} />
+          <DetailRow label="Completed" value={data.completedAt ? fmtDateTime(data.completedAt) : '—'} />
+          {data.handledAt ? <DetailRow label="Handled" value={fmtDateTime(data.handledAt)} /> : null}
+          <DetailRow label="Source" value={`${data.source} · started by ${data.initiatedByLabel}`} />
+          <DetailRow label="ASIC account no." value={data.accountNumber} mono />
+          <DetailRow label="Hosted token" value={<span className="break-all">{data.hostedTokenizationId ?? '—'}</span>} mono />
+          <DetailRow label="IP address" value={data.ipAddress ?? '—'} mono />
+          {data.bpayReference ? <DetailRow label="BPAY" value={`biller ${data.bpayBillerCode ?? '—'} · ref ${data.bpayReference}`} mono /> : null}
+          {data.stripePayment ? <DetailRow label="Payment intent" value={<span className="break-all">{data.stripePayment.paymentIntentId}</span>} mono /> : null}
           {data.stripePayment?.cardLast4 ? (
-            <Row label="Client’s card" value={`${data.stripePayment.cardBrand?.toUpperCase() ?? ''} •••• ${data.stripePayment.cardLast4} · ${data.stripePayment.cardExpMonth ?? '--'}/${data.stripePayment.cardExpYear ?? '----'} · ${data.stripePayment.cardholderName ?? ''}`} />
+            <DetailRow label="Client’s card" value={`${data.stripePayment.cardBrand?.toUpperCase() ?? ''} •••• ${data.stripePayment.cardLast4} · ${data.stripePayment.cardExpMonth ?? '--'}/${data.stripePayment.cardExpYear ?? '----'} · ${data.stripePayment.cardholderName ?? ''}`} />
           ) : null}
         </dl>
         {data.errorMessage ? (
@@ -315,11 +314,3 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
-      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
-      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
-    </div>
-  )
-}

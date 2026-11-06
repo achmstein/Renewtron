@@ -81,7 +81,7 @@ export default function Today() {
   ]
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <p className="text-caption text-muted-foreground">{now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
@@ -102,17 +102,19 @@ export default function Today() {
       ) : (
         <div className="space-y-6">
           {systemProblems.map((p) => (
-            <Alert key={p.title} variant="destructive" className="flex items-center gap-3 border-destructive/30 bg-destructive/5 py-3 [&>svg]:translate-y-0">
+            <Alert key={p.title} variant="destructive" className="flex flex-wrap items-center gap-3 border-destructive/30 bg-destructive/5 py-3 [&>svg]:translate-y-0">
               <TriangleAlert />
               <div className="min-w-0 flex-1">
                 <AlertTitle>{p.title}</AlertTitle>
                 <AlertDescription title={p.detail}>{p.text}</AlertDescription>
+                {/* Phones can't hover: show the underlying error under the summary. */}
+                {p.detail ? <p className="mt-1 text-caption break-words sm:hidden">{p.detail}</p> : null}
               </div>
               <Button asChild size="sm" variant="destructive"><Link to={p.to}>{p.action}</Link></Button>
             </Alert>
           ))}
 
-          <Card className="grid gap-0 divide-y py-0 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <Card className="grid grid-cols-3 gap-0 divide-x py-0">
             {LEVELS.map((l) => {
               const n = levelCount(l.key)
               const active = filter === l.key
@@ -123,13 +125,13 @@ export default function Today() {
                   onClick={() => setFilter(active ? null : l.key)}
                   aria-pressed={active}
                   title={active ? 'Show everything' : `Show only ${l.label.toLowerCase()}`}
-                  className={cn('px-5 py-4 text-left transition-colors first:rounded-t-xl last:rounded-b-xl hover:bg-muted/50 sm:first:rounded-l-xl sm:first:rounded-tr-none sm:last:rounded-r-xl sm:last:rounded-bl-none', active && 'bg-muted')}
+                  className={cn('min-w-0 px-3 py-4 text-left transition-colors first:rounded-l-xl last:rounded-r-xl hover:bg-muted/50 sm:px-5', active && 'bg-muted')}
                 >
                   <span className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span aria-hidden className={cn('size-2 rounded-full', n ? DOT[l.meaning] : 'bg-muted-foreground/30')} />
+                    <span aria-hidden className={cn('size-2 shrink-0 rounded-full', n ? DOT[l.meaning] : 'bg-muted-foreground/30')} />
                     {l.label}
                   </span>
-                  <span className="mt-1 block text-2xl font-semibold tracking-tight tabular-nums">{n}</span>
+                  <span className="mt-1 block text-xl font-semibold tracking-tight tabular-nums sm:text-2xl">{n}</span>
                   <span className="block truncate text-caption text-muted-foreground">
                     {n === 0 ? 'All clear' : l.key === 'urgent' && urgentMoney ? `${fmtMoney0(urgentMoney)} waiting on us` : l.hint}
                   </span>
@@ -143,10 +145,10 @@ export default function Today() {
             if (groups.length === 0) return null
             return (
               <section key={l.key} className="space-y-3">
-                <h2 className="flex items-center gap-2 text-heading">
+                <h2 className="flex flex-wrap items-center gap-x-2 text-heading">
                   <span aria-hidden className={cn('size-2 rounded-full', DOT[l.meaning])} />
                   {l.label}
-                  <span className="font-normal text-muted-foreground">{l.hint}</span>
+                  <span className="hidden font-normal text-muted-foreground sm:inline">{l.hint}</span>
                 </h2>
                 {groups.map((g) => <Group key={g.key} group={g} done={done} tone={l.meaning} open={openIn(g)} />)}
               </section>

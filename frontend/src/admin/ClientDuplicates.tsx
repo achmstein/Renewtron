@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronLeft, Loader2, TriangleAlert } from 'lucide-react'
@@ -51,7 +51,7 @@ export default function ClientDuplicates() {
   const busy = merge.isPending || dismiss.isPending
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2 text-muted-foreground">
         <Link to="/admin/clients"><ChevronLeft /> Clients</Link>
       </Button>
@@ -111,50 +111,65 @@ function Pair({ a, b, busy, onMerge, onApart, onSkip }: {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-36 px-4" />
+              <TableHead className="hidden w-36 px-4 sm:table-cell" />
               {[a, b].map((c) => (
-                <TableHead key={c.id} className="h-auto px-4 py-3 align-top whitespace-normal">
+                <TableHead key={c.id} className="h-auto w-1/2 px-3 py-3 align-top whitespace-normal sm:w-auto sm:px-4">
                   <Link to={`/admin/clients/${c.id}`} className="text-heading text-link hover:underline">{c.fullName || 'Unnamed client'}</Link>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {c.hasPurchased ? <Badge variant="secondary">Customer</Badge> : <Badge variant="outline">Lead</Badge>}
-                    {c === keep ? <Badge variant="outline">Kept if merged</Badge> : null}
+                    {c === keep ? <Badge variant="outline"><span className="sm:hidden">Kept</span><span className="hidden sm:inline">Kept if merged</span></Badge> : null}
                   </div>
                 </TableHead>
               ))}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((r) => (
-              <TableRow key={r.label} className={cn('align-top', r.same && 'bg-muted/40')}>
-                <TableCell className="px-4 py-2.5 align-top">
-                  <div className="text-caption text-muted-foreground">{r.label}</div>
-                  {r.same ? <div className="mt-0.5 inline-flex items-center gap-1 text-caption text-muted-foreground"><Check className="size-3" /> Same</div> : null}
-                </TableCell>
-                <TableCell className="px-4 py-2.5 align-top whitespace-normal">{r.a}</TableCell>
-                <TableCell className="px-4 py-2.5 align-top whitespace-normal">{r.b}</TableCell>
-              </TableRow>
-            ))}
+            {rows.map((r) => {
+              const label = (
+                <>
+                  <span className="text-caption text-muted-foreground">{r.label}</span>
+                  {r.same ? <span className="ml-2 inline-flex items-center gap-1 text-caption text-muted-foreground sm:mt-0.5 sm:ml-0 sm:flex"><Check className="size-3" /> Same</span> : null}
+                </>
+              )
+              return (
+                <Fragment key={r.label}>
+                  {/* Phones: the label on its own line, then the two clients side by side under it. */}
+                  <TableRow className={cn('border-b-0 sm:hidden', r.same && 'bg-muted/40')}>
+                    <TableCell colSpan={2} className="px-3 pt-2.5 pb-0">{label}</TableCell>
+                  </TableRow>
+                  <TableRow className={cn('align-top', r.same && 'bg-muted/40')}>
+                    <TableCell className="hidden px-4 py-2.5 align-top sm:table-cell"><div className="flex flex-col">{label}</div></TableCell>
+                    <TableCell className="px-3 py-2.5 align-top whitespace-normal [overflow-wrap:anywhere] sm:px-4">{r.a}</TableCell>
+                    <TableCell className="px-3 py-2.5 align-top whitespace-normal [overflow-wrap:anywhere] sm:px-4">{r.b}</TableCell>
+                  </TableRow>
+                </Fragment>
+              )
+            })}
           </TableBody>
         </Table>
       </Card>
 
       <Alert>
         <TriangleAlert />
-        <AlertDescription title="Merging moves the emails, ABNs and history onto the kept client and deletes the other. The ASIC key enquiry goes out in one person's name, so merge only when you're sure.">
-          Merging deletes the other client and can’t be undone.
+        <AlertDescription title={MERGE_WARNING}>
+          <span className="hidden sm:inline">Merging deletes the other client and can’t be undone.</span>
+          {/* Phones can't hover: the whole warning, in place of the short one. */}
+          <span className="sm:hidden">{MERGE_WARNING} It can’t be undone.</span>
         </AlertDescription>
       </Alert>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={busy} onClick={() => onMerge(other.id, keep.id)}>Same person: merge into {firstName(keep)}</Button>
-        <Button variant="outline" disabled={busy} onClick={() => onMerge(keep.id, other.id)}>Merge into {firstName(other)} instead</Button>
-        <Button variant="outline" disabled={busy} onClick={onApart}>Different people</Button>
-        <Button variant="ghost" disabled={busy} onClick={onSkip}>Skip for now</Button>
+        <Button className="w-full sm:w-auto" disabled={busy} onClick={() => onMerge(other.id, keep.id)}>Same person: merge into {firstName(keep)}</Button>
+        <Button className="w-full sm:w-auto" variant="outline" disabled={busy} onClick={() => onMerge(keep.id, other.id)}>Merge into {firstName(other)} instead</Button>
+        <Button className="w-full sm:w-auto" variant="outline" disabled={busy} onClick={onApart}>Different people</Button>
+        <Button className="w-full sm:w-auto" variant="ghost" disabled={busy} onClick={onSkip}>Skip for now</Button>
         {busy ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
       </div>
     </div>
   )
 }
+
+const MERGE_WARNING = 'Merging moves the emails, ABNs and history onto the kept client and deletes the other. The ASIC key enquiry goes out in one person’s name, so merge only when you’re sure.'
 
 function firstName(c: ClientDetail) {
   return c.fullName.split(' ')[0] || 'this one'

@@ -81,7 +81,7 @@ export function ClientSearch({ open, setOpen }: { open: boolean; setOpen: (open:
               </div>
               <div className="shrink-0 text-right text-xs text-muted-foreground">
                 {c.activeNames ? `${c.activeNames} name${c.activeNames === 1 ? '' : 's'}` : 'no names'}
-                {c.firstName ? <div className="max-w-48 truncate">{c.firstName}</div> : null}
+                {c.firstName ? <div className="max-w-24 truncate sm:max-w-48">{c.firstName}</div> : null}
               </div>
             </CommandItem>
           ))}

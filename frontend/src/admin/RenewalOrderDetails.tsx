@@ -6,7 +6,7 @@ import { sileo } from 'sileo'
 import { api, type RenewalOrderAttempt, type RenewalOrderRow } from '../api/client'
 import { Status, inSentence, orderStatus, renewalStatus } from './_status'
 import { DueIn, When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,7 +52,7 @@ export default function RenewalOrderDetails() {
   const who = data.client?.fullName || o.clientName || o.payerName || 'The client'
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} businessName={o.businessName}
         list={{ to: '/admin/renewal-orders', label: 'Paid renewals' }} here={`Paid ${new Date(o.paidAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`} />
 
@@ -72,20 +72,20 @@ export default function RenewalOrderDetails() {
         <CardHeader className="border-b py-4"><CardTitle>ASIC runs</CardTitle></CardHeader>
         <CardContent className="p-0">
           {data.attempts.length === 0
-            ? <p className="px-6 py-4 text-sm text-muted-foreground">No renewal started at ASIC yet.</p>
+            ? <p className="px-4 py-4 text-sm text-muted-foreground sm:px-6">No renewal started at ASIC yet.</p>
             : data.attempts.map((a) => <AttemptRow key={a.id} a={a} />)}
         </CardContent>
       </Card>
 
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 text-sm lg:grid-cols-2">
-          <Row label="Order" value={<span className="break-all font-mono">{o.id}</span>} />
-          <Row label="Stage" value={`${o.stage}${o.reason ? ` · ${o.reason}` : ''}`} />
-          <Row label="Paid through" value={data.source.label} />
-          <Row label="Paid" value={fmtDateTime(o.paidAt)} />
-          <Row label="Stage since" value={fmtDateTime(o.stageChangedAt)} />
-          <Row label="Next on its own" value={o.nextActionAt ? fmtDateTime(o.nextActionAt) : '—'} />
-          {o.note ? <Row label="Note" value={o.note} /> : null}
+          <DetailRow label="Order" value={<span className="break-all font-mono">{o.id}</span>} />
+          <DetailRow label="Stage" value={`${o.stage}${o.reason ? ` · ${o.reason}` : ''}`} />
+          <DetailRow label="Paid through" value={data.source.label} />
+          <DetailRow label="Paid" value={fmtDateTime(o.paidAt)} />
+          <DetailRow label="Stage since" value={fmtDateTime(o.stageChangedAt)} />
+          <DetailRow label="Next on its own" value={o.nextActionAt ? fmtDateTime(o.nextActionAt) : '—'} />
+          {o.note ? <DetailRow label="Note" value={o.note} /> : null}
         </dl>
       </TechnicalDetail>
     </div>
@@ -129,10 +129,10 @@ function nextStep(o: RenewalOrderRow, hint: string | undefined, retryButton: Rea
 
 function AttemptRow({ a }: { a: RenewalOrderAttempt }) {
   return (
-    <Link to={`/admin/renewals/${a.id}`} className="flex flex-wrap items-center justify-between gap-3 border-t px-6 py-3 first:border-t-0 hover:bg-muted/50">
+    <Link to={`/admin/renewals/${a.id}`} className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 first:border-t-0 hover:bg-muted/50 sm:px-6">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-sm">
-          <Status entry={renewalStatus(a)} />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <Status className="shrink-0" entry={renewalStatus(a)} />
           <span className="text-muted-foreground">started <When at={a.initiatedAt} /> · {a.attemptCount || 1} run{a.attemptCount === 1 ? '' : 's'} · pays by {a.paysBy}</span>
           {a.current ? <span className="text-caption text-muted-foreground">(current)</span> : null}
         </div>
@@ -142,11 +142,3 @@ function AttemptRow({ a }: { a: RenewalOrderAttempt }) {
   )
 }
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
-      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
-      <dd className="col-span-2 min-w-0 lg:col-span-3">{value}</dd>
-    </div>
-  )
-}

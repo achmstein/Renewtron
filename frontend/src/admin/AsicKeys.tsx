@@ -201,8 +201,8 @@ export default function AsicKeys() {
         return (
           <div className="flex items-center justify-end gap-1.5">
             {canAssign ? (
-              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setAssign(r) }} title="Write this key onto a contact you pick">
-                <UserPlus /> Assign
+              <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setAssign(r) }} title="Write this key onto a contact you pick" aria-label="Assign">
+                <UserPlus /><span className="hidden sm:inline">Assign</span>
               </Button>
             ) : null}
             {!done ? (
@@ -210,8 +210,9 @@ export default function AsicKeys() {
                 variant="outline" size="sm"
                 disabled={retryMutation.isPending}
                 onClick={(e) => { e.stopPropagation(); retry(r) }}
+                aria-label="Retry"
               >
-                <RotateCw /> Retry
+                <RotateCw /><span className="hidden sm:inline">Retry</span>
               </Button>
             ) : null}
           </div>
@@ -224,7 +225,7 @@ export default function AsicKeys() {
   const scanFailed = stats.lastScanState === 'Failed'
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title={toSort ? 'Keys to sort' : 'ASIC key letters'}
         subtitle={toSort ? 'Key letters we couldn’t read or place.' : 'Keys from ASIC’s emails, written onto the client.'}
@@ -279,7 +280,7 @@ export default function AsicKeys() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search business, ABN, key, contact…"
-          className="h-8 w-64"
+          className="h-8 w-full sm:w-64"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         {hasActiveFilters ? (

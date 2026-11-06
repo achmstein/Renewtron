@@ -26,7 +26,7 @@ export default function Dashboard() {
   })
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader title="Overview" subtitle="Money worth chasing and how the system is running." />
 
       {error ? (
@@ -93,19 +93,19 @@ function Body({ data }: { data: DashboardResponse }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6">Business</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead className="pr-6">Status</TableHead>
+                  <TableHead className="pl-4 sm:pl-6">Business</TableHead>
+                  <TableHead className="hidden sm:table-cell">Started</TableHead>
+                  <TableHead className="pr-4 sm:pr-6">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentRenewals.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="pl-6 font-medium">{r.businessName ?? '—'}</TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
+                    <TableCell className="max-w-[55vw] truncate pl-4 font-medium sm:max-w-none sm:pl-6">{r.businessName ?? '—'}</TableCell>
+                    <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
                       {new Date(r.initiatedAt).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </TableCell>
-                    <TableCell className="pr-6"><Status kind="renewal" status={r.status} /></TableCell>
+                    <TableCell className="pr-4 sm:pr-6"><Status kind="renewal" status={r.status} /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -128,7 +128,7 @@ function Recoverable({ stats }: { stats: DashboardResponse['stats'] }) {
     <section className="space-y-3">
       <h2 className="text-heading">Worth chasing</h2>
       <StatStrip cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Recoverable revenue" value={total > 0 ? fmtMoney0(total) : '$0'} sub={items === 0 ? 'Nothing to chase' : `across ${items.toLocaleString()} items`} />
+        <Stat className="col-span-2 sm:col-span-1" label="Recoverable revenue" value={total > 0 ? fmtMoney0(total) : '$0'} sub={items === 0 ? 'Nothing to chase' : `across ${items.toLocaleString()} items`} />
         <Stat
           label="Abandoned at payment"
           value={`~${fmtMoney0(stats.abandonedAtPaymentValue)}`}
@@ -195,7 +195,7 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
     <section className="space-y-3">
       <h2 className="text-heading">System</h2>
       <Card className="gap-0 overflow-hidden py-0">
-        <div className="px-5 py-4">
+        <div className="px-4 py-4 sm:px-5">
           <span className="flex items-center gap-2 text-sm font-medium">
             <span aria-hidden className={cn('size-2 rounded-full', attention ? 'bg-warning' : 'bg-success')} />
             {attention ? 'Something needs a look' : 'All systems running'}
@@ -204,7 +204,7 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
 
         {/* OTP: without it no renewal can pay ASIC, so it outranks everything else here */}
         {health.otpProblem ? (
-          <div className="border-t px-5 py-4">
+          <div className="border-t px-4 py-4 sm:px-5">
             <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
               <TriangleAlert />
               <AlertTitle>Renewals are on hold: the OTP SMS can’t be read</AlertTitle>
@@ -215,6 +215,7 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
                     : 'New renewals wait until this is fixed.'}{' '}
                   <Link to="/admin/settings" className="font-medium underline">Fix in Settings</Link>
                 </p>
+                <p className="mt-1 text-caption break-words sm:hidden">{health.otpProblem}</p>
               </AlertDescription>
             </Alert>
           </div>
@@ -238,7 +239,7 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
         </StatStrip>
 
         {jobs.length > 0 ? (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t px-5 py-4 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t px-4 py-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-5">
             {jobs.map((j) => (
               <div key={j.id} className="flex min-w-0 items-start gap-2" title={j.nextExecution ? `Next run: ${new Date(j.nextExecution).toLocaleString()}` : undefined}>
                 <span aria-hidden className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', j.state === 'ok' ? 'bg-success' : j.state === 'stale' ? 'bg-warning' : 'bg-muted-foreground/40')} />
@@ -273,7 +274,7 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
 function ActivityRow({ item }: { item: ActivityItem }) {
   const tag = activityTag(item.kind)
   return (
-    <div className="flex items-start gap-3 px-6 py-3">
+    <div className="flex items-start gap-3 px-4 py-3 sm:px-6">
       <div className="mt-0.5 w-12 shrink-0 text-caption text-muted-foreground tabular-nums">{relativeTime(item.at)}</div>
       <StatusPill tone={tag.tone} className="shrink-0">{tag.label}</StatusPill>
       <div className="min-w-0 flex-1">

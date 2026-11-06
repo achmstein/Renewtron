@@ -151,12 +151,14 @@ export default function Leads() {
       id: 'names',
       header: 'Names found',
       enableSorting: false,
+      meta: { hideBelow: 'sm' },
       cell: ({ row }) => <NamesCell l={row.original} />,
     },
     {
       id: 'funnel',
       header: 'Funnel',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => <FunnelPills stages={leadFunnelStages(row.original)} />,
     },
     {
@@ -178,6 +180,7 @@ export default function Leads() {
       accessorKey: 'reminderOptIn',
       header: 'Reminder',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) =>
         row.original.reminderOptIn ? <Badge variant="secondary">Opted in</Badge> : <span className="text-muted-foreground">—</span>,
     },
@@ -187,7 +190,7 @@ export default function Leads() {
       cell: ({ row }) => (
         <div className="whitespace-nowrap">
           <div className="tabular-nums">{relativeTime(row.original.createdAt)}</div>
-          <div className="text-caption text-muted-foreground tabular-nums">{fmtDate(row.original.createdAt)} · {fmtTime(row.original.createdAt)}</div>
+          <div className="hidden text-caption text-muted-foreground tabular-nums sm:block">{fmtDate(row.original.createdAt)} · {fmtTime(row.original.createdAt)}</div>
         </div>
       ),
     },
@@ -205,7 +208,7 @@ export default function Leads() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Leads"
         subtitle="People who looked up their ABN and left their details."
@@ -231,7 +234,7 @@ export default function Leads() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ABN, name or email…"
-          className="h-8 w-56"
+          className="h-8 w-full sm:w-56"
         />
         <FacetedFilter title="Outcome" options={outcomeOptions} selected={outcomes} onChange={setOutcomes} />
         <FacetedFilter title="Reminder" options={reminderOptions} selected={reminders} onChange={setReminders} />
@@ -243,7 +246,7 @@ export default function Leads() {
             <X />
           </Button>
         ) : null}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full items-center justify-end gap-2 sm:ml-auto sm:w-auto">
           <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
           <RefreshButton onClick={() => void refetch()} busy={isFetching} />
         </div>
@@ -475,12 +478,12 @@ function PreviewBody({ preview }: { preview: Awaited<ReturnType<typeof api.admin
 
       <div className="grid gap-1.5">
         <div className="text-caption text-muted-foreground">Subject</div>
-        <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm font-medium">{preview.subject}</div>
+        <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm font-medium break-words">{preview.subject}</div>
       </div>
 
       <div className="grid gap-1.5" title={'Edit the template in Settings › Win-back. Merge tags: {{FullName}}, {{Abn}}, {{BusinessName}}, {{Email}}.'}>
         <div className="text-caption text-muted-foreground">Email</div>
-        <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted/50 px-3 py-2 font-sans text-caption whitespace-pre-wrap">{preview.bodyPreview}</pre>
+        <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted/50 px-3 py-2 font-sans text-caption break-words whitespace-pre-wrap">{preview.bodyPreview}</pre>
       </div>
     </div>
   )

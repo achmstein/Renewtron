@@ -41,7 +41,7 @@ export default function RenewalOrders() {
   const stage = (s: string) => data?.byStage.find((b) => b.stage === s)
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title={view === 'to-fix' ? 'Renewals to fix' : 'Paid renewals'}
         subtitle="Every name a client paid us to renew, with where it is now."
@@ -56,12 +56,12 @@ export default function RenewalOrders() {
       </StatStrip>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={view} onValueChange={(v) => { setPage(1); setSearchParams({ view: v }) }}>
+        <Tabs className="min-w-0 max-w-full" value={view} onValueChange={(v) => { setPage(1); setSearchParams({ view: v }) }}>
           <TabsList>
             {VIEWS.map((v) => <TabsTrigger key={v.value} value={v.value}>{v.label}</TabsTrigger>)}
           </TabsList>
         </Tabs>
-        <Input className="h-8 w-56" placeholder="Business name or ABN" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} />
+        <Input className="h-8 w-full sm:w-56" placeholder="Business name or ABN" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} />
       </div>
 
       {data && data.items.length === 0 ? (
@@ -86,7 +86,8 @@ export function OrderSentence({ o }: { o: RenewalOrderRow }) {
     <SentenceRow
       meaning={status.meaning}
       to={`/admin/renewal-orders/${o.id}`}
-      what={<span title={status.hint}><ClientName id={o.clientId} name={o.clientName || o.payerName} /> paid for <span className="font-medium">{o.businessName}</span>: {inSentence(status.label)}</span>}
+      hint={status.hint}
+      what={<span><ClientName id={o.clientId} name={o.clientName || o.payerName} /> paid for <span className="font-medium">{o.businessName}</span>: {inSentence(status.label)}</span>}
       why={<>paid <When at={o.paidAt} /> · {fmtMoney2(o.amountPaid)} · {o.years} year{o.years === 1 ? '' : 's'}{o.dueDate ? <> · due <DueIn at={o.dueDate} /></> : ' · no due date'}</>}
     />
   )

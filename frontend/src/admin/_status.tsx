@@ -1,4 +1,5 @@
-import { StatusPill, type Tone } from './_ui'
+import { cn } from '@/lib/utils'
+import { Hint, StatusPill, type Tone } from './_ui'
 
 /**
  * The admin's one status vocabulary. Every page that shows the status of a renewal, sale, bulk
@@ -214,8 +215,10 @@ export function Status({ kind, status, entry, size = 'sm', className }: {
 }) {
   const e = entry ?? (kind ? statusOf(kind, status) : { label: status ?? '—', meaning: 'quiet' as Meaning })
   return (
-    <span title={e.hint} className={className}>
+    <span title={e.hint} className={cn(size === 'lg' && e.hint && 'inline-flex items-center gap-1', className)}>
       <StatusPill tone={MEANING_TONE[e.meaning]} className={size === 'lg' ? 'h-7 px-3 text-sm' : undefined}>{e.label}</StatusPill>
+      {/* A record's headline status: phones can't hover, so they get an icon that shows the hint on tap. */}
+      {size === 'lg' && e.hint ? <Hint text={e.hint} touchOnly /> : null}
     </span>
   )
 }

@@ -41,6 +41,8 @@ declare module '@tanstack/table-core' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<in out TFeatures extends TableFeatures, in out TData extends RowData, TValue extends CellData = CellData> {
     sticky?: boolean
+    /** Hides the column on screens narrower than this breakpoint (phones), header and cells both. */
+    hideBelow?: 'sm' | 'md' | 'lg'
     className?: string
     headerClassName?: string
   }
@@ -51,6 +53,9 @@ declare module '@tanstack/table-core' {
 const stickyCellClass =
   'sticky left-0 z-10 border-r bg-card group-hover/row:bg-muted'
 const stickyHeadClass = 'sticky left-0 z-20 border-r bg-card'
+
+// Spelled out in full so Tailwind sees the class names.
+const HIDE_BELOW = { sm: 'hidden sm:table-cell', md: 'hidden md:table-cell', lg: 'hidden lg:table-cell' } as const
 
 export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick, loading }: {
   columns: DataTableColumn<TData>[]
@@ -91,6 +96,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                       className={cn(
                         'h-10 whitespace-nowrap px-4 text-xs font-medium text-muted-foreground',
                         meta?.sticky && stickyHeadClass,
+                        meta?.hideBelow && HIDE_BELOW[meta.hideBelow],
                         meta?.headerClassName,
                       )}
                     >
@@ -130,7 +136,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
                   return (
                     <TableCell
                       key={cell.id}
-                      className={cn('px-4 py-3 align-top text-sm', meta?.sticky && stickyCellClass, meta?.className)}
+                      className={cn('px-4 py-3 align-top text-sm', meta?.sticky && stickyCellClass, meta?.hideBelow && HIDE_BELOW[meta.hideBelow], meta?.className)}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>

@@ -5,11 +5,10 @@ import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf } from './_status'
 import { When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.lead>>
 type Renewal = Detail['renewalRequests'][number]
@@ -49,7 +48,7 @@ export default function LeadDetails() {
   const names = data.searchLog?.results ?? []
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} list={{ to: '/admin/leads', label: 'Leads' }} here={`Wizard visit of ${shortDate(data.createdAt)}`} />
 
       <RecordHeader
@@ -64,13 +63,13 @@ export default function LeadDetails() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who visited">
           {data.client ? (
-            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+            <DetailRow label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
-          <Row label="Name" value={data.fullName} />
-          <Row label="Email" value={<a href={`mailto:${data.email}`} className="break-all text-link hover:underline">{data.email}</a>} />
-          <Row label="Mobile" value={<a href={`tel:${data.mobileNumber}`} className="text-link hover:underline">{data.mobileNumber}</a>} />
-          <Row label="Date of birth" value={fmtDob(data.dateOfBirth)} />
-          <Row label="Reminders" value={data.reminderOptIn ? 'Asked for renewal reminders' : 'Didn’t ask for reminders'} />
+          <DetailRow label="Name" value={data.fullName} />
+          <DetailRow label="Email" value={<a href={`mailto:${data.email}`} className="break-all text-link hover:underline">{data.email}</a>} />
+          <DetailRow label="Mobile" value={<a href={`tel:${data.mobileNumber}`} className="text-link hover:underline">{data.mobileNumber}</a>} />
+          <DetailRow label="Date of birth" value={fmtDob(data.dateOfBirth)} />
+          <DetailRow label="Reminders" value={data.reminderOptIn ? 'Asked for renewal reminders' : 'Didn’t ask for reminders'} />
         </Section>
 
         <Section title={names.length ? `${names.length} business name${names.length === 1 ? '' : 's'} on the ABN` : 'Business names on the ABN'}>
@@ -84,7 +83,7 @@ export default function LeadDetails() {
                   <div className="truncate text-sm font-medium">{n.businessName}</div>
                   <div className="text-caption text-muted-foreground">{r ? <>Renewal <When at={r.initiatedAt} /> · {fmtMoney2(r.amount)}</> : 'No renewal started'}</div>
                 </div>
-                {r ? <Link to={`/admin/renewals/${r.id}`}><Status entry={renewalStatus(r)} /></Link> : null}
+                {r ? <Link to={`/admin/renewals/${r.id}`} className="shrink-0"><Status entry={renewalStatus(r)} /></Link> : null}
               </div>
             )
           })}
@@ -93,15 +92,15 @@ export default function LeadDetails() {
 
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
-          <Row label="Lead ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Outcome" value={data.outcome} />
-          <Row label="Created" value={fmtDateTime(data.createdAt)} />
-          <Row label="Converted" value={data.convertedAt ? fmtDateTime(data.convertedAt) : '—'} />
-          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
-          <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
-          <Row label="User agent" value={<span className="break-all text-caption">{data.userAgent ?? '—'}</span>} />
-          {data.searchLog ? <Row label="Search" value={`${data.searchLog.success ? 'succeeded' : 'failed'} · ${data.searchLog.resultsCount} result(s) · ${fmtDateTime(data.searchLog.searchedAt)}`} /> : null}
-          {names.map((n) => <Row key={n.id} label={n.businessName} value={`acct ${n.accountNumber} · reg ${n.registrationDate}`} mono />)}
+          <DetailRow label="Lead ID" value={<span className="break-all">{data.id}</span>} mono />
+          <DetailRow label="Outcome" value={data.outcome} />
+          <DetailRow label="Created" value={fmtDateTime(data.createdAt)} />
+          <DetailRow label="Converted" value={data.convertedAt ? fmtDateTime(data.convertedAt) : '—'} />
+          <DetailRow label="IP address" value={data.ipAddress ?? '—'} mono />
+          <DetailRow label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
+          <DetailRow label="User agent" value={<span className="break-all text-caption">{data.userAgent ?? '—'}</span>} />
+          {data.searchLog ? <DetailRow label="Search" value={`${data.searchLog.success ? 'succeeded' : 'failed'} · ${data.searchLog.resultsCount} result(s) · ${fmtDateTime(data.searchLog.searchedAt)}`} /> : null}
+          {names.map((n) => <DetailRow key={n.id} label={n.businessName} value={`acct ${n.accountNumber} · reg ${n.registrationDate}`} mono />)}
         </dl>
         {data.outcomeMessage || data.searchLog?.errorMessage ? (
           <div className="mt-4">
@@ -187,11 +186,3 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
-      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
-      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
-    </div>
-  )
-}

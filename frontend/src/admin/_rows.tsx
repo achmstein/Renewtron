@@ -40,12 +40,14 @@ function fromControl(e: { target: EventTarget | null; currentTarget: EventTarget
   return !!hit && hit !== e.currentTarget
 }
 
-export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
+export function SentenceRow({ meaning, what, why, hint, actions, to, doneKey }: {
   meaning: Meaning
   /** The sentence: what happened, naming the client. One short line. */
   what: ReactNode
   /** A few facts: when, how much, when it's due. One short line. */
   why?: ReactNode
+  /** The next step or reason, in a sentence: hover text on the sentence, its own line on phones. */
+  hint?: string | null
   /** Buttons for the next step; clicks on them don't open the row. */
   actions?: ReactNode
   /** The record the row opens. Clicking anywhere outside a link or button goes there. */
@@ -76,16 +78,18 @@ export function SentenceRow({ meaning, what, why, actions, to, doneKey }: {
       data-done-key={doneKey}
       data-meaning={meaning}
       className={cn(
-        'flex items-center gap-3 border-b px-4 py-3 last:border-b-0 outline-none focus-visible:bg-accent',
+        'flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3 last:border-b-0 outline-none focus-visible:bg-accent sm:flex-nowrap',
         to && 'cursor-pointer hover:bg-muted/50',
       )}
     >
       <span aria-hidden className={cn('size-2 shrink-0 self-start mt-1.5 rounded-full', DOT[meaning])} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">{what}</div>
-        {why ? <div className="mt-0.5 truncate text-caption text-muted-foreground">{why}</div> : null}
+        <div title={hint ?? undefined} className="line-clamp-2 text-sm [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate">{what}</div>
+        {why ? <div className="mt-0.5 line-clamp-2 text-caption text-muted-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate">{why}</div> : null}
+        {hint ? <div className="mt-0.5 text-caption text-muted-foreground sm:hidden">{hint}</div> : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
+      {/* Phones: the buttons drop under the sentence (lined up past the dot) rather than squeezing it. */}
+      {actions ? <div className="flex w-full flex-wrap items-center gap-1.5 pl-5 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:pl-0">{actions}</div> : null}
     </div>
   )
 }
@@ -106,8 +110,8 @@ export function Queue({ title, count, total, action, children, empty, tone }: {
   const hasRows = Array.isArray(children) ? children.some(Boolean) : !!children
   return (
     <Card className="gap-0 overflow-hidden py-0">
-      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-        <h3 className="flex items-center gap-2 text-heading">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-4 py-3">
+        <h3 className="flex flex-wrap items-center gap-2 text-heading">
           {title}
           {count != null ? <Badge variant="secondary" className="tabular-nums">{count.toLocaleString()}</Badge> : null}
           {total ? <span className="text-sm font-normal text-muted-foreground tabular-nums">{total}</span> : null}

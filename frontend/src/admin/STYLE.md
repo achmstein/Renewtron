@@ -63,6 +63,27 @@ month"), never "30D" or "MTD".
 - List pages: `PageHeader`, `SectionTitle`, `StatStrip` + `Stat`, `ViewToggle`, `RefreshButton` from `_ui.tsx`.
 - Use `cn()` from `@/lib/utils` to combine classes.
 
+## Phones
+
+Every page has to work at 375px wide. Write classes mobile-first: the plain class is the phone, and
+`sm:` / `md:` bring back the desktop layout.
+
+- Nothing may make the page itself scroll sideways. Only a table scrolls, inside its card.
+- Record details: use `DetailRow` from `_record.tsx`, not a local copy. It puts the label above the
+  value on phones and wraps long emails, IPs and references.
+- Tables: give the column that names the row `meta.sticky`, and hide the extras on phones with
+  `meta.hideBelow: 'md'` (or `'sm'`).
+- List toolbars: the search box is `w-full sm:w-56` (or its desktop width), and the view toggle and
+  refresh group is `w-full justify-end sm:ml-auto sm:w-auto`.
+- Rows of choices that don't fit (more than three toggles) become a `Select` below `sm`, or scroll
+  sideways (`TabsList` already does).
+- `title` is hover text, and phones can't hover. Anything a person needs to act on (a next step, an
+  error, a warning) has to be visible on a phone too. Use `SentenceRow`'s `hint`, a `sm:hidden`
+  caption, or `Hint` from `_ui.tsx`, which is a tap-to-read info icon (`touchOnly` shows it only on
+  touch screens).
+- Row buttons: on phones, icon-only with an `aria-label` (`<span className="hidden sm:inline">`
+  around the word), at least `size="icon-sm"`.
+
 ## Type and spacing
 
 One scale, defined as tokens in `index.css`. Don't mix in other sizes or weights for these roles.

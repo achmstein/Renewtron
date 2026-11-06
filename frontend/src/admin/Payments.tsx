@@ -87,7 +87,7 @@ export default function Payments() {
       cell: ({ row }) => (
         <div className="tabular-nums">
           <div className="text-sm">{fmtDate(row.original.when)}</div>
-          <div className="text-caption text-muted-foreground">{fmtTime(row.original.when)}</div>
+          <div className="hidden text-caption text-muted-foreground sm:block">{fmtTime(row.original.when)}</div>
         </div>
       ),
     },
@@ -108,6 +108,7 @@ export default function Payments() {
       id: 'abn',
       header: 'ABN',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => row.original.abn
         ? <span className="font-mono text-sm tabular-nums text-muted-foreground">{row.original.abn}</span>
         : <span className="text-sm text-muted-foreground">—</span>,
@@ -116,6 +117,7 @@ export default function Payments() {
       id: 'card',
       header: 'Card',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => <CardCell p={row.original} />,
     },
     {
@@ -135,7 +137,7 @@ export default function Payments() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Payments"
         subtitle="Every Stripe attempt, paid or declined."
@@ -154,7 +156,7 @@ export default function Payments() {
           value={searchInput}
           onChange={(e) => { setPage(1); setSearchInput(e.target.value) }}
           placeholder="ABN, email, name…"
-          className="h-8 w-56"
+          className="h-8 w-full sm:w-56"
         />
         <FacetedFilter title="Result" options={resultOptions} selected={results} onChange={withPageReset(setResults)} />
         <FacetedFilter title="Card brand" options={brandOptions} selected={brands} onChange={withPageReset(setBrands)} />
@@ -191,7 +193,9 @@ function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
         <Button variant="outline" size="sm" className="border-dashed">
           <CalendarRange />
           Dates
-          {active ? <span className="text-caption text-muted-foreground tabular-nums">{dateFrom || '…'} → {dateTo || '…'}</span> : null}
+          {active ? <span className="hidden text-caption text-muted-foreground tabular-nums sm:inline">{dateFrom || '…'} → {dateTo || '…'}</span> : null}
+          {/* Phones: the range would widen the button past the screen; a dot says dates are set. */}
+          {active ? <span aria-label="Dates set" className="size-1.5 rounded-full bg-link sm:hidden" /> : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
@@ -217,7 +221,7 @@ function ResultCell({ p, onError }: { p: Payment; onError: (m: string) => void }
       <div className="flex items-center gap-1">
         <Status kind="payment" status={p.kind} />
         {p.error ? (
-          <Button variant="ghost" size="icon-xs" className="text-muted-foreground" onClick={() => onError(p.error ?? '')} title="View error" aria-label="View error">
+          <Button variant="ghost" size="icon-sm" className="text-muted-foreground sm:size-6" onClick={() => onError(p.error ?? '')} title="View error" aria-label="View error">
             <CircleAlert />
           </Button>
         ) : null}

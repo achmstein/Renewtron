@@ -34,9 +34,9 @@ export default function ClientDetails() {
 
   if (isPending) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-16 w-80" />
+        <Skeleton className="h-16 w-full max-w-80" />
         <Skeleton className="h-24 rounded-xl" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
@@ -55,7 +55,7 @@ export default function ClientDetails() {
   const primary = data.emails.find((e) => e.isPrimary) ?? data.emails[0]
   const facts = [primary?.email, data.mobileNumber, `first seen ${relativeTime(data.createdAt)}`].filter(Boolean)
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink asChild><Link to="/admin/clients">Clients</Link></BreadcrumbLink></BreadcrumbItem>
@@ -67,7 +67,7 @@ export default function ClientDetails() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-title">{data.fullName || 'Unnamed client'}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{facts.join(' · ')}</p>
+          <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">{facts.join(' · ')}</p>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {data.hasPurchased ? <StatusPill tone="emerald">Customer</StatusPill> : <StatusPill tone="zinc">Lead</StatusPill>}
@@ -175,16 +175,17 @@ function SummaryStrip({ client }: { client: ClientDetail }) {
     { label: 'Renewals with us', value: renewed.length, sub: lastRenewed ? `last ${fmtDate(lastRenewed)}` : client.sales.length ? `${client.sales.length} Ontraport sale${client.sales.length === 1 ? '' : 's'}` : undefined },
   ]
   return (
-    <Card className="gap-0 py-0">
-      <dl className="grid grid-cols-1 divide-y sm:grid-cols-5 sm:divide-x sm:divide-y-0">
+    <Card className="gap-0 overflow-hidden py-0">
+      {/* Phones: two to a row, the first across the top. The lines are a 1px gap over the border colour. */}
+      <dl className="grid grid-cols-2 gap-px bg-border sm:grid-cols-5 [&>*]:bg-card [&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1">
         {items.map((i) => (
-          <div key={i.label} className="min-w-0 px-5 py-4">
+          <div key={i.label} className="min-w-0 px-3 py-4 sm:px-5">
             <dt className="flex items-center gap-2 text-sm text-muted-foreground">
               {i.dot ? <span aria-hidden className={cn('size-2 rounded-full', i.dot)} /> : null}
               {i.label}
             </dt>
-            <dd className="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums">{i.value}</dd>
-            {i.sub ? <dd className="truncate text-caption text-muted-foreground" title={i.sub}>{i.sub}</dd> : null}
+            <dd className="mt-1 truncate text-xl font-semibold tracking-tight tabular-nums sm:text-2xl">{i.value}</dd>
+            {i.sub ? <dd className="line-clamp-2 text-caption text-muted-foreground [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate" title={i.sub}>{i.sub}</dd> : null}
           </div>
         ))}
       </dl>
@@ -245,11 +246,14 @@ function Timeline({ client }: { client: ClientDetail }) {
 
   return (
     <div>
-      <ToggleGroup type="single" variant="outline" size="sm" className="mb-3 flex-wrap" value={kind || 'all'}
-        onValueChange={(v) => { if (!v) return; setKind(v === 'all' ? '' : (v as TimelineKind)); setShown(TIMELINE_STEP) }}>
-        {option('all', 'All', events.length)}
-        {(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => option(k, KIND_LABELS[k], counts[k]!))}
-      </ToggleGroup>
+      {/* One row that scrolls sideways when it's wider than the screen (wrapping breaks the joined buttons). */}
+      <div className="mb-3 overflow-x-auto [scrollbar-width:none]">
+        <ToggleGroup type="single" variant="outline" size="sm" value={kind || 'all'}
+          onValueChange={(v) => { if (!v) return; setKind(v === 'all' ? '' : (v as TimelineKind)); setShown(TIMELINE_STEP) }}>
+          {option('all', 'All', events.length)}
+          {(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => option(k, KIND_LABELS[k], counts[k]!))}
+        </ToggleGroup>
+      </div>
       <ol className="divide-y">
         {visible.slice(0, shown).map((e) => (
           <li key={e.key} className="flex items-start gap-3 py-2.5">
@@ -351,7 +355,7 @@ function AbnGroup({ client, abn }: { client: ClientDetail; abn: ClientAbnDto }) 
 
   return (
     <div className="overflow-hidden rounded-lg border">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-3 py-2.5 sm:px-4">
         <div className="min-w-0" title={abn.registerCheckedAt ? `Register checked ${relativeTime(abn.registerCheckedAt)}` : 'Register not checked yet'}>
           <div className="text-sm font-medium">ABN <span className="font-mono">{formatAbn(abn.abn)}</span></div>
           <div className="mt-0.5 text-caption text-muted-foreground">
@@ -446,7 +450,7 @@ function NameStory({ client, name: n, busy, onStatus }: {
   const meta = `${n.registrationDate ? `Registered ${fmtDate(n.registrationDate)}` : 'Registration date unknown'}${n.asicAccountNumber ? ` · ASIC account ${n.asicAccountNumber}` : ''} · via ${n.source}`
 
   return (
-    <div className="px-4 py-3">
+    <div className="px-3 py-3 sm:px-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0" title={meta}>
           <div className={cn('text-sm font-medium', !active && 'text-muted-foreground')}>{n.name}</div>
@@ -455,6 +459,8 @@ function NameStory({ client, name: n, busy, onStatus }: {
             {n.lastRenewedAt ? <> · renewed <When at={n.lastRenewedAt} /> for {n.lastRenewalYears} yr</> : steps.length || !active ? null : ' · not renewed with us yet'}
             {n.asicKey ? <> · key <span className="font-mono">{n.asicKey}</span></> : null}
           </div>
+          {/* Phones can't hover for the registration details: show them as a line. */}
+          <div className="text-caption text-muted-foreground sm:hidden">{meta}</div>
         </div>
         <div className="flex items-center gap-1.5">
           <Status kind="businessName" status={n.status} />

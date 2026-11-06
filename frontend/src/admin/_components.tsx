@@ -109,7 +109,9 @@ export function DateRangeFilter({ dateFrom, dateTo, onFrom, onTo }: {
         <Button variant="outline" size="sm" className="border-dashed">
           <CalendarRange />
           Dates
-          {active ? <Badge variant="secondary" className="rounded-sm px-1 font-normal tabular-nums">{dateFrom || '…'} → {dateTo || '…'}</Badge> : null}
+          {active ? <Badge variant="secondary" className="hidden rounded-sm px-1 font-normal tabular-nums sm:inline-flex">{dateFrom || '…'} → {dateTo || '…'}</Badge> : null}
+          {/* Phones: the range would widen the button past the screen; a dot says dates are set. */}
+          {active ? <span aria-label="Dates set" className="size-1.5 rounded-full bg-link sm:hidden" /> : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">

@@ -5,11 +5,10 @@ import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.search>>
 
@@ -49,7 +48,7 @@ export default function SearchDetails() {
   const by = BY[data.initiatedBy] ?? data.initiatedBy
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} list={{ to: '/admin/searches', label: 'Searches' }} here={`ASIC search of ${shortDate(data.searchedAt)}`} />
 
       <RecordHeader
@@ -81,7 +80,7 @@ export default function SearchDetails() {
                   </div>
                 </div>
                 {r.renewalRequest
-                  ? <Link to={`/admin/renewals/${r.renewalRequest.id}`}><Status entry={renewalStatus(r.renewalRequest)} /></Link>
+                  ? <Link to={`/admin/renewals/${r.renewalRequest.id}`} className="shrink-0"><Status entry={renewalStatus(r.renewalRequest)} /></Link>
                   : null}
               </div>
             ))}
@@ -92,14 +91,14 @@ export default function SearchDetails() {
 
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
-          <Row label="Search ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Searched" value={fmtDateTime(data.searchedAt)} />
-          <Row label="Started by" value={data.initiatedBy} />
-          <Row label="Result" value={`${data.success ? 'success' : 'failed'} · ${data.resultsCount} result(s)`} />
-          <Row label="IP address" value={data.ipAddress ?? '—'} mono />
-          <Row label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
-          <Row label="User agent" value={<span className="break-all text-caption">{data.userAgent ?? '—'}</span>} />
-          {data.results.map((r) => <Row key={r.id} label={r.businessName} value={`acct ${r.accountNumber} · reg ${r.registrationDate}`} />)}
+          <DetailRow label="Search ID" value={<span className="break-all">{data.id}</span>} mono />
+          <DetailRow label="Searched" value={fmtDateTime(data.searchedAt)} />
+          <DetailRow label="Started by" value={data.initiatedBy} />
+          <DetailRow label="Result" value={`${data.success ? 'success' : 'failed'} · ${data.resultsCount} result(s)`} />
+          <DetailRow label="IP address" value={data.ipAddress ?? '—'} mono />
+          <DetailRow label="Session ID" value={<span className="break-all">{data.sessionId ?? '—'}</span>} mono />
+          <DetailRow label="User agent" value={<span className="break-all text-caption">{data.userAgent ?? '—'}</span>} />
+          {data.results.map((r) => <DetailRow key={r.id} label={r.businessName} value={`acct ${r.accountNumber} · reg ${r.registrationDate}`} />)}
         </dl>
         {data.errorMessage ? (
           <div className="mt-4">
@@ -156,11 +155,3 @@ function story(d: Detail): StoryStep[] {
   return steps
 }
 
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
-      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
-      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
-    </div>
-  )
-}

@@ -5,7 +5,7 @@ import { Loader2, TriangleAlert, Users, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientLinkResult, type ClientListItem } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, Hint, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const filters = [
@@ -106,6 +107,7 @@ export default function Clients() {
       id: 'abn',
       header: 'ABN',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => (
         <div className="font-mono text-sm tabular-nums">
           {row.original.abns.length ? formatAbn(row.original.abns[0]) : <span className="text-muted-foreground">—</span>}
@@ -125,6 +127,7 @@ export default function Clients() {
       id: 'flags',
       header: 'Status',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
           {row.original.hasPurchased ? <Badge variant="secondary">Customer</Badge> : <Badge variant="outline">Lead</Badge>}
@@ -136,12 +139,13 @@ export default function Clients() {
     {
       accessorKey: 'lastSeenAt',
       header: 'Last seen',
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => <span className="text-sm tabular-nums">{relativeTime(row.original.lastSeenAt)}</span>,
     },
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Clients"
         subtitle="One record per person, with every business name they hold."
@@ -178,8 +182,18 @@ export default function Clients() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, ABN or business name…" className="h-8 w-72" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, ABN or business name…" className="h-8 w-full sm:w-72" />
+        {/* Phones: the four filters don't fit in a row, so they're a dropdown there. */}
+        <Select value={filter || 'all'} onValueChange={(v) => update({ filter: v === 'all' ? '' : v })}>
+          <SelectTrigger size="sm" aria-label="Show" className="sm:hidden">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {filters.map((f) => <SelectItem key={f.value || 'all'} value={f.value || 'all'}>{f.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <ToggleGroup
+          className="hidden sm:flex"
           type="single"
           variant="outline"
           size="sm"
@@ -244,9 +258,9 @@ function LinkPanel() {
   // Once records exist the recurring job keeps them up to date; the panel shrinks to a status line.
   if (status.hasClients && !running && !(last && last.dryRun)) {
     return (
-      <div className="flex items-center gap-2 text-caption text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-2 text-caption text-muted-foreground">
         Kept up to date every 15 minutes{last ? ` · last run ${relativeTime(last.finishedAt)}` : ''}
-        <Button variant="ghost" size="xs" onClick={() => run.mutate(false)}>Run now</Button>
+        <Button variant="ghost" size="sm" onClick={() => run.mutate(false)}>Run now</Button>
       </div>
     )
   }
@@ -254,7 +268,10 @@ function LinkPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Build client records</CardTitle>
+        <CardTitle className="flex items-center gap-1">
+          Build client records
+          <Hint touchOnly text="Groups every Ontraport sale, wizard lead, renewal and key request into one client per person, and adds all the business names under their ABNs from the public register. After the real run, new records are added every 15 minutes." />
+        </CardTitle>
         <CardDescription title="Groups every Ontraport sale, wizard lead, renewal and key request into one client per person, and adds all the business names under their ABNs from the public register. After the real run, new records are added every 15 minutes.">
           One client per person, from every sale, lead and renewal. Do a dry run first: it changes nothing.
         </CardDescription>
@@ -319,7 +336,7 @@ function LinkResult({ result }: { result: ClientLinkResult }) {
         {result.dryRun ? 'Dry run' : 'Run'} finished {relativeTime(result.finishedAt)}
         {result.dryRun ? <span className="font-normal text-muted-foreground"> · nothing was saved. A real run would do this:</span> : null}
       </div>
-      <dl className="mt-2 grid grid-cols-2 gap-x-6 sm:grid-cols-4">
+      <dl className="mt-2 grid grid-cols-1 gap-x-6 min-[420px]:grid-cols-2 sm:grid-cols-4">
         {rows.map(([label, value]) => (
           <div
             key={label}

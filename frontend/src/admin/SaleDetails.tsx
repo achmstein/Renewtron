@@ -6,11 +6,10 @@ import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { HANDLED, Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
 
 type Detail = Awaited<ReturnType<typeof api.admin.ontraportSale>>
 
@@ -85,7 +84,7 @@ export default function SaleDetails() {
   )
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} businessName={data.businessName}
         list={{ to: '/admin/ontraport-sales', label: 'Ontraport sales' }} here={`Sale of ${shortDate(data.syncedAt)}`} />
 
@@ -101,12 +100,12 @@ export default function SaleDetails() {
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who bought it">
           {data.client ? (
-            <Row label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
+            <DetailRow label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
-          <Row label="Name" value={data.contactName || '—'} />
-          <Row label="Email" value={data.email || '—'} />
-          <Row label="Mobile" value={data.mobileNumber || '—'} mono />
-          {data.businessNameOwner ? <Row label="Name holder" value={data.businessNameOwner} /> : null}
+          <DetailRow label="Name" value={data.contactName || '—'} />
+          <DetailRow label="Email" value={data.email || '—'} />
+          <DetailRow label="Mobile" value={data.mobileNumber || '—'} mono />
+          {data.businessNameOwner ? <DetailRow label="Name holder" value={data.businessNameOwner} /> : null}
         </Section>
 
         <Section title="ASIC key for this name">
@@ -114,27 +113,27 @@ export default function SaleDetails() {
             <p className="text-sm text-muted-foreground">No key requested or received yet.</p>
           ) : null}
           {data.keyLetters.map((k) => (
-            <Row key={k.id} label="Key letter" value={<Link to={`/admin/asic-keys/${k.id}`} className="flex items-center gap-2 text-caption text-muted-foreground hover:underline"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></Link>} />
+            <DetailRow key={k.id} label="Key letter" value={<Link to={`/admin/asic-keys/${k.id}`} className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground hover:underline"><Status kind="keyLetter" status={k.status} /><When at={k.receivedAt} /></Link>} />
           ))}
           {data.keyRequests.map((k) => (
-            <Row key={k.id} label="Key request" value={<Link to={`/admin/asic-key-requests/${k.id}`} className="flex items-center gap-2 text-caption text-muted-foreground hover:underline"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</Link>} />
+            <DetailRow key={k.id} label="Key request" value={<Link to={`/admin/asic-key-requests/${k.id}`} className="flex flex-wrap items-center gap-2 text-caption text-muted-foreground hover:underline"><Status kind="keyRequest" status={k.status} /><When at={k.createdAt} />{k.referenceNumber ? ` · ref ${k.referenceNumber}` : ''}</Link>} />
           ))}
         </Section>
       </div>
 
       <TechnicalDetail>
         <dl className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
-          <Row label="Sale ID" value={<span className="break-all">{data.id}</span>} mono />
-          <Row label="Status" value={data.status} />
-          <Row label="Ontraport contact" value={data.ontraportContactId} mono />
-          <Row label="Transaction" value={data.ontraportTransactionId} mono />
-          <Row label="Synced" value={fmtDateTime(data.syncedAt)} />
-          <Row label="Processed" value={data.processedAt ? fmtDateTime(data.processedAt) : '—'} />
-          {data.handledAt ? <Row label="Handled" value={fmtDateTime(data.handledAt)} /> : null}
-          <Row label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} />
-          <Row label="Date of birth" value={data.dateOfBirth ?? '—'} />
-          <Row label="Address" value={data.address || '—'} />
-          {data.renewal ? <Row label="Renewal" value={<Link to={`/admin/renewals/${data.renewal.id}`} className="break-all text-link hover:underline">{data.renewal.id}</Link>} mono /> : null}
+          <DetailRow label="Sale ID" value={<span className="break-all">{data.id}</span>} mono />
+          <DetailRow label="Status" value={data.status} />
+          <DetailRow label="Ontraport contact" value={data.ontraportContactId} mono />
+          <DetailRow label="Transaction" value={data.ontraportTransactionId} mono />
+          <DetailRow label="Synced" value={fmtDateTime(data.syncedAt)} />
+          <DetailRow label="Processed" value={data.processedAt ? fmtDateTime(data.processedAt) : '—'} />
+          {data.handledAt ? <DetailRow label="Handled" value={fmtDateTime(data.handledAt)} /> : null}
+          <DetailRow label="Due date" value={data.renewalDueDate ? fmtDateTime(data.renewalDueDate) : '—'} />
+          <DetailRow label="Date of birth" value={data.dateOfBirth ?? '—'} />
+          <DetailRow label="Address" value={data.address || '—'} />
+          {data.renewal ? <DetailRow label="Renewal" value={<Link to={`/admin/renewals/${data.renewal.id}`} className="break-all text-link hover:underline">{data.renewal.id}</Link>} mono /> : null}
         </dl>
         {data.errorMessage ? (
           <div className="mt-4">
@@ -263,11 +262,3 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function Row({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
-  return (
-    <div className="grid grid-cols-3 items-baseline gap-3 lg:grid-cols-4">
-      <dt className="truncate text-caption text-muted-foreground">{label}</dt>
-      <dd className={cn('col-span-2 min-w-0 text-sm lg:col-span-3', mono && 'font-mono')}>{value}</dd>
-    </div>
-  )
-}

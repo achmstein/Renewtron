@@ -191,7 +191,7 @@ export default function OntraportSales() {
       id: 'syncedAt',
       accessorFn: (s) => new Date(s.syncedAt).getTime(),
       header: 'Synced',
-      meta: { className: 'tabular-nums whitespace-nowrap' },
+      meta: { className: 'tabular-nums whitespace-nowrap', hideBelow: 'md' },
       cell: ({ row }) => relativeTime(row.original.syncedAt),
     },
     {
@@ -209,8 +209,9 @@ export default function OntraportSales() {
               disabled={keyRequestMutation.isPending}
               onClick={(e) => { e.stopPropagation(); requestKey(s.id, s.businessName) }}
               title="Add this business name to the ASIC key to-do list"
+              aria-label="Request key"
             >
-              <KeyRound /> Request key
+              <KeyRound /><span className="hidden sm:inline">Request key</span>
             </Button>
             {s.renewalRequestId ? (
               <Button asChild size="sm" variant="outline">
@@ -225,7 +226,7 @@ export default function OntraportSales() {
   ], [keyRequestMutation.isPending])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Ontraport sales"
         subtitle="Paid in Ontraport, renewed once the name is inside ASIC’s window."
@@ -283,7 +284,7 @@ export default function OntraportSales() {
 
       {upNext.length > 0 ? (
         <section className="mt-8 space-y-3">
-          <h2 className="flex items-baseline gap-2 text-heading">
+          <h2 className="flex flex-wrap items-baseline gap-x-2 text-heading">
             Up next
             <span className="text-sm font-normal text-muted-foreground tabular-nums">{upNext.length} sale{upNext.length === 1 ? '' : 's'} · {fmtMoney0(upNextValue)}</span>
           </h2>
@@ -295,11 +296,11 @@ export default function OntraportSales() {
 
       {/* Due-date tabs and filters, resolved on the server; the view and refresh sit at the end. */}
       <div className="mt-8 flex flex-wrap items-center gap-2">
-        <Tabs value={dueFilter} onValueChange={(v) => setDueFilter(v as DueFilter)}>
+        <Tabs className="min-w-0 max-w-full" value={dueFilter} onValueChange={(v) => setDueFilter(v as DueFilter)}>
           <TabsList className="h-8">
             <DueTab value="overdue" count={buckets.overdue}>Overdue</DueTab>
-            <DueTab value="7d" count={buckets.soon7}>Next 7 days</DueTab>
-            <DueTab value="30d" count={buckets.soon30}>Next 30 days</DueTab>
+            <DueTab value="7d" count={buckets.soon7}><span className="sm:hidden">7 days</span><span className="hidden sm:inline">Next 7 days</span></DueTab>
+            <DueTab value="30d" count={buckets.soon30}><span className="sm:hidden">30 days</span><span className="hidden sm:inline">Next 30 days</span></DueTab>
             <DueTab value="all" count={buckets.all}>All</DueTab>
           </TabsList>
         </Tabs>
@@ -307,7 +308,7 @@ export default function OntraportSales() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search name, contact, ABN or email…"
-          className="h-8 w-64"
+          className="h-8 w-full sm:w-64"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         {hasActiveFilters ? (
@@ -316,7 +317,7 @@ export default function OntraportSales() {
             <X />
           </Button>
         ) : null}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full items-center justify-end gap-2 sm:ml-auto sm:w-auto">
           <ViewToggle<'Sentences' | 'Table'> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setViewMode} />
           <RefreshButton onClick={() => void refetch()} busy={isFetching} />
         </div>
@@ -551,11 +552,11 @@ function SaleStatusCell({ s, onShowError }: { s: SaleRow; onShowError: (title: s
       <div className="flex items-center gap-1">
         <OntraportStatusPill status={s.status} />
         {isFailed ? (
-          <Button variant="ghost" size="icon-xs" onClick={() => onShowError(modalTitle, errorBody)} title="Why did this fail?" aria-label="Why did this fail?">
+          <Button variant="ghost" size="icon-sm" className="sm:size-6" onClick={() => onShowError(modalTitle, errorBody)} title="Why did this fail?" aria-label="Why did this fail?">
             <CircleAlert className="text-destructive" />
           </Button>
         ) : isBlocked ? (
-          <Button variant="ghost" size="icon-xs" onClick={() => onShowError(modalTitle, errorBody)} title={retryBanner(s.status)} aria-label="More about this status">
+          <Button variant="ghost" size="icon-sm" className="sm:size-6" onClick={() => onShowError(modalTitle, errorBody)} title={retryBanner(s.status)} aria-label="More about this status">
             <Info className="text-muted-foreground" />
           </Button>
         ) : null}

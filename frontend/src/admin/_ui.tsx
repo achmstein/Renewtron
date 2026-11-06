@@ -1,11 +1,12 @@
-import { Children, type ReactNode } from 'react'
+import { Children, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { AlignLeft, LayoutGrid, Loader2, RefreshCw, Rows3, X } from 'lucide-react'
+import { AlignLeft, Info, LayoutGrid, Loader2, RefreshCw, Rows3, X } from 'lucide-react'
 import { TrendChart } from '@/components/trend-chart'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
@@ -113,14 +114,19 @@ export function StatStrip({ children, cols, bare, className }: {
     const grid = <div className={cn('grid gap-px bg-border [&>*]:bg-card', cols, bare && className)}>{children}</div>
     return bare ? grid : <Card className={cn('gap-0 overflow-hidden py-0', className)}>{grid}</Card>
   }
+  // Two to a row on phones, all in one row from sm. The lines are a 1px gap over the border colour,
+  // so they come out right however the cells wrap.
   const n = Children.toArray(children).length
   return (
-    <Card className={cn(
-      'grid gap-0 divide-y py-0 sm:divide-x sm:divide-y-0',
-      n >= 4 ? 'sm:grid-cols-4' : n === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
-      className,
-    )}>
-      {children}
+    <Card className={cn('gap-0 overflow-hidden py-0', className)}>
+      <div className={cn(
+        'grid grid-cols-2 gap-px bg-border [&>*]:bg-card',
+        n >= 4 ? 'sm:grid-cols-4' : n === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2',
+        // An odd count leaves the last stat alone on its row: let it take the whole row.
+        n % 2 === 1 && '[&>*:last-child]:col-span-2 sm:[&>*:last-child]:col-span-1',
+      )}>
+        {children}
+      </div>
     </Card>
   )
 }
@@ -130,7 +136,7 @@ export function StatStrip({ children, cols, bare, className }: {
  * label; `trend` draws a small sparkline under the number (the stat's only colour). With `to` the
  * whole cell is a link.
  */
-export function Stat({ label, value, sub, period, dot, hint, trend, trendLabel, to }: {
+export function Stat({ label, value, sub, period, dot, hint, trend, trendLabel, to, className }: {
   label: string
   value: ReactNode
   sub?: ReactNode
@@ -143,6 +149,7 @@ export function Stat({ label, value, sub, period, dot, hint, trend, trendLabel, 
   /** What the sparkline counts, for its tooltip: "leads", "letters". */
   trendLabel?: string
   to?: string
+  className?: string
 }) {
   const body = (
     <>
@@ -150,20 +157,53 @@ export function Stat({ label, value, sub, period, dot, hint, trend, trendLabel, 
         <span className="flex min-w-0 items-center gap-2">
           {dot ? <span aria-hidden className={cn('size-2 shrink-0 rounded-full', STAT_DOT[dot])} /> : null}
           <span className="truncate">{label}</span>
+          {hint ? <Hint text={hint} touchOnly /> : null}
         </span>
         {period ? <span className="shrink-0 text-caption">{period}</span> : null}
       </div>
-      <div className="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+      <div className="mt-1 truncate text-xl font-semibold sm:text-2xl tracking-tight tabular-nums">{value}</div>
       {sub ? (
         <div className="truncate text-caption text-muted-foreground tabular-nums" title={!hint && typeof sub === 'string' ? sub : undefined}>{sub}</div>
       ) : null}
       {trend && trend.length > 0 ? <div className="mt-2 -mb-1 h-8"><TrendChart data={trend} valueLabel={trendLabel} /></div> : null}
     </>
   )
-  const cls = 'flex min-w-0 flex-col px-5 py-4'
+  const cls = cn('flex min-w-0 flex-col px-3 py-4 sm:px-5', className)
   return to
-    ? <Link to={to} title={hint} className={cn(cls, 'transition-colors hover:bg-muted/50')}>{body}</Link>
+    // Hover is the page background (opaque), so the strip's gap lines don't show through it.
+    ? <Link to={to} title={hint} className={cn(cls, 'transition-colors hover:bg-background')}>{body}</Link>
     : <div title={hint} className={cls}>{body}</div>
+}
+
+/* ─────────────────── Hint (hover text that also works on a phone) ─────────────────── */
+
+/**
+ * A small info icon that shows `text` when tapped, for explanations that would otherwise sit in a
+ * `title` (which a phone can't show). `touchOnly` shows the icon only on touch screens, where the
+ * element beside it keeps its `title` for mouse users.
+ */
+export function Hint({ text, touchOnly, className }: { text: ReactNode; touchOnly?: boolean; className?: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="More about this"
+          // The icon can sit inside a link or a clickable row: open the hint, don't follow the row.
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o) }}
+          className={cn(
+            'inline-flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground',
+            touchOnly && 'hidden pointer-coarse:inline-flex',
+            className,
+          )}
+        >
+          <Info className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 text-sm" onClick={(e) => e.stopPropagation()}>{text}</PopoverContent>
+    </Popover>
+  )
 }
 
 /* ─────────────────── Funnel ─────────────────── */

@@ -74,38 +74,34 @@ export default function BpayPayments() {
 
   const columns = useMemo<DataTableColumn<BpayBill>[]>(() => [
     {
-      id: 'select',
+      // The tick box sits in the business cell so both stay pinned while the table scrolls on a phone.
+      id: 'business',
+      accessorFn: (b) => b.businessName,
       header: () => (
-        <Checkbox aria-label="Select all" checked={allChosen ? true : chosen.length > 0 ? 'indeterminate' : false} disabled={payable.length === 0} onCheckedChange={() => toggleAll()} />
+        <span className="flex items-center gap-3">
+          <Checkbox aria-label="Select all" checked={allChosen ? true : chosen.length > 0 ? 'indeterminate' : false} disabled={payable.length === 0} onCheckedChange={() => toggleAll()} />
+          Business
+        </span>
       ),
-      enableSorting: false,
-      meta: { className: 'w-8' },
+      meta: { sticky: true, className: 'min-w-40 max-w-[45vw] sm:min-w-56 sm:max-w-80' },
       cell: ({ row }) => {
         const b = row.original
         const can = b.payable && b.amount != null
         return (
-          <Checkbox
-            aria-label={`Select ${b.businessName ?? ''}`}
-            disabled={!can}
-            checked={selected.has(b.id)}
-            onClick={(e) => e.stopPropagation()}
-            onCheckedChange={() => toggle(b.id)}
-          />
-        )
-      },
-    },
-    {
-      id: 'business',
-      accessorFn: (b) => b.businessName,
-      header: 'Business',
-      meta: { className: 'min-w-48 max-w-72' },
-      cell: ({ row }) => {
-        const b = row.original
-        return (
-          <div className="min-w-0">
-            <Link to={`/admin/renewals/${b.id}`} className="block truncate text-sm font-medium hover:text-link hover:underline">{b.businessName}</Link>
-            <div className="text-caption text-muted-foreground">
-              <span className="font-mono tabular-nums">{b.abn}</span> · {b.renewalYears} {b.renewalYears === 1 ? 'year' : 'years'}
+          <div className="flex min-w-0 items-start gap-3">
+            <Checkbox
+              className="mt-0.5"
+              aria-label={`Select ${b.businessName ?? ''}`}
+              disabled={!can}
+              checked={selected.has(b.id)}
+              onClick={(e) => e.stopPropagation()}
+              onCheckedChange={() => toggle(b.id)}
+            />
+            <div className="min-w-0">
+              <Link to={`/admin/renewals/${b.id}`} className="block truncate text-sm font-medium hover:text-link hover:underline">{b.businessName}</Link>
+              <div className="truncate text-caption text-muted-foreground">
+                <span className="font-mono tabular-nums">{b.abn}</span> · {b.renewalYears} {b.renewalYears === 1 ? 'year' : 'years'}
+              </div>
             </div>
           </div>
         )
@@ -115,6 +111,7 @@ export default function BpayPayments() {
       id: 'bpay',
       header: 'BPAY',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => (
         <div className="tabular-nums">
           <div className="text-sm">Biller <span className="font-mono">{row.original.billerCode}</span></div>
@@ -142,8 +139,8 @@ export default function BpayPayments() {
             {b.paidAt
               ? <Status entry={{ label: `Paid ${relativeTime(b.paidAt)}`, meaning: 'done' }} />
               : <Status kind="bpay" status={b.transferStatus ?? 'TO_PAY'} />}
-            {b.error ? <div className="mt-1 break-words text-caption text-muted-foreground">{b.error}</div> : null}
-            {b.transferId ? <div className="mt-1 font-mono text-caption text-muted-foreground">{b.transferId}</div> : null}
+            {b.error ? <div className="mt-1 break-words whitespace-normal text-caption text-muted-foreground">{b.error}</div> : null}
+            {b.transferId ? <div className="mt-1 font-mono text-caption break-all whitespace-normal text-muted-foreground">{b.transferId}</div> : null}
           </div>
         )
       },
@@ -152,10 +149,11 @@ export default function BpayPayments() {
       id: 'lodged',
       accessorFn: (b) => b.lodgedAt,
       header: 'Lodged',
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => (
         <div className="tabular-nums">
           <div className="text-sm">{relativeTime(row.original.lodgedAt)}</div>
-          {row.original.transactionReference ? <div className="font-mono text-caption text-muted-foreground">{row.original.transactionReference}</div> : null}
+          {row.original.transactionReference ? <div className="font-mono text-caption break-all whitespace-normal text-muted-foreground">{row.original.transactionReference}</div> : null}
         </div>
       ),
     },
@@ -165,7 +163,7 @@ export default function BpayPayments() {
   const owed = toPay.reduce((s, b) => s + (b.amount ?? 0), 0)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="BPAY to pay"
         subtitle="Renewals lodged with ASIC to pay by BPAY, one Airwallex payment per bill."
@@ -221,7 +219,7 @@ export default function BpayPayments() {
           <Checkbox id="bpay-show-paid" checked={showPaid} onCheckedChange={(v) => setShowPaid(v === true)} />
           <Label htmlFor="bpay-show-paid" className="font-normal text-muted-foreground">Show bills paid in the last 30 days</Label>
         </div>
-        <Button size="sm" onClick={() => setConfirming(true)} disabled={chosen.length === 0 || !data?.airwallexReady || payMutation.isPending}>
+        <Button size="sm" className="w-full sm:w-auto" onClick={() => setConfirming(true)} disabled={chosen.length === 0 || !data?.airwallexReady || payMutation.isPending}>
           <Send /> Pay {chosen.length || ''} {chosen.length === 1 ? 'bill' : 'bills'}{chosen.length ? ` · ${fmtMoney2(total)}` : ''}
         </Button>
       </div>

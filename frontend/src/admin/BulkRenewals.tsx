@@ -144,6 +144,7 @@ export default function BulkRenewals() {
     {
       accessorKey: 'uploadedAt',
       header: 'Uploaded',
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => (
         <div>
           <div className="text-sm tabular-nums">{relativeTime(row.original.uploadedAt)}</div>
@@ -154,7 +155,7 @@ export default function BulkRenewals() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Bulk renewals"
         subtitle="Renewals from spreadsheet uploads; each starts once it’s due."
@@ -212,7 +213,7 @@ export default function BulkRenewals() {
             title="Batches"
             right={batches.length > 0
               ? <Button variant="ghost" size="sm" onClick={() => setBatches([])}>Show all</Button>
-              : 'Click one to filter'}
+              : 'Tap or click one to filter'}
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats.byBatch.map((b) => {

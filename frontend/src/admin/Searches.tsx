@@ -80,7 +80,7 @@ export default function Searches() {
         const s = row.original
         return (
           <div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-mono tabular-nums">{s.abn}</span>
               <RepeatBadge n={s.repeatCount7d} />
             </div>
@@ -103,7 +103,7 @@ export default function Searches() {
     {
       accessorKey: 'resultsCount',
       header: 'Names',
-      meta: { className: 'text-right tabular-nums', headerClassName: 'text-right' },
+      meta: { className: 'text-right tabular-nums', headerClassName: 'text-right', hideBelow: 'sm' },
       cell: ({ row }) => row.original.resultsCount === 0
         ? <span className="text-muted-foreground">—</span>
         : row.original.resultsCount,
@@ -112,6 +112,7 @@ export default function Searches() {
       id: 'funnel',
       header: 'Funnel',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => <FunnelPills stages={searchFunnelStages(row.original.funnel)} />,
     },
     {
@@ -132,6 +133,7 @@ export default function Searches() {
       id: 'source',
       header: 'By',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => <InitiatedByBadge value={row.original.initiatedBy} />,
     },
     {
@@ -140,7 +142,7 @@ export default function Searches() {
       cell: ({ row }) => (
         <div className="whitespace-nowrap">
           <div className="tabular-nums">{relativeTime(row.original.searchedAt)}</div>
-          <div className="text-caption text-muted-foreground tabular-nums">{fmtDate(row.original.searchedAt)} · {fmtTime(row.original.searchedAt)}</div>
+          <div className="hidden text-caption text-muted-foreground tabular-nums sm:block">{fmtDate(row.original.searchedAt)} · {fmtTime(row.original.searchedAt)}</div>
         </div>
       ),
     },
@@ -156,7 +158,7 @@ export default function Searches() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader title="Searches" subtitle="ABN lookups from the wizard, staff and Renewtron itself." />
 
       <StatsStrip stats={stats} />
@@ -167,7 +169,7 @@ export default function Searches() {
           value={abnInput}
           onChange={(e) => { setPage(1); setAbnInput(e.target.value) }}
           placeholder="Filter ABN…"
-          className="h-8 w-40 font-mono tabular-nums placeholder:font-sans"
+          className="h-8 w-full font-mono tabular-nums placeholder:font-sans sm:w-40"
         />
         <FacetedFilter title="Result" options={resultOptions} selected={results} onChange={withPageReset(setResults)} />
         <FacetedFilter title="Started by" options={initiatorOptions} selected={initiators} onChange={withPageReset(setInitiators)} />
@@ -189,7 +191,7 @@ export default function Searches() {
             <X />
           </Button>
         ) : null}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full items-center justify-end gap-2 sm:ml-auto sm:w-auto">
           <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
           <RefreshButton onClick={() => void refetch()} busy={isFetching} />
         </div>
@@ -259,7 +261,7 @@ function StatsStrip({ stats }: { stats: Stats }) {
   )
 }
 
-/* ---------------- CARDS VIEW (mobile default) ---------------- */
+/* ---------------- CARDS VIEW ---------------- */
 
 function CardsView({ searches, onShowError }: { searches: Search[]; onShowError: (m: string) => void }) {
   if (searches.length === 0) {
@@ -268,10 +270,10 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {searches.map((s) => (
-        <Card key={s.id} className="gap-4 p-5">
-          <div className="flex items-start justify-between gap-3">
+        <Card key={s.id} className="gap-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <span className="font-mono tabular-nums">{s.abn}</span>
                 <RepeatBadge n={s.repeatCount7d} />
               </div>
@@ -295,11 +297,11 @@ function CardsView({ searches, onShowError }: { searches: Search[]; onShowError:
             } />
             <Cell label="Renewal" value={
               s.renewal
-                ? <span className="flex items-center gap-1.5"><span className="font-mono tabular-nums">{fmtMoney2(s.renewal.amount)}</span><RenewalStatusPill status={s.renewal.status} /></span>
+                ? <span className="flex flex-wrap items-center gap-1.5"><span className="font-mono tabular-nums">{fmtMoney2(s.renewal.amount)}</span><RenewalStatusPill status={s.renewal.status} /></span>
                 : '—'
             } />
             <Cell label="When" value={<span title={`${fmtDate(s.searchedAt)} · ${fmtTime(s.searchedAt)}`}>{relativeTime(s.searchedAt)}</span>} />
-            <Cell label="IP" value={s.ipAddress ?? '—'} mono />
+            <Cell label="IP" value={<span className="break-all">{s.ipAddress ?? '—'}</span>} mono />
           </dl>
 
           <div className="flex justify-end border-t pt-4">
@@ -321,7 +323,8 @@ function OutcomeCell({ s, onError }: { s: Search; onError: (m: string) => void }
         {s.errorMessage ? (
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
+            className="sm:size-6"
             onClick={(e) => { e.preventDefault(); onError(s.errorMessage ?? '') }}
             title="See the error"
             aria-label="See the error"

@@ -162,8 +162,8 @@ export default function AsicKeyRequests() {
         return (
           <div className="flex items-center justify-end gap-1.5">
             {r.status === 'Failed' || r.status === 'Manual' ? (
-              <Button variant="outline" size="sm" disabled={requeueMutation.isPending} onClick={(e) => { e.stopPropagation(); requeue(r) }} title="Back on the to-do list">
-                <RotateCw /> Re-queue
+              <Button variant="outline" size="sm" disabled={requeueMutation.isPending} onClick={(e) => { e.stopPropagation(); requeue(r) }} title="Back on the to-do list" aria-label="Re-queue">
+                <RotateCw /><span className="hidden sm:inline">Re-queue</span>
               </Button>
             ) : null}
             <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setRecord(r) }} title="Fill in ASIC's form with these details and record the reference number">
@@ -179,7 +179,7 @@ export default function AsicKeyRequests() {
   const toDo = pendingCount + manualCount
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="ASIC key requests"
         subtitle="Ask ASIC to email a client’s key, then record the reference."
@@ -221,7 +221,7 @@ export default function AsicKeyRequests() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder="Search business, ABN, contact, reference…"
-          className="h-8 w-64"
+          className="h-8 w-full sm:w-64"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={setStatuses} />
         {hasActiveFilters ? (
@@ -278,7 +278,7 @@ function CopyValue({ value }: { value: string }) {
     <span className="inline-flex min-w-0 items-start gap-1">
       <span className="break-words">{value || '—'}</span>
       {value ? (
-        <Button type="button" variant="ghost" size="icon-xs" onClick={() => copyText(value)} className="shrink-0 text-muted-foreground" title="Copy" aria-label="Copy">
+        <Button type="button" variant="ghost" size="icon-sm" onClick={() => copyText(value)} className="shrink-0 text-muted-foreground sm:size-6" title="Copy" aria-label="Copy">
           <Copy />
         </Button>
       ) : null}
@@ -387,7 +387,7 @@ function DetailDialog({ row, onClose }: { row: Row | null; onClose: () => void }
                 <RequestStatusPill status={row.status} />
                 <ClientLink kind="keyRequest" id={row.id} />
               </div>
-              <dl className="grid grid-cols-3 gap-x-6 gap-y-3">
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 [overflow-wrap:anywhere] sm:grid-cols-3">
                 <Cell label="Reference" value={row.asicReferenceNumber ?? '—'} mono />
                 <Cell label="Ontraport" value={row.ontraportContactId ?? '—'} mono />
                 <Cell label="Source" value={row.source} />

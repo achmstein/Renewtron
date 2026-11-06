@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import { type Meaning, type StatusEntry, Status } from './_status'
@@ -67,7 +67,7 @@ export function RecordHeader({ title, sub, status, children }: {
   children?: ReactNode
 }) {
   return (
-    <Card className="gap-5 p-6">
+    <Card className="gap-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h1 className="text-title">{title}</h1>
@@ -101,7 +101,7 @@ export function NextStep({ meaning, title, children, actions }: {
         <div className="font-medium">{title}</div>
         {children ? <div className="mt-0.5 text-muted-foreground">{children}</div> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div> : null}
     </div>
   )
 }
@@ -128,7 +128,11 @@ const DOT: Record<Meaning, string> = {
 /** The records before and after this one, left to right: visit → paid → renewal → BPAY → key… */
 export function StoryStrip({ steps }: { steps: StoryStep[] }) {
   return (
-    <ol className="grid divide-x overflow-hidden rounded-lg border" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
+    // Phones: one step per line, top to bottom. From sm: one column per step, left to right.
+    <ol
+      className="grid grid-cols-1 divide-y overflow-hidden rounded-lg border sm:[grid-template-columns:var(--steps)] sm:divide-x sm:divide-y-0"
+      style={{ '--steps': `repeat(${steps.length}, minmax(0, 1fr))` } as CSSProperties}
+    >
       {steps.map((s, i) => {
         const body = (
           <>
@@ -149,6 +153,19 @@ export function StoryStrip({ steps }: { steps: StoryStep[] }) {
         )
       })}
     </ol>
+  )
+}
+
+/**
+ * A label and its value in a record's details. Phones: the label sits above the value. From sm:
+ * label on the left, value across the rest. Long values (emails, IPs, refs) wrap instead of spilling.
+ */
+export function DetailRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="grid grid-cols-1 items-baseline gap-0.5 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
+      <dt className="text-caption text-muted-foreground sm:truncate">{label}</dt>
+      <dd className={cn('min-w-0 text-sm [overflow-wrap:anywhere] sm:col-span-2 lg:col-span-3', mono && 'font-mono')}>{value}</dd>
+    </div>
   )
 }
 

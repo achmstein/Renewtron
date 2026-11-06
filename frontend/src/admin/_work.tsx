@@ -81,7 +81,8 @@ function OrderRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to={to}
-      what={<span title={status.hint}><Who item={item} /> paid for <Name>{item.businessName}</Name>: {inSentence(status.label)}</span>}
+      hint={status.hint}
+      what={<span><Who item={item} /> paid for <Name>{item.businessName}</Name>: {inSentence(status.label)}</span>}
       why={<Facts item={item} first={<When at={item.at} />} />}
       actions={item.canRetry ? <RetryOrder id={item.id} /> : <LinkButton to={to}>Open</LinkButton>}
     />
@@ -95,7 +96,8 @@ function RenewalRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to={`/admin/renewals/${item.id}`}
-      what={<span title={reason.next}><Who item={item} />: <Name>{item.businessName}</Name> renewal {reason.what}</span>}
+      hint={reason.next}
+      what={<span><Who item={item} />: <Name>{item.businessName}</Name> renewal {reason.what}</span>}
       why={<Facts item={item} first={<When at={item.at} />} />}
       actions={item.canRetry ? <RetryRenewal id={item.id} /> : <LinkButton to={`/admin/renewals/${item.id}`}>Open</LinkButton>}
     />
@@ -110,7 +112,8 @@ function SaleRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to={to}
-      what={<span title={ineligible ? 'Refund, or contact the client.' : item.detail ?? undefined}>
+      hint={ineligible ? 'Refund, or contact the client.' : item.detail ?? undefined}
+      what={<span>
         <Who item={item} /> paid for <Name>{item.businessName}</Name>{ineligible ? ', can’t renew with us' : ', not renewed yet'}
       </span>}
       why={<Facts item={item} first={<When at={item.at} />} />}
@@ -126,7 +129,8 @@ function BpayRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning={status.meaning}
       to={`/admin/renewals/${item.id}`}
-      what={<span title={item.reason === 'TO_PAY' ? 'ASIC holds the renewal until it’s paid.' : item.detail ?? undefined}>
+      hint={item.reason === 'TO_PAY' ? 'ASIC holds the renewal until it’s paid.' : item.detail ?? undefined}
+      what={<span>
         BPAY bill for <Name>{item.businessName}</Name>{item.reason === 'TO_PAY' ? '' : `: ${status.label.toLowerCase()}`}
       </span>}
       why={<>{item.clientName ? <><Who item={item} /> · </> : null}<Facts item={item} first={<>lodged <When at={item.at} /></>} /></>}
@@ -141,7 +145,8 @@ function KeyRequestsRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning="action"
       to="/admin/asic-key-requests"
-      what={<span title="Send them from the key tool on the office PC.">{n} key request{n === 1 ? '' : 's'} to send to ASIC</span>}
+      hint="Send them from the key tool on the office PC."
+      what={<span>{n} key request{n === 1 ? '' : 's'} to send to ASIC</span>}
       why={<>oldest <When at={item.at} /></>}
     />
   )
@@ -153,7 +158,8 @@ function KeyRequestRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning={statusOf('keyRequest', item.reason).meaning}
       to={`/admin/asic-key-requests/${item.id}`}
-      what={<span title={item.detail ?? undefined}>Key request for <Name>{item.businessName}</Name> {item.reason === 'Failed' ? 'couldn’t be sent' : item.reason === 'Manual' ? 'is being sent by hand' : 'is waiting to send'}</span>}
+      hint={item.detail ?? undefined}
+      what={<span>Key request for <Name>{item.businessName}</Name> {item.reason === 'Failed' ? 'couldn’t be sent' : item.reason === 'Manual' ? 'is being sent by hand' : 'is waiting to send'}</span>}
       why={<>{item.clientName ? <><Who item={item} /> · </> : null}<When at={item.at} /></>}
       actions={<LinkButton to="/admin/asic-key-requests">Open requests</LinkButton>}
     />
@@ -167,7 +173,8 @@ function KeyLetterRow({ item }: { item: TodayItem }) {
       doneKey={workKey(item)}
       meaning={status.meaning}
       to={`/admin/asic-keys/${item.id}`}
-      what={<span title={status.hint}>Key letter for <Name>{item.businessName}</Name>: {status.label.toLowerCase()}</span>}
+      hint={status.hint}
+      what={<span>Key letter for <Name>{item.businessName}</Name>: {status.label.toLowerCase()}</span>}
       why={<>arrived <When at={item.at} /></>}
       actions={item.canRetry
         ? <RetryKeyLetter id={item.id} />

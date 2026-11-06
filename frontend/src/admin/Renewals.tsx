@@ -45,8 +45,7 @@ function categoryLabel(category: string): string {
 }
 
 export default function Renewals() {
-  // Cards are the usable default on phones; the wide table needs a desktop viewport.
-  // Sentences read on any screen; the table is there for digging.
+  // Sentences read on any screen (phones included); the table is there for digging on a desktop.
   const [viewMode, setViewMode] = useState<ViewMode>('Sentences')
   const [page, setPage] = useState(1)
 
@@ -182,12 +181,13 @@ export default function Renewals() {
     {
       accessorKey: 'renewalYears',
       header: 'Years',
-      meta: { className: 'tabular-nums' },
+      meta: { className: 'tabular-nums', hideBelow: 'md' },
     },
     {
       id: 'sourcePayment',
       header: 'Source and payment',
       enableSorting: false,
+      meta: { hideBelow: 'md' },
       cell: ({ row }) => (
         <div>
           <div className="flex flex-wrap items-center gap-1">
@@ -202,6 +202,7 @@ export default function Renewals() {
     {
       accessorKey: 'timeInStatusHours',
       header: 'Time in status',
+      meta: { hideBelow: 'sm' },
       cell: ({ row }) => <TimeInStatus r={row.original} />,
     },
     {
@@ -212,7 +213,7 @@ export default function Renewals() {
       cell: ({ row }) => {
         const r = row.original
         return (
-          <div className="flex items-center justify-end gap-1.5">
+          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
             {canRetry(r) ? (
               <Button
                 size="sm"
@@ -232,7 +233,7 @@ export default function Renewals() {
   ], [retryOneMutation.isPending, retryOneMutation.variables])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title={toFix ? 'Renewals to fix' : 'Renewals'}
         subtitle={toFix ? 'Failed, and nothing will retry them on their own.' : 'Every renewal, from every channel.'}
@@ -265,7 +266,7 @@ export default function Renewals() {
           value={abnInput}
           onChange={(e) => { setPage(1); setAbnInput(e.target.value) }}
           placeholder="Filter ABN…"
-          className="h-8 w-40 font-mono tabular-nums placeholder:font-sans"
+          className="h-8 w-full font-mono tabular-nums placeholder:font-sans sm:w-40"
         />
         <FacetedFilter title="Status" options={statusOptions} selected={statuses} onChange={withPageReset(setStatuses)} />
         <FacetedFilter title="Source" options={sourceOptions} selected={sources} onChange={withPageReset(setSources)} />
@@ -278,7 +279,7 @@ export default function Renewals() {
             <X />
           </Button>
         ) : null}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full items-center justify-end gap-2 sm:ml-auto sm:w-auto">
           <ViewToggle<ViewMode> value={viewMode} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }, { value: 'Cards', label: 'Cards view' }]} onChange={setViewMode} />
           <RefreshButton onClick={() => void refetch()} busy={isFetching} />
         </div>
@@ -380,7 +381,7 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
             </div>
           ) : preview ? (
             <>
-              <dl className="grid grid-cols-3 gap-x-4 gap-y-3 rounded-lg border p-3">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border p-3 sm:grid-cols-3">
                 <Cell label="Checked" value={preview.scanned.toLocaleString()} />
                 <Cell label="Re-queue" value={preview.requeued.toLocaleString()} />
                 <Cell label="To verify" value={preview.needsVerification.toLocaleString()} />
@@ -391,14 +392,14 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
               {preview.items.length > 0 ? (
                 <div className="max-h-40 divide-y overflow-y-auto rounded-lg border">
                   {preview.items.slice(0, 25).map((i) => (
-                    <div key={i.renewalId} className="flex items-center justify-between gap-2 px-3 py-1.5 text-caption">
+                    <div key={i.renewalId} className="flex flex-col gap-0.5 px-3 py-1.5 text-caption sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                       <span className="min-w-0 truncate">{i.businessName ?? i.abn ?? i.renewalId}</span>
-                      <span className="shrink-0 text-muted-foreground tabular-nums">{fmtMoney0(i.amount)} · {i.ageHours}h · {i.action}</span>
+                      <span className="text-muted-foreground tabular-nums sm:shrink-0">{fmtMoney0(i.amount)} · {i.ageHours}h · {i.action}</span>
                     </div>
                   ))}
                 </div>
               ) : null}
-              <div className="flex items-center gap-2" title="Keeps the ASIC queue manageable">
+              <div className="flex flex-wrap items-center gap-2" title="Keeps the ASIC queue manageable">
                 <Label htmlFor="reconcile-cap" className="text-caption font-normal text-muted-foreground">Re-queue at most</Label>
                 <Input
                   id="reconcile-cap"
@@ -467,11 +468,11 @@ function StatsStrip({ stats }: { stats: Stats }) {
   )
 }
 
-/* ─────── Cards view (mobile default) ─────── */
+/* ─────── Cards view ─────── */
 
 function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (m: string) => void; onRetry: (id: string) => void; retrying: boolean }) {
   return (
-    <Card className="gap-4 p-5">
+    <Card className="gap-4 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate font-medium">{r.businessName}</div>
@@ -506,10 +507,10 @@ function RenewalCard({ r, onError, onRetry, retrying }: { r: Renewal; onError: (
 
 function StatusCell({ r, onError }: { r: Renewal; onError: (m: string) => void }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex shrink-0 items-center gap-1">
       <Status entry={renewalStatus(r)} />
       {r.status === 'Failed' && r.errorMessage ? (
-        <Button variant="ghost" size="icon-xs" onClick={() => onError(r.errorMessage ?? '')} title="See the error" aria-label="See the error">
+        <Button variant="ghost" size="icon-sm" className="sm:size-6" onClick={() => onError(r.errorMessage ?? '')} title="See the error" aria-label="See the error">
           <TriangleAlert className="text-destructive" />
         </Button>
       ) : null}

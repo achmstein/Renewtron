@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -195,12 +195,32 @@ export default function Settings() {
   const card = { title: active.title, description: active.description, tip: active.tip, status: status[active.key] }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader title="Settings" subtitle="Integrations, payments and pricing." />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-4">
+        {/* Phones and tablets: the section list is a dropdown, so the form stays at the top of the screen. */}
+        <Select value={activeKey} onValueChange={(v) => setActiveKey(v as SectionKey)}>
+          <SelectTrigger aria-label="Settings section" className="w-full bg-card lg:hidden">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(groups).map(([group, sections]) => (
+              <SelectGroup key={group}>
+                <SelectLabel>{group}</SelectLabel>
+                {sections.map((s) => (
+                  <SelectItem key={s.key} value={s.key}>
+                    {s.title}
+                    <ConfiguredDot status={status[s.key]} />
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+
         {/* Sidebar nav */}
-        <Card className="gap-0 py-2">
+        <Card className="hidden gap-0 py-2 lg:flex">
           <nav className="space-y-3">
             {Object.entries(groups).map(([group, sections]) => (
               <div key={group} className="px-2">
@@ -363,7 +383,7 @@ export default function Settings() {
                   <Input value={asic.cardholderName} onChange={(e) => setAsic({ ...asic, cardholderName: e.target.value })} />
                 </Field>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Field label="Expiry month">
                   <Input className="font-mono tabular-nums" value={asic.expiryMonth} onChange={(e) => setAsic({ ...asic, expiryMonth: e.target.value })} />
                 </Field>

@@ -95,7 +95,7 @@ export default function Funnel() {
   const daily = data?.daily ?? []
   const period = `Last ${days} days`
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Funnel"
         subtitle="How far people get through the renewal wizard."
@@ -167,7 +167,7 @@ export default function Funnel() {
         <Card className="gap-0 py-0">
           <CardHeader className="border-b py-4 [.border-b]:pb-4">
             <CardTitle>Where people stop</CardTitle>
-            <CardAction><Legend items={[{ cls: 'bg-muted-foreground/20', label: 'Reached the step' }, { cls: 'bg-link', label: 'Completed it' }]} /></CardAction>
+            <CardAction className={LEGEND_SLOT}><Legend items={[{ cls: 'bg-muted-foreground/20', label: 'Reached the step' }, { cls: 'bg-link', label: 'Completed it' }]} /></CardAction>
           </CardHeader>
           {landed === 0 ? (
             <div className="p-6"><EmptyState title="No visitors in this period" message="Steps are recorded as people move through the wizard." /></div>
@@ -191,9 +191,9 @@ export default function Funnel() {
           <Card className="lg:col-span-3">
             <CardHeader>
               <CardTitle>Visitors and renewals</CardTitle>
-              <CardAction><Legend items={[{ cls: 'bg-muted-foreground/25', label: 'Visitors' }, { cls: 'h-0.5 w-3 bg-link', label: 'Renewed' }]} /></CardAction>
+              <CardAction className={LEGEND_SLOT}><Legend items={[{ cls: 'bg-muted-foreground/25', label: 'Visitors' }, { cls: 'h-0.5 w-3 bg-link', label: 'Renewed' }]} /></CardAction>
             </CardHeader>
-            <CardContent className="h-56">
+            <CardContent className="h-44 sm:h-56">
               <DailyChart data={daily} />
             </CardContent>
           </Card>
@@ -237,7 +237,7 @@ function StageRow({ index, stage, landed, isLeak, isLast }: { index: number; sta
   const reachedPct = pct(stage.reached, landed)
   const donePct = stage.done != null ? pct(stage.done, landed) : reachedPct
   return (
-    <li className="px-6 py-4">
+    <li className="px-4 py-4 sm:px-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-6">
         <div className="flex min-w-0 items-center gap-3 md:w-56 md:shrink-0">
           <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-caption font-medium">{index}</span>
@@ -294,9 +294,12 @@ function StageRow({ index, stage, landed, isLeak, isLast }: { index: number; sta
   )
 }
 
+// Phones: the legend goes under the card title instead of squeezing it from the right.
+const LEGEND_SLOT = 'col-start-1 row-start-3 justify-self-start sm:col-start-2 sm:row-start-1 sm:justify-self-end'
+
 function Legend({ items }: { items: Array<{ cls: string; label: string }> }) {
   return (
-    <div className="flex items-center gap-4 text-caption text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-muted-foreground">
       {items.map((i) => (
         <span key={i.label} className="inline-flex items-center gap-1.5">
           <span aria-hidden className={cn('size-2.5 rounded-sm', i.cls)} />
@@ -365,7 +368,7 @@ function SourceList({ rows, active, onPick }: { rows: FunnelResponse['bySource']
               type="button"
               onClick={() => onPick(r.source)}
               aria-pressed={on}
-              className={cn('w-full px-6 py-3 text-left transition-colors hover:bg-muted/50', on && 'bg-muted')}
+              className={cn('w-full px-4 py-3 sm:px-6 text-left transition-colors hover:bg-muted/50', on && 'bg-muted')}
               title={on ? 'Clear filter' : 'Show only this source'}
             >
               <div className="flex items-baseline justify-between gap-3">

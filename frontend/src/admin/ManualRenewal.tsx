@@ -105,7 +105,7 @@ export default function ManualRenewal() {
   const threeYearDefault = pricing?.threeYearFee.toFixed(2) ?? '—'
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
         title="Manual renewal"
         subtitle="Renew a name for a client who paid us another way."
@@ -193,7 +193,7 @@ export default function ManualRenewal() {
                 <AlertDescription>ASIC is paid with the company card from Settings.</AlertDescription>
               </Alert>
 
-              <Button onClick={process} disabled={processMutation.isPending}>
+              <Button className="w-full sm:w-auto" onClick={process} disabled={processMutation.isPending}>
                 {processMutation.isPending ? <Loader2 className="animate-spin" /> : <CircleCheck />}
                 {processMutation.isPending ? 'Starting…' : 'Start renewal'}
               </Button>
