@@ -285,7 +285,8 @@ public sealed class RenewalsModule : ICarterModule
             });
         }).WithTags("Wizard");
 
-        var admin = app.MapGroup("/api/admin/renewals").RequireAuthorization().WithTags("Admin.Renewals");
+        var admin = app.MapGroup("/api/admin/renewals").RequireAuthorization().WithTags("Admin.Renewals")
+            .AddEndpointFilter<RenewalOrderRefreshFilter>();
 
         admin.MapGet("/", async (
             ApplicationDbContext db,

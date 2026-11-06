@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type TodayItem } from '../api/client'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
-import { statusOf } from './_status'
+import { inSentence, orderStatus, statusOf } from './_status'
 import { fmtMoney2 } from './_utils'
 import { Button } from '@/components/ui/button'
 
@@ -30,6 +30,7 @@ export const workKey = (i: TodayItem) => `${i.kind}:${i.id}:${i.reason}`
 
 export function WorkRow({ item }: { item: TodayItem }) {
   switch (item.kind) {
+    case 'order': return <OrderRow item={item} />
     case 'renewal': return <RenewalRow item={item} />
     case 'sale': return <SaleRow item={item} />
     case 'bpay': return <BpayRow item={item} />
@@ -69,6 +70,22 @@ const RENEWAL_REASONS: Record<string, { what: string; next: string }> = {
   AlreadyInProgress: { what: 'is blocked at ASIC', next: 'ASIC has a renewal open for this ABN. Check at ASIC, then retry.' },
   Terminal: { what: 'was refused by ASIC', next: 'The details didn’t pass ASIC’s checks. Open it to see what ASIC said.' },
   Transient: { what: 'failed', next: 'Network or ASIC errors on every attempt. Retry once ASIC is reachable.' },
+}
+
+/** A paid renewal that stopped for a person: the client, the name, and why, in a few words. */
+function OrderRow({ item }: { item: TodayItem }) {
+  const status = orderStatus('NeedsPerson', item.reason)
+  const to = `/admin/renewal-orders/${item.id}`
+  return (
+    <SentenceRow
+      doneKey={workKey(item)}
+      meaning="action"
+      to={to}
+      what={<span title={status.hint}><Who item={item} /> paid for <Name>{item.businessName}</Name>: {inSentence(status.label)}</span>}
+      why={<Facts item={item} first={<When at={item.at} />} />}
+      actions={item.canRetry ? <RetryOrder id={item.id} /> : <LinkButton to={to}>Open</LinkButton>}
+    />
+  )
 }
 
 function RenewalRow({ item }: { item: TodayItem }) {
@@ -194,6 +211,16 @@ function RetryRenewal({ id }: { id: string }) {
     error: (e) => ({ title: 'Retry refused', description: e instanceof Error ? e.message : undefined }),
   }).catch(() => {})
   return <Button size="sm" onClick={go} disabled={m.isPending}>{m.isPending ? <Loader2 className="animate-spin" /> : null}Retry</Button>
+}
+
+function RetryOrder({ id }: { id: string }) {
+  const m = useTodayAction(api.admin.retryRenewalOrder)
+  const go = () => void sileo.promise(m.mutateAsync(id), {
+    loading: { title: 'Trying again…' },
+    success: (r) => ({ title: r.message }),
+    error: (e) => ({ title: 'Not tried again', description: e instanceof Error ? e.message : undefined }),
+  }).catch(() => {})
+  return <Button size="sm" onClick={go} disabled={m.isPending}>{m.isPending ? <Loader2 className="animate-spin" /> : null}Try again</Button>
 }
 
 function RetryKeyLetter({ id }: { id: string }) {

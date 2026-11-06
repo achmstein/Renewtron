@@ -13,8 +13,11 @@ public interface IRenewalOrderService
     /// </summary>
     Task<RenewalOrderRebuildReport> RebuildAsync(bool dryRun, CancellationToken ct);
 
-    /// <summary>The scheduled refresh: does nothing until the first real rebuild has run.</summary>
+    /// <summary>The scheduled refresh.</summary>
     Task RefreshAsync(CancellationToken ct);
+
+    /// <summary>Refresh right after a person's action, so pages show the new status at once. Never throws.</summary>
+    Task RefreshQuietlyAsync(CancellationToken ct);
 }
 
 public sealed record RenewalOrderRebuildReport(
@@ -43,10 +46,20 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
         Guid Id, RenewalSource Source, PaymentType PaymentType, string? StripeStatus, string Abn, string BusinessName,
         Guid? NameId, Guid? ClientId, int Years, decimal Amount, RenewalOrderProjection.Attempt Attempt);
 
-    public async Task RefreshAsync(CancellationToken ct)
+    public Task RefreshAsync(CancellationToken ct) => RebuildAsync(false, ct);
+
+    public async Task RefreshQuietlyAsync(CancellationToken ct)
     {
-        if (!await db.RenewalOrders.AnyAsync(ct)) return;
-        await RebuildAsync(false, ct);
+        try
+        {
+            db.ChangeTracker.Clear();
+            await RebuildAsync(false, ct);
+        }
+        catch (Exception ex)
+        {
+            // The scheduled refresh catches up within 10 minutes (e.g. it ran at the same moment).
+            logger.LogWarning(ex, "Renewal orders: refresh after an action failed");
+        }
     }
 
     public async Task<RenewalOrderRebuildReport> RebuildAsync(bool dryRun, CancellationToken ct)

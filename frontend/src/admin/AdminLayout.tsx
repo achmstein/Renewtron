@@ -50,7 +50,7 @@ const navSections: NavSection[] = [
     kicker: 'Work',
     items: [
       { to: '/admin', label: 'Today', icon: Icon.Today, badge: 'today' },
-      { to: '/admin/renewals?view=to-fix', label: 'Renewals to fix', icon: Icon.Wrench, badge: 'renewalsToFix' },
+      { to: '/admin/renewal-orders?view=to-fix', label: 'Renewals to fix', icon: Icon.Wrench, badge: 'renewalsToFix' },
       { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank, badge: 'bpayToPay' },
       { to: '/admin/asic-key-requests', label: 'Key requests', icon: Icon.Inbox, badge: 'asicKeyRequests' },
       { to: '/admin/asic-keys?view=to-sort', label: 'Keys to sort', icon: Icon.KeyAlert, badge: 'keysToSort' },

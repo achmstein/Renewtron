@@ -5,6 +5,8 @@ import 'sileo/styles.css'
 import AdminLayout from './AdminLayout'
 import Dashboard from './Dashboard'
 import Today from './Today'
+import RenewalOrders from './RenewalOrders'
+import RenewalOrderDetails from './RenewalOrderDetails'
 import Searches from './Searches'
 import SearchDetails from './SearchDetails'
 import Clients from './Clients'
@@ -47,6 +49,8 @@ export default function AdminRoutes() {
           <Route path="leads" element={<Leads />} />
           <Route path="leads/:id" element={<LeadDetails />} />
           <Route path="funnel" element={<Funnel />} />
+          <Route path="renewal-orders" element={<RenewalOrders />} />
+          <Route path="renewal-orders/:id" element={<RenewalOrderDetails />} />
           <Route path="renewals" element={<Renewals />} />
           <Route path="renewals/:id" element={<RenewalDetails />} />
           <Route path="payments" element={<Payments />} />

@@ -357,8 +357,7 @@ RecurringJob.AddOrUpdate<IBusinessNameImportService>(
     "0 3 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
-// Keeps the paid-renewal records (RenewalOrders) in step with the pipeline. Does nothing until the
-// first real rebuild (POST /api/admin/renewal-orders/rebuild?dryRun=false).
+// Keeps the paid-renewal records (RenewalOrders) in step with the pipeline.
 RecurringJob.AddOrUpdate<IRenewalOrderService>(
     RenewalOrderService.RecurringJobId,
     service => service.RefreshAsync(CancellationToken.None),

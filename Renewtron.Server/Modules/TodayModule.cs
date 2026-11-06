@@ -46,28 +46,20 @@ public sealed class TodayModule : ICarterModule
     public sealed record TodayGroup(string Key, int Count, decimal? Total, IReadOnlyList<TodayItem> Items);
 
     public sealed record Counts(
-        int RenewalsToFix, int RenewalsStuck, int SalesNotRenewed, int BpayToPay, int KeyRequests, int KeysToSort, int Duplicates)
+        int TryAgain, int CheckFirst, int Decide, int Stuck, int BpayToPay, int KeyRequests, int KeysToSort, int Duplicates)
     {
-        public int PaidNotRenewed => RenewalsToFix + RenewalsStuck + SalesNotRenewed;
-        public int Total => PaidNotRenewed + BpayToPay + KeyRequests + KeysToSort + Duplicates;
+        /// <summary>Paid renewals that need a person to get them renewed ("Renewals to fix").</summary>
+        public int RenewalsToFix => TryAgain + CheckFirst + Stuck;
+        public int Total => TryAgain + CheckFirst + Decide + Stuck + BpayToPay + KeyRequests + KeysToSort + Duplicates;
     }
 
-    /// <summary>
-    /// Ontraport sales the client paid for that never got a renewal and won't get one by
-    /// themselves. Sales that did start a renewal are left out: the renewal is the row to act on.
-    /// </summary>
-    private static IQueryable<OntraportSale> SalesNotRenewed(ApplicationDbContext db) =>
-        db.OntraportSales.AsNoTracking()
-            .Where(s => s.RenewalRequestId == null && s.HandledAt == null
-                && (s.Status == OntraportSaleStatus.RenewalFailed || s.Status == OntraportSaleStatus.IneligibleForRenewal));
-
-    private static IQueryable<RenewalRequest> Renewals(ApplicationDbContext db) =>
-        db.RenewalRequests.AsNoTracking().Where(r => !r.IsTest);
+    private static IQueryable<RenewalOrder> Orders(ApplicationDbContext db) => db.RenewalOrders.AsNoTracking();
 
     public static async Task<Counts> CountAsync(ApplicationDbContext db, DateTime now) => new(
-        RenewalsToFix: await Renewals(db).Where(WorkQueues.RenewalNeedsPerson).CountAsync(),
-        RenewalsStuck: await Renewals(db).Where(WorkQueues.RenewalStuck(now)).CountAsync(),
-        SalesNotRenewed: await SalesNotRenewed(db).CountAsync(),
+        TryAgain: await Orders(db).OrdersIn(WorkQueues.OrderTryAgain).CountAsync(),
+        CheckFirst: await Orders(db).OrdersIn(WorkQueues.OrderCheckFirst).CountAsync(),
+        Decide: await Orders(db).OrdersIn(WorkQueues.OrderDecide).CountAsync(),
+        Stuck: await Orders(db).OrdersStuck(db, now).CountAsync(),
         BpayToPay: await db.RenewalRequests.AsNoTracking().Where(WorkQueues.BpayToPay).CountAsync(),
         KeyRequests: await db.AsicKeyRequests.AsNoTracking()
             .CountAsync(r => !r.IsTest && WorkQueues.KeyRequestOpen.Contains(r.Status)),
@@ -93,36 +85,35 @@ public sealed class TodayModule : ICarterModule
             bool Mine(Guid? owner) => !forClient || owner == clientId;
             var rowsPerGroup = forClient ? int.MaxValue : RowsPerGroup;
 
-            // ── Paid, not renewed yet ─────────────────────────────────────────────
-            var failed = await Renewals(db).Where(WorkQueues.RenewalNeedsPerson).Select(RenewalRow(db)).ToListAsync();
-            var stuck = await Renewals(db).Where(WorkQueues.RenewalStuck(now)).Select(RenewalRow(db)).ToListAsync();
-            var sales = await SalesNotRenewed(db)
-                .Select(s => new
-                {
-                    s.Id, s.ClientId, s.ContactName, s.BusinessName, s.Abn, s.AmountPaid, s.RenewalYears,
-                    s.SyncedAt, s.ProcessedAt, s.RenewalDueDate, s.ErrorMessage, Status = s.Status.ToString(),
-                    NameDue = db.ClientBusinessNames.Where(n => n.Id == s.ClientBusinessNameId).Select(n => n.RenewalDueDate).FirstOrDefault(),
-                })
-                .ToListAsync();
-
-            var paid = new List<TodayItem>();
-            paid.AddRange(failed.Select(r => r.ToItem(r.ErrorCategory ?? "Failed",
-                canRetry: !RenewalErrorClassifier.MayHoldPayment(r.FailedAtStep, r.HasHostedToken ? "held" : null, r.ErrorCategory))));
-            paid.AddRange(stuck.Select(r => r.ToItem("Stuck", canRetry: false)));
-            paid.AddRange(sales.Select(s => new TodayItem(
-                "sale", s.Id.ToString(), s.Status, s.ClientId, s.ContactName, s.BusinessName, s.Abn, s.AmountPaid,
-                s.RenewalYears, s.ProcessedAt ?? s.SyncedAt,
-                s.NameDue ?? (s.RenewalDueDate is { } d ? DateOnly.FromDateTime(d) : null),
-                s.ErrorMessage, null, CanRetry: false)));
-
+            // ── Paid renewals that need a person (one record each: RenewalOrder) ──
+            async Task<List<TodayItem>> OrderItems(IQueryable<RenewalOrder> q, bool canRetry, string? reason = null)
+            {
+                var rows = await q.Where(o => !forClient || o.ClientId == clientId)
+                    .Select(o => new
+                    {
+                        o.Id, o.ClientId, o.BusinessName, o.Abn, o.AmountPaid, o.Years, o.StageChangedAt, o.DueDate,
+                        o.Note, Reason = o.Reason,
+                        Who = db.OntraportSales.Where(s => s.Id == o.SourceId).Select(s => s.ContactName).FirstOrDefault()
+                            ?? db.BulkRenewalUploads.Where(b => b.Id == o.SourceId).Select(b => b.OwnerName).FirstOrDefault()
+                            ?? db.RenewalRequests.Where(r => r.Id == o.SourceId).Select(r => r.Lead != null ? r.Lead.FullName : r.Email).FirstOrDefault(),
+                    })
+                    .ToListAsync();
+                return rows.Select(o => new TodayItem(
+                    "order", o.Id.ToString(), reason ?? o.Reason?.ToString() ?? "", o.ClientId, o.Who, o.BusinessName, o.Abn,
+                    o.AmountPaid, o.Years, o.StageChangedAt, o.DueDate, o.Note, null, CanRetry: canRetry)).ToList();
+            }
             // Riskiest first: names due soonest (or just past due), then those with no due date,
             // then names long past due; oldest first within each.
-            var paidOrdered = paid
-                .Where(i => Mine(i.ClientId))
+            List<TodayItem> Riskiest(IEnumerable<TodayItem> items) => items
                 .OrderBy(i => i.DueAt is null ? 1 : i.DueAt >= today.AddDays(-30) ? 0 : 2)
                 .ThenBy(i => i.DueAt)
                 .ThenBy(i => i.At)
                 .ToList();
+
+            var tryAgain = Riskiest((await OrderItems(Orders(db).OrdersStuck(db, now), canRetry: false, reason: "Stuck"))
+                .Concat(await OrderItems(Orders(db).OrdersIn(WorkQueues.OrderTryAgain), canRetry: true)));
+            var checkFirst = Riskiest(await OrderItems(Orders(db).OrdersIn(WorkQueues.OrderCheckFirst), canRetry: false));
+            var decideMoney = Riskiest(await OrderItems(Orders(db).OrdersIn(WorkQueues.OrderDecide), canRetry: false));
 
             // ── ASIC BPAY bills ───────────────────────────────────────────────────
             var bills = await db.RenewalRequests.AsNoTracking().Where(WorkQueues.BpayToPay)
@@ -195,7 +186,8 @@ public sealed class TodayModule : ICarterModule
                 OtherClientId: c.OtherId, OtherClientName: c.OtherName)).ToList();
 
             // Names come from the client record where the item is linked to one.
-            var all = paidOrdered.Take(rowsPerGroup).Concat(bpay.Take(rowsPerGroup)).Concat(keys.Take(rowsPerGroup)).ToList();
+            var all = tryAgain.Take(rowsPerGroup).Concat(checkFirst.Take(rowsPerGroup)).Concat(decideMoney.Take(rowsPerGroup))
+                .Concat(bpay.Take(rowsPerGroup)).Concat(keys.Take(rowsPerGroup)).ToList();
             var clientIds = all.Where(i => i.ClientId != null).Select(i => i.ClientId!.Value).Distinct().ToList();
             var clientNames = await db.Clients.AsNoTracking()
                 .Where(c => clientIds.Contains(c.Id))
@@ -208,7 +200,9 @@ public sealed class TodayModule : ICarterModule
 
             var groups = new[]
             {
-                new TodayGroup("paid", paidOrdered.Count, paidOrdered.Sum(i => i.Amount ?? 0), Named(paidOrdered)),
+                new TodayGroup("retry", tryAgain.Count, tryAgain.Sum(i => i.Amount ?? 0), Named(tryAgain)),
+                new TodayGroup("check", checkFirst.Count, checkFirst.Sum(i => i.Amount ?? 0), Named(checkFirst)),
+                new TodayGroup("refund", decideMoney.Count, decideMoney.Sum(i => i.Amount ?? 0), Named(decideMoney)),
                 new TodayGroup("bpay", bpay.Count, bpay.Sum(i => i.Amount ?? 0), Named(bpay)),
                 // Key requests count one per request, though the ones to send share a line.
                 new TodayGroup("keys", requests.Count + letters.Count, null, Named(keys)),
@@ -236,23 +230,5 @@ public sealed class TodayModule : ICarterModule
         }).RequireAuthorization().WithTags("Admin.Today");
     }
 
-    private sealed record RenewalRowData(
-        Guid Id, Guid? ClientId, string? LeadName, string? Email, string? BusinessName, string? Abn, decimal Amount,
-        int RenewalYears, DateTime At, DateOnly? NameDue, DateTime? SaleDue, string? ErrorMessage, string? FailedAtStep,
-        string? ErrorCategory, bool HasHostedToken)
-    {
-        public TodayItem ToItem(string reason, bool canRetry) => new(
-            "renewal", Id.ToString(), reason, ClientId, LeadName ?? Email, BusinessName, Abn, Amount, RenewalYears, At,
-            NameDue ?? (SaleDue is { } d ? DateOnly.FromDateTime(d) : null),
-            ErrorMessage, FailedAtStep, canRetry);
-    }
 
-    private static System.Linq.Expressions.Expression<Func<RenewalRequest, RenewalRowData>> RenewalRow(ApplicationDbContext db) =>
-        r => new RenewalRowData(
-            r.Id, r.ClientId, r.Lead != null ? r.Lead.FullName : null, r.Email,
-            r.SearchResult.BusinessName, r.SearchResult.SearchLog.Abn, r.Amount, r.RenewalYears,
-            r.LastAttemptAt ?? r.InitiatedAt,
-            db.ClientBusinessNames.Where(n => n.Id == r.ClientBusinessNameId).Select(n => n.RenewalDueDate).FirstOrDefault(),
-            db.OntraportSales.Where(s => s.RenewalRequestId == r.Id).Select(s => s.RenewalDueDate).FirstOrDefault(),
-            r.ErrorMessage, r.FailedAtStep, r.ErrorCategory, r.HostedTokenizationId != null);
 }

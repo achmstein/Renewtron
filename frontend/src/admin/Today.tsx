@@ -35,10 +35,12 @@ const LEVELS: Array<{ key: Level; label: string; hint: string; meaning: Meaning 
   { key: 'review', label: 'Review', hint: 'No deadline', meaning: 'quiet' },
 ]
 
-const LEVEL_OF: Record<TodayGroup['key'], Level> = { paid: 'urgent', bpay: 'urgent', keys: 'todo', decide: 'review' }
+const LEVEL_OF: Record<TodayGroup['key'], Level> = { retry: 'urgent', check: 'urgent', bpay: 'urgent', refund: 'todo', keys: 'todo', decide: 'review' }
 
 const GROUP_TITLES: Record<TodayGroup['key'], string> = {
-  paid: 'Paid, not renewed yet',
+  retry: 'Paid: try again',
+  check: 'Paid: check at ASIC first',
+  refund: 'Paid: renew or refund?',
   bpay: 'ASIC bills to pay',
   keys: 'ASIC keys',
   decide: 'Possible duplicates',
@@ -211,7 +213,7 @@ function MarkedDone({ items, undo }: { items: TodayItem[]; undo: (key: string) =
 
 /** One way into the full list behind a group; paying bills is the one group action worth a primary button. */
 function GroupAction({ group }: { group: TodayGroup }) {
-  const to = { paid: '/admin/renewals?view=to-fix', bpay: '/admin/bpay', keys: '/admin/asic-key-requests', decide: '/admin/clients/duplicates' }[group.key]
+  const to = { retry: '/admin/renewal-orders?view=to-fix', check: '/admin/renewal-orders?view=to-fix', refund: '/admin/renewal-orders?view=decide', bpay: '/admin/bpay', keys: '/admin/asic-key-requests', decide: '/admin/clients/duplicates' }[group.key]
   if (group.key === 'bpay') return <LinkButton to={to} primary>Pay bills</LinkButton>
   return <Button asChild size="sm" variant="ghost" className="text-muted-foreground"><Link to={to}>View all</Link></Button>
 }

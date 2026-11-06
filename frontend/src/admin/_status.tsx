@@ -150,6 +150,46 @@ export function statusOf(kind: StatusKind, status: string | null | undefined): S
  * the name isn't in its renewal window yet, is waiting, not waiting on us.
  * Keep in step with RenewalQueues.NeedsPerson on the server.
  */
+/**
+ * A paid renewal's status (RenewalOrder): its stage, refined by the reason it stopped. The one
+ * status every page shows for a paid renewal; the server decides it (RenewalOrderProjection).
+ */
+const ORDER_STAGE: Record<string, StatusEntry> = {
+  Waiting:     { label: 'Waiting for window', meaning: 'waiting', hint: 'Paid early. Renews on its own once ASIC opens the renewal window.' },
+  Due:         { label: 'Due',                meaning: 'working', hint: 'In the renewal window; the next processing run starts it.' },
+  Renewing:    { label: 'Renewing',           meaning: 'working', hint: 'Going through ASIC, or a retry is scheduled.' },
+  Renewed:     { label: 'Renewed',            meaning: 'done' },
+  NeedsPerson: { label: 'Needs you',          meaning: 'action' },
+  Closed:      { label: 'Closed',             meaning: 'quiet' },
+}
+const ORDER_REASON: Record<string, StatusEntry> = {
+  CardDeclined:        { label: 'Card declined',         meaning: 'action', hint: 'ASIC declined our card; no money was taken. Try again: it pays by BPAY while the card is declined.' },
+  AttemptsExhausted:   { label: 'Couldn’t reach ASIC',   meaning: 'action', hint: 'Renewtron couldn’t get through to ASIC and stopped retrying. Try again.' },
+  InProgressAtAsic:    { label: 'Open at ASIC',          meaning: 'action', hint: 'ASIC has another renewal open for this ABN. Try again after 48 hours, or check at ASIC.' },
+  VerifyPaymentAtAsic: { label: 'Check payment at ASIC', meaning: 'action', hint: 'The run reached ASIC’s payment step and we can’t tell if ASIC took the money. Look it up at ASIC before anything else.' },
+  NameNotFound:        { label: 'Name not found',        meaning: 'action', hint: 'ASIC doesn’t list this name under the ABN: cancelled, or we hold the wrong name.' },
+  AsicRefused:         { label: 'Refused by ASIC',       meaning: 'action', hint: 'The details didn’t pass ASIC’s checks.' },
+  TooLate:             { label: 'Too late',              meaning: 'action', hint: 'ASIC cancelled the name. Refund or contact the client.' },
+  BelowMinimumFee:     { label: 'Paid under the fee',    meaning: 'action', hint: 'Paid less than the renewal fee. Decide: renew anyway, or refund.' },
+  Ineligible:          { label: 'Not renewable',         meaning: 'action', hint: 'Ontraport says not to renew it. Decide: refund or contact the client.' },
+  RenewedElsewhere:    { label: 'Renewed elsewhere',     meaning: 'done', hint: 'Renewed outside Renewtron (by hand at ASIC, or by the client).' },
+  Refunded:            { label: 'Refunded',              meaning: 'quiet' },
+  ClientCancelling:    { label: 'Client cancelled',      meaning: 'quiet' },
+  Disputed:            { label: 'Disputed',              meaning: 'quiet', hint: 'The payment is disputed with Stripe.' },
+  Duplicate:           { label: 'Duplicate',             meaning: 'quiet' },
+  Stuck:               { label: 'Stuck',                 meaning: 'action', hint: 'Nothing has happened for over 2 hours.' },
+}
+
+/** A label inside a sentence: first letter lower-cased, acronyms ("ASIC") kept. */
+export function inSentence(label: string): string {
+  return label.charAt(0).toLowerCase() + label.slice(1)
+}
+
+export function orderStatus(stage: string, reason?: string | null): StatusEntry {
+  if (reason && ORDER_REASON[reason]) return ORDER_REASON[reason]
+  return ORDER_STAGE[stage] ?? { label: words(stage), meaning: 'quiet' }
+}
+
 /** A sale or renewal settled outside Renewtron (renewed by hand at ASIC, refunded): off the queues. */
 export const HANDLED: StatusEntry = { label: 'Handled', meaning: 'done', hint: 'Settled outside Renewtron; off the work queues.' }
 

@@ -10,6 +10,31 @@ namespace Renewtron.Services;
 /// </summary>
 public static class WorkQueues
 {
+    /// <summary>Paid renewals a person can push through by trying again (no money at risk).</summary>
+    public static readonly RenewalOrderReason[] OrderTryAgain =
+        [RenewalOrderReason.CardDeclined, RenewalOrderReason.AttemptsExhausted, RenewalOrderReason.InProgressAtAsic];
+
+    /// <summary>Paid renewals to look up at ASIC before anything else: ASIC may hold our money, or doesn't list the name.</summary>
+    public static readonly RenewalOrderReason[] OrderCheckFirst =
+        [RenewalOrderReason.VerifyPaymentAtAsic, RenewalOrderReason.NameNotFound, RenewalOrderReason.AsicRefused];
+
+    /// <summary>Paid renewals waiting on a decision: renew anyway, or refund.</summary>
+    public static readonly RenewalOrderReason[] OrderDecide =
+        [RenewalOrderReason.BelowMinimumFee, RenewalOrderReason.Ineligible, RenewalOrderReason.TooLate];
+
+    /// <summary>A paid renewal stopped for a person (<see cref="RenewalOrderStage.NeedsPerson"/>) in one of the groups above.</summary>
+    public static IQueryable<RenewalOrder> OrdersIn(this IQueryable<RenewalOrder> q, RenewalOrderReason[] reasons) =>
+        q.Where(o => o.Stage == RenewalOrderStage.NeedsPerson && o.Reason != null && reasons.Contains(o.Reason.Value));
+
+    /// <summary>A paid renewal whose ASIC run has been queued or lodging for over <see cref="StuckAfter"/>.</summary>
+    public static IQueryable<RenewalOrder> OrdersStuck(this IQueryable<RenewalOrder> q, ApplicationDbContext db, DateTime now)
+    {
+        var cutoff = now - StuckAfter;
+        return q.Where(o => o.Stage == RenewalOrderStage.Renewing && db.RenewalRequests.Any(r => r.Id == o.CurrentAttemptId
+            && (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing)
+            && (r.LastAttemptAt ?? r.InitiatedAt) < cutoff));
+    }
+
     /// <summary>
     /// A renewal the client has paid for that failed, and nothing will retry on its own: no retry
     /// scheduled, and not turned away only because ASIC's renewal window hasn't opened. A Stripe

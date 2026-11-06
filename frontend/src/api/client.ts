@@ -89,7 +89,7 @@ export interface BpayBill {
 /** Work waiting on staff, shown as sidebar badges. */
 /** One thing on the Today page; `reason` is the record's own status or error category. */
 export interface TodayItem {
-  kind: 'renewal' | 'sale' | 'bpay' | 'keyRequests' | 'keyRequest' | 'keyLetter' | 'duplicate'
+  kind: 'order' | 'renewal' | 'sale' | 'bpay' | 'keyRequests' | 'keyRequest' | 'keyLetter' | 'duplicate'
   id: string
   reason: string
   clientId: string | null
@@ -107,7 +107,37 @@ export interface TodayItem {
   otherClientId: string | null
   otherClientName: string | null
 }
-export interface TodayGroup { key: 'paid' | 'bpay' | 'keys' | 'decide'; count: number; total: number | null; items: TodayItem[] }
+export interface TodayGroup { key: 'retry' | 'check' | 'refund' | 'bpay' | 'keys' | 'decide'; count: number; total: number | null; items: TodayItem[] }
+
+/** One paid renewal (RenewalOrder): one name, one term, one status. */
+export interface RenewalOrderRow {
+  id: string
+  source: 'Ontraport' | 'Wizard' | 'Bulk' | 'Manual'
+  sourceId: string
+  clientId: string | null
+  payerName: string | null
+  clientName: string | null
+  businessName: string
+  abn: string
+  dueDate: string | null
+  years: number
+  amountPaid: number
+  paidAt: string
+  stage: 'Waiting' | 'Due' | 'Renewing' | 'Renewed' | 'NeedsPerson' | 'Closed'
+  reason: string | null
+  note: string | null
+  nextActionAt: string | null
+  stageChangedAt: string
+  attemptCount: number
+  currentAttemptId: string | null
+  renewedAt: string | null
+  canRetry: boolean
+}
+export interface RenewalOrderAttempt {
+  id: string; status: string; errorCategory: string | null; failedAtStep: string | null; errorMessage: string | null
+  initiatedAt: string; lastAttemptAt: string | null; completedAt: string | null; nextRetryAt: string | null
+  attemptCount: number; paysBy: 'Card' | 'BPAY'; bpayPaidAt: string | null; transactionReference: string | null; current: boolean
+}
 export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; cardProblem?: string | null; groups: TodayGroup[] }
 
 export interface SidebarCounts { today: number; renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
@@ -1066,6 +1096,17 @@ export const api = {
     sidebarCounts: () => apiFetch<SidebarCounts>('/api/admin/sidebar-counts'),
     /** Every queue that needs a person; with clientId, only that client's items, uncapped. */
     today: (clientId?: string) => apiFetch<TodayResponse>(`/api/admin/today${clientId ? `?clientId=${clientId}` : ''}`),
+    renewalOrders: (params: { view?: string; search?: string; page?: number; pageSize?: number } = {}) => {
+      const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)]))
+      return apiFetch<{ total: number; page: number; pageSize: number; items: RenewalOrderRow[]; byStage: Array<{ stage: string; count: number; amount: number }> }>(`/api/admin/renewal-orders?${qs}`)
+    },
+    renewalOrder: (id: string) => apiFetch<{
+      order: RenewalOrderRow
+      client: { id: string; fullName: string } | null
+      source: { label: string; to: string }
+      attempts: RenewalOrderAttempt[]
+    }>(`/api/admin/renewal-orders/${id}`),
+    retryRenewalOrder: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/retry`, { method: 'POST' }),
     /** The client a record belongs to; 404 (thrown) when it isn't on one yet. */
     clientLookup: (kind: 'lead' | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter', id: string) =>
       apiFetch<{ id: string; fullName: string; possibleDuplicate: boolean }>(`/api/admin/clients/lookup?kind=${kind}&id=${encodeURIComponent(id)}`),

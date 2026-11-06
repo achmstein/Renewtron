@@ -148,7 +148,7 @@ function Recoverable({ stats }: { stats: DashboardResponse['stats'] }) {
           value={fmtMoney0(stats.failedRenewalValue)}
           sub={count(stats.failedRenewalCount)}
           dot={stats.failedRenewalCount > 0 ? 'action' : null}
-          to="/admin/renewals?view=to-fix"
+          to="/admin/renewal-orders?view=to-fix"
           hint="Renewals that broke before completion; each is a paying client waiting on a retry"
         />
         <Stat

@@ -276,6 +276,9 @@ public class RenewalProcessingService : IRenewalProcessingService
                 _backgroundJobClient.Enqueue<IOntraportContactPushService>(s => s.PushRenewalOutcomeAsync(leadId, outcome));
             }
 
+            // The paid-renewal record (RenewalOrder) picks up this run's outcome.
+            _backgroundJobClient.Enqueue<IRenewalOrderService>(s => s.RefreshAsync(CancellationToken.None));
+
             if (result.IsSuccess)
             {
                 _logger.LogInformation("ASIC renewal successful for request {RenewalRequestId}. Transaction: {TransactionRef}",

@@ -32,7 +32,8 @@ public sealed class OntraportSalesModule : ICarterModule
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/admin/ontraport-sales").RequireAuthorization().WithTags("Admin.Ontraport");
+        var group = app.MapGroup("/api/admin/ontraport-sales").RequireAuthorization().WithTags("Admin.Ontraport")
+            .AddEndpointFilter<RenewalOrderRefreshFilter>();
 
         group.MapGet("/", async (ApplicationDbContext db, string? status = null, string? search = null, string? due = null, int page = 1, int pageSize = 25) =>
         {
