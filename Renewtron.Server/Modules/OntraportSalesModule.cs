@@ -285,17 +285,32 @@ public sealed class OntraportSalesModule : ICarterModule
         // Puts one failed sale back for the next processing run: the single-sale form of
         // requeue-failed. Refused when its last renewal reached ASIC's payment step, since ASIC
         // may already hold the money and a fresh run could pay twice.
-        group.MapPost("/{id:guid}/requeue", async (Guid id, ApplicationDbContext db) =>
+        // When the sale already started a renewal, that renewal is retried (one chain of attempts
+        // per sale); a fresh one is started only when the sale never got that far.
+        group.MapPost("/{id:guid}/requeue", async (Guid id, ApplicationDbContext db, IBackgroundJobClient jobs) =>
         {
             var sale = await db.OntraportSales.FirstOrDefaultAsync(x => x.Id == id);
             if (sale is null) return Results.NotFound();
             if (sale.Status != OntraportSaleStatus.RenewalFailed)
                 return Results.BadRequest(new { error = "Only a failed sale can be tried again." });
-            if (sale.RenewalRequestId is { } rid && await db.RenewalRequests.AnyAsync(r => r.Id == rid
-                    && r.ErrorCategory != RenewalErrorCategories.CardDeclined
-                    && (r.FailedAtStep == "Complete Payment Action" || r.HostedTokenizationId != null
-                        || r.ErrorCategory == RenewalErrorCategories.PaymentRisk)))
-                return Results.BadRequest(new { error = "Its last renewal reached ASIC's payment step. Check at ASIC before trying again." });
+            if (sale.RenewalRequestId is { } rid && await db.RenewalRequests.FirstOrDefaultAsync(r => r.Id == rid) is { } renewal
+                && renewal.Status != RenewalStatus.Completed)
+            {
+                if (renewal.Status is RenewalStatus.Pending or RenewalStatus.Processing || renewal.NextRetryAt != null)
+                    return Results.BadRequest(new { error = "Its renewal is already running or scheduled to try again." });
+                if (RenewalErrorClassifier.MayHoldPayment(renewal.FailedAtStep, renewal.HostedTokenizationId, renewal.ErrorCategory))
+                    return Results.BadRequest(new { error = "Its last renewal reached ASIC's payment step. Check at ASIC before trying again." });
+                renewal.Status = RenewalStatus.Pending;
+                renewal.HandledAt = null;
+                renewal.HandledNote = null;
+                sale.Status = OntraportSaleStatus.RenewalQueued;
+                sale.HandledAt = null;
+                sale.HandledNote = null;
+                await db.SaveChangesAsync();
+                var renewalId = renewal.Id;
+                jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewalId));
+                return Results.Ok(new { message = "Trying its renewal again now." });
+            }
 
             sale.Status = OntraportSaleStatus.Synced;
             sale.RenewalRequestId = null;
@@ -318,8 +333,10 @@ public sealed class OntraportSalesModule : ICarterModule
 
             // The processor needs a due date to act; sales past the -30d window would only
             // churn to NotDueForRenewal, so they're excluded unless explicitly requested.
+            // Only sales that never started a renewal: one that did is retried through its renewal
+            // (renewal Retry / retry-bulk), which keeps one chain of attempts and the payment check.
             var query = db.OntraportSales
-                .Where(s => s.Status == OntraportSaleStatus.RenewalFailed && s.HandledAt == null)
+                .Where(s => s.Status == OntraportSaleStatus.RenewalFailed && s.HandledAt == null && s.RenewalRequestId == null)
                 .Where(s => s.RenewalDueDate != null);
             if (!includePastDue)
                 query = query.Where(s => s.RenewalDueDate >= pastDueCutoff);
@@ -333,10 +350,8 @@ public sealed class OntraportSalesModule : ICarterModule
             {
                 foreach (var sale in batch)
                 {
-                    // Back to the eligible pool. The old RenewalRequest row (if any) keeps
-                    // its failure history; clearing the link makes the processor attempt fresh.
+                    // Back to the eligible pool for the next processing run.
                     sale.Status = OntraportSaleStatus.Synced;
-                    sale.RenewalRequestId = null;
                     sale.ProcessedAt = null;
                 }
                 await db.SaveChangesAsync();

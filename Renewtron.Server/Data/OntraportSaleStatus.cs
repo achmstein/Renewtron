@@ -22,6 +22,20 @@ public static class OntraportSaleStatusClassifier
     /// "already in progress" are transient — the next process run retries them.
     /// Anything else stays as RenewalFailed.
     /// </summary>
+    /// <summary>
+    /// A sale's status after its renewal failed, from the renewal's ErrorCategory (see
+    /// RenewalErrorClassifier.Classify). That category already puts "ASIC may hold money" and
+    /// "card declined" ahead of "not due" / "in progress", so a run that reached ASIC's payment
+    /// step is never put back in the queue (which could pay ASIC twice).
+    /// </summary>
+    public static OntraportSaleStatus FromRenewalCategory(string? category) => category switch
+    {
+        RenewalErrorCategories.NotDueYet => OntraportSaleStatus.AsicNotYetDue,
+        RenewalErrorCategories.AlreadyInProgress => OntraportSaleStatus.RenewalInProgress,
+        _ => OntraportSaleStatus.RenewalFailed,
+    };
+
+    /// <summary>For failures before a renewal exists (the ASIC name search in the sale processor).</summary>
     public static OntraportSaleStatus ClassifyError(string? errorMessage)
     {
         if (string.IsNullOrWhiteSpace(errorMessage))

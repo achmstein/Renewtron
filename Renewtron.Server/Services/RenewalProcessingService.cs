@@ -209,9 +209,11 @@ public class RenewalProcessingService : IRenewalProcessingService
             await _dbContext.SaveChangesAsync();
 
             // Update OntraportSale status if this renewal came from Ontraport
-            if (retryingAfterCardFailure)
+            // A retry is scheduled (after a card decline or a transient error): the renewal isn't
+            // finished, so the sale stays queued and the customer's record isn't told it failed.
+            // The retry writes the outcome when it ends.
+            if (retryingAfterCardFailure || (!result.IsSuccess && renewalRequest.NextRetryAt != null))
             {
-                // Still in progress: the outcome is written when the retry finishes.
             }
             else if (renewalRequest.Source == RenewalSource.Ontraport)
             {
@@ -228,7 +230,7 @@ public class RenewalProcessingService : IRenewalProcessingService
                         }
                         else
                         {
-                            ontraportSale.Status = OntraportSaleStatusClassifier.ClassifyError(result.Message);
+                            ontraportSale.Status = OntraportSaleStatusClassifier.FromRenewalCategory(renewalRequest.ErrorCategory);
                             ontraportSale.ErrorMessage = result.Message;
 
                             // Retryable states (AsicNotYetDue / RenewalInProgress) need RenewalRequestId
@@ -270,7 +272,7 @@ public class RenewalProcessingService : IRenewalProcessingService
                 // The push service works out which contact (never trusting an id off the URL).
                 var outcome = result.IsSuccess
                     ? OntraportRenewalOutcome.Successful
-                    : OntraportRenewalOutcomeExtensions.FromSaleStatus(OntraportSaleStatusClassifier.ClassifyError(result.Message));
+                    : OntraportRenewalOutcomeExtensions.FromSaleStatus(OntraportSaleStatusClassifier.FromRenewalCategory(renewalRequest.ErrorCategory));
                 _backgroundJobClient.Enqueue<IOntraportContactPushService>(s => s.PushRenewalOutcomeAsync(leadId, outcome));
             }
 
