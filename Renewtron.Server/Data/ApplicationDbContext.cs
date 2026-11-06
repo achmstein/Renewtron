@@ -12,6 +12,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StripePayment> StripePayments { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<OntraportSale> OntraportSales { get; set; }
+    public DbSet<RenewalOrder> RenewalOrders { get; set; }
     public DbSet<BulkRenewalUpload> BulkRenewalUploads { get; set; }
     public DbSet<OutboundMessage> OutboundMessages { get; set; }
     public DbSet<FunnelEvent> FunnelEvents { get; set; }
@@ -367,6 +368,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<OntraportSale>().HasIndex(e => e.ClientId);
         modelBuilder.Entity<OntraportSale>().Property(e => e.HandledNote).HasMaxLength(500);
         modelBuilder.Entity<RenewalRequest>().Property(e => e.HandledNote).HasMaxLength(500);
+
+        modelBuilder.Entity<RenewalOrder>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Abn).HasMaxLength(20);
+            entity.Property(e => e.BusinessName).HasMaxLength(200);
+            entity.Property(e => e.NameKey).HasMaxLength(200);
+            entity.Property(e => e.Note).HasMaxLength(1000);
+            entity.Property(e => e.AmountPaid).HasPrecision(18, 2);
+            entity.Property(e => e.Source).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Stage).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.Reason).HasConversion<string>().HasMaxLength(30);
+            entity.HasIndex(e => new { e.Source, e.SourceId }).IsUnique();
+            entity.HasIndex(e => e.Stage);
+            entity.HasIndex(e => new { e.Abn, e.NameKey });
+            entity.HasIndex(e => e.ClientId);
+            entity.HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<RenewalRequest>().HasOne<RenewalOrder>().WithMany().HasForeignKey(e => e.RenewalOrderId).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<RenewalRequest>().HasIndex(e => e.RenewalOrderId);
         modelBuilder.Entity<OntraportSale>().HasIndex(e => e.ClientBusinessNameId);
         modelBuilder.Entity<RenewalRequest>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<RenewalRequest>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);

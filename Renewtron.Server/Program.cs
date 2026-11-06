@@ -125,6 +125,7 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
 builder.Services.AddScoped<IRenewedElsewhereService, RenewedElsewhereService>();
+builder.Services.AddScoped<IRenewalOrderService, RenewalOrderService>();
 builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);
@@ -355,6 +356,13 @@ RecurringJob.AddOrUpdate<IBusinessNameImportService>(
     service => service.ImportIfChangedAsync(false, CancellationToken.None),
     "0 3 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// Keeps the paid-renewal records (RenewalOrders) in step with the pipeline. Does nothing until the
+// first real rebuild (POST /api/admin/renewal-orders/rebuild?dryRun=false).
+RecurringJob.AddOrUpdate<IRenewalOrderService>(
+    RenewalOrderService.RecurringJobId,
+    service => service.RefreshAsync(CancellationToken.None),
+    "*/10 * * * *");
 
 // First deploy: load the register now rather than waiting for 3am.
 using (var scope = app.Services.CreateScope())

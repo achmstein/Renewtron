@@ -1248,6 +1248,102 @@ namespace Renewtron.Migrations
                     b.ToTable("RegisteredBusinessNames");
                 });
 
+            modelBuilder.Entity("Renewtron.Data.RenewalOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Abn")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BusinessName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("ClientBusinessNameId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ClientId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("CurrentAttemptId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("NameKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("NextActionAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("RenewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("StageChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Years")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.HasIndex("Stage");
+
+                    b.HasIndex("Abn", "NameKey");
+
+                    b.HasIndex("Source", "SourceId")
+                        .IsUnique();
+
+                    b.ToTable("RenewalOrders");
+                });
+
             modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1347,6 +1443,9 @@ namespace Renewtron.Migrations
                     b.Property<int>("PaymentType")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("RenewalOrderId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("RenewalYears")
                         .HasColumnType("int");
 
@@ -1374,6 +1473,8 @@ namespace Renewtron.Migrations
                     b.HasIndex("InitiatedAt");
 
                     b.HasIndex("LeadId");
+
+                    b.HasIndex("RenewalOrderId");
 
                     b.HasIndex("SearchResultId")
                         .IsUnique();
@@ -1740,6 +1841,14 @@ namespace Renewtron.Migrations
                     b.Navigation("Lead");
                 });
 
+            modelBuilder.Entity("Renewtron.Data.RenewalOrder", b =>
+                {
+                    b.HasOne("Renewtron.Data.Client", null)
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
             modelBuilder.Entity("Renewtron.Data.RenewalRequest", b =>
                 {
                     b.HasOne("Renewtron.Data.ClientBusinessName", null)
@@ -1756,6 +1865,11 @@ namespace Renewtron.Migrations
                         .WithMany("RenewalRequests")
                         .HasForeignKey("LeadId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Renewtron.Data.RenewalOrder", null)
+                        .WithMany()
+                        .HasForeignKey("RenewalOrderId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("Renewtron.Data.SearchResult", "SearchResult")
                         .WithOne("RenewalRequest")
