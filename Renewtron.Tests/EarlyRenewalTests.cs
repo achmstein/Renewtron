@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
 using Renewtron.Services;
 
@@ -49,5 +50,113 @@ public class EarlyRenewalTests
     {
         var m = RenewalErrorClassifier.CustomerMessage(RenewalStatus.Failed, RenewalErrorCategories.NotDueYet, DateTime.UtcNow);
         Assert.DoesNotContain("due", m!, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>The morning check (EarlyRenewalService.CheckWaitingAsync) against an in-memory database and a fake ASIC.</summary>
+public class EarlyRenewalCheckTests
+{
+    private sealed class FakeAsic(Asic.Client.Models.BusinessNamesResult answer) : IAsicSearchCoordinator
+    {
+        public int Searches;
+        public Task<Asic.Client.Models.BusinessNamesResult> SearchAsync(string abn) { Searches++; return Task.FromResult(answer); }
+        public void Prefetch(string abn) { }
+        public bool TryGetRecent(string abn, out Asic.Client.Models.BusinessNamesResult result) { result = answer; return false; }
+    }
+
+    private sealed class FakeJobs : Hangfire.IBackgroundJobClient
+    {
+        public List<string> Created = [];
+        public string Create(Hangfire.Common.Job job, Hangfire.States.IState state)
+        {
+            Created.Add($"{job.Type.Name}.{job.Method.Name}({string.Join(",", job.Args)})");
+            return Guid.NewGuid().ToString();
+        }
+        public bool ChangeState(string jobId, Hangfire.States.IState state, string expectedState) => true;
+    }
+
+    private static (ApplicationDbContext Db, RenewalRequest Renewal) Seed(DateTime checkAt, string name = "Beautique Hair Lounge & Beauty Bar")
+    {
+        var db = new ApplicationDbContext(new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var log = new SearchLog { Id = Guid.NewGuid(), Abn = "49642383462", SearchedAt = DateTime.UtcNow, Success = true, Source = SearchSource.Local, VerifiedAt = DateTime.UtcNow };
+        var sr = new SearchResult { Id = Guid.NewGuid(), SearchLogId = log.Id, BusinessName = name, AccountNumber = "", RegistrationDate = "08/10/2020", PayEarly = true, SearchLog = log };
+        var renewal = new RenewalRequest { Id = Guid.NewGuid(), SearchResultId = sr.Id, SearchResult = sr, Source = RenewalSource.Renewtron, PaymentType = PaymentType.Stripe, InitiatedAt = DateTime.UtcNow, RenewalYears = 1 };
+        EarlyRenewalService.MarkWaiting(renewal, DateOnly.FromDateTime(checkAt));
+        renewal.NextRetryAt = checkAt;
+        db.SearchLogs.Add(log); db.SearchResults.Add(sr); db.RenewalRequests.Add(renewal);
+        db.SaveChanges();
+        return (db, renewal);
+    }
+
+    private static Task<EarlyRenewalReport> Check(ApplicationDbContext db, FakeAsic asic, FakeJobs jobs) =>
+        new EarlyRenewalService(db, asic, jobs, Microsoft.Extensions.Logging.Abstractions.NullLogger<EarlyRenewalService>.Instance).CheckWaitingAsync();
+
+    [Fact]
+    public async Task Once_asic_lists_the_name_it_gets_the_account_number_and_is_lodged()
+    {
+        var (db, renewal) = Seed(DateTime.UtcNow.AddMinutes(-1));
+        var asic = new FakeAsic(new() { Success = true, BusinessNames = [new() { Name = "BEAUTIQUE HAIR LOUNGE &amp; BEAUTY BAR", AccountNumber = "123456789", RegistrationDate = "08/10/2020" }] });
+        var jobs = new FakeJobs();
+
+        var report = await Check(db, asic, jobs);
+
+        Assert.Equal(1, report.Started);
+        Assert.Equal(RenewalStatus.Pending, renewal.Status);
+        Assert.Null(renewal.ErrorCategory);
+        Assert.Null(renewal.NextRetryAt);
+        Assert.Equal("123456789", renewal.SearchResult.AccountNumber);
+        Assert.Contains(jobs.Created, j => j.StartsWith("IRenewalProcessingService.ProcessRenewalAsync") && j.Contains(renewal.Id.ToString()));
+    }
+
+    [Fact]
+    public async Task Still_not_due_waits_for_the_window_again()
+    {
+        var (db, renewal) = Seed(DateTime.UtcNow.AddMinutes(-1));
+        var asic = new FakeAsic(new() { Success = false, ErrorMessage = "This business name is not due for renewal yet. ASIC will send a renewal notice when it becomes due." });
+        var jobs = new FakeJobs();
+
+        var report = await Check(db, asic, jobs);
+
+        Assert.Equal((0, 1), (report.Started, report.StillWaiting));
+        Assert.True(EarlyRenewalService.IsWaiting(renewal.Status, renewal.ErrorCategory, renewal.NextRetryAt));
+        Assert.True(renewal.NextRetryAt > DateTime.UtcNow);
+        Assert.DoesNotContain(jobs.Created, j => j.StartsWith("IRenewalProcessingService"));
+    }
+
+    [Fact]
+    public async Task Other_names_due_but_not_this_one_keeps_waiting()
+    {
+        var (db, renewal) = Seed(DateTime.UtcNow.AddMinutes(-1));
+        var asic = new FakeAsic(new() { Success = true, BusinessNames = [new() { Name = "SOMETHING ELSE", AccountNumber = "1", RegistrationDate = "01/01/2020" }] });
+
+        await Check(db, asic, new FakeJobs());
+
+        Assert.True(EarlyRenewalService.IsWaiting(renewal.Status, renewal.ErrorCategory, renewal.NextRetryAt));
+    }
+
+    [Fact]
+    public async Task No_names_under_the_abn_goes_to_a_person()
+    {
+        var (db, renewal) = Seed(DateTime.UtcNow.AddMinutes(-1));
+        var asic = new FakeAsic(new() { Success = false, ErrorMessage = "No business names found for this ABN" });
+
+        var report = await Check(db, asic, new FakeJobs());
+
+        Assert.Equal(1, report.NeedPerson);
+        Assert.Equal(RenewalErrorCategories.Terminal, renewal.ErrorCategory);
+        Assert.Null(renewal.NextRetryAt);
+    }
+
+    [Fact]
+    public async Task A_renewal_whose_check_date_hasnt_come_is_left_alone()
+    {
+        var (db, renewal) = Seed(DateTime.UtcNow.AddDays(30));
+        var asic = new FakeAsic(new() { Success = true, BusinessNames = [] });
+
+        var report = await Check(db, asic, new FakeJobs());
+
+        Assert.Equal(0, report.Checked);
+        Assert.Equal(0, asic.Searches);
     }
 }

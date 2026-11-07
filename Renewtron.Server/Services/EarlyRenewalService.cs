@@ -91,7 +91,8 @@ public class EarlyRenewalService(
         // Wizard renewals only: Ontraport sales and bulk rows have their own daily loops.
         var waiting = await db.RenewalRequests
             .Include(r => r.SearchResult).ThenInclude(sr => sr.SearchLog)
-            .Where(r => r.Source == RenewalSource.Renewtron && r.HandledAt == null && !r.IsTest
+            // Test customers too: the search is read only, and their run never reaches ASIC.
+            .Where(r => r.Source == RenewalSource.Renewtron && r.HandledAt == null
                         && r.Status == RenewalStatus.Failed
                         && r.ErrorCategory == RenewalErrorCategories.NotDueYet
                         && r.NextRetryAt != null && r.NextRetryAt <= now)

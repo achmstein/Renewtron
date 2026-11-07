@@ -1077,7 +1077,7 @@ public sealed class RenewalsModule : ICarterModule
 
             // Paid before ASIC will take it: the renewal waits, and the morning check lodges it
             // once ASIC lists the name (EarlyRenewalService).
-            if (sr.PayEarly && !lead.IsTest)
+            if (sr.PayEarly)
             {
                 var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
                 EarlyRenewalService.MarkWaiting(renewal, EarlyRenewalService.NextCheck(today, sr.RegistrationDate));

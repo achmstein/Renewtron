@@ -151,6 +151,23 @@ public sealed class LeadsModule : ICarterModule
                 && await localNames.SearchByAbnAsync(cleanAbn) is { Success: true, BusinessNames.Count: > 0 } local0)
                 testNames = local0;
 
+            // A test customer still asks ASIC (read only) which names it isn't taking yet, so the
+            // pay-early path can be tried end to end with Stripe's test keys. Their renewals never
+            // reach ASIC's payment step.
+            HashSet<string>? testEarly = null;
+            if (testNames is not null && asicSettings.Value.AllowPayEarly && !asicSettings.Value.ForceFallback)
+            {
+                var asicAnswer = asic.TryGetRecent(cleanAbn, out var r0) ? r0 : await asic.SearchAsync(cleanAbn);
+                if (!AsicSearchCoordinator.IsTransient(asicAnswer))
+                {
+                    var listed = asicAnswer.Success
+                        ? asicAnswer.BusinessNames.Select(n => BusinessNameText.MatchKey(n.Name)).ToHashSet()
+                        : [];
+                    if (asicAnswer.Success || LeadOutcomes.FromAsicError(asicAnswer.ErrorMessage) == LeadOutcome.NotDueForRenewal)
+                        testEarly = testNames.BusinessNames.Select(n => BusinessNameText.MatchKey(n.Name)).Where(k => !listed.Contains(k)).ToHashSet();
+                }
+            }
+
             if (testNames is not null)
             {
                 source = SearchSource.Local;
@@ -252,7 +269,7 @@ public sealed class LeadsModule : ICarterModule
                 BusinessName = b.Name,
                 AccountNumber = b.AccountNumber ?? "",
                 RegistrationDate = b.RegistrationDate,
-                PayEarly = payEarly,
+                PayEarly = payEarly || (testEarly?.Contains(BusinessNameText.MatchKey(b.Name)) ?? false),
             }).ToList();
             searchLog.Results = savedResults;
             db.SearchLogs.Add(searchLog);
