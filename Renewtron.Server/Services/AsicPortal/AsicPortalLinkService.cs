@@ -12,8 +12,10 @@ namespace Renewtron.Services.AsicPortal;
 /// <summary>
 /// "Link to our ASIC account" for one business name, in ASIC Connect over plain requests: link
 /// it with the client's ASIC key and date of birth (as Registered Agent), change its business
-/// email to ours, change an individual holder's email to ours, then remove every representative
-/// except ours. Ported from David's asic-key-webhook, in the order proven live on 7 Nov 2026.
+/// email to ours, change an individual holder's email to ours (their address put back as it is),
+/// then remove every representative except ours. Ported from David's asic-key-webhook, in the
+/// order proven live on 7 Nov 2026. A step whose email is already ours is skipped, so a retry or a
+/// name done before never lodges the same change twice.
 /// </summary>
 public interface IAsicPortalLinkService
 {
@@ -146,7 +148,7 @@ public class AsicPortalLinkService(
             await SaveAsync();
             if (step <= Step.Email) await EmailAsync(client, run, s);
             await SaveAsync();
-            if (step <= Step.Holder) await HolderAsync(client, run);
+            if (step <= Step.Holder) await HolderAsync(client, run, s);
             await SaveAsync();
             if (step <= Step.Representatives) await RepresentativesAsync(client, run, keep);
 
@@ -208,6 +210,16 @@ public class AsicPortalLinkService(
     {
         var open = await client.OpenNameActionAsync(run.BusinessName, AsicPortalClient.NameActions.BusinessAddress);
         if (open.Page is null) { StepProblem(run, "Business email", open.Problem); run.EmailOutcome = Outcomes.Failed; return; }
+
+        // Already ours (a retry, or a name done before): leave the wizard without lodging anything.
+        if (string.Equals(AsicPortalClient.BusinessEmailShown(open.Page.Html), s.BusinessEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            await client.CancelWizardAsync(open.Page, open.Page.Html, "view");
+            run.EmailOutcome = Outcomes.Success;
+            run.EmailReference ??= "already ours";
+            return;
+        }
+
         var result = await client.ChangeBusinessEmailAsync(open.Page, s.BusinessEmail, run.DeclareAs);
         run.EmailOutcome = result.Lodged ? Outcomes.Success : Outcomes.Failed;
         if (result.Lodged) run.EmailReference = result.Reference;
@@ -215,25 +227,55 @@ public class AsicPortalLinkService(
     }
 
     /// <summary>
-    /// Only an individual holder has an address (and email) to change. Companies, partnerships and
-    /// trusts have none on this page: nothing to do, as in David's script. The individual case isn't
-    /// automated yet (no live page to copy): it's left for a person.
+    /// Only an individual holder has an address and email to change: companies, partnerships and
+    /// trusts have none on this page, so there's nothing to do (as in David's script). For an
+    /// individual, their residential address is put back as it is, with our email.
     /// </summary>
-    private async Task HolderAsync(AsicPortalClient client, AsicPortalLink run)
+    private async Task HolderAsync(AsicPortalClient client, AsicPortalLink run, AsicPortalSettings s)
     {
         var open = await client.OpenNameActionAsync(run.BusinessName, AsicPortalClient.NameActions.HolderDetails);
         if (open.Page is null) { StepProblem(run, "Holder email", open.Problem); run.HolderOutcome = Outcomes.Failed; return; }
         var type = AsicPortalClient.HolderType(open.Page.Html);
         run.HolderType = type;
-        if (type is not null && !type.Equals("Individual", StringComparison.OrdinalIgnoreCase))
+        if (type is null)
         {
-            run.HolderOutcome = Outcomes.NoAction;
+            run.HolderOutcome = Outcomes.Pending;
+            StepProblem(run, "Holder email", "Couldn't read the holder's type: check the holder in ASIC Connect.");
             return;
         }
-        run.HolderOutcome = Outcomes.Pending;
-        StepProblem(run, "Holder email", type is null
-            ? "Couldn't read the holder's type."
-            : "The holder is an individual: change their email to ours in ASIC Connect by hand (not automated yet), then mark it done.");
+        if (!type.Equals("Individual", StringComparison.OrdinalIgnoreCase)) { run.HolderOutcome = Outcomes.NoAction; return; }
+
+        var cells = AsicPortalClient.CellTexts(open.Page.Html);
+        if (cells.Any(c => string.Equals(c.Trim(), s.BusinessEmail, StringComparison.OrdinalIgnoreCase)))
+        {
+            run.HolderOutcome = Outcomes.NoAction; // the holder's email is ours already
+            return;
+        }
+        var addresses = cells.Where(LooksLikeHolderAddress).Distinct().ToList();
+        if (addresses.Count == 0) { run.HolderOutcome = Outcomes.NoAddress; return; }
+        if (addresses.Count > 1)
+        {
+            run.HolderOutcome = Outcomes.Pending;
+            StepProblem(run, "Holder email", "More than one holder address: change the holders' email in ASIC Connect by hand.");
+            return;
+        }
+
+        var parsed = ParseAusAddress(addresses[0]);
+        if (!parsed.IsAustralian || !parsed.IsComplete || parsed.StreetTypeCode is not { } typeCode)
+        {
+            // Never guess at someone's address: a person does this one.
+            run.HolderOutcome = Outcomes.Pending;
+            StepProblem(run, "Holder email", $"Couldn't read the holder's address \"{addresses[0]}\" into ASIC's fields: change the holder's email in ASIC Connect by hand.");
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
+        var result = await client.ChangeHolderEmailAsync(open.Page,
+            new AsicPortalClient.HolderAddress(parsed.Unit, parsed.StreetNumber, parsed.StreetName, typeCode, parsed.Suburb, parsed.State, parsed.Postcode),
+            s.BusinessEmail, today, run.DeclareAs);
+        run.HolderOutcome = result.Lodged ? Outcomes.Success : Outcomes.Failed;
+        if (result.Lodged) run.HolderReference = result.Reference;
+        else StepProblem(run, "Holder email", result.Problem);
     }
 
     private async Task RepresentativesAsync(AsicPortalClient client, AsicPortalLink run, IReadOnlyList<string> keep)

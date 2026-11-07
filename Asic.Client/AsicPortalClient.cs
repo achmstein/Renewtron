@@ -658,6 +658,121 @@ public sealed partial class AsicPortalClient : IDisposable
     [GeneratedRegex(@"<script.*?</script>|<style.*?</style>", RegexOptions.Singleline | RegexOptions.IgnoreCase)] private static partial Regex ScriptRe();
     [GeneratedRegex(@"<[^>]+>")] private static partial Regex TagRe();
 
+    /* ───────────── Holder's email (confirmed live, 7 Nov 2026: Wincare Plus Solutions) ───────────── */
+
+    /// <summary>The residential address to put back, in ASIC's form fields (street type as ASIC's code, e.g. "Rd").</summary>
+    public sealed record HolderAddress(string Unit, string StreetNumber, string StreetName, string StreetTypeCode, string Suburb, string State, string Postcode);
+
+    /// <summary>The words of every table cell on a page, in order (the holder table: name, type, ABN, address, email, actions).</summary>
+    public static IReadOnlyList<string> CellTexts(string html) =>
+        CellRe().Matches(html).Select(m => PageText(m.Groups[1].Value)).Where(t => t.Length > 0).ToList();
+
+    /// <summary>
+    /// "Change holder details" → the holder's "Change Address" → today's date, Australia, the same
+    /// address and our email → Next → ASIC's address check (its own spelling when it keeps our street
+    /// number and postcode, else as entered, as David's script does) → Review (must show our email and
+    /// street) → Submit → Declare → Submit.
+    /// </summary>
+    public async Task<LodgeResult> ChangeHolderEmailAsync(AsicPortalPage holderPage, HolderAddress address, string email, DateOnly effective,
+        AsicDeclareAs declareAs, CancellationToken ct = default)
+    {
+        var changeLink = ChangeAddressLinkRe().Match(holderPage.Html) is { Success: true } link ? link.Groups[1].Value : null;
+        if (changeLink is null) return LodgeResult.Failed("No \"Change Address\" link for the holder.");
+        var wizard = await ClickAndFollowAsync(holderPage, changeLink, ct: ct);
+        if (wizard is null) return LodgeResult.Failed("\"Change Address\" didn't open its page.");
+        var html = wizard.Html;
+
+        string? Field(string label) => FieldByLabel(html, label);
+        var date = Field("Effective date (DD/MM/YYYY)");
+        var country = Field("Country");
+        var number = Field("Street number");
+        var street = Field("Street name");
+        var type = Field("Street type");
+        var suburb = Field("Suburb/City");
+        var postcode = Field("Postcode");
+        var state = Field("State/Territory");
+        var mail = Field("Email address");
+        var unit = Field("Unit/Office");
+        if (new[] { date, country, number, street, type, suburb, postcode, state, mail }.Any(f => f is null))
+        {
+            await CancelWizardAsync(wizard, html, "view", ct);
+            return LodgeResult.Failed("The address form wasn't as expected.", PageText(html));
+        }
+
+        var page = wizard;
+        var values = new Dictionary<string, string> { [date!] = effective.ToString("dd/MM/yyyy"), [country!] = "Australia" };
+        // Choosing the country brings up the Australian address fields.
+        (page, _) = await PostEventAsync(page, country!, values, ValueChangePayload, country, ct);
+        values[number!] = address.StreetNumber;
+        values[street!] = address.StreetName;
+        values[type!] = address.StreetTypeCode;
+        values[suburb!] = address.Suburb;
+        values[postcode!] = address.Postcode;
+        values[state!] = address.State;
+        values[mail!] = email;
+        if (unit is not null && address.Unit.Length > 0) values[unit] = address.Unit;
+
+        var next = FindButton(html, "Next") ?? "button_review_1";
+        var (afterNext, checkAnswer) = await PostEventAsync(page, next, values, process: $"view,{next}", ct: ct);
+        page = afterNext;
+
+        var review = checkAnswer;
+        var choices = QasRadioRe().Matches(checkAnswer).Select(m => (Id: m.Groups[1].Value, Value: m.Groups[2].Value)).ToList();
+        if (choices.Count > 0)
+        {
+            string Label(string id) => Regex.Match(checkAnswer, $"<label[^>]*for=\"{Regex.Escape(id)}\"[^>]*>(.*?)</label>", RegexOptions.Singleline) is { Success: true } l ? PageText(l.Groups[1].Value) : "";
+            var typed = choices.Where(c => Regex.IsMatch(Label(c.Id), @"as typed|--\s*ent|enter as", RegexOptions.IgnoreCase)).ToList();
+            var verified = choices.Where(c => !typed.Contains(c) && Label(c.Id).Contains(address.StreetNumber) && Label(c.Id).Contains(address.Postcode)).ToList();
+            var pick = verified.Concat(typed).Concat(choices).First();
+            values["radioQASAddressCreate"] = pick.Value;
+            (page, review) = await PostEventAsync(page, "cmdConfirm", values, process: "popupSaveAddressCreate,cmdConfirm", ct: ct);
+        }
+
+        var reviewText = PartialText(review);
+        if (!reviewText.Contains("Review", StringComparison.OrdinalIgnoreCase)
+            || !reviewText.Contains(email, StringComparison.OrdinalIgnoreCase)
+            || !reviewText.Contains(address.StreetName, StringComparison.OrdinalIgnoreCase))
+        {
+            await CancelWizardAsync(page, html, "view", ct);
+            return LodgeResult.Failed("The review page didn't show our email and the holder's address.", reviewText);
+        }
+
+        var submit = FindButton(review, "Submit") ?? "button_validate_2";
+        var (onDeclare, declare) = await PostEventAsync(page, submit, values, process: $"view,{submit}", ct: ct);
+        page = onDeclare;
+        var choice = ChooseDeclaration(declare, declareAs);
+        if (choice is null)
+        {
+            await CancelWizardAsync(page, html, "view", ct);
+            return LodgeResult.Failed("The Declare page wasn't as expected.", PartialText(declare));
+        }
+        (page, _) = await PostEventAsync(page, AsicDeclare.AuthorityField, choice.Fields, ValueChangePayload, AsicDeclare.AuthorityField, ct);
+        var finish = FindButton(declare, "Submit") ?? FindButton(declare, "Next");
+        if (finish is null) return LodgeResult.Failed("No Submit button on the Declare page.", PartialText(declare));
+        var (_, done) = await PostEventAsync(page, finish, choice.Fields, process: $"view,{finish}", ct: ct);
+        return ReadConfirmation(done);
+    }
+
+    /// <summary>The input a &lt;label&gt; with exactly these words is for (ids like "mapping_573" change between forms).</summary>
+    public static string? FieldByLabel(string html, string label) =>
+        FieldLabelRe().Matches(html).FirstOrDefault(m => PageText(m.Groups[2].Value).Equals(label, StringComparison.OrdinalIgnoreCase))?.Groups[1].Value;
+
+    /// <summary>The value of the Email row on the "Change business address" page, as ASIC shows it.</summary>
+    public static string? BusinessEmailShown(string html)
+    {
+        var row = FindEmailRow(html);
+        if (row is null) return null;
+        var at = html.IndexOf($"tblAddr:{row}:cmdLink", StringComparison.Ordinal);
+        var text = PageText(html[Math.Max(0, html.LastIndexOf('<', at) - 1500)..html.LastIndexOf('<', at)]);
+        return EmailInTextRe().Matches(text).LastOrDefault()?.Value;
+    }
+
+    [GeneratedRegex(@"<td[^>]*>(.*?)</td>", RegexOptions.Singleline)] private static partial Regex CellRe();
+    [GeneratedRegex(@"id=""([^""]*tableBN:\d+:editAddressLink)""")] private static partial Regex ChangeAddressLinkRe();
+    [GeneratedRegex(@"<input type=""radio"" name=""radioQASAddressCreate"" id=""([^""]+)"" value=""([^""]*)""")] private static partial Regex QasRadioRe();
+    [GeneratedRegex(@"<label[^>]*for=""([^""]+?)(?:::content)?""[^>]*>(.*?)</label>", RegexOptions.Singleline)] private static partial Regex FieldLabelRe();
+    [GeneratedRegex(@"[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")] private static partial Regex EmailInTextRe();
+
     public sealed record AdfForm(string Id, string Action, IReadOnlyDictionary<string, string> Fields);
 
     /// <summary>

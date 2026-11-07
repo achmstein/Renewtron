@@ -423,8 +423,28 @@ public class AsicPortalStepPageTests(ITestOutputHelper output)
 
         Assert.True(AsicPortalClient.ReadConfirmation(Read("rp4-r3.xml")).Lodged);
         Assert.True(AsicPortalClient.ReadConfirmation(Read("e-r6.xml")).Lodged);
-        Assert.Equal("Body Corporate", AsicPortalClient.HolderType(Read("holder3.html")));
+        Assert.Equal("Body Corporate", AsicPortalClient.HolderType(Read("holder2.html")));
         Assert.Equal("2", AsicPortalClient.FindEmailRow(Read("email-live.html")));
+
+        // Holder: an individual's row, its address and the Change Address form.
+        var holderPage = Read("holder-ind.html");
+        Assert.Equal("Individual", AsicPortalClient.HolderType(holderPage));
+        var address = AsicPortalClient.CellTexts(holderPage).Where(LooksLikeHolderAddress).Distinct().Single();
+        var parsed = ParseAusAddress(address);
+        output.WriteLine($"holder address: {address} -> {parsed.StreetNumber} | {parsed.StreetName} | {parsed.StreetTypeCode} | {parsed.Suburb} | {parsed.State} | {parsed.Postcode}");
+        Assert.True(parsed.IsComplete && parsed.IsAustralian && parsed.StreetTypeCode is not null);
+        var form = Read("ha-page.html");
+        foreach (var label in new[] { "Effective date (DD/MM/YYYY)", "Country", "Street number", "Street name", "Street type", "Suburb/City", "Postcode", "State/Territory", "Email address" })
+            Assert.StartsWith("mapping_", AsicPortalClient.FieldByLabel(form, label));
+        Assert.Contains("radioQASAddressCreate", Read("ha-r2.xml"));
+        var holderDeclare = AsicPortalClient.ChooseDeclaration(Read("ha-r4.xml"), AsicDeclareAs.Holder);
+        Assert.Equal("authority3", holderDeclare?.RadioId);
+        Assert.Equal("authority4", AsicPortalClient.ChooseDeclaration(Read("ha-r4.xml"), AsicDeclareAs.OnBehalfOfHolder)?.RadioId);
+        var holderDone = AsicPortalClient.ReadConfirmation(Read("ha-r5.xml"));
+        Assert.True(holderDone.Lodged);
+        Assert.Equal("1-1198M4V7", holderDone.Reference);
+        output.WriteLine($"business email shown: {AsicPortalClient.BusinessEmailShown(Read("email-live.html"))}");
+        Assert.NotNull(AsicPortalClient.BusinessEmailShown(Read("email-live.html")));
 
         var lodgements = Read("lodg.html");
         var row = AsicPortalClient.FindNameRowRadio(lodgements, "NAKED SKIN AESTHETICA");
