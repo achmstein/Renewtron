@@ -169,6 +169,13 @@ public sealed class ClientsModule : ICarterModule
             var keyRequests = await db.AsicKeyRequests.AsNoTracking().Where(r => r.ClientId == id).OrderByDescending(r => r.CreatedAt)
                 .Select(r => new { id = r.Id, businessName = r.BusinessName, status = r.Status.ToString(), createdAt = r.CreatedAt, asicReferenceNumber = r.AsicReferenceNumber })
                 .ToListAsync();
+            // The latest "link to our ASIC account" run for each of the client's names.
+            var nameIds = holders.Values.SelectMany(h => h.BusinessNames).Select(n => n.Id).ToList();
+            var portalRuns = (await db.AsicPortalLinks.AsNoTracking().Where(r => nameIds.Contains(r.ClientBusinessNameId))
+                    .Select(r => new { r.Id, r.ClientBusinessNameId, Status = r.Status.ToString(), r.CreatedAt, r.FinishedAt })
+                    .ToListAsync())
+                .GroupBy(r => r.ClientBusinessNameId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.CreatedAt).First());
             var messages = await db.OutboundMessages.AsNoTracking().Where(m => m.ClientId == id).OrderByDescending(m => m.CreatedAt).Take(50)
                 .Select(m => new { id = m.Id, template = m.Template, subject = m.Subject, status = m.Status.ToString(), createdAt = m.CreatedAt, recipient = m.Recipient })
                 .ToListAsync();
@@ -209,6 +216,10 @@ public sealed class ClientsModule : ICarterModule
                                 id = n.Id, name = n.Name, abn = n.Abn, registrationDate = n.RegistrationDate,
                                 asicAccountNumber = n.AsicAccountNumber, renewalDueDate = n.RenewalDueDate, dueDateSource = n.DueDateSource?.ToString(),
                                 asicKey = n.AsicKey, asicKeyReceivedAt = n.AsicKeyReceivedAt,
+                                portalLinkedAt = n.PortalLinkedAt,
+                                portalLink = portalRuns.GetValueOrDefault(n.Id) is { } pr
+                                    ? new { id = pr.Id, status = pr.Status, createdAt = pr.CreatedAt, finishedAt = pr.FinishedAt }
+                                    : null,
                                 lastRenewedAt = n.LastRenewedAt, lastRenewalYears = n.LastRenewalYears,
                                 status = n.Status.ToString(), source = n.Source.ToString(),
                             }),

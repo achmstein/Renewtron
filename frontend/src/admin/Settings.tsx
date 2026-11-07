@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Info } from 'lucide-react'
 import { sileo } from 'sileo'
-import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
+import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicPortalSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'asicportal' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
 
 type Settings = Awaited<ReturnType<typeof api.admin.settings>>
 
@@ -36,6 +36,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'airwallex', group: 'Payments', title: 'Airwallex', description: 'Pays ASIC’s BPAY bills for renewals lodged to pay later.', tip: 'Admin → BPAY to pay. Keys: Airwallex → Settings → Developer → API keys.' },
   { key: 'pricing',   group: 'Payments', title: 'Pricing', description: 'What clients pay for a renewal.' },
   { key: 'asic',      group: 'Integrations', title: 'ASIC credentials', description: 'How Renewtron pays ASIC for each renewal.' },
+  { key: 'asicportal', group: 'Integrations', title: 'ASIC Connect login', description: 'Our ASIC Connect account, for linking clients’ business names to it.', tip: 'Used by “Link to our ASIC account” on a business name: links it with the client’s ASIC key, then lodges our business email, the holder’s email and removes every representative but ours.' },
   { key: 'ontraport', group: 'Integrations', title: 'Ontraport', description: 'Sales sync, contacts and the OTP conversation.' },
   { key: 'asickeys',  group: 'Integrations', title: 'ASIC key inbox', description: 'Reads ASIC key letters from a Gmail inbox.' },
   { key: 'asickeyrequests', group: 'Integrations', title: 'ASIC key requests', description: 'Asks ASIC to email a client’s key.' },
@@ -65,6 +66,7 @@ export default function Settings() {
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
   const [keyRequests, setKeyRequests] = useState<AsicKeyRequestSettings>(defaultAsicKeyRequest())
+  const [asicPortal, setAsicPortal] = useState<AsicPortalSettings>({ enabled: false, username: '', password: '', businessEmail: '', keepRepresentatives: '', declareAs: 'Holder', ontraportLinkFieldId: '', wrongKeyCampaignId: '' })
   const [testMode, setTestMode] = useState<TestModeSettings>({ testEmails: '', stripeSecretKey: '', stripePublishableKey: '' })
   const [testData, setTestData] = useState<TestModeData | null>(null)
 
@@ -83,6 +85,7 @@ export default function Settings() {
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
     setKeyRequests(r.asicKeyRequest ?? defaultAsicKeyRequest())
+    if (r.asicPortal) setAsicPortal(r.asicPortal)
     if (r.testMode) setTestMode({ testEmails: r.testMode.testEmails, stripeSecretKey: r.testMode.stripeSecretKey, stripePublishableKey: r.testMode.stripePublishableKey })
     void api.admin.testModeData().then(setTestData).catch(() => {})
   }
@@ -118,6 +121,15 @@ export default function Settings() {
   const onAsicKeys  = save('ASIC key inbox', () => api.admin.updateAsicKeyInbox(asicKeys))
   const onKeyRequests = save('ASIC key requests', () => api.admin.updateAsicKeyRequest(keyRequests))
   const onTestMode  = save('Test mode', () => api.admin.updateTestMode(testMode))
+  const onAsicPortal = save('ASIC Connect login', () => api.admin.updateAsicPortalSettings(asicPortal))
+  // Tests the saved login (save first): logs in to ASIC Connect and out again.
+  const testAsicPortal = () => {
+    void sileo.promise(api.admin.testAsicPortalLogin().then((r) => { if (!r.ok) throw new Error(r.message); return r }), {
+      loading: { title: 'Logging in to ASIC Connect…' },
+      success: (r) => ({ title: 'ASIC Connect login works', description: r.message }),
+      error: (e) => ({ title: 'ASIC Connect login failed', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
 
   const deleteTestData = () => {
     if (!window.confirm('Delete every test lead, renewal and ASIC key request? Real customers are not touched.')) return
@@ -181,6 +193,7 @@ export default function Settings() {
       return keys && isFilled(testMode.testEmails) ? 'configured' : keys || isFilled(testMode.testEmails) ? 'partial' : 'empty'
     })(),
     airwallex: isFilled(airwallex.clientId) && isFilled(airwallex.apiKey) ? 'configured' : isFilled(airwallex.clientId) || isFilled(airwallex.apiKey) ? 'partial' : 'empty',
+    asicportal: asicPortal.enabled && isFilled(asicPortal.username) && isFilled(asicPortal.password) ? 'configured' : isFilled(asicPortal.username) || isFilled(asicPortal.password) ? 'partial' : 'empty',
     asickeyrequests: keyRequests.enabled && isFilled(keyRequests.requestEmail) ? 'configured' : isFilled(keyRequests.requestEmail) ? 'partial' : 'empty',
   }
 
@@ -322,6 +335,56 @@ export default function Settings() {
               <Field label="API key">
                 <Input type="password" className="font-mono" value={airwallex.apiKey} onChange={(e) => setAirwallex({ ...airwallex, apiKey: e.target.value })} />
               </Field>
+            </SettingsCard>
+          ) : null}
+
+          {data && activeKey === 'asicportal' ? (
+            <SettingsCard
+              {...card}
+              onSubmit={onAsicPortal}
+              extra={<Button type="button" variant="outline" onClick={testAsicPortal}>Test saved login</Button>}
+            >
+              <Field label="Link to our ASIC account" hint={asicPortal.enabled ? 'The button shows on business names with an ASIC key.' : 'Off: the button is turned off.'}>
+                <Select value={asicPortal.enabled ? 'on' : 'off'} onValueChange={(v) => setAsicPortal({ ...asicPortal, enabled: v === 'on' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">On</SelectItem>
+                    <SelectItem value="off">Off</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Username">
+                  <Input autoComplete="off" value={asicPortal.username} onChange={(e) => setAsicPortal({ ...asicPortal, username: e.target.value })} />
+                </Field>
+                <Field label="Password">
+                  <Input type="password" autoComplete="new-password" value={asicPortal.password} onChange={(e) => setAsicPortal({ ...asicPortal, password: e.target.value })} />
+                </Field>
+              </div>
+              <Field label="Our business email" hint="Put on the business name and on an individual holder.">
+                <Input type="email" value={asicPortal.businessEmail} onChange={(e) => setAsicPortal({ ...asicPortal, businessEmail: e.target.value })} />
+              </Field>
+              <Field label="Representatives to keep" hint="Comma separated. Every other representative is removed."
+                tip="A representative is kept when its name contains one of these. Keep our own ASIC Connect account’s person (sdfgsdfg David sdfgsdfg): removing it takes away our access to the name.">
+                <Input value={asicPortal.keepRepresentatives} onChange={(e) => setAsicPortal({ ...asicPortal, keepRepresentatives: e.target.value })} />
+              </Field>
+              <Field label="Declare by default" hint="Each run can pick the other.">
+                <Select value={asicPortal.declareAs} onValueChange={(v) => setAsicPortal({ ...asicPortal, declareAs: v as AsicPortalSettings['declareAs'] })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Holder">As the holder</SelectItem>
+                    <SelectItem value="OnBehalfOfHolder">On behalf of the holder</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Ontraport “Did ASIC key link?” field" hint="Set to success or fail.">
+                  <Input className="font-mono" value={asicPortal.ontraportLinkFieldId} onChange={(e) => setAsicPortal({ ...asicPortal, ontraportLinkFieldId: e.target.value })} />
+                </Field>
+                <Field label="Wrong-key campaign" hint="Ontraport campaign id; blank = none.">
+                  <Input className="font-mono" value={asicPortal.wrongKeyCampaignId} onChange={(e) => setAsicPortal({ ...asicPortal, wrongKeyCampaignId: e.target.value })} />
+                </Field>
+              </div>
             </SettingsCard>
           ) : null}
 

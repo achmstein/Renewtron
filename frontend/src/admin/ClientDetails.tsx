@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, KeyRound, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
+import { Copy, KeyRound, Link2, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
 import { sileo } from 'sileo'
-import { api, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
+import { api, type AsicDeclareAs, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
 import { Cell, EmptyState, StatusPill } from './_ui'
 import { Status, statusOf } from './_status'
 import { DueIn, Queue, When, useRowKeyboard } from './_rows'
@@ -15,7 +15,10 @@ import {
 } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -446,6 +449,15 @@ function NameStory({ client, name: n, busy, onStatus }: {
   } else if (steps.length) {
     steps.push({ label: 'ASIC key', meaning: 'quiet', note: 'not requested' })
   }
+  // Linked to our ASIC Connect account (and our email and representative on it).
+  if (n.portalLink) {
+    const st = statusOf('asicPortal', n.portalLink.status)
+    steps.push({ label: 'Linked', meaning: st.meaning, at: n.portalLink.finishedAt ?? n.portalLink.createdAt, note: n.portalLink.status === 'Done' ? undefined : st.label.toLowerCase(), to: `/admin/asic-portal/${n.portalLink.id}` })
+  } else if (n.portalLinkedAt) {
+    steps.push({ label: 'Linked', meaning: 'done', at: n.portalLinkedAt })
+  } else if (n.asicKey) {
+    steps.push({ label: 'Linked', meaning: 'quiet', note: 'not yet' })
+  }
 
   const meta = `${n.registrationDate ? `Registered ${fmtDate(n.registrationDate)}` : 'Registration date unknown'}${n.asicAccountNumber ? ` · ASIC account ${n.asicAccountNumber}` : ''} · via ${n.source}`
 
@@ -474,6 +486,8 @@ function NameStory({ client, name: n, busy, onStatus }: {
 
 /** Exclude / include, and copying the ASIC key. */
 function NameMenu({ name, busy, onStatus }: { name: ClientBusinessNameDto; busy: boolean; onStatus: (s: ClientBusinessNameDto['status']) => void }) {
+  const [linking, setLinking] = useState(false)
+  const running = name.portalLink?.status === 'Queued' || name.portalLink?.status === 'Running'
   const copyKey = () => {
     if (!name.asicKey) return
     void navigator.clipboard.writeText(name.asicKey).then(() => sileo.success({ title: 'ASIC key copied' }))
@@ -488,10 +502,71 @@ function NameMenu({ name, busy, onStatus }: { name: ClientBusinessNameDto; busy:
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {name.asicKey ? <DropdownMenuItem onSelect={copyKey}><Copy /> Copy ASIC key</DropdownMenuItem> : null}
+        {name.asicKey && name.status !== 'Cancelled'
+          ? <DropdownMenuItem disabled={running} onSelect={() => setLinking(true)}><Link2 /> {running ? 'Linking to our ASIC account…' : 'Link to our ASIC account'}</DropdownMenuItem>
+          : null}
         {name.status === 'Active' ? <DropdownMenuItem onSelect={() => onStatus('Excluded')}>Leave out of reminders</DropdownMenuItem> : null}
         {name.status === 'Excluded' ? <DropdownMenuItem onSelect={() => onStatus('Active')}>Include in reminders again</DropdownMenuItem> : null}
       </DropdownMenuContent>
+      <LinkToAsicDialog name={linking ? name : null} onClose={() => setLinking(false)} />
     </DropdownMenu>
+  )
+}
+
+/**
+ * Starts "link to our ASIC account" for one name: link it with the client's key, then our business
+ * email, the holder's email and our representative only. Each change is lodged with ASIC with a
+ * declaration, so the person picks which one.
+ */
+function LinkToAsicDialog({ name, onClose }: { name: ClientBusinessNameDto | null; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [declareAs, setDeclareAs] = useState<AsicDeclareAs>('Holder')
+  const start = useMutation({ mutationFn: (n: ClientBusinessNameDto) => api.admin.linkToAsicPortal(n.id, declareAs) })
+  const go = () => {
+    if (!name) return
+    void sileo.promise(start.mutateAsync(name), {
+      loading: { title: 'Queuing…' },
+      success: (r) => ({ title: r.message }),
+      error: (e) => ({ title: 'Couldn’t start it', description: errorText(e) }),
+    }).then((r) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-client'] })
+      onClose()
+      navigate(`/admin/asic-portal/${r.id}`)
+    }).catch(() => {})
+  }
+  return (
+    <Dialog open={!!name} onOpenChange={(o) => { if (!o && !start.isPending) onClose() }}>
+      <DialogContent className="sm:max-w-lg">
+        {name ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Link {name.name} to our ASIC account</DialogTitle>
+              <DialogDescription>
+                Links it with the client’s ASIC key, then lodges our business email, the holder’s email and removes every representative but ours.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-3">
+              <Label>Declare each change</Label>
+              <RadioGroup value={declareAs} onValueChange={(v) => setDeclareAs(v as AsicDeclareAs)}>
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem id="declare-holder" value="Holder" className="mt-0.5" />
+                  <Label htmlFor="declare-holder" className="font-normal">As the holder: “I am the registration or licence holder”</Label>
+                </div>
+                <div className="flex items-start gap-2">
+                  <RadioGroupItem id="declare-behalf" value="OnBehalfOfHolder" className="mt-0.5" />
+                  <Label htmlFor="declare-behalf" className="font-normal">On behalf of the holder: “submitting on behalf of the holder and authorised to”</Label>
+                </div>
+              </RadioGroup>
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="outline" onClick={onClose} disabled={start.isPending}>Cancel</Button>
+              <Button onClick={go} disabled={start.isPending}>{start.isPending ? 'Starting…' : 'Link it'}</Button>
+            </DialogFooter>
+          </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }
 

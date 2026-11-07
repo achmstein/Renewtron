@@ -39,6 +39,9 @@ public interface IOntraportSalesService
     /// <summary>Sets arbitrary fields on one contact. False when Ontraport rejected the write.</summary>
     Task<bool> UpdateContactFieldsAsync(string contactId, Dictionary<string, object> fields);
 
+    /// <summary>Adds one contact to a campaign (an automation). False when Ontraport rejected it.</summary>
+    Task<bool> SubscribeToCampaignAsync(string contactId, string campaignId);
+
     /// <summary>
     /// Looks the field id up in the Contact object's metadata. Returns its display alias, or
     /// null when no such field exists. Throws when the metadata call itself fails.

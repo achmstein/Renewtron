@@ -150,6 +150,11 @@ public class SettingsService : ISettingsService
         await UpdateSettingsSectionAsync("Airwallex", settings);
     }
 
+    public async Task UpdateAsicPortalSettingsAsync(AsicPortalSettings settings)
+    {
+        await UpdateSettingsSectionAsync("AsicPortal", settings);
+    }
+
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)
     {
         // Load existing overrides if present, else start empty. We never touch

@@ -48,15 +48,20 @@ public sealed class SettingsModule : ICarterModule
         if (string.IsNullOrWhiteSpace(body.MessageTemplate)) body.MessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate;
     }
 
+    public record AsicPortalBody(bool Enabled, string? Username, string? Password, string? BusinessEmail,
+        string? KeepRepresentatives, string? DeclareAs, string? OntraportLinkFieldId, string? WrongKeyCampaignId);
+
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/settings").RequireAuthorization().WithTags("Admin.Settings");
 
         group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions,
-            IOptionsMonitor<AirwallexSettings> airwallexOptions) =>
+            IOptionsMonitor<AirwallexSettings> airwallexOptions,
+            IOptionsMonitor<AsicPortalSettings> asicPortalOptions) =>
         {
             var testMode = testModeOptions.CurrentValue;
             var airwallex = airwallexOptions.CurrentValue;
+            var asicPortal = asicPortalOptions.CurrentValue;
             var sendGrid = await settings.GetSendGridSettingsAsync();
             var stripe = await settings.GetStripeSettingsAsync();
             var asic = await settings.GetAsicSettingsAsync();
@@ -115,6 +120,17 @@ public sealed class SettingsModule : ICarterModule
                     asicKeyPattern = asicKeyInbox.AsicKeyPattern,
                     // Saved overrides pin the pattern, so a newer code default needs a way back in.
                     defaultAsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern,
+                },
+                asicPortal = new
+                {
+                    enabled = asicPortal.Enabled,
+                    username = asicPortal.Username,
+                    password = Mask(asicPortal.Password),
+                    businessEmail = asicPortal.BusinessEmail,
+                    keepRepresentatives = asicPortal.KeepRepresentatives,
+                    declareAs = asicPortal.DeclareAs.ToString(),
+                    ontraportLinkFieldId = asicPortal.OntraportLinkFieldId,
+                    wrongKeyCampaignId = asicPortal.WrongKeyCampaignId,
                 },
                 airwallex = new
                 {
@@ -205,6 +221,33 @@ public sealed class SettingsModule : ICarterModule
             NormalizeAsicKeyInbox(body, current);
             await settings.UpdateAsicKeyInboxSettingsAsync(body);
             return Results.NoContent();
+        });
+
+        // The ASIC Connect login for "Link to our ASIC account" (not the renewals' card above).
+        group.MapPut("/asic-portal", async (AsicPortalBody body, IOptionsMonitor<AsicPortalSettings> current, ISettingsService settings) =>
+        {
+            var saved = new AsicPortalSettings
+            {
+                Enabled = body.Enabled,
+                Username = (body.Username ?? "").Trim(),
+                Password = Unmask(body.Password, current.CurrentValue.Password) ?? "",
+                BusinessEmail = (body.BusinessEmail ?? "").Trim(),
+                KeepRepresentatives = (body.KeepRepresentatives ?? "").Trim(),
+                DeclareAs = Enum.TryParse<Asic.Client.AsicDeclareAs>(body.DeclareAs, true, out var d) ? d : Asic.Client.AsicDeclareAs.Holder,
+                OntraportLinkFieldId = (body.OntraportLinkFieldId ?? "").Trim(),
+                WrongKeyCampaignId = (body.WrongKeyCampaignId ?? "").Trim(),
+            };
+            if (string.IsNullOrWhiteSpace(saved.BusinessEmail))
+                return Results.BadRequest(new { error = "The business email can't be blank." });
+            await settings.UpdateAsicPortalSettingsAsync(saved);
+            return Results.NoContent();
+        });
+
+        // Logs in with the saved login and out again: run it first on a new server.
+        group.MapPost("/asic-portal/test", async (Renewtron.Services.AsicPortal.IAsicPortalLinkService service, CancellationToken ct) =>
+        {
+            var problem = await service.TestLoginAsync(ct);
+            return Results.Ok(new { ok = problem is null, message = problem ?? "Logged in to ASIC Connect and out again." });
         });
 
         group.MapPut("/asic-key-request", async (AsicKeyRequestSettings body, ISettingsService settings) =>

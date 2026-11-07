@@ -27,6 +27,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<AbnHolder> AbnHolders { get; set; }
     public DbSet<ClientAbn> ClientAbns { get; set; }
     public DbSet<ClientBusinessName> ClientBusinessNames { get; set; }
+    public DbSet<AsicPortalLink> AsicPortalLinks { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -400,6 +401,37 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<AsicKeyRequest>().HasIndex(e => e.ClientId);
         modelBuilder.Entity<AsicKeyNotification>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<AsicKeyNotification>().HasIndex(e => e.ClientBusinessNameId);
+        modelBuilder.Entity<AsicPortalLink>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
+            entity.Property(e => e.AsicKey).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.DateOfBirth).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.DateOfBirthSource).IsRequired().HasMaxLength(10);
+            entity.Property(e => e.OntraportContactId).HasMaxLength(20);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasConversion<string>();
+            entity.Property(e => e.DeclareAs).IsRequired().HasMaxLength(20).HasConversion<string>();
+            entity.Property(e => e.LinkOutcome).HasMaxLength(20);
+            entity.Property(e => e.EmailOutcome).HasMaxLength(20);
+            entity.Property(e => e.EmailReference).HasMaxLength(50);
+            entity.Property(e => e.RepsOutcome).HasMaxLength(20);
+            entity.Property(e => e.RepsReferences).HasMaxLength(500);
+            entity.Property(e => e.HolderType).HasMaxLength(50);
+            entity.Property(e => e.RepsRemoved).HasMaxLength(2000);
+            entity.Property(e => e.HolderOutcome).HasMaxLength(20);
+            entity.Property(e => e.HolderReference).HasMaxLength(50);
+            entity.Property(e => e.FailedAtStep).HasMaxLength(40);
+            entity.Property(e => e.Error).HasMaxLength(2000);
+            entity.Property(e => e.Screenshot).HasMaxLength(200);
+            entity.Property(e => e.OntraportResult).HasMaxLength(200);
+            entity.Property(e => e.RequestedBy).HasMaxLength(200);
+            entity.HasIndex(e => e.ClientBusinessNameId);
+            entity.HasIndex(e => e.ClientId);
+            entity.HasIndex(e => e.Status);
+            entity.HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        });
         modelBuilder.Entity<OutboundMessage>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<OutboundMessage>().HasIndex(e => e.ClientId);
 

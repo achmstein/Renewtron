@@ -176,6 +176,56 @@ export interface ClientBusinessNameDto {
   lastRenewalYears: number | null
   status: 'Active' | 'Cancelled' | 'Excluded'
   source: string
+  /** When the name was linked to our ASIC Connect account. */
+  portalLinkedAt: string | null
+  /** The latest "link to our ASIC account" run for the name. */
+  portalLink: { id: string; status: AsicPortalLinkStatus; createdAt: string; finishedAt: string | null } | null
+}
+
+export type AsicPortalLinkStatus = 'Queued' | 'Running' | 'Done' | 'WrongKey' | 'NeedsLook' | 'Failed'
+export type AsicDeclareAs = 'Holder' | 'OnBehalfOfHolder'
+
+/** One "link to our ASIC account" run: link, business email, holder email, representatives. */
+export interface AsicPortalLinkDto {
+  id: string
+  clientId: string | null
+  clientName: string | null
+  clientBusinessNameId: string
+  businessName: string
+  abn: string
+  dateOfBirth: string
+  dateOfBirthSource: string
+  ontraportContactId: string | null
+  declareAs: AsicDeclareAs
+  status: AsicPortalLinkStatus
+  linkOutcome: string | null
+  emailOutcome: string | null
+  emailReference: string | null
+  holderOutcome: string | null
+  holderType: string | null
+  holderReference: string | null
+  repsOutcome: string | null
+  repsRemoved: string[]
+  repsReferences: string[]
+  failedAtStep: string | null
+  error: string | null
+  ontraportResult: string | null
+  requestedBy: string | null
+  attemptCount: number
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+export interface AsicPortalSettings {
+  enabled: boolean
+  username: string
+  password: string
+  businessEmail: string
+  keepRepresentatives: string
+  declareAs: AsicDeclareAs
+  ontraportLinkFieldId: string
+  wrongKeyCampaignId: string
 }
 
 export interface ClientAbnDto {
@@ -498,6 +548,7 @@ export const api = {
       tracking: TrackingSettings
       asicKeyInbox: AsicKeyInboxSettings
       asicKeyRequest: AsicKeyRequestSettings
+      asicPortal: AsicPortalSettings
       testMode: TestModeSettings & { stripeReady: boolean }
     }>('/api/admin/settings'),
     searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
@@ -1045,6 +1096,12 @@ export const api = {
     },
     runAsicKeyRequests: () => apiFetch<{ skipped: boolean; message: string; keysMatched: number; requeued: number }>('/api/admin/asic-key-requests/run', { method: 'POST' }),
     requeueAsicKeyRequest: (id: string) => apiFetch<AsicKeyRequestDto>(`/api/admin/asic-key-requests/${id}/requeue`, { method: 'POST' }),
+    linkToAsicPortal: (nameId: string, declareAs: AsicDeclareAs) => apiFetch<{ id: string; message: string }>(`/api/admin/asic-portal/business-names/${nameId}/link`, { method: 'POST', body: JSON.stringify({ declareAs }) }),
+    asicPortalLink: (id: string) => apiFetch<AsicPortalLinkDto>(`/api/admin/asic-portal/${id}`),
+    asicPortalLinks: (params: { status?: string; clientId?: string } = {}) => apiFetch<AsicPortalLinkDto[]>(`/api/admin/asic-portal/?${new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][])}`),
+    retryAsicPortalLink: (id: string) => apiFetch<{ message: string }>(`/api/admin/asic-portal/${id}/retry`, { method: 'POST' }),
+    updateAsicPortalSettings: (body: AsicPortalSettings) => apiFetch<void>('/api/admin/settings/asic-portal', { method: 'PUT', body: JSON.stringify(body) }),
+    testAsicPortalLogin: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/settings/asic-portal/test', { method: 'POST' }),
     requestAsicKeyForSale: (saleId: string) =>
       apiFetch<{ request: AsicKeyRequestDto }>(`/api/admin/asic-key-requests/for-sale/${saleId}`, { method: 'POST' }),
     recordAsicKeyRequestOutcome: (id: string, body: { referenceNumber: string; note: string }) =>

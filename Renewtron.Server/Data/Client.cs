@@ -155,6 +155,8 @@ public class ClientBusinessName
     public string? AsicKey { get; set; }
     public DateTime? AsicKeyReceivedAt { get; set; }
     public Guid? AsicKeyNotificationId { get; set; }
+    /// <summary>When the name was linked to our ASIC Connect account (see <see cref="AsicPortalLink"/>).</summary>
+    public DateTime? PortalLinkedAt { get; set; }
 
     public DateTime? LastRenewedAt { get; set; }
     public int? LastRenewalYears { get; set; }

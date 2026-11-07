@@ -787,6 +787,7 @@ public sealed class ClientLinkService(
         await db.RenewalRequests.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.BulkRenewalUploads.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.AsicKeyRequests.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
+        await db.AsicPortalLinks.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.OutboundMessages.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         // Anyone flagged as a possible duplicate of the source now points at the target (or nowhere, if it is the target).
         await db.Clients.Where(x => x.PossibleDuplicateOfId == sourceId && x.Id != targetId)

@@ -515,6 +515,34 @@ public class OntraportSalesService : IOntraportSalesService
         }
     }
 
+    public async Task<bool> SubscribeToCampaignAsync(string contactId, string campaignId)
+    {
+        try
+        {
+            // PUT, not POST: Ontraport answers POST /objects/subscribe with a 404.
+            var content = new StringContent(
+                JsonSerializer.Serialize(new { objectID = 0, ids = new[] { contactId }, add_list = new[] { campaignId }, sub_type = "Campaign" }),
+                System.Text.Encoding.UTF8,
+                "application/json");
+
+            var response = await _httpClient.PutAsync("objects/subscribe", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Ontraport campaign {CampaignId} subscribe for contact {ContactId} returned {StatusCode}: {Body}",
+                    campaignId, contactId, (int)response.StatusCode, body.Length > 500 ? body[..500] : body);
+                return false;
+            }
+            _logger.LogInformation("Added Ontraport contact {ContactId} to campaign {CampaignId}", contactId, campaignId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add Ontraport contact {ContactId} to campaign {CampaignId}", contactId, campaignId);
+            return false;
+        }
+    }
+
     private async Task<bool> AddContactTagAsync(string contactId, string tagId)
     {
         try

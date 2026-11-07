@@ -116,6 +116,7 @@ builder.Services.AddOptions<AsicKeyInboxSettings>().BindConfiguration("AsicKeyIn
 builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKeyRequest");
 builder.Services.AddOptions<TestModeSettings>().BindConfiguration("TestMode");
 builder.Services.AddOptions<AirwallexSettings>().BindConfiguration("Airwallex");
+builder.Services.AddOptions<AsicPortalSettings>().BindConfiguration("AsicPortal");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
@@ -138,6 +139,7 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationService>();
 builder.Services.AddScoped<IEarlyRenewalService, EarlyRenewalService>();
+builder.Services.AddScoped<Renewtron.Services.AsicPortal.IAsicPortalLinkService, Renewtron.Services.AsicPortal.AsicPortalLinkService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
@@ -192,6 +194,15 @@ builder.Services.AddHangfireServer(options =>
 {
     options.ServerName = $"{Environment.MachineName}:asic";
     options.Queues = ["asic"];
+    options.WorkerCount = 1;
+});
+
+// "Link to our ASIC account" runs: one ASIC Connect session per account, so one worker. Kept off
+// the "asic" queue so it never waits behind (or holds up) renewals.
+builder.Services.AddHangfireServer(options =>
+{
+    options.ServerName = $"{Environment.MachineName}:asic-portal";
+    options.Queues = [Renewtron.Services.AsicPortal.AsicPortalLinkService.Queue];
     options.WorkerCount = 1;
 });
 

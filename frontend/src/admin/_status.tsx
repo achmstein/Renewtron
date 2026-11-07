@@ -35,7 +35,7 @@ export type StatusEntry = { label: string; meaning: Meaning; hint?: string }
 
 export type StatusKind =
   | 'renewal' | 'sale' | 'bulk' | 'keyRequest' | 'keyLetter' | 'bpay'
-  | 'lead' | 'email' | 'payment' | 'businessName'
+  | 'lead' | 'email' | 'payment' | 'businessName' | 'asicPortal'
 
 const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
   // RenewalStatus. A failed renewal is refined by renewalStatus() below.
@@ -131,6 +131,15 @@ const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
     Active:    { label: 'Active',    meaning: 'done' },
     Cancelled: { label: 'Cancelled', meaning: 'quiet' },
     Excluded:  { label: 'Excluded',  meaning: 'quiet', hint: 'Left out of reminders.' },
+  },
+  // AsicPortalLinkStatus: "link to our ASIC account" runs.
+  asicPortal: {
+    Queued:    { label: 'Queued',       meaning: 'working', hint: 'Waiting for the ASIC Connect worker.' },
+    Running:   { label: 'Linking',      meaning: 'working', hint: 'Going through ASIC Connect now.' },
+    Done:      { label: 'Linked',       meaning: 'done', hint: 'Linked, with our email on the name and our representative only.' },
+    WrongKey:  { label: 'Wrong key',    meaning: 'action', hint: 'ASIC didn’t accept the key and date of birth: ask the client for the right key.' },
+    NeedsLook: { label: 'Needs a look', meaning: 'action', hint: 'Linked, but a later step needs a person: see the run.' },
+    Failed:    { label: 'Failed',       meaning: 'action', hint: 'Couldn’t get through ASIC Connect: see the run, then retry.' },
   },
 }
 
