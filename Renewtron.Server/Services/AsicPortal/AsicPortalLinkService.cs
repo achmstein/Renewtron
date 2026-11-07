@@ -292,8 +292,15 @@ public class AsicPortalLinkService(
 
             var rows = AsicPortalClient.ReadRepresentatives(open.Page.Html);
             // Judge each row by its own name only: the row's words can carry the end of the row above.
-            var target = rows.FirstOrDefault(r => !IsKeptRepresentative(RepresentativeName(r.Text), keep));
-            if (target is null) { run.RepsOutcome = Outcomes.NoAction; break; }
+            // A representative already removed (this run or an earlier one) can stay listed for a few
+            // minutes while ASIC applies it: never lodge their removal twice.
+            var target = rows.FirstOrDefault(r => !IsKeptRepresentative(RepresentativeName(r.Text), keep)
+                && !removed.Contains(RepresentativeName(r.Text), StringComparer.OrdinalIgnoreCase));
+            if (target is null)
+            {
+                run.RepsOutcome = Outcomes.NoAction;
+                break;
+            }
             if (i == MaxRemovals) { StepProblem(run, "Representatives", $"Still representatives left after {MaxRemovals} removals."); run.RepsOutcome = Outcomes.Failed; break; }
 
             var who = RepresentativeName(target.Text);
@@ -319,7 +326,7 @@ public class AsicPortalLinkService(
         {
             var notes = new List<string>();
             if (!string.IsNullOrWhiteSpace(s.OntraportLinkFieldId))
-                notes.Add(await ontraport.UpdateContactFieldsAsync(contact, new() { [s.OntraportLinkFieldId] = value })
+                notes.Add(await ontraport.UpdateContactFieldsAsync(contact, new() { ["id"] = contact, [s.OntraportLinkFieldId] = value })
                     ? $"{s.OntraportLinkFieldId} = {value}" : $"{s.OntraportLinkFieldId} write refused");
             if (value == "fail" && !string.IsNullOrWhiteSpace(s.WrongKeyCampaignId))
                 notes.Add(await ontraport.SubscribeToCampaignAsync(contact, s.WrongKeyCampaignId)
