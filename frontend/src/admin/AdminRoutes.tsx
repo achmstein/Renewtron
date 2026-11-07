@@ -66,8 +66,8 @@ export default function AdminRoutes() {
           <Route path="asic-key-requests/:id" element={<KeyRequestDetails />} />
           <Route path="asic-keys/:id" element={<KeyLetterDetails />} />
           <Route path="asic-portal/:id" element={<AsicPortalLinkDetails />} />
-          <Route path="emails" element={<Emails />} />
-          <Route path="emails/:id" element={<Emails />} />
+          {/* One route, so opening an email keeps the list (and its scroll) in place. */}
+          <Route path="emails/:id?" element={<Emails />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

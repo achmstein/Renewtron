@@ -141,22 +141,32 @@ function AdminSidebar({ onSearch }: { onSearch: () => void }) {
   }
 
   return (
-    <Sidebar className="border-sidebar-border">
-      <SidebarHeader className="gap-3 px-4 pt-5">
-        <Link to="/admin" onClick={close} className="flex items-center gap-2 px-1">
+    <Sidebar collapsible="icon" className="border-sidebar-border">
+      <SidebarHeader className="gap-3 px-4 pt-5 group-data-[collapsible=icon]:px-2">
+        <Link to="/admin" onClick={close} className="flex items-center gap-2 px-1 group-data-[collapsible=icon]:hidden">
           <Wordmark tone="dark" className="text-sm" />
         </Link>
-        <ClientSearchButton onClick={() => { close(); onSearch() }} />
+        <div className="group-data-[collapsible=icon]:hidden">
+          <ClientSearchButton onClick={() => { close(); onSearch() }} />
+        </div>
+        <SidebarMenu className="hidden group-data-[collapsible=icon]:flex">
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Find a client" onClick={onSearch} className="text-sidebar-foreground hover:text-sidebar-accent-foreground [&>svg]:text-muted-foreground">
+              <Search />
+              <span>Find a client</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent className="scrollbar-dark px-2">
+      <SidebarContent className="scrollbar-dark px-2 group-data-[collapsible=icon]:px-0">
         {navSections.map((section) => (
           <SidebarGroup key={section.kicker} className="py-1.5">
             <SidebarGroupLabel className="text-muted-foreground">{section.kicker}</SidebarGroupLabel>
             <SidebarMenu>
               {section.items.map((item) => (
                 <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton asChild isActive={item === active} className="text-sidebar-foreground hover:text-sidebar-accent-foreground data-[active=true]:font-medium [&>svg]:text-muted-foreground data-[active=true]:[&>svg]:text-brand-300">
+                  <SidebarMenuButton asChild isActive={item === active} tooltip={item.badge && counts?.[item.badge] ? `${item.label} (${counts[item.badge]})` : item.label} className="text-sidebar-foreground hover:text-sidebar-accent-foreground data-[active=true]:font-medium [&>svg]:text-muted-foreground data-[active=true]:[&>svg]:text-brand-300">
                     <Link to={item.to} onClick={close}>
                       {item.icon}
                       <span>{item.label}</span>
@@ -177,7 +187,7 @@ function AdminSidebar({ onSearch }: { onSearch: () => void }) {
       <SidebarFooter className="border-t border-sidebar-border p-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onSignOut} className="h-auto py-2 text-sidebar-foreground hover:text-sidebar-accent-foreground" title="Sign out">
+            <SidebarMenuButton onClick={onSignOut} tooltip="Sign out" className="h-auto py-2 text-sidebar-foreground hover:text-sidebar-accent-foreground" title="Sign out">
               <LogOut className="text-muted-foreground" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-zinc-200">{user?.email ?? 'Signed in'}</span>
@@ -194,6 +204,10 @@ function AdminSidebar({ onSearch }: { onSearch: () => void }) {
 export default function AdminLayout() {
   const [searchOpen, setSearchOpen] = useState(false)
   const location = useLocation()
+  // The Emails page is a full-screen mail client: the nav folds to an icon rail to give it room.
+  const onEmails = location.pathname === '/admin/emails' || location.pathname.startsWith('/admin/emails/')
+  // Fade in on a new page, but not when only the open email changes (that would rebuild the list).
+  const pageKey = onEmails ? '/admin/emails' : location.pathname
 
   // The admin theme (index.css) hangs off <html>, so dialogs and menus portalled into <body> get it too.
   useEffect(() => {
@@ -202,15 +216,15 @@ export default function AdminLayout() {
   }, [])
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={!onEmails} onOpenChange={() => {}}>
       <ClientSearch open={searchOpen} setOpen={setSearchOpen} />
       <AdminSidebar onSearch={() => setSearchOpen(true)} />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <header className="sticky top-0 z-40 flex h-12 items-center gap-3 border-b bg-sidebar px-4 md:hidden">
           <SidebarTrigger className="text-muted-foreground/70 hover:bg-card/10 hover:text-white" />
           <Wordmark tone="dark" className="text-sm" />
         </header>
-        <div key={location.pathname} className="fade-in">
+        <div key={pageKey} className="fade-in">
           <Outlet />
         </div>
       </SidebarInset>
