@@ -25,6 +25,7 @@ public class SearchVerificationService(
     IAsicSearchCoordinator asic,
     ILeadEmailService leadEmail,
     IBackgroundJobClient jobs,
+    Microsoft.Extensions.Options.IOptionsMonitor<Renewtron.Settings.AsicSettings> asicSettings,
     ILogger<SearchVerificationService> logger) : ISearchVerificationService
 {
     /// <summary>Starts the check now, outside the request, plus a durable retry in case this process dies or ASIC is down.</summary>
@@ -86,9 +87,11 @@ public class SearchVerificationService(
 
         var leads = await db.Leads.Where(l => l.SearchLogId == log.Id).ToListAsync();
 
+        var payEarly = asicSettings.CurrentValue.AllowPayEarly;
+
         if (result.Success && result.BusinessNames.Count > 0)
         {
-            ApplyAsicNames(log, result.BusinessNames);
+            ApplyAsicNames(log, result.BusinessNames, payEarly);
             log.VerifiedAt = DateTime.UtcNow;
             log.VerificationError = null;
             await db.SaveChangesAsync();
@@ -101,14 +104,29 @@ public class SearchVerificationService(
             return true;
         }
 
+        var message = result.ErrorMessage ?? "";
+        var outcome = LeadOutcomes.FromAsicError(message);
+
+        // Not due yet, but the customer may pay now: the names stay payable and the renewal
+        // waits for ASIC (EarlyRenewalService). Nothing tells the customer it isn't due.
+        if (payEarly && outcome == LeadOutcome.NotDueForRenewal && log.Results.Count > 0)
+        {
+            foreach (var r in log.Results) { r.IsAvailable = true; r.PayEarly = true; }
+            log.VerifiedAt = DateTime.UtcNow;
+            log.VerificationError = Truncate(message, 500);
+            log.ResultsCount = log.Results.Count;
+            await db.SaveChangesAsync();
+            logger.LogInformation("Search {SearchLogId} for {Abn}: ASIC says not due; {Count} name(s) can be paid early", log.Id, log.Abn, log.Results.Count);
+            foreach (var lead in leads)
+                jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
+            return true;
+        }
+
         // ASIC's answer is no: not due, already in progress, or no names on its renewal list.
         foreach (var r in log.Results) r.IsAvailable = false;
         log.VerifiedAt = DateTime.UtcNow;
         log.VerificationError = Truncate(result.ErrorMessage ?? "No business names found", 500);
         log.ResultsCount = 0;
-
-        var message = result.ErrorMessage ?? "";
-        var outcome = LeadOutcomes.FromAsicError(message);
         foreach (var lead in leads.Where(l => !l.ConvertedToRenewal))
         {
             lead.Outcome = outcome;
@@ -122,7 +140,7 @@ public class SearchVerificationService(
         return true;
     }
 
-    private void ApplyAsicNames(SearchLog log, List<BusinessName> asicNames)
+    private void ApplyAsicNames(SearchLog log, List<BusinessName> asicNames, bool payEarly)
     {
         var byKey = asicNames
             .GroupBy(n => BusinessNameText.MatchKey(n.Name))
@@ -137,6 +155,13 @@ public class SearchVerificationService(
                 r.AccountNumber = n.AccountNumber;
                 r.RegistrationDate = n.RegistrationDate;
                 r.IsAvailable = true;
+            }
+            else if (payEarly)
+            {
+                // On the register but not on ASIC's renewal list while other names are: not
+                // due yet. It can still be paid for; the renewal waits for ASIC.
+                r.IsAvailable = true;
+                r.PayEarly = true;
             }
             else
             {

@@ -148,4 +148,79 @@ This is an automated email from Renewtron.
         var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
         await SendGridDelivery.SendAsync(_client, msg, _settings.ApiKey, "renewal confirmation", toEmail, _logger);
     }
+
+    public async Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid)
+    {
+        var from = new EmailAddress(_settings.FromEmail, _settings.FromName);
+        var to = new EmailAddress(toEmail);
+        var one = businessNames.Length == 1;
+        var subject = one
+            ? $"Payment received - {EmailText.SubjectSafe(businessNames[0])} renewal"
+            : $"Payment received - renewal of {businessNames.Length} business names";
+        static string h(string? v) => EmailText.Html(v);
+
+        var namesHtml = string.Join("", businessNames.Select(n => $@"
+            <div class='detail-row'><div class='value'>{h(n)}</div></div>"));
+        var namesText = string.Join("\n", businessNames.Select(n => "  " + n));
+        var what = one ? "your business name" : "your business names";
+        var term = $"{renewalYears} {(renewalYears == 1 ? "year" : "years")}";
+        var its = one ? "its" : "their";
+        var done = one ? "it has" : "they have";
+        // No dates: our guess at the due date can be a whole term out for a 3-year name.
+        var next = $"ASIC only accepts a business name renewal in the month before it's due, so we'll lodge yours with ASIC as soon as {its} renewal opens. You don't need to do anything, and your business name stays registered in the meantime.";
+        var later = $"We'll email you again with ASIC's confirmation once {done} been renewed. Please keep this email for your records.";
+
+        var htmlContent = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #4F46E5; color: white; padding: 20px; text-align: center; }}
+        .content {{ background-color: #f9fafb; padding: 30px; }}
+        .detail-row {{ margin: 10px 0; padding: 10px; background-color: white; border-radius: 5px; }}
+        .value {{ color: #111827; }}
+        .footer {{ text-align: center; padding: 20px; color: #6B7280; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <div class='header'>
+            <h1>✓ Payment Received</h1>
+        </div>
+        <div class='content'>
+            <p>Dear Valued Customer,</p>
+            <p>Thank you, we've received your payment of <strong>${amountPaid:F2}</strong> to renew {what} for {term} (ABN {h(abn)}):</p>
+            {namesHtml}
+            <p style='margin-top: 24px;'><strong>What happens next?</strong><br>{h(next)}</p>
+            <p>{h(later)}</p>
+        </div>
+        <div class='footer'>
+            <p>This is an automated email from Renewtron. Please do not reply to this email.</p>
+            <p>If you have any questions, please contact our support team.</p>
+        </div>
+    </div>
+</body>
+</html>";
+
+        var plainTextContent = $@"
+Payment Received
+
+Thank you, we've received your payment of ${amountPaid:F2} to renew {what} for {term} (ABN {abn}):
+
+{namesText}
+
+What happens next?
+{next}
+
+{later}
+
+---
+This is an automated email from Renewtron.
+";
+
+        var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
+        await SendGridDelivery.SendAsync(_client, msg, _settings.ApiKey, "paid early", toEmail, _logger);
+    }
 }

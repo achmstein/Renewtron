@@ -3,6 +3,13 @@ namespace Renewtron.Settings;
 public class AsicSettings
 {
     public bool ForceFallback { get; set; }
+
+    /// <summary>
+    /// Let customers pay for a name ASIC says isn't due yet (David, 7 Nov 2026: "people can pay
+    /// early"). The renewal waits and is lodged automatically once ASIC opens it. Off = the
+    /// wizard stops at "Not due for renewal yet" as before.
+    /// </summary>
+    public bool AllowPayEarly { get; set; } = true;
     public string Email { get; set; }
     public string CardNumber { get; set; }
     public string CardholderName { get; set; }

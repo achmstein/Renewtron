@@ -1559,6 +1559,9 @@ namespace Renewtron.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true);
 
+                    b.Property<bool>("PayEarly")
+                        .HasColumnType("bit");
+
                     b.Property<string>("RegistrationDate")
                         .IsRequired()
                         .HasMaxLength(50)

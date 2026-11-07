@@ -137,6 +137,7 @@ builder.Services.AddScoped<ILeadService, LeadService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationService>();
+builder.Services.AddScoped<IEarlyRenewalService, EarlyRenewalService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
@@ -307,6 +308,14 @@ RecurringJob.AddOrUpdate<IOntraportSalesService>(
     "ontraport-process-renewals",
     service => service.ProcessEligibleRenewalsAsync(),
     "0 7 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// Renewals paid early (before ASIC's renewal window): asks ASIC each morning about the ones
+// whose check date has come, and lodges each as soon as ASIC lists the name.
+RecurringJob.AddOrUpdate<IEarlyRenewalService>(
+    EarlyRenewalService.RecurringJobId,
+    service => service.CheckWaitingAsync(),
+    "15 7 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
 RecurringJob.AddOrUpdate<IBulkRenewalService>(

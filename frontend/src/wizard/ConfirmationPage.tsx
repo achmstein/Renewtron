@@ -43,7 +43,7 @@ export default function ConfirmationPage() {
         const list = await api.batchStatus(ids)
         if (!active) return
         setRenewals(list)
-        const allDone = list.every((r) => r.status === 'Completed' || r.status === 'Failed')
+        const allDone = list.every((r) => r.status === 'Completed' || r.status === 'Failed' || r.status === 'Received')
         if (allDone && pollRef.current) {
           window.clearInterval(pollRef.current)
           pollRef.current = undefined
@@ -63,6 +63,7 @@ export default function ConfirmationPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params])
 
+  // "Received" (paid, lodged once ASIC takes it) isn't renewed yet: the page stays on "being processed".
   const allCompleted = renewals.length > 0 && renewals.every((r) => r.status === 'Completed' || r.status === 'Failed')
   const completedCount = renewals.filter((r) => r.status === 'Completed').length
   const totalAmount = renewals.reduce((sum, r) => sum + (r.amount ?? 0), 0)
@@ -187,7 +188,7 @@ export default function ConfirmationPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-gray-900 truncate">{r.businessName}</h3>
-                          <p className="text-xs text-gray-500">Account: {r.accountNumber}</p>
+                          {r.accountNumber ? <p className="text-xs text-gray-500">Account: {r.accountNumber}</p> : null}
                           {r.status === 'Completed' && r.transactionReference ? (
                             <p className="mt-1 text-xs text-gray-500 font-mono">Ref: {r.transactionReference}</p>
                           ) : null}
@@ -200,6 +201,15 @@ export default function ConfirmationPage() {
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
                               </svg>
                               Done
+                            </span>
+                          ) : r.status === 'Received' ? (
+                            // Paid early: lodged with ASIC once it takes it. Shown as received,
+                            // never as "not due" (David: that puts people off paying).
+                            <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                              <svg className="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                              </svg>
+                              Paid
                             </span>
                           ) : r.status === 'Failed' ? (
                             <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20">

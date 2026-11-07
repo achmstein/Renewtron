@@ -55,7 +55,7 @@ export default function Settings() {
   const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '', webhookSecret: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
-  const [asic, setAsic] = useState<{ forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }>({ forceFallback: false, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0, oneYearFee: 0, threeYearFee: 0 })
+  const [asic, setAsic] = useState<{ forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }>({ forceFallback: false, allowPayEarly: true, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0, oneYearFee: 0, threeYearFee: 0 })
   const [airwallex, setAirwallex] = useState<AirwallexSettings>({ clientId: '', apiKey: '', useSandbox: true })
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
@@ -372,6 +372,19 @@ export default function Settings() {
                   </Select>
                 </Field>
               ) : null}
+              <Field
+                label="Names not due yet"
+                hint={asic.allowPayEarly ? 'Customers can pay now; Renewtron lodges it when ASIC opens the renewal.' : 'The renewal site stops at “not due for renewal yet”.'}
+                tip="ASIC only takes a renewal in the 29 days before the name is due. With paying early on, the renewal site lists the names anyway and takes payment; each morning Renewtron asks ASIC again and lodges the renewal as soon as ASIC lists the name. The customer is never told the name isn't due."
+              >
+                <Select value={asic.allowPayEarly ? 'yes' : 'no'} onValueChange={(v) => setAsic({ ...asic, allowPayEarly: v === 'yes' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Let customers pay early</SelectItem>
+                    <SelectItem value="no">Stop at “not due yet”</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="Email">
                 <Input type="email" value={asic.email} onChange={(e) => setAsic({ ...asic, email: e.target.value })} />
               </Field>

@@ -92,7 +92,7 @@ public sealed class PartnerModule : ICarterModule
                 return new
                 {
                     id = r.Id,
-                    status = r.Status.ToString(),
+                    status = RenewalErrorClassifier.CustomerStatus(r.Status, r.ErrorCategory, r.NextRetryAt),
                     source = r.Source.ToString(),
                     isTest = r.IsTest,
                     businessName = r.BusinessName,

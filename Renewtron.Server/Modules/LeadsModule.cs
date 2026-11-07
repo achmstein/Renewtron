@@ -182,6 +182,22 @@ public sealed class LeadsModule : ICarterModule
                 }
             }
 
+            // ASIC says not due, but the customer may pay early: list the names from our copy of
+            // the register as payable and let the renewal wait for ASIC (EarlyRenewalService).
+            // The wizard carries on as for any name: nothing tells the customer it isn't due.
+            var payEarly = false;
+            string? asicNotDueMessage = null;
+            if (asicSettings.Value.AllowPayEarly && !searchResult.Success
+                && LeadOutcomes.FromAsicError(searchResult.ErrorMessage) == LeadOutcome.NotDueForRenewal
+                && await localNames.SearchByAbnAsync(cleanAbn) is { Success: true, BusinessNames.Count: > 0 } earlyNames)
+            {
+                logger.LogInformation("ABN {Abn}: ASIC says not due ({Message}); offering {Count} name(s) to pay early",
+                    cleanAbn, searchResult.ErrorMessage, earlyNames.BusinessNames.Count);
+                asicNotDueMessage = searchResult.ErrorMessage;
+                searchResult = earlyNames;
+                payEarly = true;
+            }
+
             if (!searchResult.Success || searchResult.BusinessNames.Count == 0)
             {
                 var failedLog = new SearchLog
@@ -225,15 +241,18 @@ public sealed class LeadsModule : ICarterModule
                 InitiatedBy = SearchInitiator.Customer,
                 Source = source,
                 ResultsCount = searchResult.BusinessNames.Count,
-                VerifiedAt = testNames is not null ? DateTime.UtcNow : null,
+                // ASIC has already answered for a paid-early search: nothing left to confirm.
+                VerifiedAt = testNames is not null || payEarly ? DateTime.UtcNow : null,
+                VerificationError = asicNotDueMessage is { } m ? m[..Math.Min(m.Length, 500)] : null,
             };
             var savedResults = searchResult.BusinessNames.Select(b => new SearchResult
             {
                 Id = Guid.NewGuid(),
                 SearchLogId = searchLog.Id,
                 BusinessName = b.Name,
-                AccountNumber = b.AccountNumber,
+                AccountNumber = b.AccountNumber ?? "",
                 RegistrationDate = b.RegistrationDate,
+                PayEarly = payEarly,
             }).ToList();
             searchLog.Results = savedResults;
             db.SearchLogs.Add(searchLog);
@@ -245,7 +264,7 @@ public sealed class LeadsModule : ICarterModule
             {
                 // Test customer: settled already, and never pushed to Ontraport.
             }
-            else if (source == SearchSource.Asic)
+            else if (source == SearchSource.Asic || payEarly)
                 // The business names are ASIC's — send them to the lead's Ontraport contact.
                 jobs.Enqueue<IOntraportContactPushService>(s => s.PushLeadAsync(lead.Id));
             else if (!asicSettings.Value.ForceFallback)

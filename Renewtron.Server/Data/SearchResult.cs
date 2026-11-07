@@ -16,6 +16,13 @@ public class SearchResult
     /// </summary>
     public bool IsAvailable { get; set; } = true;
 
+    /// <summary>
+    /// ASIC isn't taking this name's renewal yet (it opens 29 days before the due date), but
+    /// the customer may pay now: the renewal waits and Renewtron lodges it once ASIC lists the
+    /// name (see <see cref="Services.EarlyRenewalService"/>). Its account number comes then.
+    /// </summary>
+    public bool PayEarly { get; set; }
+
     // Navigation properties
     public SearchLog SearchLog { get; set; }
     public RenewalRequest? RenewalRequest { get; set; }

@@ -82,6 +82,9 @@ public static class RenewalOrderProjection
         {
             if (current.Status is RenewalStatus.Pending or RenewalStatus.Processing)
                 return new(RenewalOrderStage.Renewing, CurrentAttemptId: current.Id);
+            // Paid early: waiting for ASIC to open the renewal, checked again on that date.
+            if (current.Status == RenewalStatus.Failed && current.ErrorCategory == RenewalErrorCategories.NotDueYet && current.NextRetryAt is { } check)
+                return new(RenewalOrderStage.Waiting, NextActionAt: check, CurrentAttemptId: current.Id);
             if (current.NextRetryAt is { } retry)
                 return new(RenewalOrderStage.Renewing, NextActionAt: retry, CurrentAttemptId: current.Id);
             return FromFailedAttempt(current, source, overdue, today);

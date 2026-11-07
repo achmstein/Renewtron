@@ -83,6 +83,27 @@ public class RenewalProcessingService : IRenewalProcessingService
                 return;
             }
 
+            // Paid early and waiting for ASIC to open the renewal: the morning check
+            // (EarlyRenewalService) starts it. A person's Retry sets it Pending first.
+            if (EarlyRenewalService.IsWaiting(renewalRequest.Status, renewalRequest.ErrorCategory, renewalRequest.NextRetryAt)
+                && renewalRequest.NextRetryAt > DateTime.UtcNow)
+            {
+                _logger.LogInformation("Renewal {RenewalRequestId} was paid early and waits for ASIC until {NextRetryAt:u}; skipping", renewalRequestId, renewalRequest.NextRetryAt);
+                return;
+            }
+
+            // No ASIC account number yet (paid early, from our copy of the register): ASIC's
+            // search supplies it. Hand it to the paid-early check now rather than fail the run.
+            if (!renewalRequest.IsTest && string.IsNullOrWhiteSpace(renewalRequest.SearchResult.AccountNumber))
+            {
+                EarlyRenewalService.MarkWaiting(renewalRequest, DateOnly.FromDateTime(DateTime.UtcNow));
+                renewalRequest.NextRetryAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync();
+                _backgroundJobClient.Enqueue<IEarlyRenewalService>(s => s.CheckWaitingAsync());
+                _logger.LogInformation("Renewal {RenewalRequestId} has no ASIC account number yet; asking ASIC for it first", renewalRequestId);
+                return;
+            }
+
             // A recent Processing row means another run is (or was moments ago) live —
             // e.g. Hangfire re-delivered after a crash. Never run the ASIC pipeline twice;
             // if the first run actually died, the reconciliation sweep repairs the row.
@@ -205,6 +226,15 @@ public class RenewalProcessingService : IRenewalProcessingService
 
             if (!result.IsSuccess && !retryingAfterCardFailure)
                 ScheduleAutoRetryIfEligible(renewalRequest);
+
+            // A wizard renewal ASIC says isn't due yet (paid early, or our window guess was a
+            // little early): it waits and the morning check tries again, instead of failing.
+            if (!result.IsSuccess && renewalRequest.Source == RenewalSource.Renewtron && renewalRequest.LeadId != null
+                && renewalRequest.ErrorCategory == RenewalErrorCategories.NotDueYet)
+            {
+                var sydneyToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
+                EarlyRenewalService.MarkWaiting(renewalRequest, EarlyRenewalService.NextCheck(sydneyToday, renewalRequest.SearchResult.RegistrationDate));
+            }
 
             await _dbContext.SaveChangesAsync();
 

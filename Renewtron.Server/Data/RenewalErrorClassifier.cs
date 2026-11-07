@@ -35,12 +35,23 @@ public static class RenewalErrorClassifier
     /// Portal). Never the raw ErrorMessage, which carries ASIC page text and step names.
     /// Null while the renewal is on track.
     /// </summary>
+    /// <summary>
+    /// The status to show a customer (Business Portal, renewal links). A renewal paid early and
+    /// waiting for ASIC is stored as a failed "not due yet" run; to the customer it's in progress.
+    /// </summary>
+    public static string CustomerStatus(RenewalStatus status, string? category, DateTime? nextRetryAt) =>
+        status == RenewalStatus.Failed && category == RenewalErrorCategories.NotDueYet && nextRetryAt != null
+            ? nameof(RenewalStatus.Pending)
+            : status.ToString();
+
     public static string? CustomerMessage(RenewalStatus status, string? category, DateTime? nextRetryAt)
     {
         if (status == RenewalStatus.Completed) return null;
         return category switch
         {
-            RenewalErrorCategories.NotDueYet => "ASIC isn't accepting this renewal yet — we'll retry automatically.",
+            // Paid early and waiting for ASIC to open the renewal. David: never tell the customer
+            // the name "isn't due" (it puts people off paying); it's simply received and in hand.
+            RenewalErrorCategories.NotDueYet => "Payment received. We'll lodge this renewal with ASIC and email you when it's done.",
             RenewalErrorCategories.AlreadyInProgress => "ASIC shows a renewal already in progress for this name.",
             RenewalErrorCategories.Transient when nextRetryAt != null => "We hit a temporary problem at ASIC and will retry automatically.",
             _ when status == RenewalStatus.Failed => "This renewal needs attention from our team — we'll be in touch.",

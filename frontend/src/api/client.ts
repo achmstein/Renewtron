@@ -270,7 +270,8 @@ export interface BatchRenewalResponse {
 }
 export interface RenewalStatusItem {
   id: string
-  status: 'Pending' | 'Processing' | 'Completed' | 'Failed'
+  /** Received: paid, and Renewtron lodges it with ASIC as soon as ASIC takes it. */
+  status: 'Pending' | 'Processing' | 'Completed' | 'Failed' | 'Received'
   amount: number
   renewalYears: number
   businessName: string
@@ -490,7 +491,7 @@ export const api = {
       sendGrid: { apiKey: string; fromEmail: string; fromName: string }
       stripe: { secretKey: string; publishableKey: string; webhookSecret?: string }
       pricing: { oneYearFee: number; threeYearFee: number }
-      asic: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }
+      asic: { forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }
       airwallex: AirwallexSettings
       ontraport: OntraportSettingsBody
       winBack: { subject: string; bodyPlain: string; bodyHtml: string }
@@ -1085,7 +1086,7 @@ export const api = {
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
     updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
     updateStripe: (body: { secretKey: string; publishableKey: string; webhookSecret: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
-    updateAsic: (body: { forceFallback: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
+    updateAsic: (body: { forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),
     updateTracking: (body: TrackingSettings) => apiFetch<void>('/api/admin/settings/tracking', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsicKeyInbox: (body: AsicKeyInboxSettings) => apiFetch<void>('/api/admin/settings/asic-key-inbox', { method: 'PUT', body: JSON.stringify(body) }),

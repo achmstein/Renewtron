@@ -157,6 +157,7 @@ public sealed class RenewalsModule : ICarterModule
 
             foreach (var rid in renewalIds)
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
+            EnqueuePaidEarlyEmail(jobs, lead, searchResults, request.RenewalYears, pricePer);
 
             // Signs the customer straight into the Business Portal from the confirmation page.
             return Results.Ok(new
@@ -234,6 +235,7 @@ public sealed class RenewalsModule : ICarterModule
 
             foreach (var rid in renewalIds)
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
+            EnqueuePaidEarlyEmail(jobs, lead, searchResults, request.RenewalYears, pricePer);
 
             return Results.Ok(new { renewalIds, total, portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt) });
         }).WithTags("Wizard");
@@ -251,7 +253,9 @@ public sealed class RenewalsModule : ICarterModule
             return Results.Ok(renewals.Select(r => new
             {
                 id = r.Id,
-                status = r.Status.ToString(),
+                // Paid early and waiting for ASIC reads as received: the customer is never told
+                // the name isn't due (David: it puts people off paying).
+                status = EarlyRenewalService.IsWaiting(r.Status, r.ErrorCategory, r.NextRetryAt) ? "Received" : r.Status.ToString(),
                 amount = r.Amount,
                 renewalYears = r.RenewalYears,
                 businessName = r.SearchResult?.BusinessName,
@@ -274,7 +278,7 @@ public sealed class RenewalsModule : ICarterModule
             return Results.Ok(new
             {
                 id = renewal.Id,
-                status = renewal.Status.ToString(),
+                status = RenewalErrorClassifier.CustomerStatus(renewal.Status, renewal.ErrorCategory, renewal.NextRetryAt),
                 businessName = renewal.SearchResult.BusinessName,
                 abn = renewal.SearchResult.SearchLog.Abn,
                 renewalYears = renewal.RenewalYears,
@@ -996,6 +1000,20 @@ public sealed class RenewalsModule : ICarterModule
     /// immediate-success path and the post-3DS completion endpoint so the two can't drift.
     /// Reuses an existing RenewalRequest per search result (a failed earlier attempt), else creates one.
     /// </summary>
+    /// <summary>
+    /// Names paid for before ASIC takes them: one email telling the customer we have the payment
+    /// and will lodge the renewal when ASIC opens it. The renewal site itself doesn't say.
+    /// </summary>
+    private static void EnqueuePaidEarlyEmail(IBackgroundJobClient jobs, Lead lead, List<SearchResult> searchResults, int renewalYears, decimal pricePer)
+    {
+        var early = searchResults.Where(sr => sr.PayEarly).Select(sr => sr.BusinessName).ToArray();
+        if (early.Length == 0 || string.IsNullOrWhiteSpace(lead.Email)) return;
+        var email = lead.Email;
+        var abn = lead.Abn;
+        var amount = pricePer * early.Length;
+        jobs.Enqueue<IEmailService>(e => e.SendPaidEarlyAsync(email, abn, early, renewalYears, amount));
+    }
+
     private static async Task<List<Guid>> UpsertPaidRenewalsAsync(
         ApplicationDbContext db,
         Lead lead,
@@ -1055,6 +1073,14 @@ public sealed class RenewalsModule : ICarterModule
                     Status = RenewalStatus.Pending,
                 };
                 db.RenewalRequests.Add(renewal);
+            }
+
+            // Paid before ASIC will take it: the renewal waits, and the morning check lodges it
+            // once ASIC lists the name (EarlyRenewalService).
+            if (sr.PayEarly && !lead.IsTest)
+            {
+                var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
+                EarlyRenewalService.MarkWaiting(renewal, EarlyRenewalService.NextCheck(today, sr.RegistrationDate));
             }
             await db.SaveChangesAsync();
 

@@ -63,6 +63,15 @@ public class RenewalOrderProjectionTests
         Assert.Equal(Now.AddHours(1), r.NextActionAt);
     }
 
+    [Fact]
+    public void A_wizard_renewal_paid_early_is_waiting_until_its_check_date()
+    {
+        var check = Now.AddDays(40);
+        var run = Run(RenewalStatus.Failed, RenewalErrorCategories.NotDueYet, nextRetry: check);
+        var r = Compute(new Source(SourceState.Queued, null, LinkedAttemptId: run.Id), [run], Today);
+        Assert.Equal((RenewalOrderStage.Waiting, check), (r.Stage, r.NextActionAt));
+    }
+
     [Theory]
     [InlineData(RenewalErrorCategories.PaymentRisk, null, RenewalOrderReason.VerifyPaymentAtAsic)]
     [InlineData(RenewalErrorCategories.CardDeclined, null, RenewalOrderReason.CardDeclined)]

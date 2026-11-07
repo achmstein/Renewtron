@@ -72,6 +72,7 @@ public sealed class SettingsModule : ICarterModule
                 asic = new
                 {
                     forceFallback = asic.ForceFallback,
+                    allowPayEarly = asic.AllowPayEarly,
                     email = asic.Email,
                     cardNumber = Mask(asic.CardNumber),
                     cardholderName = asic.CardholderName,
