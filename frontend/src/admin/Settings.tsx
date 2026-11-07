@@ -689,7 +689,7 @@ function SettingsCard({ title, description, tip, status, onSubmit, saveLabel = '
 /** A label, its input, and at most one muted line under it; the longer explanation on hover. */
 function Field({ label, hint, tip, children }: { label: string; hint?: string; tip?: string; children: ReactNode }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="grid content-start gap-1.5">
       <Label title={tip}>
         {label}
         {tip ? <Info aria-hidden className="size-3.5 text-muted-foreground" /> : null}

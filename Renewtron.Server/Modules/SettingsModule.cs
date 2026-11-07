@@ -84,6 +84,10 @@ public sealed class SettingsModule : ICarterModule
                     hasCvc = !string.IsNullOrEmpty(asic.Cvc),
                     paymentMethod = AsicPaymentMethods.IsBpay(asic.PaymentMethod) ? AsicPaymentMethods.Bpay : AsicPaymentMethods.Card,
                     bpayAfterCardFailures = asic.BpayAfterCardFailures,
+                    // In this section: the ASIC card loads and saves them. (They once sat under
+                    // asicKeyInbox, so the card showed them empty and every save wrote 0.)
+                    oneYearFee = asic.OneYearFee,
+                    threeYearFee = asic.ThreeYearFee,
                 },
                 ontraport = new
                 {
@@ -111,8 +115,6 @@ public sealed class SettingsModule : ICarterModule
                     asicKeyPattern = asicKeyInbox.AsicKeyPattern,
                     // Saved overrides pin the pattern, so a newer code default needs a way back in.
                     defaultAsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern,
-                    oneYearFee = asic.OneYearFee,
-                    threeYearFee = asic.ThreeYearFee,
                 },
                 airwallex = new
                 {
