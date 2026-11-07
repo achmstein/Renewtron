@@ -1,4 +1,4 @@
-﻿using System.Net.Mail;
+using System.Net.Mail;
 
 namespace Renewtron.Abstractions;
 
@@ -10,7 +10,9 @@ public interface IEmailService
         string abn,
         int renewalYears,
         decimal amountPaid,
-        string transactionReference);
+        string transactionReference,
+        Guid? renewalRequestId = null,
+        Guid? leadId = null);
 
     /// <summary>
     /// After paying for names ASIC isn't taking yet: payment received, ASIC only opens a renewal
@@ -18,4 +20,7 @@ public interface IEmailService
     /// where the customer learns it — the renewal site doesn't say (David, 7 Nov 2026).
     /// </summary>
     Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid);
+
+    /// <summary>The same, recorded against the lead (and so the client) it's for.</summary>
+    Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid, Guid? leadId);
 }

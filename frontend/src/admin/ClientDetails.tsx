@@ -231,7 +231,7 @@ function Timeline({ client }: { client: ClientDetail }) {
         sub: l.email, status: l.outcome,
       })),
       ...client.messages.map((m) => ({
-        key: `m${m.id}`, kind: 'email' as const, at: m.createdAt, title: `Email: ${m.subject || m.template}`,
+        key: `m${m.id}`, kind: 'email' as const, at: m.createdAt, to: `/admin/emails/${m.id}`, title: `Email: ${m.subject || m.template}`,
         sub: m.recipient, status: m.status,
       })),
     ]

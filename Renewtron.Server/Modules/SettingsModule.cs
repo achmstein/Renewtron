@@ -71,7 +71,7 @@ public sealed class SettingsModule : ICarterModule
 
             return Results.Ok(new
             {
-                sendGrid = new { apiKey = Mask(sendGrid.ApiKey), fromEmail = sendGrid.FromEmail, fromName = sendGrid.FromName },
+                sendGrid = new { apiKey = Mask(sendGrid.ApiKey), fromEmail = sendGrid.FromEmail, fromName = sendGrid.FromName, eventWebhookPublicKey = sendGrid.EventWebhookPublicKey ?? "" },
                 stripe = new { secretKey = Mask(stripe.SecretKey), publishableKey = stripe.PublishableKey, webhookSecret = Mask(stripe.WebhookSecret) },
                 pricing = await settings.GetPricingSettingsAsync(),
                 asic = new
@@ -162,6 +162,8 @@ public sealed class SettingsModule : ICarterModule
         {
             var current = await settings.GetSendGridSettingsAsync();
             body.ApiKey = Unmask(body.ApiKey, current.ApiKey);
+            // A page that doesn't send the webhook key keeps the stored one.
+            body.EventWebhookPublicKey = body.EventWebhookPublicKey is null ? current.EventWebhookPublicKey : body.EventWebhookPublicKey.Trim();
             await settings.UpdateSendGridSettingsAsync(body);
             return Results.NoContent();
         });

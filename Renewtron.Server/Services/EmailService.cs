@@ -1,27 +1,34 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
+using Renewtron.Data;
+using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
-using SendGrid;
-using SendGrid.Helpers.Mail;
 
 namespace Renewtron.Services;
 
 public class EmailService : IEmailService
 {
-    private readonly SendGridClient _client;
-    private readonly SendGridSettings _settings;
+    private readonly IEmailSender _sender;
+    private readonly ApplicationDbContext _db;
     private readonly PortalSettings _portal;
-    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(
-        IOptionsSnapshot<SendGridSettings> settings,
-        IOptionsSnapshot<PortalSettings> portal,
-        ILogger<EmailService> logger)
+    public EmailService(IEmailSender sender, ApplicationDbContext db, IOptionsSnapshot<PortalSettings> portal)
     {
-        _settings = settings.Value;
+        _sender = sender;
+        _db = db;
         _portal = portal.Value;
-        _logger = logger;
-        _client = new SendGridClient(_settings.ApiKey);
+    }
+
+    /// <summary>The client a lead (or a renewal's lead) belongs to, for the email's record.</summary>
+    private async Task<Guid?> ClientOfAsync(Guid? leadId, Guid? renewalRequestId)
+    {
+        if (renewalRequestId is { } rid
+            && await _db.RenewalRequests.Where(r => r.Id == rid).Select(r => new { r.ClientId, r.LeadId }).FirstOrDefaultAsync() is { } r)
+        {
+            if (r.ClientId is { } c) return c;
+            leadId ??= r.LeadId;
+        }
+        return leadId is { } lid ? await _db.Leads.Where(l => l.Id == lid).Select(l => l.ClientId).FirstOrDefaultAsync() : null;
     }
 
     public async Task SendRenewalConfirmationAsync(
@@ -30,10 +37,10 @@ public class EmailService : IEmailService
         string abn,
         int renewalYears,
         decimal amountPaid,
-        string transactionReference)
+        string transactionReference,
+        Guid? renewalRequestId = null,
+        Guid? leadId = null)
     {
-        var from = new EmailAddress(_settings.FromEmail, _settings.FromName);
-        var to = new EmailAddress(toEmail);
         var subject = $"Business Name Renewal Confirmation - {EmailText.SubjectSafe(businessName)}";
 
         // Values below come from customers and ASIC — encode everything that lands in HTML.
@@ -145,14 +152,17 @@ Please keep this email for your records.
 This is an automated email from Renewtron.
 ";
 
-        var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
-        await SendGridDelivery.SendAsync(_client, msg, _settings.ApiKey, "renewal confirmation", toEmail, _logger);
+        if (renewalRequestId is { } rr && leadId is null)
+            leadId = await _db.RenewalRequests.Where(r => r.Id == rr).Select(r => r.LeadId).FirstOrDefaultAsync();
+        await _sender.SendAsync(new EmailToSend("renewal confirmation", toEmail, subject, plainTextContent, htmlContent,
+            LeadId: leadId, ClientId: await ClientOfAsync(leadId, renewalRequestId), RenewalRequestId: renewalRequestId));
     }
 
-    public async Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid)
+    public Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid) =>
+        SendPaidEarlyAsync(toEmail, abn, businessNames, renewalYears, amountPaid, null);
+
+    public async Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid, Guid? leadId)
     {
-        var from = new EmailAddress(_settings.FromEmail, _settings.FromName);
-        var to = new EmailAddress(toEmail);
         var one = businessNames.Length == 1;
         var subject = one
             ? $"Payment received - {EmailText.SubjectSafe(businessNames[0])} renewal"
@@ -220,7 +230,7 @@ What happens next?
 This is an automated email from Renewtron.
 ";
 
-        var msg = MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
-        await SendGridDelivery.SendAsync(_client, msg, _settings.ApiKey, "paid early", toEmail, _logger);
+        await _sender.SendAsync(new EmailToSend("paid early", toEmail, subject, plainTextContent, htmlContent,
+            LeadId: leadId, ClientId: await ClientOfAsync(leadId, null)));
     }
 }

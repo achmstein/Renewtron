@@ -209,8 +209,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Subject).HasMaxLength(300);
             entity.Property(e => e.Recipient).IsRequired().HasMaxLength(300);
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+            entity.Property(e => e.ProviderMessageId).HasMaxLength(100);
+            entity.Property(e => e.DeliveryStatus).HasMaxLength(20);
+            entity.Property(e => e.DeliveryDetail).HasMaxLength(500);
 
             entity.HasIndex(e => e.LeadId);
+            entity.HasIndex(e => e.Recipient);
+            entity.HasIndex(e => e.ProviderMessageId);
+            entity.HasIndex(e => e.RenewalRequestId);
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.BatchId);
             entity.HasIndex(e => e.Status);

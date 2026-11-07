@@ -1011,7 +1011,8 @@ public sealed class RenewalsModule : ICarterModule
         var email = lead.Email;
         var abn = lead.Abn;
         var amount = pricePer * early.Length;
-        jobs.Enqueue<IEmailService>(e => e.SendPaidEarlyAsync(email, abn, early, renewalYears, amount));
+        var leadId = (Guid?)lead.Id;
+        jobs.Enqueue<IEmailService>(e => e.SendPaidEarlyAsync(email, abn, early, renewalYears, amount, leadId));
     }
 
     private static async Task<List<Guid>> UpsertPaidRenewalsAsync(

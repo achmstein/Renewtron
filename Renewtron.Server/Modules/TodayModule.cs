@@ -219,12 +219,18 @@ public sealed class TodayModule : ICarterModule
             try { if (!forClient) cardProblem = (await AsicCardHealth.CheckAsync(db, now)).Problem; }
             catch (Exception ex) { logger.LogWarning(ex, "Today: card check failed"); }
 
+            // Email not going out (SendGrid refusing our key, or every recent send failing).
+            string? emailProblem = null;
+            try { if (!forClient) emailProblem = await EmailEvents.ProblemAsync(db, now); }
+            catch (Exception ex) { logger.LogWarning(ex, "Today: email check failed"); }
+
             return Results.Ok(new
             {
                 generatedAt = now,
                 total = groups.Sum(g => g.Count),
                 otpProblem,
                 cardProblem,
+                emailProblem,
                 groups,
             });
         }).RequireAuthorization().WithTags("Admin.Today");

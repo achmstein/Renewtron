@@ -388,13 +388,23 @@ public sealed class ClientLinkService(
         var messages = await db.OutboundMessages.Where(m => m.ClientId == null).ToListAsync(ct);
         if (messages.Count == 0) return;
         var leadClient = db.Leads.Local.Where(l => l.ClientId != null).ToDictionary(l => l.Id, l => l.ClientId!.Value);
-        var leadIds = messages.Select(m => m.LeadId).Distinct().ToList();
+        var leadIds = messages.Where(m => m.LeadId != null).Select(m => m.LeadId!.Value).Distinct().ToList();
         foreach (var row in await db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id) && l.ClientId != null).Select(l => new { l.Id, l.ClientId }).ToListAsync(ct))
             leadClient.TryAdd(row.Id, row.ClientId!.Value);
 
+        // Emails that aren't about a lead find their client by the address they went to.
+        var recipients = messages.Where(m => m.LeadId == null).Select(m => m.Recipient.Trim().ToLower()).Distinct().ToList();
+        var emailClient = recipients.Count == 0 ? new Dictionary<string, Guid>() : (await db.ClientEmails.AsNoTracking()
+                .Where(e => recipients.Contains(e.Email)).Select(e => new { e.Email, e.ClientId }).ToListAsync(ct))
+            .GroupBy(e => e.Email).Where(g => g.Select(x => x.ClientId).Distinct().Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First().ClientId);
+
         foreach (var m in messages)
         {
-            if (!leadClient.TryGetValue(m.LeadId, out var cid)) { _result.Skipped++; continue; }
+            Guid cid;
+            if (m.LeadId is { } lid && leadClient.TryGetValue(lid, out var byLead)) cid = byLead;
+            else if (m.LeadId is null && emailClient.TryGetValue(m.Recipient.Trim().ToLower(), out var byEmail)) cid = byEmail;
+            else { _result.Skipped++; continue; }
             m.ClientId = cid;
             _result.MessagesLinked++;
         }

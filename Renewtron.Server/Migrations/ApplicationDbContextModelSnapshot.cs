@@ -1288,8 +1288,17 @@ namespace Renewtron.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("BatchId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BodyHtml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BodyText")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Channel")
                         .HasColumnType("int");
@@ -1300,17 +1309,44 @@ namespace Renewtron.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeliveryAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeliveryDetail")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DeliveryStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<Guid>("LeadId")
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("LeadId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("OpenedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("Recipient")
                         .IsRequired()
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("RenewalRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ResendOfId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("datetime2");
@@ -1337,6 +1373,12 @@ namespace Renewtron.Migrations
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("LeadId");
+
+                    b.HasIndex("ProviderMessageId");
+
+                    b.HasIndex("Recipient");
+
+                    b.HasIndex("RenewalRequestId");
 
                     b.HasIndex("Status");
 
@@ -1986,8 +2028,7 @@ namespace Renewtron.Migrations
                     b.HasOne("Renewtron.Data.Lead", "Lead")
                         .WithMany()
                         .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Lead");
                 });

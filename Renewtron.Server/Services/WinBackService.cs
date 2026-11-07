@@ -126,7 +126,7 @@ public class WinBackService : IWinBackService
             {
                 var lead = await _db.Leads.AsNoTracking().FirstOrDefaultAsync(x => x.Id == leads[i].Id);
                 if (lead is null) continue;
-                await _leadEmail.SendWinBackEmailAsync(lead, leads[i].FirstBusinessName);
+                await _leadEmail.SendWinBackEmailAsync(lead, leads[i].FirstBusinessName, msg.Id);
                 msg.Status = OutboundStatus.Sent;
                 msg.SentAt = DateTime.UtcNow;
             }
@@ -158,7 +158,7 @@ public class WinBackService : IWinBackService
 
         try
         {
-            await _leadEmail.SendWinBackEmailAsync(msg.Lead, firstBusinessName);
+            await _leadEmail.SendWinBackEmailAsync(msg.Lead, firstBusinessName, msg.Id);
             msg.Status = OutboundStatus.Sent;
             msg.SentAt = DateTime.UtcNow;
         }

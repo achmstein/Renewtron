@@ -27,6 +27,7 @@ import AsicKeys from './AsicKeys'
 import AsicKeyRequests from './AsicKeyRequests'
 import { KeyLetterDetails, KeyRequestDetails } from './KeyDetails'
 import AsicPortalLinkDetails from './AsicPortalLinkDetails'
+import Emails from './Emails'
 import Settings from './Settings'
 
 const queryClient = new QueryClient({
@@ -65,6 +66,8 @@ export default function AdminRoutes() {
           <Route path="asic-key-requests/:id" element={<KeyRequestDetails />} />
           <Route path="asic-keys/:id" element={<KeyLetterDetails />} />
           <Route path="asic-portal/:id" element={<AsicPortalLinkDetails />} />
+          <Route path="emails" element={<Emails />} />
+          <Route path="emails/:id" element={<Emails />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

@@ -123,6 +123,8 @@ builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
 builder.Services.AddHttpClient<IAirwallexClient, AirwallexClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<IBpayPaymentService, BpayPaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IEmailSender, EmailSender>();
+builder.Services.AddScoped<EmailMaintenance>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
 builder.Services.AddScoped<IRenewedElsewhereService, RenewedElsewhereService>();
@@ -375,6 +377,13 @@ RecurringJob.AddOrUpdate<IBusinessNameImportService>(
     BusinessNameImportService.RecurringJobId,
     service => service.ImportIfChangedAsync(false, CancellationToken.None),
     "0 3 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// Clears the text of emails older than 180 days (the record of each send stays).
+RecurringJob.AddOrUpdate<EmailMaintenance>(
+    "email-body-purge",
+    job => job.PurgeOldBodiesAsync(),
+    "30 3 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
 // Keeps the paid-renewal records (RenewalOrders) in step with the pipeline.

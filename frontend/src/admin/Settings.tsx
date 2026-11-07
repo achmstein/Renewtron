@@ -53,7 +53,7 @@ export default function Settings() {
   const [data, setData] = useState<Settings | null>(null)
 
   // Form state mirrors the original separate models
-  const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '' })
+  const [sg, setSg] = useState({ apiKey: '', fromEmail: '', fromName: '', eventWebhookPublicKey: '' })
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '', webhookSecret: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
   const [asic, setAsic] = useState<{ forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }>({ forceFallback: false, allowPayEarly: true, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0, oneYearFee: 0, threeYearFee: 0 })
@@ -73,7 +73,7 @@ export default function Settings() {
   const load = async () => {
     const r = await api.admin.settings()
     setData(r)
-    setSg(r.sendGrid)
+    setSg({ ...r.sendGrid, eventWebhookPublicKey: r.sendGrid.eventWebhookPublicKey ?? '' })
     setStripe({ ...r.stripe, webhookSecret: r.stripe.webhookSecret ?? '' })
     setPricing(r.pricing)
     const { hasCvc, ...asicFields } = r.asic
@@ -104,6 +104,14 @@ export default function Settings() {
   }
 
   const onSendGrid  = save('SendGrid', () => api.admin.updateSendGrid(sg))
+  // Sends a test email to the signed-in admin through the saved settings (save first); it shows on the Emails page.
+  const testSendGrid = () => {
+    void sileo.promise(api.admin.testSendGridEmail().then((r) => { if (!r.ok) throw new Error(r.message); return r }), {
+      loading: { title: 'Sending a test email…' },
+      success: (r) => ({ title: 'SendGrid took it', description: r.message }),
+      error: (e) => ({ title: 'SendGrid didn’t send it', description: e instanceof Error ? e.message : undefined }),
+    }).catch(() => {})
+  }
   const onStripe    = save('Stripe', () => api.admin.updateStripe(stripe))
   const onPricing   = save('Pricing', () => api.admin.updatePricing(pricing))
   const onAirwallex = save('Airwallex', () => api.admin.updateAirwallex(airwallex))
@@ -267,7 +275,8 @@ export default function Settings() {
           ) : null}
 
           {data && activeKey === 'sendgrid' ? (
-            <SettingsCard {...card} onSubmit={onSendGrid}>
+            <SettingsCard {...card} onSubmit={onSendGrid}
+              extra={<Button type="button" variant="outline" onClick={testSendGrid}>Send test email</Button>}>
               <Field label="API key">
                 <Input value={sg.apiKey} onChange={(e) => setSg({ ...sg, apiKey: e.target.value })} />
               </Field>
@@ -279,6 +288,13 @@ export default function Settings() {
                   <Input value={sg.fromName} onChange={(e) => setSg({ ...sg, fromName: e.target.value })} />
                 </Field>
               </div>
+              <Field
+                label="Event webhook verification key"
+                hint={sg.eventWebhookPublicKey ? 'Delivered, bounced and opened show on the Emails page.' : 'Blank: the Emails page shows only whether SendGrid took each email.'}
+                tip={`In SendGrid: Settings → Mail Settings → Event Webhook. Post URL ${window.location.origin}/api/sendgrid/events; tick Delivered, Deferred, Bounced, Dropped, Spam reports and Opened; turn on Signed Event Webhook and paste its verification key here.`}
+              >
+                <Textarea rows={2} className="font-mono text-caption" value={sg.eventWebhookPublicKey} onChange={(e) => setSg({ ...sg, eventWebhookPublicKey: e.target.value })} placeholder="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE…" />
+              </Field>
             </SettingsCard>
           ) : null}
 

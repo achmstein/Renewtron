@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Archive, ChartColumn, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut,
-  Landmark, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench,
+  Landmark, Mail, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api, type SidebarCounts } from '../api/client'
@@ -38,6 +38,7 @@ const Icon = {
   Key: <KeyRound />,
   KeyAlert: <FileWarning />,
   Inbox: <Inbox />,
+  Mail: <Mail />,
   Funnel: <Filter />,
   Cog: <Settings />,
   Logout: <LogOut />,
@@ -86,6 +87,7 @@ const navSections: NavSection[] = [
       { to: '/admin/ontraport-sales', label: 'Ontraport sales', icon: Icon.Cart },
       { to: '/admin/bulk-renewals', label: 'Bulk uploads', icon: Icon.Bulk },
       { to: '/admin/asic-keys', label: 'Key letters', icon: Icon.Key },
+      { to: '/admin/emails', label: 'Emails', icon: Icon.Mail },
     ],
   },
   {

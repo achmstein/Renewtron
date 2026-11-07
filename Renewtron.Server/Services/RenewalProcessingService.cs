@@ -325,7 +325,9 @@ public class RenewalProcessingService : IRenewalProcessingService
                             renewalRequest.SearchResult.SearchLog.Abn,
                             renewalRequest.RenewalYears,
                             renewalRequest.Amount,
-                            result.TransactionReference ?? "N/A"
+                            result.TransactionReference ?? "N/A",
+                            renewalRequest.Id,
+                            renewalRequest.LeadId
                         );
 
                         _logger.LogInformation("Confirmation email sent to {Email} for request {RenewalRequestId}",

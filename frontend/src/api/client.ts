@@ -138,7 +138,7 @@ export interface RenewalOrderAttempt {
   initiatedAt: string; lastAttemptAt: string | null; completedAt: string | null; nextRetryAt: string | null
   attemptCount: number; paysBy: 'Card' | 'BPAY'; bpayPaidAt: string | null; transactionReference: string | null; current: boolean
 }
-export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; cardProblem?: string | null; groups: TodayGroup[] }
+export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; cardProblem?: string | null; emailProblem?: string | null; groups: TodayGroup[] }
 
 export interface SidebarCounts { today: number; renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
 
@@ -180,6 +180,49 @@ export interface ClientBusinessNameDto {
   portalLinkedAt: string | null
   /** The latest "link to our ASIC account" run for the name. */
   portalLink: { id: string; status: AsicPortalLinkStatus; createdAt: string; finishedAt: string | null } | null
+}
+
+/** One email Renewtron sent or tried to (the admin's Emails page). */
+export interface EmailRow {
+  id: string
+  kind: string
+  subject: string
+  to: string
+  status: 'Queued' | 'Sent' | 'Failed'
+  /** What SendGrid said happened at the inbox: delivered, deferred, bounce, dropped, spamreport. */
+  deliveryStatus: string | null
+  openedAt: string | null
+  error: string | null
+  createdAt: string
+  sentAt: string | null
+  attemptCount: number
+  clientId: string | null
+}
+
+export interface EmailListResponse {
+  total: number
+  page: number
+  pageSize: number
+  counts: Record<'all' | 'problem' | 'sent' | 'delivered' | 'opened', number>
+  kinds: string[]
+  items: EmailRow[]
+  /** Email isn't going out (SendGrid refusing our key, or every recent send failing). */
+  problem: string | null
+}
+
+export interface EmailDetail extends Omit<EmailRow, 'clientId'> {
+  lastAttemptAt: string | null
+  providerMessageId: string | null
+  deliveryAt: string | null
+  deliveryDetail: string | null
+  bodyHtml: string | null
+  bodyText: string | null
+  leadId: string | null
+  renewalRequestId: string | null
+  batchId: string | null
+  resendOfId: string | null
+  client: { id: string; fullName: string } | null
+  resends: Array<{ id: string; status: string; createdAt: string }>
 }
 
 export type AsicPortalLinkStatus = 'Queued' | 'Running' | 'Done' | 'WrongKey' | 'NeedsLook' | 'Failed'
@@ -538,7 +581,7 @@ export const api = {
   admin: {
     dashboard: () => apiFetch<DashboardResponse>('/api/admin/dashboard'),
     settings: () => apiFetch<{
-      sendGrid: { apiKey: string; fromEmail: string; fromName: string }
+      sendGrid: { apiKey: string; fromEmail: string; fromName: string; eventWebhookPublicKey?: string }
       stripe: { secretKey: string; publishableKey: string; webhookSecret?: string }
       pricing: { oneYearFee: number; threeYearFee: number }
       asic: { forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; hasCvc: boolean; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }
@@ -1141,7 +1184,12 @@ export const api = {
       return apiFetch<{ totalRows: number; importedCount: number; skippedDuplicates: number; skippedInvalid: number; errors: string[] }>('/api/admin/bulk-renewals/upload', { method: 'POST', body: form })
     },
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
-    updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
+    testSendGridEmail: (to?: string) => apiFetch<{ ok: boolean; message: string }>('/api/admin/settings/sendgrid/test-email', { method: 'POST', body: JSON.stringify({ to: to ?? null }) }),
+    emails: (params: { tab?: string; kind?: string; search?: string; clientId?: string; page?: number; pageSize?: number } = {}) =>
+      apiFetch<EmailListResponse>(`/api/admin/emails/?${new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)]))}`),
+    email: (id: string) => apiFetch<EmailDetail>(`/api/admin/emails/${id}`),
+    resendEmail: (id: string) => apiFetch<{ id: string; message: string }>(`/api/admin/emails/${id}/resend`, { method: 'POST' }),
+    updateSendGrid: (body: { apiKey: string; fromEmail: string; fromName: string; eventWebhookPublicKey?: string }) => apiFetch<void>('/api/admin/settings/sendgrid', { method: 'PUT', body: JSON.stringify(body) }),
     updateStripe: (body: { secretKey: string; publishableKey: string; webhookSecret: string }) => apiFetch<void>('/api/admin/settings/stripe', { method: 'PUT', body: JSON.stringify(body) }),
     updateAsic: (body: { forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/asic', { method: 'PUT', body: JSON.stringify(body) }),
     updateOntraport: (body: OntraportSettingsBody) => apiFetch<void>('/api/admin/settings/ontraport', { method: 'PUT', body: JSON.stringify(body) }),

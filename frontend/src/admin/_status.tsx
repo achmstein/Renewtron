@@ -112,10 +112,16 @@ const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
     RenewalCompleted:  { label: 'Renewed',      meaning: 'done' },
   },
   // OutboundStatus
+  // An email: our send (Queued/Sent/Failed), refined by what SendGrid reported at the inbox.
   email: {
-    Queued: { label: 'Queued', meaning: 'working' },
-    Sent:   { label: 'Sent',   meaning: 'done' },
-    Failed: { label: 'Failed', meaning: 'action' },
+    Queued:     { label: 'Sending',     meaning: 'working' },
+    Sent:       { label: 'Sent',        meaning: 'done', hint: 'SendGrid took it; no delivery report yet.' },
+    Failed:     { label: 'Not sent',    meaning: 'action', hint: 'SendGrid didn’t take it.' },
+    delivered:  { label: 'Delivered',   meaning: 'done', hint: 'The recipient’s mail server accepted it.' },
+    deferred:   { label: 'Delayed',     meaning: 'waiting', hint: 'The recipient’s server asked SendGrid to try again later.' },
+    bounce:     { label: 'Bounced',     meaning: 'action', hint: 'The recipient’s server refused it.' },
+    dropped:    { label: 'Dropped',     meaning: 'action', hint: 'SendGrid didn’t send it (e.g. the address bounced before).' },
+    spamreport: { label: 'Marked spam', meaning: 'action', hint: 'The recipient marked it as spam.' },
   },
   // Stripe PaymentIntent status as stored on a payment.
   payment: {

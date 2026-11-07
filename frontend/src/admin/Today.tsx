@@ -75,6 +75,9 @@ export default function Today() {
     ...(data?.otpProblem
       ? [{ title: 'Card renewals are on hold', text: 'Renewtron can’t read ASIC’s one-time codes from Ontraport.', detail: data.otpProblem, to: '/admin/settings', action: 'Fix in Settings' }]
       : []),
+    ...(data?.emailProblem
+      ? [{ title: 'Emails aren’t going out', text: 'Customers aren’t getting Renewtron’s emails.', detail: data.emailProblem, to: '/admin/emails?tab=problem', action: 'See emails' }]
+      : []),
     ...(data?.cardProblem
       ? [{ title: 'ASIC is declining our card', text: 'Renewals are paying by BPAY instead. Check the card with the bank.', detail: data.cardProblem, to: '/admin/bpay', action: 'BPAY to pay' }]
       : []),
