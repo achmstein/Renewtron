@@ -90,6 +90,8 @@ public sealed class EmailsModule : ICarterModule
                 providerMessageId = m.ProviderMessageId,
                 deliveryStatus = m.DeliveryStatus, deliveryAt = m.DeliveryAt, deliveryDetail = m.DeliveryDetail, openedAt = m.OpenedAt,
                 bodyHtml = m.BodyHtml, bodyText = m.BodyText,
+                templateKey = m.TemplateKey, templateVersion = m.TemplateVersion,
+                templateName = m.TemplateKey is null ? null : Renewtron.Services.Email.EmailTemplateCatalog.Find(m.TemplateKey)?.Name,
                 leadId = m.LeadId, renewalRequestId = m.RenewalRequestId, batchId = m.BatchId, resendOfId = m.ResendOfId,
                 client, resends,
             });
@@ -105,7 +107,9 @@ public sealed class EmailsModule : ICarterModule
             try
             {
                 var newId = await sender.SendAsync(new EmailToSend(m.Template, m.Recipient, m.Subject, m.BodyText ?? "", m.BodyHtml ?? m.BodyText ?? "",
-                    LeadId: m.LeadId, ClientId: m.ClientId, RenewalRequestId: m.RenewalRequestId, ResendOfId: m.Id));
+                    LeadId: m.LeadId, ClientId: m.ClientId, RenewalRequestId: m.RenewalRequestId, ResendOfId: m.Id,
+                    // The same email again: it keeps the template version it was written from.
+                    TemplateKey: m.TemplateKey, TemplateVersion: m.TemplateVersion));
                 return Results.Ok(new { id = newId, message = $"Sent again to {m.Recipient}." });
             }
             catch (InvalidOperationException ex)

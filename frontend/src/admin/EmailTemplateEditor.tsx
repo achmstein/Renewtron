@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle, ArrowLeft, Check, ChevronsUpDown, Code2, History, Loader2, Monitor, MoreHorizontal, PenLine,
@@ -72,7 +72,14 @@ function Editor({ detail }: { detail: TemplateDetail }) {
   const [sampleId, setSampleId] = useState<string | null>(null)
   const [sampleLabel, setSampleLabel] = useState('Sample values')
   const [width, setWidth] = useState<Width>('desktop')
-  const [historyOpen, setHistoryOpen] = useState(false)
+  // ?history=3 (from an email in the log): open History on the version that email used.
+  const [params, setParams] = useSearchParams()
+  const historyParam = params.get('history')
+  const [historyOpen, setHistoryOpen] = useState(historyParam !== null)
+  const openHistory = (open: boolean) => {
+    setHistoryOpen(open)
+    if (!open && historyParam !== null) setParams((p) => { p.delete('history'); return p }, { replace: true })
+  }
   const [confirm, setConfirm] = useState<null | 'reset' | 'off'>(null)
 
   useEffect(() => setCompletionVariables(detail.variables), [detail.variables])
@@ -295,7 +302,8 @@ function Editor({ detail }: { detail: TemplateDetail }) {
 
       <VersionHistory
         open={historyOpen}
-        onOpenChange={setHistoryOpen}
+        onOpenChange={openHistory}
+        initialVersion={historyParam === null ? null : Number(historyParam)}
         templateKey={key}
         current={saved.version}
         currentContent={draft}

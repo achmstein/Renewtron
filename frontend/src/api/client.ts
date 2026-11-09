@@ -223,6 +223,10 @@ export interface EmailDetail extends Omit<EmailRow, 'clientId'> {
   resendOfId: string | null
   client: { id: string; fullName: string } | null
   resends: Array<{ id: string; status: string; createdAt: string }>
+  /** The template it was written from, and its version (0 = the default wording). */
+  templateKey: string | null
+  templateVersion: number | null
+  templateName: string | null
 }
 
 export type AsicPortalLinkStatus = 'Queued' | 'Running' | 'Done' | 'WrongKey' | 'NeedsLook' | 'Failed'

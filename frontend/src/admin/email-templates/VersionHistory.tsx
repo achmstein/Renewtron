@@ -26,16 +26,18 @@ const asText = (c: Pick<TemplateContent, 'subject' | 'heading' | 'body'>, isLayo
 
 const SOURCE: Record<TemplateVersion['source'], string> = { edit: 'Edited', default: 'Reset to default', rollback: 'Restored' }
 
-export function VersionHistory({ open, onOpenChange, templateKey, current, currentContent, isLayout, onRestored }: {
+export function VersionHistory({ open, onOpenChange, templateKey, current, currentContent, isLayout, initialVersion, onRestored }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   templateKey: string
   current: number
   currentContent: Draft
   isLayout: boolean
+  /** The version to show first (e.g. the one an email used). */
+  initialVersion?: number | null
   onRestored: () => Promise<void>
 }) {
-  const [picked, setPicked] = useState<number | null>(null)
+  const [picked, setPicked] = useState<number | null>(initialVersion ?? null)
   const [compare, setCompare] = useState<Compare>('draft')
 
   const list = useQuery({

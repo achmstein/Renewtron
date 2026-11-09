@@ -236,6 +236,45 @@ public class EmailTemplateTests
         Assert.Equal((0, "Thank You for Using Renewtron"), (email.Version, email.Subject));
     }
 
+    [Fact]
+    public async Task A_restore_is_a_new_version_that_points_back()
+    {
+        await using var db = NewDb();
+        var store = Store(db);
+        var key = EmailTemplateCatalog.LeadCaptured;
+        await store.SaveAsync(key, new("First {{ full_name }}", "", "<p>1</p>"), "david", null);
+        await store.SaveAsync(key, new("Second {{ full_name }}", "", "<p>2</p>"), "david", null);
+        var restored = await store.SaveAsync(key, new("First {{ full_name }}", "", "<p>1</p>"), "david", "Restored version 1",
+            EmailTemplateVersionSource.Rollback, 1);
+
+        Assert.Equal(3, restored);
+        var v3 = await db.EmailTemplateVersions.SingleAsync(v => v.TemplateKey == key && v.Version == 3);
+        Assert.Equal((EmailTemplateVersionSource.Rollback, (int?)1), (v3.Source, v3.RestoredFrom));
+        Assert.Equal(3, await db.EmailTemplateVersions.CountAsync(v => v.TemplateKey == key)); // nothing overwritten
+        Assert.Equal("First Jane Citizen", (await store.RenderAsync(key, EmailModels.Lead(Lead()))).Subject);
+    }
+
+    [Fact]
+    public async Task The_email_log_records_the_template_version_even_when_sending_fails()
+    {
+        await using var db = NewDb();
+        // No SendGrid key: the send fails, but the row is written first, with its template and version.
+        var sender = new Renewtron.Services.EmailSender(db, new StaticSnapshot<SendGridSettings>(new SendGridSettings()),
+            NullLogger<Renewtron.Services.EmailSender>.Instance);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sender.SendAsync(new Renewtron.Services.EmailToSend(
+            EmailTemplateCatalog.LeadCaptured, "jane@example.com", "Hi", "text", "<p>html</p>",
+            TemplateKey: EmailTemplateCatalog.LeadCaptured, TemplateVersion: 4)));
+
+        var row = await db.OutboundMessages.SingleAsync();
+        Assert.Equal((EmailTemplateCatalog.LeadCaptured, (int?)4, OutboundStatus.Failed), (row.TemplateKey, row.TemplateVersion, row.Status));
+    }
+
+    private sealed class StaticSnapshot<T>(T value) : IOptionsSnapshot<T> where T : class
+    {
+        public T Value => value;
+        public T Get(string? name) => value;
+    }
+
     private sealed class StaticMonitor<T>(T value) : IOptionsMonitor<T>
     {
         public T CurrentValue => value;

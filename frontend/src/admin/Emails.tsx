@@ -316,6 +316,7 @@ function EmailPane({ id, onBack }: { id: string; onBack: () => void }) {
           <span>To <span className="text-foreground">{e.to}</span></span>
           {e.client ? <>{sep}<Link className="text-link hover:underline" to={`/admin/clients/${e.client.id}`}>{e.client.fullName || 'client'}</Link></> : null}
           {sep}<span>{kindWords(e.kind)}</span>
+          {e.templateKey && e.templateVersion !== null ? <>{sep}<Link className="text-link hover:underline" to={`/admin/emails/templates/${encodeURIComponent(e.templateKey)}?history=${e.templateVersion}`} title="The template this email was written from">{e.templateVersion === 0 ? 'Default wording' : `Version ${e.templateVersion}`}</Link></> : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-muted-foreground">
