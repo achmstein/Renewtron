@@ -20,7 +20,10 @@ public sealed record EmailToSend(
     Guid? BatchId = null,
     /// <summary>An OutboundMessage row already written for this send (win-back writes its own up front).</summary>
     Guid? MessageId = null,
-    Guid? ResendOfId = null);
+    Guid? ResendOfId = null,
+    /// <summary>The editable template it came from and that template's version (0 = the wording in code).</summary>
+    string? TemplateKey = null,
+    int? TemplateVersion = null);
 
 /// <summary>
 /// Every email Renewtron sends goes through here. It writes an <see cref="OutboundMessage"/> first, sends
@@ -93,6 +96,9 @@ public sealed class EmailSender(
             given.BodyText ??= email.PlainText;
             given.RenewalRequestId ??= email.RenewalRequestId;
             given.ClientId ??= email.ClientId;
+            given.TemplateKey ??= email.TemplateKey;
+            given.TemplateVersion ??= email.TemplateVersion;
+            given.Subject = Cap(email.Subject, 300); // win-back writes the row before the subject is filled in
             return given;
         }
 
@@ -117,6 +123,8 @@ public sealed class EmailSender(
             ResendOfId = email.ResendOfId,
             Channel = OutboundChannel.Email,
             Template = Cap(email.Kind, 64),
+            TemplateKey = email.TemplateKey,
+            TemplateVersion = email.TemplateVersion,
             Subject = Cap(email.Subject, 300),
             Recipient = Cap(email.To.Trim(), 300),
             BodyHtml = email.Html,

@@ -30,6 +30,10 @@ public class OutboundMessage
 
     public OutboundChannel Channel { get; set; }
     public string Template { get; set; } = string.Empty; // e.g. "win-back"
+    /// <summary>The editable template it was written from (see <see cref="EmailTemplate"/>), when it was.</summary>
+    public string? TemplateKey { get; set; }
+    /// <summary>That template's version: 0 is the wording in code, otherwise an <see cref="EmailTemplateVersion"/>.</summary>
+    public int? TemplateVersion { get; set; }
     public string Subject { get; set; } = string.Empty;
     public string Recipient { get; set; } = string.Empty; // email or phone
 

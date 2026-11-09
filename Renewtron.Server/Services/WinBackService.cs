@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Renewtron.Data;
-using Renewtron.Settings;
+using Renewtron.Services.Email;
 
 namespace Renewtron.Services;
 
@@ -42,18 +42,18 @@ public class WinBackService : IWinBackService
 {
     private readonly ApplicationDbContext _db;
     private readonly ILeadEmailService _leadEmail;
-    private readonly IOptionsMonitor<WinBackSettings> _winBack;
+    private readonly IEmailTemplates _templates;
     private readonly ILogger<WinBackService> _logger;
 
     public WinBackService(
         ApplicationDbContext db,
         ILeadEmailService leadEmail,
-        IOptionsMonitor<WinBackSettings> winBack,
+        IEmailTemplates templates,
         ILogger<WinBackService> logger)
     {
         _db = db;
         _leadEmail = leadEmail;
-        _winBack = winBack;
+        _templates = templates;
         _logger = logger;
     }
 
@@ -66,13 +66,18 @@ public class WinBackService : IWinBackService
             .Select(l => new { l.Id, l.FullName, l.Abn })
             .ToListAsync();
 
-        var template = _winBack.CurrentValue;
+        // The first recipient's email as they'd get it (sample values when there's nobody yet).
+        var firstLead = leads.Count > 0 ? await _db.Leads.AsNoTracking().FirstOrDefaultAsync(l => l.Id == leads[0].Id) : null;
+        var model = firstLead is null
+            ? EmailTemplateCatalog.SampleModel(EmailTemplateCatalog.Find(EmailTemplateCatalog.WinBack)!)
+            : EmailModels.Lead(firstLead);
+        var email = await _templates.RenderAsync(EmailTemplateCatalog.WinBack, model);
         return new WinBackPreview(
             RecipientCount: leads.Count,
             RecoverableValue: leads.Count * Math.Max(avgBasket, 0m),
             SampleNames: leads.Take(3).Select(l => l.FullName ?? "—").ToArray(),
-            Subject: template.Subject,
-            BodyPreview: template.BodyPlain);
+            Subject: email.Enabled ? email.Subject : "(The win-back email is switched off in Emails → Templates)",
+            BodyPreview: email.Text);
     }
 
     public async Task<WinBackSendResult> SendAsync(WinBackFilter filter)
@@ -80,7 +85,7 @@ public class WinBackService : IWinBackService
         var batchId = Guid.NewGuid();
         var query = BuildEligibleQuery(filter);
 
-        // Pull leads + their first business name (for {{BusinessName}}) in one go.
+        // Pull leads + their first business name (for {{ business_name }}) in one go.
         var leads = await query
             .OrderByDescending(l => l.CreatedAt)
             .Take(500) // safety cap per send
@@ -97,7 +102,8 @@ public class WinBackService : IWinBackService
         if (leads.Count == 0)
             return new WinBackSendResult(0, batchId);
 
-        var template = _winBack.CurrentValue;
+        if (!await _templates.IsEnabledAsync(EmailTemplateCatalog.WinBack))
+            throw new InvalidOperationException("The win-back email is switched off in Emails → Templates.");
         var now = DateTime.UtcNow;
 
         // Insert OutboundMessage rows up front (status=Queued); send happens immediately
@@ -108,7 +114,7 @@ public class WinBackService : IWinBackService
             LeadId = l.Id,
             Channel = OutboundChannel.Email,
             Template = "win-back",
-            Subject = template.Subject,
+            Subject = "", // filled in with each recipient's subject when it sends
             Recipient = l.Email ?? string.Empty,
             Status = OutboundStatus.Queued,
             CreatedAt = now,

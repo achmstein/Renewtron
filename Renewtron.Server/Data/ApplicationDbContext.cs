@@ -28,6 +28,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ClientAbn> ClientAbns { get; set; }
     public DbSet<ClientBusinessName> ClientBusinessNames { get; set; }
     public DbSet<AsicPortalLink> AsicPortalLinks { get; set; }
+    public DbSet<EmailTemplate> EmailTemplates { get; set; }
+    public DbSet<EmailTemplateVersion> EmailTemplateVersions { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -202,9 +204,29 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
+        modelBuilder.Entity<EmailTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Key);
+            entity.Property(e => e.Key).HasMaxLength(64);
+            entity.Property(e => e.UpdatedBy).HasMaxLength(256);
+        });
+
+        modelBuilder.Entity<EmailTemplateVersion>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.TemplateKey).IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Subject).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.Heading).IsRequired().HasMaxLength(1000);
+            entity.Property(e => e.Body).IsRequired();
+            entity.Property(e => e.Note).HasMaxLength(500);
+            entity.Property(e => e.CreatedBy).HasMaxLength(256);
+            entity.HasIndex(e => new { e.TemplateKey, e.Version }).IsUnique();
+        });
+
         modelBuilder.Entity<OutboundMessage>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.TemplateKey).HasMaxLength(64);
             entity.Property(e => e.Template).IsRequired().HasMaxLength(64);
             entity.Property(e => e.Subject).HasMaxLength(300);
             entity.Property(e => e.Recipient).IsRequired().HasMaxLength(300);

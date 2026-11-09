@@ -2,21 +2,28 @@ using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
+using Renewtron.Services.Email;
 using Renewtron.Settings;
 
 namespace Renewtron.Services;
 
+/// <summary>Renewal emails. The wording is in their templates (Emails → Templates); this fills in the values and sends.</summary>
 public class EmailService : IEmailService
 {
     private readonly IEmailSender _sender;
+    private readonly IEmailTemplates _templates;
     private readonly ApplicationDbContext _db;
     private readonly PortalSettings _portal;
+    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IEmailSender sender, ApplicationDbContext db, IOptionsSnapshot<PortalSettings> portal)
+    public EmailService(IEmailSender sender, IEmailTemplates templates, ApplicationDbContext db,
+        IOptionsSnapshot<PortalSettings> portal, ILogger<EmailService> logger)
     {
         _sender = sender;
+        _templates = templates;
         _db = db;
         _portal = portal.Value;
+        _logger = logger;
     }
 
     /// <summary>The client a lead (or a renewal's lead) belongs to, for the email's record.</summary>
@@ -41,121 +48,19 @@ public class EmailService : IEmailService
         Guid? renewalRequestId = null,
         Guid? leadId = null)
     {
-        var subject = $"Business Name Renewal Confirmation - {EmailText.SubjectSafe(businessName)}";
-
-        // Values below come from customers and ASIC — encode everything that lands in HTML.
-        static string h(string? v) => EmailText.Html(v);
-
-        // Customers keep an account in the Business Portal: their names, renewal history and
-        // ASIC keys. With a signing key the button signs them straight in (once, for 72 hours);
-        // otherwise it opens the sign-in page with their email filled in.
-        var signInUrl = _portal.SignInUrl(toEmail, DateTimeOffset.UtcNow);
-        var loginUrl = _portal.LoginUrl(null);
-        var portalUrl = signInUrl ?? _portal.LoginUrl(toEmail);
-        var portalLabel = signInUrl is null ? "View your business names in your Business Portal" : "Open your Business Portal";
-        var portalNote = signInUrl is null ? "" : $@"
-            <p style='margin-top: 8px; text-align: center; font-size: 12px; color: #6B7280;'>
-                This link signs you in and works once, for 72 hours. After that, sign in with your email at {h(loginUrl)}.
-            </p>";
-        var portalHtml = portalUrl is null ? "" : $@"
-            <p style='margin-top: 24px; text-align: center;'>
-                <a href='{h(portalUrl)}' style='background-color: #4F46E5; color: #ffffff; padding: 12px 22px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: bold;'>{portalLabel}</a>
-            </p>{portalNote}";
-        var portalText = portalUrl is null ? "" : signInUrl is null
-            ? $"\nView your business names in your Business Portal: {portalUrl}\n"
-            : $"\nOpen your Business Portal: {portalUrl}\nThis link signs you in and works once, for 72 hours. After that, sign in with your email at {loginUrl}.\n";
-
-        var htmlContent = $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #4F46E5; color: white; padding: 20px; text-align: center; }}
-        .content {{ background-color: #f9fafb; padding: 30px; }}
-        .detail-row {{ margin: 10px 0; padding: 10px; background-color: white; border-radius: 5px; }}
-        .label {{ font-weight: bold; color: #6B7280; }}
-        .value {{ color: #111827; }}
-        .footer {{ text-align: center; padding: 20px; color: #6B7280; font-size: 12px; }}
-        .success-badge {{ background-color: #10B981; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1>✓ Renewal Successful</h1>
-        </div>
-        <div class='content'>
-            <p>Dear Valued Customer,</p>
-            <p>Your business name has been successfully renewed with ASIC.</p>
-            
-            <div class='detail-row'>
-                <div class='label'>Business Name:</div>
-                <div class='value'>{h(businessName)}</div>
-            </div>
-            
-            <div class='detail-row'>
-                <div class='label'>ABN:</div>
-                <div class='value'>{h(abn)}</div>
-            </div>
-            
-            <div class='detail-row'>
-                <div class='label'>Renewal Period:</div>
-                <div class='value'>{renewalYears} {(renewalYears == 1 ? "Year" : "Years")}</div>
-            </div>
-            
-            <div class='detail-row'>
-                <div class='label'>Amount Paid:</div>
-                <div class='value'>${amountPaid:F2}</div>
-            </div>
-            
-            <div class='detail-row'>
-                <div class='label'>Transaction Reference:</div>
-                <div class='value'>{h(transactionReference)}</div>
-            </div>
-            
-            <div class='detail-row'>
-                <div class='label'>Date:</div>
-                <div class='value'>{DateTime.UtcNow:MMMM dd, yyyy 'at' hh:mm tt} UTC</div>
-            </div>
-            
-            <p style='margin-top: 30px;'>
-                <strong>What's Next?</strong><br>
-                Your business name registration has been extended and is now active with ASIC. 
-                Please keep this email for your records.
-            </p>{portalHtml}
-        </div>
-        <div class='footer'>
-            <p>This is an automated email from Renewtron. Please do not reply to this email.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-        var plainTextContent = $@"
-Business Name Renewal Confirmation
-
-Your business name has been successfully renewed with ASIC.
-
-Business Name: {businessName}
-ABN: {abn}
-Renewal Period: {renewalYears} {(renewalYears == 1 ? "Year" : "Years")}
-Amount Paid: ${amountPaid:F2}
-Transaction Reference: {transactionReference}
-Date: {DateTime.UtcNow:MMMM dd, yyyy 'at' hh:mm tt} UTC
-
-Please keep this email for your records.
-{portalText}
----
-This is an automated email from Renewtron.
-";
+        var model = EmailModels.RenewalConfirmation(_portal, toEmail, businessName, abn, renewalYears, amountPaid, transactionReference, DateTime.UtcNow);
+        var email = await _templates.RenderAsync(EmailTemplateCatalog.RenewalConfirmation, model);
+        if (!email.Enabled)
+        {
+            _logger.LogInformation("Renewal confirmation not sent: the template is switched off");
+            return;
+        }
 
         if (renewalRequestId is { } rr && leadId is null)
             leadId = await _db.RenewalRequests.Where(r => r.Id == rr).Select(r => r.LeadId).FirstOrDefaultAsync();
-        await _sender.SendAsync(new EmailToSend("renewal confirmation", toEmail, subject, plainTextContent, htmlContent,
-            LeadId: leadId, ClientId: await ClientOfAsync(leadId, renewalRequestId), RenewalRequestId: renewalRequestId));
+        await _sender.SendAsync(new EmailToSend(EmailTemplateCatalog.RenewalConfirmation, toEmail, email.Subject, email.Text, email.Html,
+            LeadId: leadId, ClientId: await ClientOfAsync(leadId, renewalRequestId), RenewalRequestId: renewalRequestId,
+            TemplateKey: email.Key, TemplateVersion: email.Version));
     }
 
     public Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid) =>
@@ -163,74 +68,15 @@ This is an automated email from Renewtron.
 
     public async Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid, Guid? leadId)
     {
-        var one = businessNames.Length == 1;
-        var subject = one
-            ? $"Payment received - {EmailText.SubjectSafe(businessNames[0])} renewal"
-            : $"Payment received - renewal of {businessNames.Length} business names";
-        static string h(string? v) => EmailText.Html(v);
+        var model = EmailModels.PaidEarly(toEmail, abn, businessNames, renewalYears, amountPaid);
+        var email = await _templates.RenderAsync(EmailTemplateCatalog.PaidEarly, model);
+        if (!email.Enabled)
+        {
+            _logger.LogInformation("Paid-early email not sent: the template is switched off");
+            return;
+        }
 
-        var namesHtml = string.Join("", businessNames.Select(n => $@"
-            <div class='detail-row'><div class='value'>{h(n)}</div></div>"));
-        var namesText = string.Join("\n", businessNames.Select(n => "  " + n));
-        var what = one ? "your business name" : "your business names";
-        var term = $"{renewalYears} {(renewalYears == 1 ? "year" : "years")}";
-        var its = one ? "its" : "their";
-        var done = one ? "it has" : "they have";
-        // No dates: our guess at the due date can be a whole term out for a 3-year name.
-        var next = $"ASIC only accepts a business name renewal in the month before it's due, so we'll lodge yours with ASIC as soon as {its} renewal opens. You don't need to do anything, and your business name stays registered in the meantime.";
-        var later = $"We'll email you again with ASIC's confirmation once {done} been renewed. Please keep this email for your records.";
-
-        var htmlContent = $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #4F46E5; color: white; padding: 20px; text-align: center; }}
-        .content {{ background-color: #f9fafb; padding: 30px; }}
-        .detail-row {{ margin: 10px 0; padding: 10px; background-color: white; border-radius: 5px; }}
-        .value {{ color: #111827; }}
-        .footer {{ text-align: center; padding: 20px; color: #6B7280; font-size: 12px; }}
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1>✓ Payment Received</h1>
-        </div>
-        <div class='content'>
-            <p>Dear Valued Customer,</p>
-            <p>Thank you, we've received your payment of <strong>${amountPaid:F2}</strong> to renew {what} for {term} (ABN {h(abn)}):</p>
-            {namesHtml}
-            <p style='margin-top: 24px;'><strong>What happens next?</strong><br>{h(next)}</p>
-            <p>{h(later)}</p>
-        </div>
-        <div class='footer'>
-            <p>This is an automated email from Renewtron. Please do not reply to this email.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-        var plainTextContent = $@"
-Payment Received
-
-Thank you, we've received your payment of ${amountPaid:F2} to renew {what} for {term} (ABN {abn}):
-
-{namesText}
-
-What happens next?
-{next}
-
-{later}
-
----
-This is an automated email from Renewtron.
-";
-
-        await _sender.SendAsync(new EmailToSend("paid early", toEmail, subject, plainTextContent, htmlContent,
-            LeadId: leadId, ClientId: await ClientOfAsync(leadId, null)));
+        await _sender.SendAsync(new EmailToSend(EmailTemplateCatalog.PaidEarly, toEmail, email.Subject, email.Text, email.Html,
+            LeadId: leadId, ClientId: await ClientOfAsync(leadId, null), TemplateKey: email.Key, TemplateVersion: email.Version));
     }
 }

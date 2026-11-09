@@ -123,6 +123,7 @@ builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
 builder.Services.AddHttpClient<IAirwallexClient, AirwallexClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<IBpayPaymentService, BpayPaymentService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<Renewtron.Services.Email.IEmailTemplates, Renewtron.Services.Email.EmailTemplates>();
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddScoped<EmailMaintenance>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();

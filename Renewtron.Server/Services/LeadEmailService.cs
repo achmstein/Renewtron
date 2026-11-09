@@ -1,6 +1,5 @@
-using Microsoft.Extensions.Options;
 using Renewtron.Data;
-using Renewtron.Settings;
+using Renewtron.Services.Email;
 
 namespace Renewtron.Services;
 
@@ -10,386 +9,37 @@ public interface ILeadEmailService
     Task SendNotDueForRenewalEmailAsync(Lead lead);
     Task SendNoBusinessNamesEmailAsync(Lead lead);
     Task SendRenewalInProgressEmailAsync(Lead lead);
-    /// <summary>Send the configurable win-back email. firstBusinessName is optional and merged into {{BusinessName}}.</summary>
+    /// <summary>Send the win-back email. firstBusinessName fills {{ business_name }}.
     /// <paramref name="outboundMessageId"/> is the row win-back already wrote for it, so the send records on that row.
+    /// Throws when the win-back template is switched off, so that row is marked failed rather than sent.</summary>
     Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null, Guid? outboundMessageId = null);
 }
 
-public class LeadEmailService : ILeadEmailService
+/// <summary>Emails about a lead. The wording is in their templates (Emails → Templates); this fills in the values and sends.</summary>
+public class LeadEmailService(IEmailSender sender, IEmailTemplates templates, ILogger<LeadEmailService> logger) : ILeadEmailService
 {
-    private readonly IEmailSender _sender;
-    private readonly IOptionsMonitor<WinBackSettings> _winBack;
-
-    public LeadEmailService(IEmailSender sender, IOptionsMonitor<WinBackSettings> winBack)
-    {
-        _sender = sender;
-        _winBack = winBack;
-    }
-
-    public async Task SendLeadCapturedEmailAsync(Lead lead)
-    {
-        var subject = "Thank You for Using Renewtron";
-        var htmlContent = GetLeadCapturedHtml(lead);
-        var plainContent = GetLeadCapturedPlain(lead);
-
-        await SendEmailAsync("lead captured", lead, subject, plainContent, htmlContent);
-    }
-
-    public async Task SendNotDueForRenewalEmailAsync(Lead lead)
-    {
-        var subject = "Your Business Name Registration Status";
-        var htmlContent = GetNotDueForRenewalHtml(lead);
-        var plainContent = GetNotDueForRenewalPlain(lead);
-
-        await SendEmailAsync("not due for renewal", lead, subject, plainContent, htmlContent);
-    }
-
-    public async Task SendNoBusinessNamesEmailAsync(Lead lead)
-    {
-        var subject = "ABN Search Results - No Business Names Found";
-        var htmlContent = GetNoBusinessNamesHtml(lead);
-        var plainContent = GetNoBusinessNamesPlain(lead);
-
-        await SendEmailAsync("no business names", lead, subject, plainContent, htmlContent);
-    }
-
-    public async Task SendRenewalInProgressEmailAsync(Lead lead)
-    {
-        var subject = "Your Business Name Renewal Status";
-        var htmlContent = GetRenewalInProgressHtml(lead);
-        var plainContent = GetRenewalInProgressPlain(lead);
-
-        await SendEmailAsync("renewal in progress", lead, subject, plainContent, htmlContent);
-    }
+    public Task SendLeadCapturedEmailAsync(Lead lead) => SendAsync(EmailTemplateCatalog.LeadCaptured, lead);
+    public Task SendNotDueForRenewalEmailAsync(Lead lead) => SendAsync(EmailTemplateCatalog.NotDue, lead);
+    public Task SendNoBusinessNamesEmailAsync(Lead lead) => SendAsync(EmailTemplateCatalog.NoBusinessNames, lead);
+    public Task SendRenewalInProgressEmailAsync(Lead lead) => SendAsync(EmailTemplateCatalog.RenewalInProgress, lead);
 
     public async Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null, Guid? outboundMessageId = null)
     {
-        var template = _winBack.CurrentValue;
-        var subject = EmailText.SubjectSafe(MergeTags(template.Subject, lead, firstBusinessName));
-        var plain = MergeTags(template.BodyPlain, lead, firstBusinessName);
-        // The admin writes the template's markup; the merged values are customer data.
-        var html = string.IsNullOrWhiteSpace(template.BodyHtml)
-            ? WrapPlainAsHtml(plain)
-            : MergeTags(template.BodyHtml, lead, firstBusinessName, EmailText.Html);
-        await SendEmailAsync("win-back", lead, subject, plain, html, outboundMessageId);
+        if (!await SendAsync(EmailTemplateCatalog.WinBack, lead, firstBusinessName, outboundMessageId))
+            throw new InvalidOperationException("The win-back email is switched off in Emails → Templates.");
     }
 
-    private static string MergeTags(string source, Lead lead, string? firstBusinessName, Func<string?, string>? encode = null)
+    /// <summary>False when the template is switched off (nothing sent).</summary>
+    private async Task<bool> SendAsync(string key, Lead lead, string? firstBusinessName = null, Guid? messageId = null)
     {
-        if (string.IsNullOrEmpty(source)) return source;
-        encode ??= v => v ?? string.Empty;
-        return source
-            .Replace("{{FullName}}", encode(lead.FullName), StringComparison.OrdinalIgnoreCase)
-            .Replace("{{Abn}}", encode(lead.Abn), StringComparison.OrdinalIgnoreCase)
-            .Replace("{{Email}}", encode(lead.Email), StringComparison.OrdinalIgnoreCase)
-            .Replace("{{BusinessName}}", encode(firstBusinessName ?? "your business name"), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private string WrapPlainAsHtml(string plain)
-    {
-        var html = System.Net.WebUtility.HtmlEncode(plain).Replace("\n", "<br />");
-        return $@"<!DOCTYPE html><html><head><meta charset=""utf-8""><style>{GetEmailStyles()}</style></head>
-<body><div class=""container""><div class=""content""><p style=""white-space: pre-wrap;"">{html}</p></div></div></body></html>";
-    }
-
-    private Task SendEmailAsync(string kind, Lead lead, string subject, string plainContent, string htmlContent, Guid? messageId = null) =>
-        _sender.SendAsync(new EmailToSend(kind, lead.Email, subject, plainContent, htmlContent,
-            LeadId: lead.Id, ClientId: lead.ClientId, MessageId: messageId));
-
-    private string FormatAbn(string abn)
-    {
-        var clean = abn.Replace(" ", "");
-        if (clean.Length == 11)
+        var email = await templates.RenderAsync(key, EmailModels.Lead(lead, firstBusinessName));
+        if (!email.Enabled)
         {
-            return $"{clean[..2]} {clean[2..5]} {clean[5..8]} {clean[8..]}";
+            logger.LogInformation("{Key} email not sent: the template is switched off", key);
+            return false;
         }
-        return abn;
+        await sender.SendAsync(new EmailToSend(key, lead.Email, email.Subject, email.Text, email.Html,
+            LeadId: lead.Id, ClientId: lead.ClientId, MessageId: messageId, TemplateKey: email.Key, TemplateVersion: email.Version));
+        return true;
     }
-
-    private string GetEmailStyles() => @"
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f3f4f6; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
-        .header { background-color: #2563eb; color: white; padding: 32px 24px; text-align: center; }
-        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-        .content { padding: 32px 24px; }
-        .info-box { background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 16px 0; }
-        .info-row { margin: 8px 0; }
-        .label { color: #6b7280; font-size: 14px; }
-        .value { color: #111827; font-weight: 500; }
-        .button { display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; margin: 16px 0; }
-        .footer { background-color: #f9fafb; padding: 24px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; }
-        .highlight { background-color: #dbeafe; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 16px 0; }
-        .warning { background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 16px 0; }
-    ";
-
-    private string GetLeadCapturedHtml(Lead lead) => $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""utf-8"">
-    <style>{GetEmailStyles()}</style>
-</head>
-<body>
-    <div class=""container"">
-        <div class=""header"">
-            <h1>Thank You for Using Renewtron</h1>
-        </div>
-        <div class=""content"">
-            <p>Hi {EmailText.Html(lead.FullName)},</p>
-            <p>Thank you for using Renewtron for your business name renewal needs.</p>
-
-            <div class=""info-box"">
-                <div class=""info-row"">
-                    <span class=""label"">ABN:</span>
-                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
-                </div>
-                <div class=""info-row"">
-                    <span class=""label"">Date:</span>
-                    <span class=""value"">{lead.CreatedAt:MMMM dd, yyyy}</span>
-                </div>
-            </div>
-
-            <p>We've saved your details and will be here whenever you need to renew your business name.</p>
-
-            <p>If you have any questions, please don't hesitate to contact us.</p>
-        </div>
-        <div class=""footer"">
-            <p>This is an automated email from Renewtron.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-    private string GetLeadCapturedPlain(Lead lead) => $@"
-Thank You for Using Renewtron
-
-Hi {lead.FullName},
-
-Thank you for using Renewtron for your business name renewal needs.
-
-ABN: {FormatAbn(lead.Abn)}
-Date: {lead.CreatedAt:MMMM dd, yyyy}
-
-We've saved your details and will be here whenever you need to renew your business name.
-
-If you have any questions, please don't hesitate to contact us.
-
----
-This is an automated email from Renewtron.
-";
-
-    private string GetNotDueForRenewalHtml(Lead lead) => $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""utf-8"">
-    <style>{GetEmailStyles()}</style>
-</head>
-<body>
-    <div class=""container"">
-        <div class=""header"" style=""background-color: #f59e0b;"">
-            <h1>Your Business Name Registration Status</h1>
-        </div>
-        <div class=""content"">
-            <p>Hi {EmailText.Html(lead.FullName)},</p>
-            <p>Thank you for checking your business name renewal status with Renewtron.</p>
-
-            <div class=""warning"">
-                <strong>Not Due for Renewal Yet</strong>
-                <p style=""margin: 8px 0 0 0;"">Your business name is currently active and not due for renewal at this time.</p>
-            </div>
-
-            <div class=""info-box"">
-                <div class=""info-row"">
-                    <span class=""label"">ABN:</span>
-                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
-                </div>
-            </div>
-
-            <p><strong>What does this mean?</strong></p>
-            <ul>
-                <li>Your business name registration is still valid</li>
-                <li>No action is required from you at this time</li>
-                <li>ASIC will notify you when your renewal period approaches</li>
-            </ul>
-
-            {(lead.ReminderOptIn ? @"<div class=""highlight"">
-                <strong>Reminder Set!</strong>
-                <p style=""margin: 8px 0 0 0;"">We'll send you an email when your business name is due for renewal.</p>
-            </div>" : "")}
-
-            <p>When your business name becomes due for renewal, you can return to Renewtron and we'll process it quickly and easily.</p>
-        </div>
-        <div class=""footer"">
-            <p>This is an automated email from Renewtron.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-    private string GetNotDueForRenewalPlain(Lead lead) => $@"
-Your Business Name Registration Status
-
-Hi {lead.FullName},
-
-Thank you for checking your business name renewal status with Renewtron.
-
-NOT DUE FOR RENEWAL YET
-Your business name is currently active and not due for renewal at this time.
-
-ABN: {FormatAbn(lead.Abn)}
-
-What does this mean?
-- Your business name registration is still valid
-- No action is required from you at this time
-- ASIC will notify you when your renewal period approaches
-
-{(lead.ReminderOptIn ? "REMINDER SET: We'll send you an email when your business name is due for renewal.\n" : "")}
-When your business name becomes due for renewal, you can return to Renewtron and we'll process it quickly and easily.
-
----
-This is an automated email from Renewtron.
-";
-
-    private string GetNoBusinessNamesHtml(Lead lead) => $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""utf-8"">
-    <style>{GetEmailStyles()}</style>
-</head>
-<body>
-    <div class=""container"">
-        <div class=""header"" style=""background-color: #6b7280;"">
-            <h1>ABN Search Results</h1>
-        </div>
-        <div class=""content"">
-            <p>Hi {EmailText.Html(lead.FullName)},</p>
-            <p>Thank you for using Renewtron to check your business name status.</p>
-
-            <div class=""info-box"">
-                <strong>No Business Names Found</strong>
-                <p style=""margin: 8px 0 0 0;"">We couldn't find any business names registered under the ABN you provided.</p>
-            </div>
-
-            <div class=""info-box"">
-                <div class=""info-row"">
-                    <span class=""label"">ABN Searched:</span>
-                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
-                </div>
-            </div>
-
-            <p><strong>This could mean:</strong></p>
-            <ul>
-                <li>The ABN doesn't have a registered business name</li>
-                <li>The business name has been cancelled or deregistered</li>
-                <li>There may be a typo in the ABN number</li>
-            </ul>
-
-            <p><strong>Need to register a business name?</strong></p>
-            <p>You can register a new business name through ASIC at:</p>
-            <p><a href=""https://asic.gov.au/for-business/registering-a-business-name/"" class=""button"">Register a Business Name</a></p>
-        </div>
-        <div class=""footer"">
-            <p>This is an automated email from Renewtron.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-    private string GetNoBusinessNamesPlain(Lead lead) => $@"
-ABN Search Results
-
-Hi {lead.FullName},
-
-Thank you for using Renewtron to check your business name status.
-
-NO BUSINESS NAMES FOUND
-We couldn't find any business names registered under the ABN you provided.
-
-ABN Searched: {FormatAbn(lead.Abn)}
-
-This could mean:
-- The ABN doesn't have a registered business name
-- The business name has been cancelled or deregistered
-- There may be a typo in the ABN number
-
-Need to register a business name?
-You can register a new business name through ASIC at:
-https://asic.gov.au/for-business/registering-a-business-name/
-
----
-This is an automated email from Renewtron.
-";
-
-    private string GetRenewalInProgressHtml(Lead lead) => $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""utf-8"">
-    <style>{GetEmailStyles()}</style>
-</head>
-<body>
-    <div class=""container"">
-        <div class=""header"">
-            <h1>Your Business Name Renewal Status</h1>
-        </div>
-        <div class=""content"">
-            <p>Hi {EmailText.Html(lead.FullName)},</p>
-            <p>Thank you for checking your business name renewal status with Renewtron.</p>
-
-            <div class=""highlight"">
-                <strong>Renewal Already in Progress</strong>
-                <p style=""margin: 8px 0 0 0;"">A renewal for this ABN is already being processed. This could be because you or someone else has recently initiated a renewal.</p>
-            </div>
-
-            <div class=""info-box"">
-                <div class=""info-row"">
-                    <span class=""label"">ABN:</span>
-                    <span class=""value"">{EmailText.Html(FormatAbn(lead.Abn))}</span>
-                </div>
-            </div>
-
-            <p><strong>What should you do?</strong></p>
-            <ul>
-                <li>Wait for the current renewal to complete</li>
-                <li>Check your email for any confirmation messages</li>
-                <li>If you didn't initiate a renewal, please contact us</li>
-            </ul>
-
-            <p>If you have any concerns or questions about this renewal, please don't hesitate to contact us.</p>
-        </div>
-        <div class=""footer"">
-            <p>This is an automated email from Renewtron.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-    private string GetRenewalInProgressPlain(Lead lead) => $@"
-Your Business Name Renewal Status
-
-Hi {lead.FullName},
-
-Thank you for checking your business name renewal status with Renewtron.
-
-RENEWAL ALREADY IN PROGRESS
-A renewal for this ABN is already being processed. This could be because you or someone else has recently initiated a renewal.
-
-ABN: {FormatAbn(lead.Abn)}
-
-What should you do?
-- Wait for the current renewal to complete
-- Check your email for any confirmation messages
-- If you didn't initiate a renewal, please contact us
-
-If you have any concerns or questions about this renewal, please don't hesitate to contact us.
-
----
-This is an automated email from Renewtron.
-";
 }
