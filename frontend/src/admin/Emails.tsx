@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, CheckCheck, Eye, Inbox, Loader2, Mail, MailOpen, RotateCw, Search, Send, Tag } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCheck, Eye, Inbox, LayoutTemplate, Loader2, Mail, MailOpen, RotateCw, Search, Send, Tag } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type EmailDetail, type EmailListResponse, type EmailRow } from '../api/client'
 import { Status, statusOf, type StatusEntry } from './_status'
@@ -124,6 +124,11 @@ export default function Emails() {
             </div>
           ) : null}
         </nav>
+        <div className="border-t p-2">
+          <Link to="/admin/emails/templates" className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground [&_svg]:size-4">
+            <LayoutTemplate /> Templates
+          </Link>
+        </div>
       </aside>
 
       {/* ── The list ── */}
@@ -131,7 +136,10 @@ export default function Emails() {
         <div className="space-y-3 border-b p-3">
           <div className="flex items-center justify-between gap-2 lg:hidden">
             <h1 className="text-title">Emails</h1>
-            <RefreshButton onClick={() => void list.refetch()} busy={list.isFetching} />
+            <div className="flex items-center gap-1">
+              <Button asChild variant="ghost" size="sm"><Link to="/admin/emails/templates"><LayoutTemplate /> Templates</Link></Button>
+              <RefreshButton onClick={() => void list.refetch()} busy={list.isFetching} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2 lg:hidden">
             <Select value={tab} onValueChange={(v) => setTab(v as FolderKey)}>

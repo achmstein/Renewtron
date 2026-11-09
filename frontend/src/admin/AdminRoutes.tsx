@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sileo'
@@ -28,6 +29,9 @@ import AsicKeyRequests from './AsicKeyRequests'
 import { KeyLetterDetails, KeyRequestDetails } from './KeyDetails'
 import AsicPortalLinkDetails from './AsicPortalLinkDetails'
 import Emails from './Emails'
+import EmailTemplates from './EmailTemplates'
+// The editor brings Monaco and TipTap: loaded only when a template is opened.
+const EmailTemplateEditor = lazy(() => import('./EmailTemplateEditor'))
 import Settings from './Settings'
 
 const queryClient = new QueryClient({
@@ -67,6 +71,8 @@ export default function AdminRoutes() {
           <Route path="asic-keys/:id" element={<KeyLetterDetails />} />
           <Route path="asic-portal/:id" element={<AsicPortalLinkDetails />} />
           {/* One route, so opening an email keeps the list (and its scroll) in place. */}
+          <Route path="emails/templates" element={<EmailTemplates />} />
+          <Route path="emails/templates/:key" element={<Suspense fallback={null}><EmailTemplateEditor /></Suspense>} />
           <Route path="emails/:id?" element={<Emails />} />
           <Route path="settings" element={<Settings />} />
         </Route>

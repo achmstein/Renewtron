@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { Info } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicPortalSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
@@ -31,7 +32,7 @@ type SectionDef = {
 
 const SECTIONS: SectionDef[] = [
   { key: 'sendgrid',  group: 'Email', title: 'SendGrid', description: 'Sends the site’s emails.' },
-  { key: 'winback',   group: 'Email', title: 'Win-back template', description: 'The email sent to leads who didn’t pay.' },
+  { key: 'winback',   group: 'Email', title: 'Win-back template', description: 'Moved to Emails → Templates.' },
   { key: 'stripe',    group: 'Payments', title: 'Stripe', description: 'Takes card payments on the website.' },
   { key: 'airwallex', group: 'Payments', title: 'Airwallex', description: 'Pays ASIC’s BPAY bills for renewals lodged to pay later.', tip: 'Admin → BPAY to pay. Keys: Airwallex → Settings → Developer → API keys.' },
   { key: 'pricing',   group: 'Payments', title: 'Pricing', description: 'What clients pay for a renewal.' },
@@ -61,7 +62,6 @@ export default function Settings() {
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
-  const [winBack, setWinBack] = useState({ subject: '', bodyPlain: '', bodyHtml: '' })
   const [tracking, setTracking] = useState({ gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
@@ -81,7 +81,6 @@ export default function Settings() {
     setAsicHasCvc(hasCvc)
     setAirwallex(r.airwallex ?? { clientId: '', apiKey: '', useSandbox: true })
     setOntraport(r.ontraport)
-    setWinBack(r.winBack ?? { subject: '', bodyPlain: '', bodyHtml: '' })
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
     setKeyRequests(r.asicKeyRequest ?? defaultAsicKeyRequest())
@@ -124,7 +123,6 @@ export default function Settings() {
   }
   const onAsic      = save('ASIC', () => api.admin.updateAsic(asic).then(() => { if (asic.cvc) setAsicHasCvc(true) }))
   const onOntraport = save('Ontraport', () => api.admin.updateOntraport(ontraport))
-  const onWinBack   = save('Win-back template', () => api.admin.updateWinBack(winBack))
   const onTracking  = save('Tracking tags', () => api.admin.updateTracking(tracking))
   const onAsicKeys  = save('ASIC key inbox', () => api.admin.updateAsicKeyInbox(asicKeys))
   const onKeyRequests = save('ASIC key requests', () => api.admin.updateAsicKeyRequest(keyRequests))
@@ -173,7 +171,7 @@ export default function Settings() {
       const total = [sg.apiKey, sg.fromEmail, sg.fromName].filter(isFilled).length
       return total === 3 ? 'configured' : total === 0 ? 'empty' : 'partial'
     })(),
-    winback: isFilled(winBack.subject) && isFilled(winBack.bodyPlain) ? 'configured' : 'partial',
+    winback: 'configured',
     stripe: (() => {
       const total = [stripe.secretKey, stripe.publishableKey].filter(isFilled).length
       return total === 2 ? 'configured' : total === 0 ? 'empty' : 'partial'
@@ -299,17 +297,16 @@ export default function Settings() {
           ) : null}
 
           {data && activeKey === 'winback' ? (
-            <SettingsCard {...card} onSubmit={onWinBack} saveLabel="Save template">
-              <Field label="Subject" hint="Merge tags: {{FullName}}, {{Abn}}, {{Email}}, {{BusinessName}}">
-                <Input value={winBack.subject} onChange={(e) => setWinBack({ ...winBack, subject: e.target.value })} />
-              </Field>
-              <Field label="Body (plain text)">
-                <Textarea rows={10} className="font-mono" value={winBack.bodyPlain} onChange={(e) => setWinBack({ ...winBack, bodyPlain: e.target.value })} />
-              </Field>
-              <Field label="Body (HTML, optional)">
-                <Textarea rows={6} className="font-mono" value={winBack.bodyHtml} onChange={(e) => setWinBack({ ...winBack, bodyHtml: e.target.value })} />
-              </Field>
-            </SettingsCard>
+            // The win-back wording moved to Emails → Templates, with every other customer email.
+            <Card>
+              <CardHeader>
+                <CardTitle>{card.title}</CardTitle>
+                <CardDescription>The win-back email is now edited with the other customer emails, with a live preview and history.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild size="sm"><Link to="/admin/emails/templates/win-back">Edit the win-back email</Link></Button>
+              </CardContent>
+            </Card>
           ) : null}
 
           {data && activeKey === 'stripe' ? (

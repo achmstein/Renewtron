@@ -165,7 +165,7 @@ public static partial class WinBackDefaults
             .Where(p => p.Trim().Length > 0)
             .Select(p =>
             {
-                var encoded = string.Join("<br>", p.Trim().Split('\n').Select(l => WebUtility.HtmlEncode(l.Trim())));
+                var encoded = string.Join("<br>", p.Trim().Split('\n').Select(l => WebUtility.HtmlEncode(l.Trim()).Replace("&#39;", "'")));
                 // Liquid tags were encoded too ({{ a }} has no HTML specials, so they survive as-is).
                 encoded = Link().Replace(encoded, m => $"<a href=\"{m.Value}\">{m.Value}</a>");
                 return $"<p>{encoded}</p>";
