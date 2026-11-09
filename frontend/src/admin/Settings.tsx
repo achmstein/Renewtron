@@ -11,7 +11,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeletonizer } from '@/components/skeletonizer'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -269,7 +269,17 @@ export default function Settings() {
         {/* Active section */}
         <div className="min-w-0 space-y-6 lg:col-span-3">
           {!data ? (
-            <Skeleton className="h-80 rounded-xl" />
+            // While the settings load: the section's real card and fields, as a skeleton.
+            <Skeletonizer loading>
+              <SettingsCard {...card} onSubmit={(e) => e.preventDefault()}>
+                <Field label="API key"><Input defaultValue="SG.xxxxxxxxxxxxxxxxxxxxxxxx" /></Field>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <Field label="From email"><Input defaultValue="hello@example.com.au" /></Field>
+                  <Field label="From name"><Input defaultValue="Ideal Business" /></Field>
+                </div>
+                <Field label="Webhook key" hint="Delivered, bounced and opened show on the Emails page."><Textarea rows={2} /></Field>
+              </SettingsCard>
+            </Skeletonizer>
           ) : null}
 
           {data && activeKey === 'sendgrid' ? (

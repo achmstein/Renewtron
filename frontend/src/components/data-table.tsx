@@ -13,6 +13,7 @@ import {
   type TableFeatures,
 } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react'
+import { Skeletonizer } from '@/components/skeletonizer'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
@@ -57,33 +58,40 @@ const stickyHeadClass = 'sticky left-0 z-20 border-r bg-card'
 // Spelled out in full so Tailwind sees the class names.
 const HIDE_BELOW = { sm: 'hidden sm:table-cell', md: 'hidden md:table-cell', lg: 'hidden lg:table-cell' } as const
 
-export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick, loading }: {
+export function DataTable<TData extends RowData>({ columns, data, empty, onRowClick, loading, skeleton }: {
   columns: DataTableColumn<TData>[]
   data: TData[]
   empty: ReactNode
   onRowClick?: (row: DataTableRow<TData>) => void
-  /** A new page or filter is on its way: the rows dim and a bar runs along the top. */
+  /**
+   * Data is on its way. With no rows yet (the first load) the sample rows in `skeleton` show as
+   * shimmering bones; with rows already shown (a new page or filter) they dim and a bar runs along the top.
+   */
   loading?: boolean
+  /** Sample rows drawn through the real columns as a skeleton while the first rows load. */
+  skeleton?: TData[]
 }) {
+  const placeholder = !!loading && data.length === 0 && !!skeleton?.length
   const table = useTable({
     features,
     columns,
-    data,
+    data: placeholder ? skeleton! : data,
   })
 
   const rows = table.getRowModel().rows
 
   return (
     <div className="relative overflow-hidden rounded-xl border bg-card shadow-sm" aria-busy={loading || undefined}>
-      {loading ? (
+      {loading && !placeholder ? (
         <div className="absolute inset-x-0 top-0 z-30 h-0.5 overflow-hidden bg-link/10" role="progressbar" aria-label="Loading">
           <div className="h-full w-1/3 bg-link animate-[table-loading_1s_ease-in-out_infinite]" />
         </div>
       ) : null}
       {/* w-0 min-w-full: the scroll area takes its parent's width and never widens the page to fit the table. */}
-      <div className={cn('w-0 min-w-full overflow-x-auto transition-opacity', loading && 'pointer-events-none opacity-50')}>
+      <Skeletonizer loading={placeholder}>
+      <div className={cn('w-0 min-w-full overflow-x-auto transition-opacity', loading && !placeholder && 'pointer-events-none opacity-50')}>
         <Table>
-          <TableHeader>
+          <TableHeader data-skeleton="keep">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {headerGroup.headers.map((header) => {
@@ -128,7 +136,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
             ) : rows.map((row) => (
               <TableRow
                 key={row.id}
-                className={cn('group/row hover:bg-muted/50', onRowClick && 'cursor-pointer')}
+                className={cn('content-in group/row hover:bg-muted/50', onRowClick && 'cursor-pointer')}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {row.getAllCells().map((cell) => {
@@ -147,6 +155,7 @@ export function DataTable<TData extends RowData>({ columns, data, empty, onRowCl
           </TableBody>
         </Table>
       </div>
+      </Skeletonizer>
     </div>
   )
 }

@@ -9,6 +9,8 @@ import { renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When, agoWords, dueWords } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -31,17 +33,49 @@ function statusFor(d: Detail): StatusEntry {
   return renewalStatus(d)
 }
 
+// The page drawn as a skeleton while the renewal loads.
+const SAMPLE_RENEWAL: Detail = {
+  id: sample.id(0),
+  client: { id: sample.id(1), fullName: sample.name(2) },
+  clientBusinessNameId: sample.id(2),
+  searchLogId: sample.id(3),
+  searchedAt: sample.daysAgo(3),
+  sale: null,
+  dueDate: sample.daysAhead(20),
+  stuck: false,
+  status: 'Completed',
+  source: 'Wizard',
+  paymentType: 'Stripe',
+  businessName: sample.business(2),
+  accountNumber: '612 345 678',
+  abn: sample.abn(2),
+  initiatedByLabel: 'Customer',
+  renewalYears: 3,
+  amount: 299,
+  email: sample.email(2),
+  mobileNumber: sample.mobile(),
+  dateOfBirth: '1984-03-12',
+  initiatedAt: sample.daysAgo(3),
+  completedAt: sample.daysAgo(3),
+  transactionReference: '7310 2841 9922',
+  attemptCount: 1,
+  cardFailureCount: 0,
+  stripePayment: { paymentIntentId: 'pi_3Q0000000000000', paymentStatus: 'succeeded', paidAt: sample.daysAgo(3), cardholderName: sample.name(2), cardLast4: '4242', cardBrand: 'visa', cardExpMonth: '08', cardExpYear: '2028' },
+  lead: { id: sample.id(4), fullName: sample.name(2), email: sample.email(2) },
+}
+
 export default function RenewalDetails() {
   const { id } = useParams()
   const queryClient = useQueryClient()
 
-  const { data, isPending } = useQuery({
+  const { data: loaded, isPending } = useQuery({
     queryKey: ['admin-renewal', id],
     queryFn: () => api.admin.renewal(id!),
     enabled: !!id,
     // Auto-refresh while queued or processing (manual renewals land here as Pending)
     refetchInterval: (query) => (query.state.data?.status === 'Processing' || query.state.data?.status === 'Pending' ? 3000 : false),
   })
+  const data = loaded ?? (isPending ? SAMPLE_RENEWAL : undefined)
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-renewal', id] })
@@ -76,13 +110,6 @@ export default function RenewalDetails() {
     }).catch(() => {})
   }
 
-  if (isPending) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
 
   if (!data) {
     return (
@@ -113,6 +140,7 @@ export default function RenewalDetails() {
     : nextStep(data, retryButton, markBpay, bpayMutation.isPending)
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs
         client={data.client}
@@ -195,6 +223,7 @@ export default function RenewalDetails() {
         ) : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

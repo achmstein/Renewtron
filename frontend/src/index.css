@@ -257,6 +257,52 @@ select:not([multiple]) {
     to { transform: translateX(300%); }
 }
 
+/* Skeleton shimmer (components/ui/skeleton.tsx). The gradient is fixed to the viewport, so every
+   placeholder on the page catches the same band of light as it sweeps across, in step. */
+.shimmer {
+    background-color: #EDEDF0;
+    background-image: linear-gradient(100deg, #EDEDF0 0%, #EDEDF0 35%, #F8F8FA 50%, #EDEDF0 65%, #EDEDF0 100%);
+    background-size: 200vw 100%;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+    from { background-position: 100vw 0; }
+    to { background-position: -100vw 0; }
+}
+/* Skeletonizer (components/skeletonizer.tsx): the sample content keeps its boxes, borders and
+   spacing but its text and icons vanish; the bones are drawn over where they were. */
+.skeletonize { user-select: none; }
+.skeletonize *:not([data-skeleton="keep"], [data-skeleton="keep"] *) {
+    color: transparent !important;
+    text-decoration-color: transparent !important;
+    caret-color: transparent !important;
+}
+.skeletonize ::placeholder { color: transparent !important; }
+/* What gets one bone for the whole element is hidden under it, so no fill or border peeks out
+   round the bone's edge. Mirrors isWhole() in skeletonizer.tsx. */
+.skeletonize :is(svg, img, input, textarea, select, canvas, video, iframe,
+    [data-slot="badge"], [data-slot="checkbox"], [data-slot="switch"], [data-slot="select-trigger"],
+    [data-slot="toggle-group-item"], [data-slot="avatar"], [data-slot="input"],
+    [role="checkbox"], [role="switch"], [role="radio"], [role="combobox"], [data-skeleton="bone"]):not([data-skeleton="keep"] *) {
+    visibility: hidden;
+}
+/* Sample records are in some state or other; its colour shouldn't show through while loading. */
+.skeletonize :is([class*="bg-success"], [class*="bg-destructive"], [class*="bg-warning"], [class*="bg-info"]):not([data-skeleton="keep"] *) {
+    background-color: var(--muted) !important;
+}
+.skeletonize :is([class*="border-success"], [class*="border-destructive"], [class*="border-warning"], [class*="border-info"]):not([data-skeleton="keep"] *) {
+    border-color: var(--border) !important;
+}
+
+/* Content replacing a skeleton eases in rather than popping. */
+.content-in { animation: fade-in-up 220ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+    .shimmer { animation: none; }
+    .content-in { animation: none; }
+}
+
 @keyframes fade-in-up {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }

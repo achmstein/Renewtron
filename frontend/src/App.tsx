@@ -15,7 +15,10 @@ import RequireAuth from './auth/RequireAuth'
 import { AppLoading } from './components/AppLoading'
 import { isPrivatePath, syncClarityWithPath } from './lib/siteConfig'
 
-const AdminRoutes = lazy(() => import('./admin/AdminRoutes'))
+const loadAdmin = () => import('./admin/AdminRoutes')
+const AdminRoutes = lazy(loadAdmin)
+// Opening the admin directly: fetch its code alongside the sign-in check, not after it.
+if (window.location.pathname.startsWith('/admin')) void loadAdmin()
 
 export default function App() {
   const { pathname } = useLocation()

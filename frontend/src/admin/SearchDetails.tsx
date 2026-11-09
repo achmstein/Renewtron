@@ -1,12 +1,13 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -17,21 +18,35 @@ const shortDate = (s: string) => new Date(s).toLocaleDateString('en-AU', { day: 
 /** Who ran the search, in words. */
 const BY: Record<string, string> = { Customer: 'A visitor', Admin: 'Staff', System: 'Renewtron' }
 
+// The page drawn as a skeleton while the search loads.
+const SAMPLE_SEARCH: Detail = {
+  id: sample.id(0),
+  client: { id: sample.id(1), fullName: sample.name(1) },
+  abn: sample.abn(1),
+  searchedAt: sample.daysAgo(1),
+  success: true,
+  resultsCount: 3,
+  initiatedBy: 'Customer',
+  lead: { id: sample.id(2), fullName: sample.name(1), email: sample.email(1), mobileNumber: sample.mobile(), outcome: 'Converted' },
+  results: [0, 1, 2].map((i) => ({
+    id: sample.id(10 + i),
+    businessName: sample.business(i + 1),
+    accountNumber: '612 345 678',
+    registrationDate: sample.daysAgo(700 + i * 300),
+    renewalRequest: i === 0 ? { id: sample.id(20), status: 'Completed', initiatedAt: sample.daysAgo(1), renewalYears: 3, amount: 299 } : null,
+  })),
+  funnel: { hasLead: true, anyPaid: true, anyInflight: false, anyFailed: false },
+}
+
 export default function SearchDetails() {
   const { id } = useParams()
-  const { data, isPending, isError } = useQuery({
+  const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-search', id],
     queryFn: () => api.admin.search(id!),
     enabled: !!id,
   })
+  const data = loaded ?? (isPending ? SAMPLE_SEARCH : undefined)
 
-  if (isPending) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
 
   if (isError || !data) {
     return (
@@ -48,6 +63,7 @@ export default function SearchDetails() {
   const by = BY[data.initiatedBy] ?? data.initiatedBy
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} list={{ to: '/admin/searches', label: 'Searches' }} here={`ASIC search of ${shortDate(data.searchedAt)}`} />
 
@@ -108,6 +124,7 @@ export default function SearchDetails() {
         ) : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

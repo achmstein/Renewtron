@@ -7,11 +7,29 @@ import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
 import { inSentence, orderStatus } from './_status'
 import { fmtMoney0, fmtMoney2 } from './_utils'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const PAGE_SIZE = 50
+
+type OrdersResponse = Awaited<ReturnType<typeof api.admin.renewalOrders>>
+const SAMPLE_STAGES: RenewalOrderRow['stage'][] = ['NeedsPerson', 'Due', 'Renewing', 'NeedsPerson']
+const SKELETON: OrdersResponse = {
+  total: 0, page: 1, pageSize: PAGE_SIZE,
+  items: sampleRows<RenewalOrderRow>(8, (i) => ({
+    id: sample.id(i), source: 'Ontraport', sourceId: sample.id(100 + i), clientId: null, payerName: sample.name(i), clientName: sample.name(i),
+    businessName: sample.business(i), abn: sample.abn(i), dueDate: sample.daysAhead(5 + i * 6), years: i % 3 === 0 ? 3 : 1,
+    amountPaid: sample.money(i), paidAt: sample.daysAgo(i * 2), stage: SAMPLE_STAGES[i % SAMPLE_STAGES.length], reason: null, note: null,
+    nextActionAt: null, stageChangedAt: sample.daysAgo(i), attemptCount: 1, currentAttemptId: null, renewedAt: null, canRetry: false,
+  })),
+  byStage: [
+    { stage: 'NeedsPerson', count: 14, amount: 4186 }, { stage: 'Due', count: 212, amount: 0 }, { stage: 'Renewing', count: 9, amount: 0 },
+    { stage: 'Renewed', count: 3820, amount: 512400 }, { stage: 'Closed', count: 96, amount: 0 },
+  ],
+}
 
 /** The views of paid renewals, as tabs. "to-fix" is the sidebar's "Renewals to fix". */
 const VIEWS = [
@@ -33,11 +51,13 @@ export default function RenewalOrders() {
   const [search, setSearch] = useState('')
   const debounced = useDebouncedValue(search, 300)
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data: realData, isFetching, isPending, refetch } = useQuery({
     queryKey: ['admin-renewal-orders', view, debounced, page],
     queryFn: () => api.admin.renewalOrders({ view: view === 'all' ? undefined : view, search: debounced, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   })
+  // Sample counts and rows drawn as a skeleton until the first answer arrives.
+  const data = realData ?? (isPending ? SKELETON : undefined)
   const stage = (s: string) => data?.byStage.find((b) => b.stage === s)
 
   return (
@@ -48,12 +68,14 @@ export default function RenewalOrders() {
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
 
-      <StatStrip className="mb-6">
+      <Skeletonizer loading={isPending} className="mb-6">
+      <StatStrip>
         <Stat label="Needs you" dot="action" value={(stage('NeedsPerson')?.count ?? 0).toLocaleString()} sub={fmtMoney0(stage('NeedsPerson')?.amount ?? 0)} />
         <Stat label="Due or renewing" value={((stage('Due')?.count ?? 0) + (stage('Renewing')?.count ?? 0)).toLocaleString()} sub="Renewtron is on it" />
         <Stat label="Renewed" value={(stage('Renewed')?.count ?? 0).toLocaleString()} sub={fmtMoney0(stage('Renewed')?.amount ?? 0)} />
         <Stat label="Closed" value={(stage('Closed')?.count ?? 0).toLocaleString()} sub="Renewed elsewhere, disputed, cancelled" />
       </StatStrip>
+      </Skeletonizer>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <Tabs className="min-w-0 max-w-full" value={view} onValueChange={(v) => { setPage(1); setSearchParams({ view: v }) }}>
@@ -67,14 +89,16 @@ export default function RenewalOrders() {
       {data && data.items.length === 0 ? (
         <EmptyState title={view === 'to-fix' ? 'Nothing to fix' : 'Nothing here'} message={view === 'to-fix' ? 'Every paid renewal is on track.' : undefined} />
       ) : (
+        <Skeletonizer loading={isPending}>
         <Card className="gap-0 py-0">
           {data?.items.map((o) => <OrderSentence key={o.id} o={o} />)}
-          {data ? (
+          {realData ? (
             <div className="border-t px-4 py-2">
-              <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPage={setPage} />
+              <Pagination page={page} pageSize={PAGE_SIZE} total={realData.total} onPage={setPage} />
             </div>
           ) : null}
         </Card>
+        </Skeletonizer>
       )}
     </div>
   )

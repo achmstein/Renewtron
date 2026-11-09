@@ -8,7 +8,8 @@ import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
 
@@ -18,8 +19,26 @@ import { cn } from '@/lib/utils'
  * only where a status matters, related numbers in one card.
  */
 
+/** Shown as a skeleton while the first load is on its way: the page's real cards with sample numbers. */
+const SKELETON: DashboardResponse = {
+  stats: {
+    totalSearches: 1840, successfulSearches: 1620, renewalsInitiated: 412, renewalsCompleted: 388, renewalsPending: 12, renewalsFailed: 9,
+    totalLeads: 960, convertedLeads: 214, notDueLeads: 120, renewtronDirectCount: 142, renewtronDirectRevenue: 42_318.5,
+    ontraportCount: 96, ontraportRevenue: 28_704, avgBasket: 298, abandonedAtPaymentCount: 38, abandonedAtPaymentValue: 11_362,
+    ontraportPipelineCount: 54, ontraportPipelineValue: 16_146, failedRenewalCount: 6, failedRenewalValue: 1_794,
+    pastCustomersDueSoonCount: 210, pastCustomersDueSoonValue: 62_790,
+  },
+  activity: sampleRows(8, (i) => ({
+    kind: i % 3 === 0 ? 'lead-warm' as const : 'paid' as const, at: sample.daysAgo(i / 8), label: sample.business(i),
+    detail: sample.name(i), amount: i % 3 === 0 ? null : sample.money(i), source: i % 2 ? 'Ontraport' : 'Wizard',
+  })),
+  recentSearches: [],
+  recentRenewals: sampleRows(6, (i) => ({ id: sample.id(i), businessName: sample.business(i), initiatedAt: sample.daysAgo(i / 4), status: 'Completed' })),
+  health: { otpProblem: null, otpHeldCount: 0, stuckCount: 0, oldestStuckAt: null, outboxPending: 2, outboxDead: 0, queueDepth: 3, recurringJobs: null },
+}
+
 export default function Dashboard() {
-  const { data, error } = useQuery({
+  const { data, error, isPending } = useQuery({
     queryKey: ['admin-dashboard'],
     queryFn: () => api.admin.dashboard(),
     refetchInterval: 30_000,
@@ -31,14 +50,10 @@ export default function Dashboard() {
 
       {error ? (
         <Alert variant="destructive"><TriangleAlert /><AlertTitle>Couldn’t load the overview</AlertTitle><AlertDescription>{error instanceof Error ? error.message : 'Load failed.'}</AlertDescription></Alert>
-      ) : !data ? (
-        <div className="space-y-6">
-          <Skeleton className="h-28 rounded-xl" />
-          <Skeleton className="h-40 rounded-xl" />
-          <Skeleton className="h-28 rounded-xl" />
-        </div>
       ) : (
-        <Body data={data} />
+        <Skeletonizer loading={!data && isPending}>
+          <Body data={data ?? SKELETON} />
+        </Skeletonizer>
       )}
     </div>
   )

@@ -13,13 +13,14 @@ import { fmtDate, fmtMoney2, formatAbn, relativeTime } from './_utils'
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
@@ -27,24 +28,34 @@ import { cn } from '@/lib/utils'
 const errorText = (e: unknown) => (e instanceof Error ? e.message : undefined)
 const firstName = (c: ClientDetail) => c.fullName.split(' ')[0] || 'this client'
 
+// The page drawn as a skeleton while the client loads.
+const sampleName = (i: number, abn: string): ClientBusinessNameDto => ({
+  id: sample.id(20 + i), name: sample.business(i), abn, registrationDate: sample.daysAgo(1200 + i * 150), asicAccountNumber: '612 345 678',
+  renewalDueDate: sample.daysAhead(40 + i * 60), dueDateSource: 'Asic', asicKey: i === 0 ? '84213977' : null, asicKeyReceivedAt: i === 0 ? sample.daysAgo(30) : null,
+  lastRenewedAt: sample.daysAgo(330), lastRenewalYears: 1, status: 'Active', source: 'AbnLookup', portalLinkedAt: null, portalLink: null,
+})
+const SAMPLE_CLIENT: ClientDetail = {
+  id: sample.id(0), fullName: sample.name(7), mobileNumber: sample.mobile(), dateOfBirth: '1981-09-14',
+  address: '22 Marine Parade, Coogee NSW 2034', hasTfn: false, hasPurchased: true, reminderOptIn: true, unsubscribedAt: null, isTest: false,
+  notes: null, createdAt: sample.daysAgo(400), lastSeenAt: sample.daysAgo(3), possibleDuplicateOf: null, duplicates: [],
+  emails: [{ id: sample.id(1), email: sample.email(7), isPrimary: true, ontraportContactId: '184522', source: 'Ontraport' }],
+  abns: [{ abn: sample.abn(7), isReminderContact: true, registerCheckedAt: sample.daysAgo(5), contacts: [], businessNames: [0, 1].map((i) => sampleName(i, sample.abn(7))) }],
+  sales: [{ id: sample.id(2), businessName: sample.business(0), status: 'Completed', syncedAt: sample.daysAgo(330), amountPaid: 99, renewalDueDate: sample.daysAgo(320), ontraportContactId: '184522' }],
+  leads: [],
+  renewals: [{ id: sample.id(3), businessName: sample.business(0), status: 'Completed', initiatedAt: sample.daysAgo(330), completedAt: sample.daysAgo(330), amount: 99, renewalYears: 1, source: 'Ontraport', bpayReference: null, bpayPaidAt: null }],
+  keyRequests: [],
+  messages: [{ id: sample.id(4), template: 'RenewalReminder', subject: 'Your business name is due for renewal', status: 'Sent', createdAt: sample.daysAgo(14), recipient: sample.email(7) }],
+}
+
 export default function ClientDetails() {
   const { id } = useParams()
-  const { data, isPending, isError } = useQuery({
+  const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-client', id],
     queryFn: () => api.admin.client(id!),
     enabled: !!id,
   })
+  const data = loaded ?? (isPending ? SAMPLE_CLIENT : undefined)
 
-  if (isPending) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-        <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-16 w-full max-w-80" />
-        <Skeleton className="h-24 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
-      </div>
-    )
-  }
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center">
@@ -58,7 +69,9 @@ export default function ClientDetails() {
   const primary = data.emails.find((e) => e.isPrimary) ?? data.emails[0]
   const facts = [primary?.email, data.mobileNumber, `first seen ${relativeTime(data.createdAt)}`].filter(Boolean)
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <Skeletonizer loading={isPending}>
+    {/* Keyed so the notes box and other local state start from the real client, not the sample. */}
+    <div key={isPending ? 'sample' : data.id} className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink asChild><Link to="/admin/clients">Clients</Link></BreadcrumbLink></BreadcrumbItem>
@@ -82,7 +95,7 @@ export default function ClientDetails() {
 
       <SummaryStrip client={data} />
 
-      <NeedsAttention client={data} />
+      <NeedsAttention client={data} sampleOnly={isPending} />
 
       <DuplicatePanel client={data} />
 
@@ -120,6 +133,7 @@ export default function ClientDetails() {
         </div>
       </div>
     </div>
+    </Skeletonizer>
   )
 }
 
@@ -127,20 +141,25 @@ export default function ClientDetails() {
  * This client's items from the work queues, as Today shows them, so staff act on them here.
  * Possible duplicates are left to the panel below.
  */
-function NeedsAttention({ client }: { client: ClientDetail }) {
-  const { data } = useQuery({
+function NeedsAttention({ client, sampleOnly }: { client: ClientDetail; sampleOnly?: boolean }) {
+  const { data, isPending } = useQuery({
     queryKey: ['admin-client-work', client.id],
     queryFn: () => api.admin.today(client.id),
+    // The sample client drawn while the page loads has no work to fetch.
+    enabled: !sampleOnly,
   })
   useRowKeyboard()
-  if (!data) return null
-  const items = data.groups.flatMap((g) => g.items).filter((i) => i.kind !== 'duplicate')
+  if (!data && !isPending) return null
+  const items = (data?.groups ?? []).flatMap((g) => g.items).filter((i) => i.kind !== 'duplicate')
   if (items.length === 0) {
+    // Also the shape drawn while the queue loads.
     return (
-      <Card className="flex-row items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-        <span aria-hidden className="size-2 rounded-full bg-success" />
-        Nothing needs you for {firstName(client)} right now.
-      </Card>
+      <Skeletonizer loading={!data}>
+        <Card className="flex-row items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+          <span aria-hidden className="size-2 rounded-full bg-success" />
+          Nothing needs you for {firstName(client)} right now.
+        </Card>
+      </Skeletonizer>
     )
   }
   return (

@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { sileo } from 'sileo'
-import { api } from '../api/client'
+import { api, type AsicPortalLinkDto } from '../api/client'
 import { statusOf, type Meaning } from './_status'
 import { When } from './_rows'
 import { DetailRow, NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep } from './_record'
 import { fmtDateTime, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -36,16 +38,28 @@ function outcome(o: string | null, done: string): { meaning: Meaning; note: stri
   }
 }
 
+// The page drawn as a skeleton while the run loads.
+const SAMPLE_RUN: AsicPortalLinkDto = {
+  id: sample.id(0), clientId: sample.id(1), clientName: sample.name(6), clientBusinessNameId: sample.id(2),
+  businessName: sample.business(6), abn: sample.abn(6), dateOfBirth: '1988-06-21', dateOfBirthSource: 'Ontraport',
+  ontraportContactId: '184522', declareAs: 'OnBehalfOfHolder', status: 'Done',
+  linkOutcome: 'success', emailOutcome: 'success', emailReference: '2-98765432101', holderOutcome: 'success', holderType: 'Individual',
+  holderReference: '2-98765432102', repsOutcome: 'no_action', repsRemoved: [], repsReferences: [],
+  failedAtStep: null, error: null, ontraportResult: null, requestedBy: 'Admin', attemptCount: 1,
+  createdAt: sample.daysAgo(2), startedAt: sample.daysAgo(2), finishedAt: sample.daysAgo(2),
+}
+
 export default function AsicPortalLinkDetails() {
   const { id } = useParams()
   const queryClient = useQueryClient()
-  const { data: r, isPending, isError } = useQuery({
+  const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-asic-portal-link', id],
     queryFn: () => api.admin.asicPortalLink(id!),
     enabled: !!id,
     // Follow a run while it goes.
     refetchInterval: (q) => (q.state.data && ['Queued', 'Running'].includes(q.state.data.status) ? 4000 : false),
   })
+  const r = loaded ?? (isPending ? SAMPLE_RUN : undefined)
   const retry = useMutation({
     mutationFn: () => api.admin.retryAsicPortalLink(id!),
     onSettled: () => {
@@ -54,7 +68,6 @@ export default function AsicPortalLinkDetails() {
     },
   })
 
-  if (isPending) return <div className="mx-auto max-w-5xl px-4 py-12 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
   if (isError || !r) return <div className="mx-auto max-w-5xl px-4 py-12 text-center"><h3 className="text-heading">Run not found</h3></div>
 
   const status = statusOf('asicPortal', r.status)
@@ -97,6 +110,7 @@ export default function AsicPortalLinkDetails() {
   ]
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={client} businessName={r.businessName} list={{ to: '/admin/clients', label: 'Clients' }} here="Link to our ASIC account" />
       <RecordHeader
@@ -141,6 +155,7 @@ export default function AsicPortalLinkDetails() {
         {r.error ? <pre className="mt-4 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{r.error}</pre> : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

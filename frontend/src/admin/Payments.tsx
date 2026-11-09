@@ -8,6 +8,8 @@ import { EmptyState, Field, PageHeader, RefreshButton, Stat, StatStrip } from '.
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +22,24 @@ type Facets = PaymentsResponse['facets']
 
 const PAGE_SIZE = 20
 
+const SKELETON_ROWS = sampleRows<Payment>(8, (i) => ({
+  kind: i % 4 === 2 ? 'failed' : 'succeeded',
+  when: sample.daysAgo(i),
+  paymentIntentId: `pi_${sample.id(i).slice(-12)}`,
+  amount: sample.money(i),
+  abn: sample.abn(i),
+  businessNames: [sample.business(i)],
+  leadId: sample.id(i),
+  customerName: sample.name(i),
+  email: sample.email(i),
+  cardBrand: i % 2 ? 'mastercard' : 'visa',
+  cardLast4: '4242',
+  cardholderName: sample.name(i),
+  error: i % 4 === 2 ? sample.text(0) : null,
+  renewals: [{ id: sample.id(i), status: 'Completed' }],
+}))
+const SKELETON_STATS: Stats = { succeededCount: 1240, succeededValue: 312400, failedCount: 86, succeeded30d: 112, succeededValue30d: 28400, failed30d: 9 }
+
 export default function Payments() {
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
@@ -30,7 +50,7 @@ export default function Payments() {
   const [dateTo, setDateTo] = useState('')
   const [errorModal, setErrorModal] = useState<string | null>(null)
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-payments', { search, results, brands, dateFrom, dateTo, page }],
     queryFn: () => api.admin.payments({
       status: results.join(',') || undefined,
@@ -45,7 +65,7 @@ export default function Payments() {
   })
 
   const items = data?.items ?? []
-  const stats: Stats = data?.stats ?? { succeededCount: 0, succeededValue: 0, failedCount: 0, succeeded30d: 0, succeededValue30d: 0, failed30d: 0 }
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : { succeededCount: 0, succeededValue: 0, failedCount: 0, succeeded30d: 0, succeededValue30d: 0, failed30d: 0 })
   const facets: Facets = data?.facets ?? { result: [], cardBrand: [] }
 
   const hasActiveFilters = !!searchInput || results.length > 0 || brands.length > 0 || !!dateFrom || !!dateTo
@@ -144,11 +164,13 @@ export default function Payments() {
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
 
+      <Skeletonizer loading={isPending}>
       <StatStrip>
         <Stat label="Collected" value={fmtMoney0(stats.succeededValue30d)} sub={`Last 30 days · ${stats.succeeded30d} payment${stats.succeeded30d === 1 ? '' : 's'}`} />
         <Stat label="Failed attempts" value={String(stats.failed30d)} sub="Last 30 days" dot={stats.failed30d > 0 ? 'waiting' : null} />
         <Stat label="Collected" value={fmtMoney0(stats.succeededValue)} sub={`All time · ${stats.succeededCount} payment${stats.succeededCount === 1 ? '' : 's'}`} />
       </StatStrip>
+      </Skeletonizer>
 
       {/* Filter toolbar — every facet is resolved server-side with live counts */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -170,8 +192,8 @@ export default function Payments() {
       </div>
 
       <div className="mt-4">
-        <DataTable columns={columns} data={items} empty={<EmptyState title={hasActiveFilters ? 'Nothing matches these filters' : 'No payments yet'} />} />
-        <Pagination page={page} pageSize={PAGE_SIZE} total={data?.totalCount ?? 0} onPage={setPage} />
+        <DataTable columns={columns} data={items} loading={isPending || (isFetching && isPlaceholderData)} skeleton={SKELETON_ROWS} empty={<EmptyState title={hasActiveFilters ? 'Nothing matches these filters' : 'No payments yet'} />} />
+        {data ? <Pagination page={page} pageSize={PAGE_SIZE} total={data.totalCount} onPage={setPage} /> : null}
       </div>
 
       <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Payment error details" />

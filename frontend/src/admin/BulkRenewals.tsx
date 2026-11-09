@@ -7,6 +7,8 @@ import { EmptyState, PageHeader, RefreshButton, SectionTitle, Stat, StatStrip } 
 import { Status, statusLabel } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -16,13 +18,37 @@ type Upload = BulkResponse['items'][number]
 type Stats = BulkResponse['stats']
 type Facets = BulkResponse['facets']
 
+const SKELETON_ROWS = sampleRows<Upload>(8, (i) => ({
+  id: sample.id(i),
+  businessName: sample.business(i),
+  abn: sample.abn(i),
+  ownerName: sample.name(i),
+  renewalYears: i % 3 === 0 ? 3 : 1,
+  amount: sample.money(i),
+  status: ['WaitingForRenewalWindow', 'RenewalQueued', 'RenewalCompleted', 'RenewalCompleted'][i % 4],
+  uploadedAt: sample.daysAgo(i * 2),
+  renewalDueDate: sample.daysAhead(10 + i * 6),
+  sourceFile: `renewals-batch-${(i % 3) + 1}.xlsx`,
+  errorMessage: null,
+}))
+const SKELETON_COUNTS = { totalCount: 1260, waitingCount: 84, queuedCount: 12, failedCount: 3 }
+const SKELETON_STATS: Stats = {
+  pipelineValueNext30d: 18400,
+  lastUploadAt: sample.daysAgo(2),
+  today: 24,
+  yesterday: 31,
+  deltaPct: null,
+  daily14d: sampleRows(14, (i) => ({ date: sample.daysAgo(13 - i).slice(0, 10), count: [12, 30, 18, 24, 9, 27, 21][i % 7] })),
+  byBatch: sampleRows(3, (i) => ({ sourceFile: `renewals-batch-${i + 1}.xlsx`, total: [420, 318, 522][i], completed: [380, 240, 96][i], failed: [4, 1, 0][i], pipelineValue: [3200, 8400, 6800][i], lastUploadAt: sample.daysAgo(i * 9) })),
+}
+
 export default function BulkRenewals() {
   const [statuses, setStatuses] = useState<string[]>([])
   const [batches, setBatches] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-bulk-renewals', { statuses, batches }],
     queryFn: () => api.admin.bulkRenewals({
       status: statuses.join(',') || undefined,
@@ -81,8 +107,11 @@ export default function BulkRenewals() {
   }
 
   const items = data?.items ?? []
-  const stats: Stats = data?.stats ?? defaultStats()
+  // While the first load is out, the strip and batches are drawn from samples as a skeleton.
+  const counts = data ?? (isPending ? SKELETON_COUNTS : undefined)
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : defaultStats())
   const failedCount = data?.failedCount ?? 0
+  const shownFailed = counts?.failedCount ?? 0
   const facets: Facets = data?.facets ?? { status: [], batch: [] }
 
   const hasActiveFilters = statuses.length > 0 || batches.length > 0
@@ -180,22 +209,23 @@ export default function BulkRenewals() {
         }
       />
 
+      <Skeletonizer loading={isPending}>
       <StatStrip>
         <Stat
           label="Due in the next 30 days"
           value={fmtMoney0(stats.pipelineValueNext30d)}
-          sub={`${data?.waitingCount ?? 0} waiting · ${data?.queuedCount ?? 0} queued`}
+          sub={`${counts?.waitingCount ?? 0} waiting · ${counts?.queuedCount ?? 0} queued`}
         />
         <Stat
           label="Failed"
-          value={failedCount.toLocaleString()}
-          sub={failedCount > 0 ? 'Retry to queue them again' : 'All clear'}
-          dot={failedCount > 0 ? 'action' : null}
+          value={shownFailed.toLocaleString()}
+          sub={shownFailed > 0 ? 'Retry to queue them again' : 'All clear'}
+          dot={shownFailed > 0 ? 'action' : null}
         />
         <Stat
           label="Last upload"
           value={stats.lastUploadAt ? relativeTime(stats.lastUploadAt) : '—'}
-          sub={`${data?.totalCount ?? 0} rows in all`}
+          sub={`${counts?.totalCount ?? 0} rows in all`}
         />
         <Stat
           label="Added today"
@@ -205,6 +235,7 @@ export default function BulkRenewals() {
           trendLabel="rows"
         />
       </StatStrip>
+      </Skeletonizer>
 
       {/* Batches: clicking one toggles it in the server-side batch facet */}
       {stats.byBatch.length > 0 ? (
@@ -215,6 +246,7 @@ export default function BulkRenewals() {
               ? <Button variant="ghost" size="sm" onClick={() => setBatches([])}>Show all</Button>
               : 'Tap or click one to filter'}
           />
+          <Skeletonizer loading={isPending}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats.byBatch.map((b) => {
               // "(direct)" rows have no sourceFile, so the server can't facet on them.
@@ -244,6 +276,7 @@ export default function BulkRenewals() {
               )
             })}
           </div>
+          </Skeletonizer>
         </div>
       ) : null}
 
@@ -263,6 +296,8 @@ export default function BulkRenewals() {
         <DataTable
           columns={columns}
           data={items}
+          loading={isPending || (isFetching && isPlaceholderData)}
+          skeleton={SKELETON_ROWS}
           empty={<EmptyState
             title={hasActiveFilters ? 'Nothing matches these filters' : 'No bulk renewals yet'}
             message={hasActiveFilters ? undefined : 'Upload an .xlsx to get started.'}

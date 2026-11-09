@@ -10,6 +10,8 @@ import { SaleSentence, SentenceList } from './_sentences'
 import { HANDLED, Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -27,6 +29,23 @@ type Facets = SalesResponse['facets']
 
 /** A sale annotated with days until its due date (null when no due date is known). */
 type SaleRow = Sale & { _daysUntil: number | null }
+
+const SAMPLE_STATUSES = ['WaitingForRenewalWindow', 'RenewalCompleted', 'RenewalFailed', 'AsicNotYetDue']
+const sampleSale = (i: number): Sale => ({
+  id: sample.id(i), contactName: sample.name(i), email: sample.email(i), abn: sample.abn(i), businessName: sample.business(i),
+  renewalYears: i % 3 === 0 ? 3 : 1, amountPaid: sample.money(i), status: SAMPLE_STATUSES[i % SAMPLE_STATUSES.length],
+  syncedAt: sample.daysAgo(i), renewalDueDate: sample.daysAhead(3 + i * 4), errorMessage: null, renewalRequestId: null,
+  renewalStatus: null, renewalFailedAtStep: null, renewalErrorMessage: null, clientId: null, handledAt: null,
+})
+// withDaysUntil is a function declaration further down, so it's hoisted and callable here.
+const SKELETON_ROWS = sampleRows<SaleRow>(8, (i) => withDaysUntil(sampleSale(i)))
+const SKELETON_RESPONSE: SalesResponse = {
+  filteredCount: 0, page: 1, pageSize: 0, view: 'all',
+  buckets: { overdue: 12, overdueValue: 2480, soon7: 38, soon30: 214, all: 6120 },
+  upNext: sampleRows(5, sampleSale), totalCount: 0, waitingCount: 186, queuedCount: 24, completedCount: 0, failedCount: 14,
+  ineligibleCount: 3, asicNotYetDueCount: 5, renewalInProgressCount: 2, blockedCount: 10, items: [], facets: { status: [] },
+  stats: { pipelineValueNext30d: 31240, lastSyncAt: sample.daysAgo(0), nextSyncAt: sample.daysAhead(0), today: 42, yesterday: 51, deltaPct: null, daily14d: [] },
+}
 
 type DueFilter = 'overdue' | '7d' | '30d' | 'all'
 
@@ -73,7 +92,7 @@ export default function OntraportSales() {
   const [errorModal, setErrorModal] = useState<{ title: string; body: string } | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data: realData, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-ontraport-sales', { statuses, search, dueFilter, page }],
     queryFn: () => api.admin.ontraportSales({
       status: statuses.join(',') || undefined,
@@ -85,6 +104,8 @@ export default function OntraportSales() {
     placeholderData: keepPreviousData,
   })
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sales'] })
+  // Sample counts and up-next cards drawn as a skeleton until the first answer arrives.
+  const data = realData ?? (isPending ? SKELETON_RESPONSE : undefined)
 
   // Puts the sale on the ASIC key to-do list; the form is filled in by hand from the
   // ASIC Key Requests page, where the reference number is recorded.
@@ -118,6 +139,8 @@ export default function OntraportSales() {
   const [viewMode, setViewMode] = useState<'Sentences' | 'Table'>('Sentences')
   const upNext = useMemo<SaleRow[]>(() => (data?.upNext ?? []).map(withDaysUntil), [data])
   const buckets = data?.buckets ?? { overdue: 0, overdueValue: 0, soon7: 0, soon30: 0, all: 0 }
+  // The tabs and header sit outside the skeleton, so they only ever show real counts.
+  const tabCounts = realData?.buckets ?? { overdue: 0, overdueValue: 0, soon7: 0, soon30: 0, all: 0 }
   const upNextValue = upNext.reduce((sum, s) => sum + s.amountPaid, 0)
 
   const syncMutation = useMutation({
@@ -232,7 +255,7 @@ export default function OntraportSales() {
         subtitle="Paid in Ontraport, renewed once the name is inside ASIC’s window."
         right={
           <>
-            {failedCount > 0 ? (
+            {(realData?.failedCount ?? 0) > 0 ? (
               <Button variant="outline" size="sm" onClick={() => setRequeueOpen(true)} title="Put failed sales back in the pool, in batches">
                 <ListRestart />
                 Requeue failed
@@ -250,6 +273,7 @@ export default function OntraportSales() {
       />
 
       {/* Counts come from the server and describe all sales, not the filter. */}
+      <Skeletonizer loading={isPending}>
       <StatStrip>
         <Stat
           label="Due in the next 30 days"
@@ -281,9 +305,11 @@ export default function OntraportSales() {
           hint="Sales pulled from Ontraport; the line is the last 14 days"
         />
       </StatStrip>
+      </Skeletonizer>
 
       {upNext.length > 0 ? (
-        <section className="mt-8 space-y-3">
+        <Skeletonizer loading={isPending} className="mt-8">
+        <section className="space-y-3">
           <h2 className="flex flex-wrap items-baseline gap-x-2 text-heading">
             Up next
             <span className="text-sm font-normal text-muted-foreground tabular-nums">{upNext.length} sale{upNext.length === 1 ? '' : 's'} · {fmtMoney0(upNextValue)}</span>
@@ -292,16 +318,17 @@ export default function OntraportSales() {
             {upNext.map((s) => <UpNextCard key={s.id} s={s} />)}
           </div>
         </section>
+        </Skeletonizer>
       ) : null}
 
       {/* Due-date tabs and filters, resolved on the server; the view and refresh sit at the end. */}
       <div className="mt-8 flex flex-wrap items-center gap-2">
         <Tabs className="min-w-0 max-w-full" value={dueFilter} onValueChange={(v) => setDueFilter(v as DueFilter)}>
           <TabsList className="h-8">
-            <DueTab value="overdue" count={buckets.overdue}>Overdue</DueTab>
-            <DueTab value="7d" count={buckets.soon7}><span className="sm:hidden">7 days</span><span className="hidden sm:inline">Next 7 days</span></DueTab>
-            <DueTab value="30d" count={buckets.soon30}><span className="sm:hidden">30 days</span><span className="hidden sm:inline">Next 30 days</span></DueTab>
-            <DueTab value="all" count={buckets.all}>All</DueTab>
+            <DueTab value="overdue" count={tabCounts.overdue}>Overdue</DueTab>
+            <DueTab value="7d" count={tabCounts.soon7}><span className="sm:hidden">7 days</span><span className="hidden sm:inline">Next 7 days</span></DueTab>
+            <DueTab value="30d" count={tabCounts.soon30}><span className="sm:hidden">30 days</span><span className="hidden sm:inline">Next 30 days</span></DueTab>
+            <DueTab value="all" count={tabCounts.all}>All</DueTab>
           </TabsList>
         </Tabs>
         <Input
@@ -325,11 +352,13 @@ export default function OntraportSales() {
 
       <div className="mt-4">
         {viewMode === 'Sentences' ? (
-          <SentenceList empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />}>
-            {tableRows.map((s) => <SaleSentence key={s.id} s={s} />)}
-          </SentenceList>
+          <Skeletonizer loading={isPending}>
+            <SentenceList empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />}>
+              {(isPending ? SKELETON_ROWS : tableRows).map((s) => <SaleSentence key={s.id} s={s} />)}
+            </SentenceList>
+          </Skeletonizer>
         ) : (
-          <DataTable columns={columns} data={tableRows} loading={isFetching && isPlaceholderData} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
+          <DataTable columns={columns} data={tableRows} loading={isPending || (isFetching && isPlaceholderData)} skeleton={SKELETON_ROWS} empty={<EmptyState title={emptyMessage(dueFilter, hasActiveFilters)} />} />
         )}
         {(data?.filteredCount ?? 0) > PAGE_SIZE ? (
           <Pagination page={page} pageSize={PAGE_SIZE} total={data?.filteredCount ?? 0} onPage={setPage} />

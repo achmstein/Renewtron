@@ -9,6 +9,8 @@ import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -20,6 +22,27 @@ import { cn } from '@/lib/utils'
 type KeysResponse = Awaited<ReturnType<typeof api.admin.asicKeys>>
 type Row = AsicKeyNotificationListItem
 type Stats = KeysResponse['stats']
+
+const SKELETON_ROWS = sampleRows<Row>(8, (i) => ({
+  id: sample.id(i),
+  businessName: sample.business(i),
+  abn: sample.abn(i),
+  asicKey: `${String(10000000 + i * 1234567).slice(0, 8)}`,
+  ontraportContactIds: String(48000 + i * 37),
+  ontraportContactsUpdated: 1,
+  status: ['Completed', 'SavedToClient', 'ContactNotFound', 'Completed', 'Completed'][i % 5],
+  errorMessage: null,
+  subject: 'Your business name ASIC key',
+  receivedAt: sample.daysAgo(i),
+  processedAt: sample.daysAgo(i),
+  attemptCount: 1,
+}))
+const SKELETON_COUNTS = { totalCount: 3180, completedCount: 3040, attentionCount: 4, savedToClientCount: 120 }
+const SKELETON_STATS: Stats = {
+  lastScanAt: sample.daysAgo(0), lastScanState: 'Succeeded', lastScanError: null, nextScanAt: sample.daysAhead(0), scanCron: null,
+  today: 14, yesterday: 22, deltaPct: null,
+  daily14d: sampleRows(14, (i) => ({ date: sample.daysAgo(13 - i).slice(0, 10), count: [12, 30, 18, 24, 9, 27, 21][i % 7] })),
+}
 
 const PAGE_SIZE = 25
 type Facets = KeysResponse['facets']
@@ -45,7 +68,7 @@ export default function AsicKeys() {
   const [assign, setAssign] = useState<Row | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-asic-keys', { statuses, search, page }],
     queryFn: () => api.admin.asicKeys({ status: statuses.join(',') || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -106,11 +129,14 @@ export default function AsicKeys() {
   }
 
   const items = data?.items ?? []
-  const stats: Stats = data?.stats ?? defaultStats()
+  // While the first load is out, the strip is drawn from samples as a skeleton.
+  const counts = data ?? (isPending ? SKELETON_COUNTS : undefined)
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : defaultStats())
   const facets: Facets = data?.facets ?? { status: [] }
   const attentionCount = data?.attentionCount ?? 0
-  const completedCount = data?.completedCount ?? 0
-  const totalCount = data?.totalCount ?? 0
+  const shownAttention = counts?.attentionCount ?? 0
+  const completedCount = counts?.completedCount ?? 0
+  const totalCount = counts?.totalCount ?? 0
 
   const hasActiveFilters = !!searchInput || statuses.length > 0
   const resetFilters = () => { setSearchInput(''); setStatuses([]) }
@@ -246,17 +272,18 @@ export default function AsicKeys() {
         }
       />
 
+      <Skeletonizer loading={isPending}>
       <StatStrip>
         <Stat
           label="Keys written"
           value={completedCount.toLocaleString()}
-          sub={`${data?.savedToClientCount ? `+${data.savedToClientCount.toLocaleString()} saved to client · ` : ''}${totalCount.toLocaleString()} letters`}
+          sub={`${counts?.savedToClientCount ? `+${counts.savedToClientCount.toLocaleString()} saved to client · ` : ''}${totalCount.toLocaleString()} letters`}
         />
         <Stat
           label="Needs attention"
-          value={attentionCount.toLocaleString()}
-          sub={attentionCount > 0 ? 'Retry, or assign a contact' : 'All clear'}
-          dot={attentionCount > 0 ? 'action' : null}
+          value={shownAttention.toLocaleString()}
+          sub={shownAttention > 0 ? 'Retry, or assign a contact' : 'All clear'}
+          dot={shownAttention > 0 ? 'action' : null}
         />
         <Stat
           label="Last scan"
@@ -274,6 +301,7 @@ export default function AsicKeys() {
           trendLabel="letters"
         />
       </StatStrip>
+      </Skeletonizer>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input
@@ -296,7 +324,8 @@ export default function AsicKeys() {
           columns={columns}
           data={items}
           onRowClick={(r) => setDetail(r.original)}
-          loading={isFetching && isPlaceholderData}
+          loading={isPending || (isFetching && isPlaceholderData)}
+          skeleton={SKELETON_ROWS}
           empty={<EmptyState
             title={hasActiveFilters ? (toSort ? 'All clear' : 'Nothing matches these filters') : 'No key letters yet'}
             message={hasActiveFilters ? undefined : 'Set up the inbox in Settings, then scan.'}

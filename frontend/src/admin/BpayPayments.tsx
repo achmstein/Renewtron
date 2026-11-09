@@ -8,6 +8,8 @@ import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -15,13 +17,30 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
+const SKELETON_ROWS = sampleRows<BpayBill>(6, (i) => ({
+  id: sample.id(i),
+  businessName: sample.business(i),
+  abn: sample.abn(i),
+  renewalYears: i % 3 === 0 ? 3 : 1,
+  lodgedAt: sample.daysAgo(i + 1),
+  transactionReference: `${4100000 + i * 731}`,
+  billerCode: '17301',
+  customerReference: `2291${String(880000 + i * 4231)}`,
+  amount: i % 3 === 0 ? 245 : 104,
+  payable: i % 4 !== 3,
+  transferId: null,
+  transferStatus: i % 4 === 3 ? 'PROCESSING' : null,
+  error: null,
+  paidAt: null,
+}))
+
 export default function BpayPayments() {
   const [showPaid, setShowPaid] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirming, setConfirming] = useState(false)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-bpay', { showPaid }],
     queryFn: () => api.admin.bpayBills(showPaid),
   })
@@ -34,8 +53,10 @@ export default function BpayPayments() {
   const payable = items.filter((b) => b.payable && b.amount != null)
   const chosen = payable.filter((b) => selected.has(b.id))
   const total = chosen.reduce((sum, b) => sum + (b.amount ?? 0), 0)
-  const inFlight = items.filter((b) => !b.paidAt && b.transferStatus && !b.payable)
-  const toPay = items.filter((b) => b.payable)
+  // While the first load is out, the strip is drawn from the sample rows as a skeleton.
+  const shown = data ? items : isPending ? SKELETON_ROWS : []
+  const inFlight = shown.filter((b) => !b.paidAt && b.transferStatus && !b.payable)
+  const toPay = shown.filter((b) => b.payable)
   const missingFee = toPay.some((b) => b.amount == null)
 
   const toggle = (id: string) => setSelected((s) => {
@@ -203,6 +224,7 @@ export default function BpayPayments() {
         ) : null}
       </div>
 
+      <Skeletonizer loading={isPending}>
       <StatStrip>
         <Stat
           label="To pay"
@@ -213,6 +235,7 @@ export default function BpayPayments() {
         <Stat label="Waiting on Airwallex" value={inFlight.length.toLocaleString()} sub="Sent, not paid yet" />
         <Stat label="Ticked to pay now" value={fmtMoney2(total)} sub={`${chosen.length} ${chosen.length === 1 ? 'bill' : 'bills'}`} />
       </StatStrip>
+      </Skeletonizer>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -228,6 +251,8 @@ export default function BpayPayments() {
         <DataTable
           columns={columns}
           data={items}
+          loading={isPending || (isFetching && isPlaceholderData)}
+          skeleton={SKELETON_ROWS}
           empty={<EmptyState title="No BPAY bills to pay" message="Renewals lodged to pay later by BPAY show up here." />}
         />
       </div>

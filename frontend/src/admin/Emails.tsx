@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, CheckCheck, Eye, Inbox, LayoutTemplate, Loader2, Mail, MailOpen, RotateCw, Search, Send, Tag } from 'lucide-react'
@@ -10,6 +10,8 @@ import { RefreshButton } from './_ui'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { cn } from '@/lib/utils'
 
 /*
@@ -37,6 +39,31 @@ const kindWords = (k: string) => (k ? k[0].toUpperCase() + k.slice(1) : k)
 function emailStatus(e: Pick<EmailRow, 'status' | 'deliveryStatus'>): StatusEntry {
   if (e.status !== 'Sent') return statusOf('email', e.status)
   return statusOf('email', e.deliveryStatus ?? 'Sent')
+}
+
+const SUBJECTS = ['Your business name is renewed', 'Payment received: thank you', 'Your renewal is coming up', 'We need your ASIC key', 'Something went wrong with your renewal']
+const KINDS = ['renewal completed', 'payment received', 'renewal reminder', 'asic key request', 'renewal failed']
+
+/** Sample emails, drawn as skeleton rows while the list loads. */
+const SKELETON_ROWS = sampleRows<EmailRow>(10, (i) => ({
+  id: sample.id(i), kind: KINDS[i % 5], subject: SUBJECTS[i % 5], to: sample.email(i), status: 'Sent',
+  deliveryStatus: i % 3 ? 'delivered' : null, openedAt: i % 2 ? sample.daysAgo(i) : null, error: null,
+  createdAt: sample.daysAgo(i / 3), sentAt: sample.daysAgo(i / 3), attemptCount: 1, clientId: null,
+}))
+
+/** A sample email, drawn as a skeleton while the open one loads. */
+const SKELETON_EMAIL: EmailDetail = {
+  ...SKELETON_ROWS[0], lastAttemptAt: null, providerMessageId: 'x7Yq2PZ3Tq-abc123', deliveryAt: sample.daysAgo(0), deliveryDetail: null,
+  bodyHtml: null,
+  bodyText: [
+    'Hi Sarah,', '',
+    'Good news: MITCHELL CONSULTING is renewed with ASIC for another year.',
+    'Your new renewal date is 14 November 2027, and ASIC’s receipt is attached.', '',
+    'Nothing else to do. We’ll remind you before it next falls due.', '',
+    'Thanks,', 'The Ideal Business team',
+  ].join('\n'),
+  leadId: null, renewalRequestId: sample.id(1), batchId: null, resendOfId: null,
+  client: { id: sample.id(0), fullName: sample.name(0) }, resends: [], templateKey: 'renewal-completed', templateVersion: 2, templateName: 'Renewal confirmation',
 }
 
 export default function Emails() {
@@ -239,7 +266,11 @@ function EmailList({ list, data, query, tab, selectedId, onOpen }: {
   return (
     <div className="min-h-64 flex-1 divide-y lg:min-h-0 lg:overflow-y-auto">
       {list.isPending ? (
-        <div className="p-8 text-center"><Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" /></div>
+        <Skeletonizer loading>
+          <div className="divide-y">
+            {SKELETON_ROWS.map((row) => <EmailListRow key={row.id} row={row} selected={false} onOpen={() => {}} skeleton />)}
+          </div>
+        </Skeletonizer>
       ) : !data || data.items.length === 0 ? (
         <div className="p-8 text-center text-sm text-muted-foreground">
           {query ? 'Nothing matches this search.' : tab === 'problem' ? 'No problems: every email went out.' : 'No emails here yet.'}
@@ -254,16 +285,15 @@ function EmailList({ list, data, query, tab, selectedId, onOpen }: {
   )
 }
 
-function EmailListRow({ row, selected, onOpen, ref }: { row: EmailRow; selected: boolean; onOpen: () => void; ref?: Ref<HTMLButtonElement> }) {
+function EmailListRow({ row, selected, onOpen, ref, skeleton }: {
+  row: EmailRow; selected: boolean; onOpen: () => void; ref?: Ref<HTMLButtonElement>
+  /** Drawn as a skeleton: a plain block, so its text and status each become a bone rather than the whole row. */
+  skeleton?: boolean
+}) {
   const st = emailStatus(row)
-  return (
-    <button
-      ref={ref}
-      type="button"
-      onClick={onOpen}
-      className={cn('block w-full border-l-2 border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted/60',
-        selected && 'border-l-foreground bg-muted')}
-    >
+  const cls = cn('block w-full border-l-2 border-transparent px-3 py-2.5 text-left transition-colors hover:bg-muted/60', selected && 'border-l-foreground bg-muted')
+  const body = (
+    <>
       <div className="flex items-center justify-between gap-2">
         <span className={cn('truncate text-sm', st.meaning === 'action' ? 'font-semibold' : 'font-medium')}>{row.to}</span>
         <span className="shrink-0 text-caption text-muted-foreground" title={fmtDateTime(row.createdAt)}>{relativeTime(row.createdAt)}</span>
@@ -274,18 +304,20 @@ function EmailListRow({ row, selected, onOpen, ref }: { row: EmailRow; selected:
         {row.openedAt ? <span className="inline-flex items-center gap-1 text-caption text-muted-foreground"><Eye className="size-3" />opened</span> : null}
         <span className="truncate text-caption text-muted-foreground">{kindWords(row.kind)}</span>
       </div>
-    </button>
+    </>
   )
+  if (skeleton) return <div className={cls}>{body}</div>
+  return <button ref={ref} type="button" onClick={onOpen} className={cls}>{body}</button>
 }
 
 function EmailPane({ id, onBack }: { id: string; onBack: () => void }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { data: e, isPending, isError } = useQuery({ queryKey: ['admin-email', id], queryFn: () => api.admin.email(id) })
+  const { data, isPending, isError } = useQuery({ queryKey: ['admin-email', id], queryFn: () => api.admin.email(id) })
+  const e = data ?? (isPending ? SKELETON_EMAIL : undefined)
   const [asText, setAsText] = useState(false)
   const resend = useMutation({ mutationFn: () => api.admin.resendEmail(id) })
 
-  if (isPending) return <div className="flex flex-1 items-center justify-center p-8"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
   if (isError || !e) return <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">Email not found.</div>
 
   const st = emailStatus(e)
@@ -301,7 +333,7 @@ function EmailPane({ id, onBack }: { id: string; onBack: () => void }) {
   const canResend = !!(e.bodyHtml || e.bodyText)
   const sep = <span className="text-border">·</span>
 
-  return (
+  const pane = (
     <>
       <div className="space-y-2.5 border-b px-4 py-3 sm:px-5">
         <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground lg:hidden">
@@ -358,6 +390,9 @@ function EmailPane({ id, onBack }: { id: string; onBack: () => void }) {
       <EmailBody detail={e} asText={asText} />
     </>
   )
+  // Loading: the same pane drawn from a sample email, as a skeleton. Loaded: the pane on its own,
+  // so the email frame keeps filling the column.
+  return isPending ? <Skeletonizer loading className="flex-1">{pane}</Skeletonizer> : pane
 }
 
 /** The email as the customer saw it, in a locked-down frame (no scripts, no forms, links open a new tab). Fills the pane. */
@@ -368,6 +403,43 @@ function EmailBody({ detail: e, asText }: { detail: EmailDetail; asText: boolean
   if (asText || !e.bodyHtml) {
     return <pre className="min-h-[60dvh] flex-1 overflow-y-auto whitespace-pre-wrap break-words p-4 text-sm sm:p-5 lg:min-h-0">{e.bodyText}</pre>
   }
-  const doc = `<base target="_blank">${e.bodyHtml}`
-  return <iframe title="Email" sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={doc} className="h-[75dvh] w-full flex-1 bg-white lg:h-auto lg:min-h-0" />
+  return <EmailFrame html={e.bodyHtml} />
+}
+
+/**
+ * Phones: the frame is as tall as the email, so the page scrolls the whole thing like a mail app
+ * (a frame inside a scrolling page otherwise shrinks to a 150px strip). Wide screens: it fills the
+ * reading pane and scrolls inside it.
+ *
+ * allow-same-origin is there only so the page can measure the email's height. Scripts stay off
+ * (no allow-scripts), so the email itself can't run anything.
+ */
+function EmailFrame({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement>(null)
+  const [height, setHeight] = useState<number>()
+  const [observer, setObserver] = useState<ResizeObserver>()
+
+  const fit = () => {
+    const d = ref.current?.contentDocument
+    if (!d?.documentElement) return
+    setHeight(d.documentElement.scrollHeight)
+    // Images arriving or the phone turning change the email's height: follow it.
+    observer?.disconnect()
+    const ro = new ResizeObserver(() => setHeight(d.documentElement.scrollHeight))
+    ro.observe(d.documentElement)
+    setObserver(ro)
+  }
+  useEffect(() => () => observer?.disconnect(), [observer])
+
+  return (
+    <iframe
+      ref={ref}
+      title="Email"
+      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      srcDoc={`<base target="_blank">${html}`}
+      onLoad={fit}
+      style={{ '--email-h': height ? `${height}px` : '75dvh' } as CSSProperties}
+      className="h-(--email-h) w-full shrink-0 bg-white lg:h-auto lg:min-h-0 lg:flex-1"
+    />
+  )
 }

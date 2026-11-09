@@ -5,7 +5,8 @@ import { templatesApi, type TemplateSummary } from '../api/emailTemplates'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
@@ -14,6 +15,13 @@ import { relativeTime } from './_utils'
  * Emails → Templates (/admin/emails/templates): every email Renewtron sends a customer, whether it's
  * on, and which wording it uses. Opening one goes to the editor.
  */
+
+const SKELETON = sampleRows<TemplateSummary>(6, (i) => ({
+  key: `sample-${i}`,
+  name: ['Renewal confirmation', 'Payment received', 'Renewal reminder', 'ASIC key request', 'Win-back', 'Renewal failed'][i],
+  description: ['Sent when ASIC confirms the renewal.', 'Sent the moment a card payment goes through.', 'Sent before the business name falls due.', 'Asks the client for their ASIC key.', 'Brings back clients who stopped part way.', 'Tells the client something went wrong.'][i],
+  enabled: true, version: i % 3, updatedAt: sample.daysAgo(i * 5), updatedBy: 'david@example.com.au', lastSentAt: sample.daysAgo(i),
+}))
 
 export default function EmailTemplates() {
   const q = useQuery({ queryKey: ['email-templates'], queryFn: templatesApi.list })
@@ -27,11 +35,11 @@ export default function EmailTemplates() {
 
       {q.error ? <Alert variant="destructive"><AlertDescription>{(q.error as Error).message}</AlertDescription></Alert> : null}
 
-      <Card className="mt-6 gap-0 py-0">
-        {q.isLoading
-          ? Array.from({ length: 5 }).map((_, i) => <div key={i} className="border-b p-4 last:border-0"><Skeleton className="h-10" /></div>)
-          : q.data?.templates.map((t) => <TemplateRow key={t.key} t={t} />)}
-      </Card>
+      <Skeletonizer loading={q.isPending} className="mt-6">
+        <Card className="gap-0 py-0">
+          {(q.data?.templates ?? (q.isPending ? SKELETON : [])).map((t) => <TemplateRow key={t.key} t={t} />)}
+        </Card>
+      </Skeletonizer>
 
       {q.data && (
         <Card className="mt-6 gap-0 py-0">

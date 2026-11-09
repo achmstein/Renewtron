@@ -10,6 +10,8 @@ import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip, ViewToggl
 import { renewalStatus, Status, statusLabel } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +27,16 @@ type Stats = RenewalsResponse['stats']
 type Facets = RenewalsResponse['facets']
 
 type ViewMode = 'Sentences' | 'Table' | 'Cards'
+
+const SAMPLE_STATUSES: Renewal['status'][] = ['Completed', 'Failed', 'Completed', 'Processing']
+const SKELETON_ROWS = sampleRows<Renewal>(8, (i) => ({
+  id: sample.id(i), abn: sample.abn(i), businessName: sample.business(i), renewalYears: i % 3 === 0 ? 3 : 1,
+  amount: sample.money(i), status: SAMPLE_STATUSES[i % SAMPLE_STATUSES.length], source: 'Renewtron', paymentType: 'Stripe',
+  initiatedAt: sample.daysAgo(i), completedAt: i % 2 === 0 ? sample.daysAgo(i) : null, email: sample.email(i),
+  errorMessage: i % 4 === 1 ? sample.text(0) : null, errorCategory: i % 4 === 1 ? 'CardDeclined' : null, attemptCount: 1,
+  initiatedByLabel: 'Customer', stripePaymentSucceeded: true, cardBrand: 'visa', cardLast4: '4242',
+  lead: { id: sample.id(100 + i), fullName: sample.name(i), email: sample.email(i) }, timeInStatusHours: 2 + i,
+}))
 const PAGE_SIZE = 10
 
 function canRetry(r: Renewal) {
@@ -69,7 +81,7 @@ export default function Renewals() {
   const [errorModal, setErrorModal] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-renewals', { toFix, abn, statuses, sources, categories, initiators, dateFrom, dateTo, page }],
     queryFn: () => api.admin.renewals({
       view: toFix ? 'toFix' : undefined,
@@ -127,7 +139,9 @@ export default function Renewals() {
 
   const totalCount = data?.totalCount ?? 0
   const renewals = data?.items ?? []
-  const stats: Stats = data?.stats ?? defaultStats()
+  // Sentence and card views draw the sample renewals as a skeleton on the first load; the table does it itself.
+  const shown = isPending ? SKELETON_ROWS : renewals
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : defaultStats())
   const facets: Facets = data?.facets ?? { status: [], source: [], initiatedBy: [], errorCategory: [] }
 
   const hasActiveFilters = !!abnInput || statuses.length > 0 || sources.length > 0 || categories.length > 0 || initiators.length > 0 || !!dateFrom || !!dateTo
@@ -248,7 +262,7 @@ export default function Renewals() {
               <Wrench />
               Reconcile
             </Button>
-            {stats.failedValue30d > 0 ? (
+            {(data?.stats.failedValue30d ?? 0) > 0 ? (
               <Button size="sm" onClick={() => setBulkRetryConfirm(true)} title="Re-queue every failed renewal in the current filter">
                 Retry all failed
                 <span className="font-normal tabular-nums opacity-70">{fmtMoney0(stats.failedValue30d)}</span>
@@ -258,7 +272,7 @@ export default function Renewals() {
         }
       />
 
-      <StatsStrip stats={stats} />
+      <Skeletonizer loading={isPending}><StatsStrip stats={stats} /></Skeletonizer>
 
       {/* Filters, resolved on the server with live counts; the view and refresh sit at the end. */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -287,25 +301,29 @@ export default function Renewals() {
 
       <div className="mt-4">
         {viewMode === 'Sentences' ? (
+          <Skeletonizer loading={isPending}>
           <SentenceList empty={<EmptyState title="Nothing matches these filters" />}>
-            {renewals.map((r) => (
+            {shown.map((r) => (
               <RenewalSentence key={r.id} r={r} actions={canRetry(r) ? (
                 <Button size="sm" variant="outline" disabled={retryOneMutation.isPending && retryOneMutation.variables === r.id} onClick={() => retryOne(r.id)}>Retry</Button>
               ) : null} />
             ))}
           </SentenceList>
+          </Skeletonizer>
         ) : viewMode === 'Cards' ? (
-          renewals.length === 0 ? (
+          shown.length === 0 ? (
             <EmptyState title="Nothing matches these filters" />
           ) : (
+            <Skeletonizer loading={isPending}>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {renewals.map((r) => (
+              {shown.map((r) => (
                 <RenewalCard key={r.id} r={r} onError={setErrorModal} onRetry={retryOne} retrying={retryOneMutation.isPending && retryOneMutation.variables === r.id} />
               ))}
             </div>
+            </Skeletonizer>
           )
         ) : (
-          <DataTable columns={columns} data={renewals} empty={<EmptyState title="Nothing matches these filters" />} />
+          <DataTable columns={columns} data={renewals} loading={isPending || (isFetching && isPlaceholderData)} skeleton={SKELETON_ROWS} empty={<EmptyState title="Nothing matches these filters" />} />
         )}
 
         <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />
@@ -421,6 +439,13 @@ function ReconcileDialog({ open, onClose, onDone }: { open: boolean; onClose: ()
       </DialogContent>
     </Dialog>
   )
+}
+
+const SKELETON_STATS: Stats = {
+  successRate30d: 94, completed30d: 1204, decided30d: 1281, total30d: 1320, avgCompletionMinutes: 4,
+  revenueMtd: 84210, liveValue: 2380, stuckValue: 598, stuckCount: 3, scheduledRetryValue: 897,
+  needsReviewCount: 4, needsReviewValue: 1196, failedValue30d: 4120,
+  today: 61, yesterday: 58, deltaPct: 5, daily14d: [], errorCategoryBreakdown: [],
 }
 
 function defaultStats(): Stats {

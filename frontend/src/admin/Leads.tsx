@@ -10,6 +10,8 @@ import { LeadSentence, SentenceList } from './_sentences'
 import { Status } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +28,20 @@ type LeadsResponse = Awaited<ReturnType<typeof api.admin.leads>>
 type Lead = LeadsResponse['items'][number]
 type Stats = LeadsResponse['stats']
 type Facets = LeadsResponse['facets']
+
+const SAMPLE_OUTCOMES = ['RenewalAvailable', 'RenewalCompleted', 'NotDueForRenewal', 'RenewalInProgress']
+const SKELETON_ROWS = sampleRows<Lead>(8, (i) => ({
+  id: sample.id(i), abn: sample.abn(i), fullName: sample.name(i), email: sample.email(i), mobileNumber: sample.mobile(),
+  createdAt: sample.daysAgo(i), outcome: SAMPLE_OUTCOMES[i % SAMPLE_OUTCOMES.length], reminderOptIn: i % 2 === 0,
+  convertedToRenewal: i % 4 === 1, convertedAt: i % 4 === 1 ? sample.daysAgo(i) : null,
+  searchLog: { id: sample.id(100 + i), searchedAt: sample.daysAgo(i), success: true, resultsCount: 1 + (i % 3) },
+  firstBusinessName: sample.business(i), renewal: i % 4 === 1 ? { id: sample.id(200 + i), status: 'Completed', amount: sample.money(i) } : null,
+}))
+const SKELETON_STATS: Stats = {
+  totalAllTime: 48210, total30d: 3120, converted30d: 412, conversionRate30d: 13, avgHoursToConvert: 6,
+  today: 104, yesterday: 98, deltaPct: 6, daily14d: [], outcomeBreakdown: {}, winBackEligible: 1840,
+  winBackRecoverableValue: 254000, avgBasket: 138,
+}
 
 const PAGE_SIZE = 25
 
@@ -66,7 +82,7 @@ export default function Leads() {
   const debouncedSearch = useDebouncedValue(search)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-leads', { outcomes, reminders, search: debouncedSearch, hasRenewal, dateFrom, dateTo, page }],
     queryFn: () => api.admin.leads({
       page,
@@ -85,7 +101,7 @@ export default function Leads() {
   const leads = data?.items ?? []
   const [viewMode, setViewMode] = useState<'Sentences' | 'Table'>('Sentences')
   const totalCount = data?.totalCount ?? 0
-  const stats: Stats = data?.stats ?? defaultStats()
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : defaultStats())
   const facets: Facets = data?.facets ?? { outcome: [], reminder: [] }
 
   const outcomeOptions: FacetOption[] = facets.outcome.map((f) => ({ value: f.value, label: outcomeLabels[f.value] ?? f.value, count: f.count }))
@@ -96,7 +112,9 @@ export default function Leads() {
     setSearch(''); setOutcomes([]); setReminders([]); setHasRenewal(''); setDateFrom(''); setDateTo('')
   }
 
-  const winBackEnabled = stats.winBackEligible > 0
+  // The header button sits outside the skeleton, so it reads only real counts.
+  const winBackEligible = data?.stats.winBackEligible ?? 0
+  const winBackEnabled = winBackEligible > 0
 
   // Win-back endpoints take a single outcome / a boolean — pass them only when the
   // facet selection is unambiguous (exactly one value picked).
@@ -221,12 +239,12 @@ export default function Leads() {
           >
             <Mail />
             Send win-back
-            {winBackEnabled ? <span className="font-normal tabular-nums opacity-70">{stats.winBackEligible}</span> : null}
+            {winBackEnabled ? <span className="font-normal tabular-nums opacity-70">{winBackEligible}</span> : null}
           </Button>
         }
       />
 
-      <StatsStrip stats={stats} />
+      <Skeletonizer loading={isPending}><StatsStrip stats={stats} /></Skeletonizer>
 
       {/* Filters, resolved on the server with live counts; the view and refresh sit at the end. */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -254,11 +272,13 @@ export default function Leads() {
 
       <div className="mt-4">
         {viewMode === 'Sentences' ? (
-          <SentenceList empty={<EmptyState title="Nothing matches these filters" />}>
-            {leads.map((l) => <LeadSentence key={l.id} l={l} />)}
-          </SentenceList>
+          <Skeletonizer loading={isPending}>
+            <SentenceList empty={<EmptyState title="Nothing matches these filters" />}>
+              {(isPending ? SKELETON_ROWS : leads).map((l) => <LeadSentence key={l.id} l={l} />)}
+            </SentenceList>
+          </Skeletonizer>
         ) : (
-          <DataTable columns={columns} data={leads} loading={isFetching && isPlaceholderData} empty={<EmptyState title="Nothing matches these filters" />} />
+          <DataTable columns={columns} data={leads} loading={isPending || (isFetching && isPlaceholderData)} skeleton={SKELETON_ROWS} empty={<EmptyState title="Nothing matches these filters" />} />
         )}
         {totalCount > PAGE_SIZE ? (
           <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />

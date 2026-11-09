@@ -8,6 +8,8 @@ import { Status, inSentence, orderStatus, renewalStatus } from './_status'
 import { DueIn, When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -15,15 +17,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
  * One paid renewal: the one status that matters, the next step, what paid for it, and every
  * ASIC run for it (newest first). Sale and renewal pages are the detail behind it.
  */
+// The page drawn as a skeleton while the renewal loads.
+const SAMPLE_ORDER: Awaited<ReturnType<typeof api.admin.renewalOrder>> = {
+  order: {
+    id: sample.id(0), source: 'Ontraport', sourceId: sample.id(1), clientId: sample.id(2), payerName: sample.name(4), clientName: sample.name(4),
+    businessName: sample.business(4), abn: sample.abn(4), dueDate: sample.daysAhead(18), years: 3, amountPaid: 299, paidAt: sample.daysAgo(5),
+    stage: 'Renewed', reason: null, note: null, nextActionAt: null, stageChangedAt: sample.daysAgo(4), attemptCount: 1,
+    currentAttemptId: sample.id(3), renewedAt: sample.daysAgo(4), canRetry: false,
+  },
+  client: { id: sample.id(2), fullName: sample.name(4) },
+  source: { label: 'Ontraport sale', to: '/admin/ontraport-sales' },
+  attempts: [{
+    id: sample.id(3), status: 'Completed', errorCategory: null, failedAtStep: null, errorMessage: null, initiatedAt: sample.daysAgo(4),
+    lastAttemptAt: sample.daysAgo(4), completedAt: sample.daysAgo(4), nextRetryAt: null, attemptCount: 1, paysBy: 'Card',
+    bpayPaidAt: null, transactionReference: '7310 2841 9922', current: true,
+  }],
+}
+
 export default function RenewalOrderDetails() {
   const { id } = useParams()
   const queryClient = useQueryClient()
-  const { data, isPending, isError } = useQuery({
+  const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-renewal-order', id],
     queryFn: () => api.admin.renewalOrder(id!),
     enabled: !!id,
     refetchInterval: (q) => (q.state.data?.order.stage === 'Renewing' ? 5000 : false),
   })
+  const data = loaded ?? (isPending ? SAMPLE_ORDER : undefined)
   const retry = useMutation({
     mutationFn: () => api.admin.retryRenewalOrder(id!),
     onSettled: () => {
@@ -37,7 +57,6 @@ export default function RenewalOrderDetails() {
     error: (e) => ({ title: 'Not tried again', description: e instanceof Error ? e.message : undefined }),
   }).catch(() => {})
 
-  if (isPending) return <div className="py-12 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
@@ -52,6 +71,7 @@ export default function RenewalOrderDetails() {
   const who = data.client?.fullName || o.clientName || o.payerName || 'The client'
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} businessName={o.businessName}
         list={{ to: '/admin/renewal-orders', label: 'Paid renewals' }} here={`Paid ${new Date(o.paidAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`} />
@@ -89,6 +109,7 @@ export default function RenewalOrderDetails() {
         </dl>
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

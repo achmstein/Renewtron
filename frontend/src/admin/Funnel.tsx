@@ -5,6 +5,8 @@ import { TriangleAlert } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, type FunnelResponse } from '../api/client'
 import { Chip, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { sample } from '@/components/skeleton-samples'
+import { Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -65,6 +67,20 @@ function pct(part: number, whole: number) {
   return whole > 0 ? Math.round((part / whole) * 1000) / 10 : 0
 }
 
+// Sample journey drawn as a skeleton until the first answer arrives: each step a little smaller.
+const SAMPLE_STEPS = ['abn_viewed', 'abn_submitted', 'details_viewed', 'details_submitted', 'check_started', 'check_available', 'select_viewed', 'select_submitted', 'payment_viewed', 'payment_submitted', 'renewal_complete']
+const SKELETON: FunnelResponse = {
+  totalVisitors: 8420, completedVisitors: 612, conversionPct: 7.3,
+  steps: SAMPLE_STEPS.map((step, i) => ({
+    step, label: step, visitors: Math.round(8420 * 0.8 ** i), events: 0, droppedFromPrevious: 0, stepConversionPct: 0, overallConversionPct: 0,
+  })),
+  exits: [{ step: 'check_unavailable', label: 'not eligible', visitors: 940 }],
+  stoppedAt: [{ step: 'abn_submitted', label: '', visitors: 2100, rank: 1 }, { step: 'details_submitted', label: '', visitors: 1300, rank: 2 }],
+  bySource: ['Google Ads', 'Organic', 'Email', 'Direct'].map((source, i) => ({ source, visitors: 3200 - i * 700, completed: 240 - i * 50, conversionPct: 7.5 - i })),
+  daily: Array.from({ length: 30 }, (_, i) => ({ date: sample.daysAgo(30 - i).slice(0, 10), visitors: 240 + ((i * 37) % 90), renewed: 16 + ((i * 7) % 9) })),
+  previous: { totalVisitors: 7900, completedVisitors: 570, conversionPct: 7.2 },
+}
+
 const shortDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
 export default function Funnel() {
@@ -74,15 +90,16 @@ export default function Funnel() {
   // otherwise strip every other option out of the dropdown.
   const [allSources, setAllSources] = useState<string[]>([])
 
-  const { data, error, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data: realData, error, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-funnel', { days, source }],
     queryFn: () => api.admin.funnel({ dateFrom: isoDaysAgo(Number(days)), source: source || undefined }),
     placeholderData: keepPreviousData,
   })
 
   useEffect(() => {
-    if (!source && data && !isPlaceholderData) setAllSources(data.bySource.map((s) => s.source))
-  }, [data, source, isPlaceholderData])
+    if (!source && realData && !isPlaceholderData) setAllSources(realData.bySource.map((s) => s.source))
+  }, [realData, source, isPlaceholderData])
+  const data = realData ?? (isPending ? SKELETON : undefined)
 
   const stages = useMemo(() => buildStages(data), [data])
   const landed = stages[0]?.reached ?? 0
@@ -132,6 +149,7 @@ export default function Funnel() {
         </Alert>
       ) : null}
 
+      <Skeletonizer loading={isPending}>
       <div className="space-y-6">
         <StatStrip cols="grid-cols-2 lg:grid-cols-4">
           <Stat
@@ -206,6 +224,7 @@ export default function Funnel() {
           </Card>
         </div>
       </div>
+      </Skeletonizer>
     </div>
   )
 }

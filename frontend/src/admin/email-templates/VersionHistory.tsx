@@ -7,7 +7,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { Skeleton } from '@/components/ui/skeleton'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { fmtDateTime, relativeTime } from '../_utils'
@@ -81,7 +82,15 @@ export function VersionHistory({ open, onOpenChange, templateKey, current, curre
         </SheetHeader>
         <div className="grid min-h-0 flex-1 md:grid-cols-[18rem_1fr]">
           <ol className="max-h-64 overflow-y-auto border-b md:max-h-none md:border-r md:border-b-0">
-            {list.isLoading && <li className="p-4"><Skeleton className="h-24" /></li>}
+            {list.isPending && open ? (
+              <li>
+                <Skeletonizer loading>
+                  <ol>
+                    {SKELETON.map((v) => <VersionRow key={v.version} v={v} live={v.version === 4} active={false} onClick={() => {}} skeleton />)}
+                  </ol>
+                </Skeletonizer>
+              </li>
+            ) : null}
             {versions.map((v) => (
               <VersionRow key={v.version} v={v} live={v.version === current} active={v.version === selected} onClick={() => setPicked(v.version)} />
             ))}
@@ -129,12 +138,22 @@ export function VersionHistory({ open, onOpenChange, templateKey, current, curre
   )
 }
 
-function VersionRow({ v, live, active, onClick }: { v: TemplateVersion; live: boolean; active: boolean; onClick: () => void }) {
+const SKELETON = sampleRows<TemplateVersion>(4, (i) => ({
+  version: 4 - i, source: i === 1 ? 'rollback' : 'edit', restoredFrom: i === 1 ? 2 : null,
+  note: i % 2 ? null : 'Shorter opening line', createdAt: sample.daysAgo(i * 6 + 1), createdBy: 'david@example.com.au', sent: 120 - i * 30,
+}))
+
+function VersionRow({ v, live, active, onClick, skeleton }: {
+  v: TemplateVersion; live: boolean; active: boolean; onClick: () => void
+  /** Drawn as a skeleton: a plain block, so each line becomes its own bone. */
+  skeleton?: boolean
+}) {
+  const Row = skeleton ? 'div' : 'button'
   return (
     <li>
-      <button
-        type="button"
-        onClick={onClick}
+      <Row
+        type={skeleton ? undefined : 'button'}
+        onClick={skeleton ? undefined : onClick}
         className={cn('w-full border-b px-4 py-3 text-left transition-colors hover:bg-muted/50', active && 'bg-muted')}
       >
         <div className="flex items-center gap-2">
@@ -148,7 +167,7 @@ function VersionRow({ v, live, active, onClick }: { v: TemplateVersion; live: bo
         </div>
         {v.note && v.source === 'edit' && <div className="mt-0.5 line-clamp-2 text-caption">{v.note}</div>}
         <div className="text-caption text-muted-foreground">{v.sent === 0 ? 'Not sent yet' : `${v.sent.toLocaleString()} email${v.sent === 1 ? '' : 's'} sent`}</div>
-      </button>
+      </Row>
     </li>
   )
 }

@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { sample } from '@/components/skeleton-samples'
+import { Skeletonizer } from '@/components/skeletonizer'
 import { cn } from '@/lib/utils'
 
 /**
@@ -62,7 +64,7 @@ export default function ClientDuplicates() {
       />
 
       {isPending ? (
-        <div className="py-12 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
+        <PairSkeleton />
       ) : !current ? (
         <div className="space-y-3">
           <EmptyState
@@ -72,7 +74,7 @@ export default function ClientDuplicates() {
           {skipped.length ? <div className="text-center"><Button variant="outline" size="sm" onClick={() => setSkipped([])}>Go through the skipped ones</Button></div> : null}
         </div>
       ) : !a.data || !b.data ? (
-        <div className="py-12 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
+        <PairSkeleton />
       ) : (
         <Pair
           key={current.id}
@@ -87,6 +89,36 @@ export default function ClientDuplicates() {
     </div>
   )
 }
+
+/** The pair, drawn from sample clients as a skeleton. */
+function PairSkeleton() {
+  return (
+    <Skeletonizer loading>
+      <Pair a={SKELETON_PAIR[0]} b={SKELETON_PAIR[1]} busy={false} onMerge={() => {}} onApart={() => {}} onSkip={() => {}} />
+    </Skeletonizer>
+  )
+}
+
+/** A sample client, for drawing the pair as a skeleton while the real ones load. */
+function sampleClient(i: number): ClientDetail {
+  const abn = sample.abn(i)
+  return {
+    id: sample.id(i), fullName: sample.name(i), mobileNumber: sample.mobile(), dateOfBirth: '1984-06-12', address: '12 Harbour Street, Sydney NSW 2000',
+    hasTfn: false, hasPurchased: i === 0, reminderOptIn: true, unsubscribedAt: null, isTest: false, notes: null,
+    createdAt: sample.daysAgo(400), lastSeenAt: sample.daysAgo(i * 20 + 3), possibleDuplicateOf: null, duplicates: [],
+    emails: [{ id: sample.id(i), email: sample.email(i), isPrimary: true, ontraportContactId: null, source: 'Ontraport' }],
+    abns: [{
+      abn, isReminderContact: true, registerCheckedAt: null, contacts: [],
+      businessNames: [0, 1].map((n) => ({
+        id: sample.id(i * 2 + n), name: sample.business(i * 2 + n), abn, registrationDate: null, asicAccountNumber: null, renewalDueDate: null,
+        dueDateSource: null, asicKey: null, asicKeyReceivedAt: null, lastRenewedAt: null, lastRenewalYears: null, status: 'Active', source: 'Register',
+        portalLinkedAt: null, portalLink: null,
+      })),
+    }],
+    sales: [], leads: [], renewals: [], keyRequests: [], messages: [],
+  }
+}
+const SKELETON_PAIR = [sampleClient(0), sampleClient(1)] as const
 
 /** Who to keep when merging: the one who has paid us, then the one with more history. */
 function weight(c: ClientDetail) {

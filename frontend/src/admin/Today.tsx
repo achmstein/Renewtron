@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, CircleCheck, TriangleAlert } from 'lucide-react'
-import { api, type TodayGroup, type TodayItem } from '../api/client'
+import { api, type TodayGroup, type TodayItem, type TodayResponse } from '../api/client'
 import { Queue, useDoneItems, useRowKeyboard } from './_rows'
 import type { Meaning } from './_status'
 import { RefreshButton } from './_ui'
@@ -12,7 +12,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Skeleton } from '@/components/ui/skeleton'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { cn } from '@/lib/utils'
 
 /*
@@ -54,8 +55,22 @@ const DOT: Record<Meaning, string> = {
   quiet: 'bg-muted-foreground/40',
 }
 
+const sampleItem = (kind: TodayItem['kind'], reason: string) => (i: number): TodayItem => ({
+  kind, id: sample.id(i), reason, clientId: sample.id(i), clientName: sample.name(i), businessName: sample.business(i),
+  abn: sample.abn(i), amount: sample.money(i), years: 1, at: sample.daysAgo(i + 1), dueAt: sample.daysAhead(10 + i * 4),
+  detail: sample.text(i), failedAtStep: null, canRetry: kind === 'order', count: null, otherClientId: null, otherClientName: null,
+})
+/** Shown as a skeleton while the first load is on its way: the page's real tiles, queues and rows. */
+const SKELETON: TodayResponse = {
+  generatedAt: sample.daysAgo(0), total: 6, otpProblem: null,
+  groups: [
+    { key: 'retry', count: 3, total: 897, items: sampleRows(3, sampleItem('order', 'Card declined')) },
+    { key: 'keys', count: 3, total: null, items: sampleRows(3, sampleItem('keyRequest', 'Request the ASIC key')) },
+  ],
+}
+
 export default function Today() {
-  const { data, error, isFetching, refetch } = useQuery({
+  const { data: loaded, error, isFetching, isPending, refetch } = useQuery({
     queryKey: ['admin-today'],
     queryFn: () => api.admin.today(),
     refetchInterval: 120_000,
@@ -64,6 +79,8 @@ export default function Today() {
   const { done, mark, undo } = useDoneItems()
   useRowKeyboard(mark)
 
+  const skeleton = !loaded && isPending
+  const data = loaded ?? (skeleton ? SKELETON : undefined)
   const now = new Date()
   const marked = data?.groups.flatMap((g) => g.items).filter((i) => done.has(workKey(i))) ?? []
   const open = data ? data.total - marked.length : 0
@@ -89,7 +106,7 @@ export default function Today() {
         <div>
           <p className="text-caption text-muted-foreground">{now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
           <h1 className="mt-1 text-title">
-            {!data ? 'Today' : open <= 0 ? 'All clear for now' : `${open.toLocaleString()} thing${open === 1 ? '' : 's'} need${open === 1 ? 's' : ''} you`}
+            {!loaded ? 'Today' : open <= 0 ? 'All clear for now' : `${open.toLocaleString()} thing${open === 1 ? '' : 's'} need${open === 1 ? 's' : ''} you`}
           </h1>
         </div>
         <RefreshButton onClick={() => void refetch()} busy={isFetching} title="Refresh (keys: ↑ ↓ move, Enter open, D done)" />
@@ -97,12 +114,8 @@ export default function Today() {
 
       {error ? (
         <Alert variant="destructive"><TriangleAlert /><AlertTitle>Couldn’t load today’s work</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>
-      ) : !data ? (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
-          {[0, 1].map((i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
-        </div>
-      ) : (
+      ) : !data ? null : (
+        <Skeletonizer loading={skeleton}>
         <div className="space-y-6">
           {systemProblems.map((p) => (
             <Alert key={p.title} variant="destructive" className="flex flex-wrap items-center gap-3 border-destructive/30 bg-destructive/5 py-3 [&>svg]:translate-y-0">
@@ -121,10 +134,12 @@ export default function Today() {
             {LEVELS.map((l) => {
               const n = levelCount(l.key)
               const active = filter === l.key
+              // While loading the tile is a plain block, so its label, number and line each become a bone.
+              const Tile = skeleton ? 'div' : 'button'
               return (
-                <button
+                <Tile
                   key={l.key}
-                  type="button"
+                  type={skeleton ? undefined : 'button'}
                   onClick={() => setFilter(active ? null : l.key)}
                   aria-pressed={active}
                   title={active ? 'Show everything' : `Show only ${l.label.toLowerCase()}`}
@@ -138,7 +153,7 @@ export default function Today() {
                   <span className="block truncate text-caption text-muted-foreground">
                     {n === 0 ? 'All clear' : l.key === 'urgent' && urgentMoney ? `${fmtMoney0(urgentMoney)} waiting on us` : l.hint}
                   </span>
-                </button>
+                </Tile>
               )
             })}
           </Card>
@@ -168,6 +183,7 @@ export default function Today() {
 
           {marked.length ? <MarkedDone items={marked} undo={undo} /> : null}
         </div>
+        </Skeletonizer>
       )}
     </div>
   )

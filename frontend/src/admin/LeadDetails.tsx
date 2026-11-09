@@ -1,12 +1,13 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf } from './_status'
 import { When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -19,21 +20,39 @@ function fmtDob(s: string) {
 }
 const shortDate = (s: string) => new Date(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 
+// The page drawn as a skeleton while the visit loads.
+const SAMPLE_LEAD: Detail = {
+  id: sample.id(0),
+  client: { id: sample.id(1), fullName: sample.name(0) },
+  abn: sample.abn(0),
+  fullName: sample.name(0),
+  email: sample.email(0),
+  mobileNumber: sample.mobile(),
+  dateOfBirth: '1984-03-12',
+  createdAt: sample.daysAgo(2),
+  outcome: 'Converted',
+  reminderOptIn: true,
+  convertedToRenewal: true,
+  convertedAt: sample.daysAgo(2),
+  searchLog: {
+    id: sample.id(2),
+    searchedAt: sample.daysAgo(2),
+    success: true,
+    resultsCount: 2,
+    results: [0, 1].map((i) => ({ id: sample.id(10 + i), businessName: sample.business(i), accountNumber: '612 345 678', registrationDate: sample.daysAgo(900 + i * 200) })),
+  },
+  renewalRequests: [{ id: sample.id(3), status: 'Completed', amount: 299, renewalYears: 3, initiatedAt: sample.daysAgo(2), businessName: sample.business(0) }],
+}
+
 export default function LeadDetails() {
   const { id } = useParams()
-  const { data, isPending, isError } = useQuery({
+  const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-lead', id],
     queryFn: () => api.admin.lead(id!),
     enabled: !!id,
   })
+  const data = loaded ?? (isPending ? SAMPLE_LEAD : undefined)
 
-  if (isPending) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
 
   if (isError || !data) {
     return (
@@ -48,6 +67,7 @@ export default function LeadDetails() {
   const names = data.searchLog?.results ?? []
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} list={{ to: '/admin/leads', label: 'Leads' }} here={`Wizard visit of ${shortDate(data.createdAt)}`} />
 
@@ -110,6 +130,7 @@ export default function LeadDetails() {
         ) : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

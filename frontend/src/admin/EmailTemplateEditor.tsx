@@ -17,10 +17,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { Skeletonizer } from '@/components/skeletonizer'
 import { cn } from '@/lib/utils'
 import { fmtDateTime } from './_utils'
 import { fromEditor, toEditor } from './email-templates/liquid'
@@ -49,7 +49,7 @@ export default function EmailTemplateEditor() {
       </div>
     )
   }
-  if (!detail.data) return <div className="space-y-3 p-6"><Skeleton className="h-10 w-72" /><Skeleton className="h-[70vh]" /></div>
+  if (!detail.data) return <EditorSkeleton />
   // Remount on a new version so the editor starts from what's saved.
   return <Editor key={`${key}:${detail.data.current.version}`} detail={detail.data} />
 }
@@ -485,5 +485,65 @@ function SamplePicker({ templateKey, source, label, onPick }: {
         </Command>
       </PopoverContent>
     </Popover>
+  )
+}
+
+/**
+ * The editor while the template loads: its real header, fields, tabs and preview bar, drawn as a
+ * skeleton. The message editor and the preview are one bone each.
+ */
+function EditorSkeleton() {
+  const field = (label: string, value: string) => (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        <Button variant="ghost" size="sm">Insert</Button>
+      </div>
+      <Input defaultValue={value} />
+    </div>
+  )
+  return (
+    <Skeletonizer loading className="lg:h-svh">
+      <div className="flex flex-col lg:h-svh">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5">
+          <Button variant="ghost" size="icon-sm"><ArrowLeft /></Button>
+          <div className="min-w-40 flex-1">
+            <h1 className="truncate text-heading">Renewal confirmation</h1>
+            <div className="truncate text-caption text-muted-foreground">Version 3</div>
+          </div>
+          <Switch checked />
+          <Button variant="outline" size="sm"><History /> <span className="hidden sm:inline">History</span></Button>
+          <Button variant="outline" size="sm"><Send /> Send test</Button>
+          <Button variant="outline" size="icon-sm"><MoreHorizontal /></Button>
+          <Button size="sm">Save</Button>
+        </header>
+        <div className="grid min-h-0 flex-1 lg:grid-cols-2">
+          <section className="flex min-h-0 min-w-0 flex-col border-b lg:border-r lg:border-b-0">
+            <div className="space-y-3 border-b p-4">
+              {field('Subject', 'Your business name {{ business_name }} is renewed')}
+              {field('Heading', 'All done')}
+            </div>
+            <div className="flex items-center gap-2 border-b px-3 py-1.5">
+              <span className="text-caption font-medium text-muted-foreground">Message</span>
+              <div className="ml-auto h-8 w-40" data-skeleton="bone" />
+            </div>
+            <div className="m-4 min-h-[50vh] flex-1 rounded-lg" data-skeleton="bone" />
+          </section>
+          <section className="flex min-h-0 min-w-0 flex-col bg-muted/30">
+            <div className="flex flex-wrap items-center gap-2 border-b bg-card px-3 py-1.5">
+              <Button variant="outline" size="sm">Sample values</Button>
+              <div className="ml-auto h-8 w-28" data-skeleton="bone" />
+            </div>
+            <div className="border-b bg-card px-4 py-2 text-sm">
+              <span className="text-muted-foreground">Subject: </span>
+              <span className="font-medium">Your business name OKAFOR PLUMBING is renewed</span>
+            </div>
+            <div className="flex min-h-[70vh] flex-1 justify-center p-3 lg:min-h-0">
+              <div className="h-full min-h-[70vh] w-full max-w-[720px] rounded-lg lg:min-h-0" data-skeleton="bone" />
+            </div>
+          </section>
+        </div>
+      </div>
+    </Skeletonizer>
   )
 }

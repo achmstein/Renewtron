@@ -9,6 +9,8 @@ import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +31,43 @@ const ASIC_FORM_URL = 'https://www.edge.asic.gov.au/008/inquiryV001?start/landin
 
 const statusLabel = (s: string) => vocabLabel('keyRequest', s)
 
+const SKELETON_ROWS = sampleRows<Row>(8, (i) => {
+  const [givenNames, familyName] = sample.name(i).split(' ')
+  return {
+    id: sample.id(i),
+    ontraportSaleId: null,
+    ontraportContactId: String(48000 + i * 37),
+    businessName: sample.business(i),
+    otherBusinessNames: i % 3 === 0 ? [sample.business(i + 3)] : [],
+    abn: sample.abn(i),
+    contactName: sample.name(i),
+    givenNames,
+    familyName,
+    email: sample.email(i),
+    phone: sample.mobile(),
+    phonePrefix: '+61',
+    phoneNumber: '412345678',
+    question: null,
+    source: 'OntraportSale',
+    status: ['Pending', 'Submitted', 'KeyReceived', 'Submitted'][i % 4],
+    asicReferenceNumber: i % 4 === 0 ? null : `7E${String(1000000 + i * 8191)}`,
+    errorMessage: null,
+    canAutoRetry: false,
+    asicKeyNotificationId: null,
+    attemptCount: 1,
+    createdAt: sample.daysAgo(i + 1),
+    processedAt: sample.daysAgo(i),
+    submittedAt: i % 4 === 0 ? null : sample.daysAgo(i),
+    keyReceivedAt: i % 4 === 2 ? sample.daysAgo(i) : null,
+  }
+})
+const SKELETON_COUNTS = { totalCount: 2140, pendingCount: 6, manualCount: 0, submittedCount: 38, keyReceivedCount: 2050, failedCount: 0 }
+const SKELETON_STATS: Stats = {
+  lastRunAt: null, lastRunState: null, lastRunError: null, nextRunAt: null, runCron: null,
+  today: 12, yesterday: 18, deltaPct: null,
+  daily14d: sampleRows(14, (i) => ({ date: sample.daysAgo(13 - i).slice(0, 10), count: [12, 30, 18, 24, 9, 27, 21][i % 7] })),
+}
+
 export default function AsicKeyRequests() {
   const [statuses, setStatusesRaw] = useState<string[]>([])
   const [searchInput, setSearchInputRaw] = useState('')
@@ -40,7 +79,7 @@ export default function AsicKeyRequests() {
   const [record, setRecord] = useState<Row | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-asic-key-requests', { statuses, search, page }],
     queryFn: () => api.admin.asicKeyRequests({ status: statuses.join(',') || undefined, search: search || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -72,13 +111,15 @@ export default function AsicKeyRequests() {
   }
 
   const items = data?.items ?? []
-  const stats: Stats = data?.stats ?? defaultStats()
+  // While the first load is out, the strip is drawn from samples as a skeleton.
+  const counts = data ?? (isPending ? SKELETON_COUNTS : undefined)
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : defaultStats())
   const facets: Facets = data?.facets ?? { status: [] }
-  const pendingCount = data?.pendingCount ?? 0
-  const manualCount = data?.manualCount ?? 0
-  const submittedCount = data?.submittedCount ?? 0
-  const keyReceivedCount = data?.keyReceivedCount ?? 0
-  const failedCount = data?.failedCount ?? 0
+  const pendingCount = counts?.pendingCount ?? 0
+  const manualCount = counts?.manualCount ?? 0
+  const submittedCount = counts?.submittedCount ?? 0
+  const keyReceivedCount = counts?.keyReceivedCount ?? 0
+  const failedCount = counts?.failedCount ?? 0
 
   const hasActiveFilters = !!searchInput || statuses.length > 0
   const resetFilters = () => { setSearchInput(''); setStatuses([]) }
@@ -194,6 +235,7 @@ export default function AsicKeyRequests() {
         }
       />
 
+      <Skeletonizer loading={isPending}>
       <StatStrip>
         <Stat
           label="To send"
@@ -205,7 +247,7 @@ export default function AsicKeyRequests() {
         <Stat
           label="Keys received"
           value={keyReceivedCount.toLocaleString()}
-          sub={failedCount > 0 ? `${failedCount} not sent` : `${(data?.totalCount ?? 0).toLocaleString()} requests`}
+          sub={failedCount > 0 ? `${failedCount} not sent` : `${(counts?.totalCount ?? 0).toLocaleString()} requests`}
         />
         <Stat
           label="Sent today"
@@ -215,6 +257,7 @@ export default function AsicKeyRequests() {
           trendLabel="requests"
         />
       </StatStrip>
+      </Skeletonizer>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input
@@ -237,7 +280,8 @@ export default function AsicKeyRequests() {
           columns={columns}
           data={items}
           onRowClick={(r) => setDetail(r.original)}
-          loading={isFetching && isPlaceholderData}
+          loading={isPending || (isFetching && isPlaceholderData)}
+          skeleton={SKELETON_ROWS}
           empty={<EmptyState
             title={hasActiveFilters ? 'Nothing matches these filters' : 'No key requests yet'}
             message={hasActiveFilters ? undefined : 'Turn them on in Settings, or use “Request key” on a sale.'}

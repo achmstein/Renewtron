@@ -8,6 +8,8 @@ import { HANDLED, Status, renewalStatus, statusOf, type StatusEntry } from './_s
 import { DueIn, When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -15,14 +17,46 @@ type Detail = Awaited<ReturnType<typeof api.admin.ontraportSale>>
 
 const shortDate = (s: string) => new Date(s).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
 
+// The page drawn as a skeleton while the sale loads.
+const SAMPLE_SALE: Detail = {
+  id: sample.id(0),
+  client: { id: sample.id(1), fullName: sample.name(3) },
+  contactName: sample.name(3),
+  email: sample.email(3),
+  mobileNumber: sample.mobile(),
+  dateOfBirth: '1979-11-02',
+  businessName: sample.business(3),
+  abn: sample.abn(3),
+  businessNameOwner: sample.name(3),
+  address: '14 Harbour Street, Wollongong NSW 2500',
+  renewalYears: 3,
+  amountPaid: 299,
+  renewalDueDate: sample.daysAhead(25),
+  status: 'Completed',
+  syncedAt: sample.daysAgo(4),
+  processedAt: sample.daysAgo(4),
+  errorMessage: null,
+  handledAt: null,
+  handledNote: null,
+  ontraportContactId: '184522',
+  ontraportTransactionId: '99231',
+  renewal: {
+    id: sample.id(2), status: 'Completed', errorCategory: null, nextRetryAt: null, initiatedAt: sample.daysAgo(4),
+    completedAt: sample.daysAgo(4), bpayReference: null, bpayPaidAt: null, transactionReference: '7310 2841 9922',
+  },
+  keyRequests: [],
+  keyLetters: [{ id: sample.id(3), status: 'Completed', receivedAt: sample.daysAgo(1), hasKey: true }],
+}
+
 export default function SaleDetails() {
   const { id } = useParams()
   const queryClient = useQueryClient()
-  const { data, isPending, isError } = useQuery({
+  const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-ontraport-sale', id],
     queryFn: () => api.admin.ontraportSale(id!),
     enabled: !!id,
   })
+  const data = loaded ?? (isPending ? SAMPLE_SALE : undefined)
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-ontraport-sale', id] })
@@ -50,13 +84,6 @@ export default function SaleDetails() {
     error: (e) => ({ title: 'Didn’t change', description: e instanceof Error ? e.message : undefined }),
   }).catch(() => {})
 
-  if (isPending) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
@@ -84,6 +111,7 @@ export default function SaleDetails() {
   )
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} businessName={data.businessName}
         list={{ to: '/admin/ontraport-sales', label: 'Ontraport sales' }} here={`Sale of ${shortDate(data.syncedAt)}`} />
@@ -143,6 +171,7 @@ export default function SaleDetails() {
         ) : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

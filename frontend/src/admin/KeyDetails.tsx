@@ -8,6 +8,8 @@ import { statusOf } from './_status'
 import { When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, formatAbn } from './_utils'
+import { Skeletonizer } from '@/components/skeletonizer'
+import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -27,12 +29,30 @@ function useInvalidateKeys() {
   }
 }
 
-function Loading() {
-  return (
-    <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-      <Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" />
-    </div>
-  )
+// The pages drawn as skeletons while their record loads.
+const SAMPLE_CLIENT = { id: sample.id(1), fullName: sample.name(5) }
+const SAMPLE_SALE = { id: sample.id(2), status: 'Completed', syncedAt: sample.daysAgo(9) }
+const SAMPLE_LETTER: AsicKeyNotificationDto = {
+  id: sample.id(0), businessName: sample.business(5), abn: sample.abn(5), asicKey: '84213977', ontraportContactIds: '184522',
+  ontraportContactsUpdated: 1, status: 'Completed', errorMessage: null, pdfTextExcerpt: null, subject: 'Your ASIC key for business name',
+  from: 'asic.connect@asic.gov.au', downloadUrl: null, receivedAt: sample.daysAgo(1), processedAt: sample.daysAgo(1), attemptCount: 1,
+}
+const SAMPLE_LETTER_CONTEXT: Awaited<ReturnType<typeof api.admin.asicKeyContext>> = {
+  client: SAMPLE_CLIENT,
+  keyRequest: { id: sample.id(3), status: 'KeyReceived', createdAt: sample.daysAgo(6), referenceNumber: '2-12345678901' },
+  sale: SAMPLE_SALE,
+}
+const SAMPLE_REQUEST: Awaited<ReturnType<typeof api.admin.asicKeyRequest>> = {
+  request: {
+    id: sample.id(0), ontraportSaleId: SAMPLE_SALE.id, ontraportContactId: '184522', businessName: sample.business(5), otherBusinessNames: [],
+    abn: sample.abn(5), contactName: sample.name(5), givenNames: 'Daniel', familyName: 'Ho', email: sample.email(5), phone: sample.mobile(),
+    phonePrefix: '+61', phoneNumber: '412345678', question: null, source: 'OntraportSale', status: 'Submitted',
+    asicReferenceNumber: '2-12345678901', errorMessage: null, canAutoRetry: false, asicKeyNotificationId: null, attemptCount: 1,
+    createdAt: sample.daysAgo(6), processedAt: sample.daysAgo(6), submittedAt: sample.daysAgo(6), keyReceivedAt: null,
+  },
+  client: SAMPLE_CLIENT,
+  sale: SAMPLE_SALE,
+  letter: null,
 }
 
 function NotFound({ what, back }: { what: string; back: { to: string; label: string } }) {
@@ -64,10 +84,10 @@ export function KeyLetterDetails() {
   const context = useQuery({ queryKey: ['admin-asic-key-context', id], queryFn: () => api.admin.asicKeyContext(id!), enabled: !!id })
   const retry = useMutation({ mutationFn: () => api.admin.retryAsicKey(id!), onSettled: invalidate })
 
-  if (letter.isPending) return <Loading />
-  if (letter.isError || !letter.data) return <NotFound what="Key letter" back={{ to: '/admin/asic-keys', label: 'key letters' }} />
-  const k = letter.data
-  const ctx = context.data
+  const loading = letter.isPending || context.isPending
+  const k = letter.data ?? (letter.isPending ? SAMPLE_LETTER : undefined)
+  if (!k) return <NotFound what="Key letter" back={{ to: '/admin/asic-keys', label: 'key letters' }} />
+  const ctx = context.data ?? (context.isPending ? SAMPLE_LETTER_CONTEXT : undefined)
   const status = statusOf('keyLetter', k.status)
 
   const runRetry = () => void sileo.promise(retry.mutateAsync(), {
@@ -117,6 +137,7 @@ export function KeyLetterDetails() {
   steps.push({ label: k.status === 'SavedToClient' ? 'Saved on client' : 'Saved to Ontraport', meaning: status.meaning === 'done' ? 'done' : status.meaning === 'working' ? 'quiet' : 'action', note: status.meaning === 'done' ? undefined : status.label.toLowerCase(), at: status.meaning === 'done' ? k.processedAt : undefined })
 
   return (
+    <Skeletonizer loading={loading}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={ctx?.client} businessName={k.businessName} list={{ to: '/admin/asic-keys', label: 'Key letters' }} here={`Key letter of ${shortDate(k.receivedAt)}`} />
       <RecordHeader
@@ -160,6 +181,7 @@ export function KeyLetterDetails() {
         ) : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 
@@ -179,10 +201,10 @@ function requestHeadline(r: AsicKeyRequestDto): string {
 export function KeyRequestDetails() {
   const { id } = useParams()
   const invalidate = useInvalidateKeys()
-  const { data, isPending, isError } = useQuery({ queryKey: ['admin-asic-key-request', id], queryFn: () => api.admin.asicKeyRequest(id!), enabled: !!id })
+  const { data: loaded, isPending, isError } = useQuery({ queryKey: ['admin-asic-key-request', id], queryFn: () => api.admin.asicKeyRequest(id!), enabled: !!id })
   const requeue = useMutation({ mutationFn: () => api.admin.requeueAsicKeyRequest(id!), onSettled: invalidate })
+  const data = loaded ?? (isPending ? SAMPLE_REQUEST : undefined)
 
-  if (isPending) return <Loading />
   if (isError || !data) return <NotFound what="Key request" back={{ to: '/admin/asic-key-requests', label: 'key requests' }} />
   const r = data.request
   const status = statusOf('keyRequest', r.status)
@@ -229,6 +251,7 @@ export function KeyRequestDetails() {
     : { label: 'Key letter', meaning: 'quiet', note: 'not yet' })
 
   return (
+    <Skeletonizer loading={isPending}>
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <RecordCrumbs client={data.client} businessName={r.businessName} list={{ to: '/admin/asic-key-requests', label: 'Key requests' }} here={`Key request of ${shortDate(r.createdAt)}`} />
       <RecordHeader
@@ -263,6 +286,7 @@ export function KeyRequestDetails() {
         {r.errorMessage ? <div className="mt-4"><Pre label="Note" text={r.errorMessage} /></div> : null}
       </TechnicalDetail>
     </div>
+    </Skeletonizer>
   )
 }
 

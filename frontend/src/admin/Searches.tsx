@@ -9,6 +9,8 @@ import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelS
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { FacetedFilter, type FacetOption } from '@/components/faceted-filter'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,6 +23,18 @@ type Stats = SearchesResponse['stats']
 type Facets = SearchesResponse['facets']
 
 type ViewMode = 'Sentences' | 'Table' | 'Cards'
+
+const SKELETON_ROWS = sampleRows<Search>(8, (i) => ({
+  id: sample.id(i), abn: sample.abn(i), searchedAt: sample.daysAgo(i), success: true, resultsCount: 1 + (i % 3),
+  initiatedBy: 'Wizard', hasRenewal: i % 3 === 0, firstBusinessName: sample.business(i),
+  lead: { id: sample.id(100 + i), fullName: sample.name(i), email: sample.email(i), outcome: 'RenewalAvailable', converted: i % 3 === 0 },
+  renewal: i % 3 === 0 ? { id: sample.id(200 + i), amount: sample.money(i), status: 'Completed' } : null,
+  funnel: { hasLead: true, anyPaid: i % 3 === 0, anyInflight: false, anyFailed: false }, repeatCount7d: 0,
+}))
+const SKELETON_STATS: Stats = {
+  totalAllTime: 61240, total30d: 4210, success30d: 4012, successRate30d: 95,
+  conversions30d: 512, conversionRate30d: 12, today: 138, yesterday: 126, deltaPct: 9, daily14d: [],
+}
 const PAGE_SIZE = 10
 
 export default function Searches() {
@@ -38,7 +52,7 @@ export default function Searches() {
 
   const [errorModal, setErrorModal] = useState<string | null>(null)
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-searches', { abn, results, initiators, dateFrom, dateTo, includeSystem, page }],
     queryFn: () => api.admin.searches({
       abn: abn || undefined,
@@ -56,7 +70,9 @@ export default function Searches() {
 
   const totalCount = data?.totalCount ?? 0
   const searches = data?.items ?? []
-  const stats: Stats = data?.stats ?? defaultStats()
+  // Sentence and card views draw the sample searches as a skeleton on the first load; the table does it itself.
+  const shown = isPending ? SKELETON_ROWS : searches
+  const stats: Stats = data?.stats ?? (isPending ? SKELETON_STATS : defaultStats())
   const facets: Facets = data?.facets ?? { result: [], initiatedBy: [] }
 
   const hasActiveFilters = !!abnInput || results.length > 0 || initiators.length > 0 || !!dateFrom || !!dateTo || includeSystem
@@ -161,7 +177,7 @@ export default function Searches() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader title="Searches" subtitle="ABN lookups from the wizard, staff and Renewtron itself." />
 
-      <StatsStrip stats={stats} />
+      <Skeletonizer loading={isPending}><StatsStrip stats={stats} /></Skeletonizer>
 
       {/* Filters, resolved on the server with live counts; the view and refresh sit at the end. */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -199,13 +215,15 @@ export default function Searches() {
 
       <div className="mt-4">
         {viewMode === 'Sentences' ? (
-          <SentenceList empty={<EmptyState title="Nothing matches these filters" />}>
-            {searches.map((s) => <SearchSentence key={s.id} s={s} />)}
-          </SentenceList>
+          <Skeletonizer loading={isPending}>
+            <SentenceList empty={<EmptyState title="Nothing matches these filters" />}>
+              {shown.map((s) => <SearchSentence key={s.id} s={s} />)}
+            </SentenceList>
+          </Skeletonizer>
         ) : viewMode === 'Cards' ? (
-          <CardsView searches={searches} onShowError={setErrorModal} />
+          <Skeletonizer loading={isPending}><CardsView searches={shown} onShowError={setErrorModal} /></Skeletonizer>
         ) : (
-          <DataTable columns={columns} data={searches} empty={<EmptyState title="Nothing matches these filters" />} />
+          <DataTable columns={columns} data={searches} loading={isPending || (isFetching && isPlaceholderData)} skeleton={SKELETON_ROWS} empty={<EmptyState title="Nothing matches these filters" />} />
         )}
 
         <Pagination page={page} pageSize={PAGE_SIZE} total={totalCount} onPage={setPage} />

@@ -8,6 +8,8 @@ import { Pagination, useDebouncedValue } from './_components'
 import { EmptyState, Hint, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
+import { sample } from '@/components/skeleton-samples'
+import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +26,14 @@ const filters = [
 ] as const
 
 const PAGE_SIZE = 25
+
+const SKELETON_ROWS = sampleRows<ClientListItem>(8, (i) => ({
+  id: sample.id(i), fullName: sample.name(i), email: sample.email(i), emailCount: 1, mobileNumber: null,
+  abns: [sample.abn(i)], activeNames: i % 3 === 0 ? 2 : 1, firstName: sample.business(i), nextDue: sample.daysAhead(30 + i * 9),
+  keys: i % 2, sharesAbn: false, hasPurchased: i % 3 !== 1, isTest: false, possibleDuplicateOfId: null, possibleDuplicateOfName: null,
+  lastSeenAt: sample.daysAgo(i * 3),
+}))
+const SKELETON_STATS = { clients: 12480, purchased: 3120, names: 15230, severalNames: 1840, possibleDuplicates: 0 }
 
 export default function Clients() {
   // Filter, search and page live in the URL, so Back and refresh keep your place and a view can be shared.
@@ -51,16 +61,17 @@ export default function Clients() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch])
 
-  const { data, isFetching, isPlaceholderData, refetch } = useQuery({
+  const { data, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-clients', { search: urlSearch, filter, page }],
     queryFn: () => api.admin.clients({ search: urlSearch || undefined, filter: filter || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   })
-  const { data: stats, refetch: refetchStats } = useQuery({
+  const { data: realStats, isPending: statsPending, refetch: refetchStats } = useQuery({
     queryKey: ['admin-clients', 'stats'],
     queryFn: () => api.admin.clientStats(),
     staleTime: 60_000,
   })
+  const stats = realStats ?? (statsPending ? SKELETON_STATS : undefined)
   const items = data?.items ?? []
   // Typing ahead of the debounce counts as loading too, so the table never looks finished when it isn't.
   const loading = (isFetching && isPlaceholderData) || search.trim() !== urlSearch
@@ -154,6 +165,7 @@ export default function Clients() {
 
       <div className="space-y-4">
         {stats && stats.clients > 0 ? (
+          <Skeletonizer loading={statsPending}>
           <StatStrip>
             <Stat label="Clients" value={stats.clients.toLocaleString()} sub={`${stats.purchased.toLocaleString()} bought from us`} />
             <Stat label="Business names" value={stats.names.toLocaleString()} sub="Active, across all clients" />
@@ -165,13 +177,14 @@ export default function Clients() {
               dot={stats.possibleDuplicates > 0 ? 'waiting' : null}
             />
           </StatStrip>
+          </Skeletonizer>
         ) : null}
 
-        {stats && stats.possibleDuplicates > 0 ? (
+        {realStats && realStats.possibleDuplicates > 0 ? (
           <Alert className="flex items-center gap-3 py-3 [&>svg]:translate-y-0">
             <Users />
             <div className="min-w-0 flex-1">
-              <AlertTitle>{stats.possibleDuplicates} possible duplicate{stats.possibleDuplicates === 1 ? '' : 's'} to decide</AlertTitle>
+              <AlertTitle>{realStats.possibleDuplicates} possible duplicate{realStats.possibleDuplicates === 1 ? '' : 's'} to decide</AlertTitle>
               <AlertDescription>Merge or keep apart, one pair at a time.</AlertDescription>
             </div>
             <Button size="sm" variant="outline" asChild><Link to="/admin/clients/duplicates">Review</Link></Button>
@@ -219,9 +232,9 @@ export default function Clients() {
         <DataTable
           columns={columns}
           data={items}
-          loading={loading || (!data && isFetching)}
-          empty={!data ? <div className="py-10 text-center"><Loader2 className="mx-auto size-6 animate-spin text-muted-foreground" /></div>
-            : <EmptyState title="No clients match" message={stats?.clients ? undefined : 'Build the client records above first.'} />}
+          loading={loading || isPending}
+          skeleton={SKELETON_ROWS}
+          empty={<EmptyState title="No clients match" message={stats?.clients ? undefined : 'Build the client records above first.'} />}
         />
         {data ? <Pagination page={page} pageSize={PAGE_SIZE} total={data.totalCount} onPage={(p) => update({ page: p })} /> : null}
       </div>
