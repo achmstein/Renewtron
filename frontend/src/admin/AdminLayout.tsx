@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Archive, ChartColumn, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut,
+  ChartColumn, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut,
   Landmark, Mail, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench, FilePlus2,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
@@ -33,7 +33,6 @@ const Icon = {
   Cart: <ShoppingCart />,
   Card: <CreditCard />,
   Bank: <Landmark />,
-  Bulk: <Archive />,
   Pencil: <SquarePen />,
   Key: <KeyRound />,
   KeyAlert: <FileWarning />,
@@ -87,7 +86,6 @@ const navSections: NavSection[] = [
       { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
       { to: '/admin/renewals', label: 'Renewals', icon: Icon.Refresh },
       { to: '/admin/ontraport-sales', label: 'Ontraport sales', icon: Icon.Cart },
-      { to: '/admin/bulk-renewals', label: 'Bulk uploads', icon: Icon.Bulk },
       { to: '/admin/asic-keys', label: 'Key letters', icon: Icon.Key },
       { to: '/admin/emails', label: 'Emails', icon: Icon.Mail },
     ],

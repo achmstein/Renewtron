@@ -337,7 +337,6 @@ function LinkResult({ result }: { result: ClientLinkResult }) {
     ['Renewals linked', result.renewalsLinked],
     ['Renewals completed since linking', result.renewalsCompletedLater],
     ['Key requests linked', result.keyRequestsLinked],
-    ['Bulk uploads linked', result.bulkUploadsLinked],
     ['Messages linked', result.messagesLinked],
     ['Key letters linked', result.keyLettersLinked],
     ['"No contact" keys resolved', result.keyLettersResolved],
@@ -355,7 +354,7 @@ function LinkResult({ result }: { result: ClientLinkResult }) {
             key={label}
             className="flex items-baseline justify-between gap-2 border-b py-1.5"
             title={label === 'Left unlinked' && result.skipped > 0
-              ? 'Records with no email to reach the person by (some manual renewals), or bulk uploads whose name isn’t on any client yet.'
+              ? 'Records with no email to reach the person by (some manual renewals).'
               : undefined}
           >
             <dt className="text-caption text-muted-foreground">{label}</dt>

@@ -196,7 +196,7 @@ export default function Searches() {
           onClick={() => { setPage(1); setIncludeSystem((v) => !v) }}
           aria-pressed={includeSystem}
           className={includeSystem ? 'bg-accent' : 'border-dashed'}
-          title="Renewtron's own background lookups (Ontraport sync, bulk renewals). Hidden by default."
+          title="Renewtron's own background lookups (Ontraport sync). Hidden by default."
         >
           {includeSystem ? <Eye /> : <EyeOff />}
           {includeSystem ? 'System shown' : 'System hidden'}

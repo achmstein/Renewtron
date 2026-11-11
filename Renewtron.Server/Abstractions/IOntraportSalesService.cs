@@ -7,6 +7,9 @@ public interface IOntraportSalesService
     Task<List<OntraportSale>> SyncSalesAsync();
     Task ProcessEligibleRenewalsAsync();
 
+    /// <summary>Tries again the ASIC name searches that didn't get an answer (see <see cref="Services.SearchRetry"/>).</summary>
+    Task RetryNameSearchesAsync();
+
     /// <summary>
     /// Writes the outcome of a renewal attempt back onto the Ontraport contact: the renewal
     /// status field, and — on success only — the rolled-forward renewal due date.

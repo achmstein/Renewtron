@@ -14,7 +14,7 @@ public sealed class RenewalOrdersModule : ICarterModule
     {
         var group = app.MapGroup("/api/admin/renewal-orders").RequireAuthorization().WithTags("Admin.RenewalOrders");
 
-        // Builds or refreshes the orders from the sale, bulk and renewal records. dryRun (the
+        // Builds or refreshes the orders from the sale and renewal records. dryRun (the
         // default) only reports counts per stage and reason.
         group.MapPost("/rebuild", async (IRenewalOrderService service, bool dryRun = true, CancellationToken ct = default) =>
             Results.Ok(await service.RebuildAsync(dryRun, ct)));
@@ -78,7 +78,6 @@ public sealed class RenewalOrdersModule : ICarterModule
             var source = o.Source switch
             {
                 RenewalOrderSource.Ontraport => new { label = "Ontraport sale", to = $"/admin/ontraport-sales/{o.SourceId}" },
-                RenewalOrderSource.Bulk => new { label = "Bulk upload", to = "/admin/bulk-renewals" },
                 _ => new { label = o.Source == RenewalOrderSource.Wizard ? "Paid on the website" : "Manual renewal", to = $"/admin/renewals/{o.SourceId}" },
             };
             return Results.Ok(new { order = row, client, source, attempts });
@@ -121,17 +120,10 @@ public sealed class RenewalOrdersModule : ICarterModule
                 sale.Status = OntraportSaleStatus.Synced;
                 sale.RenewalRequestId = null;
                 sale.ProcessedAt = null;
+                sale.SearchAttempts = 0;
+                sale.NextSearchAt = null;
                 await db.SaveChangesAsync(ct);
                 message = "Back in the queue: the next processing run (07:00) renews it.";
-            }
-            else if (order.Source == RenewalOrderSource.Bulk
-                && await db.BulkRenewalUploads.FirstOrDefaultAsync(b => b.Id == order.SourceId, ct) is { } upload)
-            {
-                upload.Status = BulkRenewalStatus.WaitingForRenewalWindow;
-                upload.RenewalRequestId = null;
-                upload.ErrorMessage = null;
-                await db.SaveChangesAsync(ct);
-                message = "Back in the queue: the next bulk run renews it.";
             }
             else
             {
@@ -147,7 +139,6 @@ public sealed class RenewalOrdersModule : ICarterModule
     private static IQueryable<OrderRow> Rows(ApplicationDbContext db, IQueryable<RenewalOrder> q) => q.Select(o => new OrderRow(
         o.Id, o.Source.ToString(), o.SourceId, o.ClientId,
         db.OntraportSales.Where(s => s.Id == o.SourceId).Select(s => s.ContactName).FirstOrDefault()
-            ?? db.BulkRenewalUploads.Where(b => b.Id == o.SourceId).Select(b => b.OwnerName).FirstOrDefault()
             ?? db.RenewalRequests.Where(r => r.Id == o.SourceId).Select(r => r.Lead != null ? r.Lead.FullName : r.Email).FirstOrDefault(),
         db.Clients.Where(c => c.Id == o.ClientId).Select(c => c.FullName).FirstOrDefault(),
         o.BusinessName, o.Abn, o.DueDate, o.Years, o.AmountPaid, o.PaidAt,

@@ -4,7 +4,7 @@ namespace Renewtron.Services;
 
 /// <summary>
 /// The one place that decides a paid renewal's status. It works from what the pipeline stores
-/// today: the paying record's own state (Ontraport sale or bulk row) and the ASIC runs for it.
+/// today: the paying record's own state (the Ontraport sale) and the ASIC runs for it.
 /// Pure: no database, no clock except <c>today</c>, so every rule is unit-tested.
 /// </summary>
 public static class RenewalOrderProjection
@@ -39,7 +39,9 @@ public static class RenewalOrderProjection
         /// renewals, the renewal itself). Older runs it let go of are history: they only count if
         /// one of them renewed the name.
         /// </summary>
-        Guid? LinkedAttemptId = null);
+        Guid? LinkedAttemptId = null,
+        /// <summary>ASIC's name search didn't get an answer and is tried again on its own at this time.</summary>
+        DateTime? NextSearchAt = null);
 
     public sealed record Attempt(
         Guid Id,
@@ -94,6 +96,9 @@ public static class RenewalOrderProjection
         {
             case SourceState.Ineligible:
                 return FromIneligible(source.Message);
+            case SourceState.Failed when source.NextSearchAt is { } searchAgain:
+                return new(RenewalOrderStage.Renewing, NextActionAt: searchAgain,
+                    Note: "ASIC didn't answer the name search; Renewtron tries again on its own.");
             case SourceState.Failed:
                 return new(RenewalOrderStage.NeedsPerson, NameNotFound(source.Message) ? RenewalOrderReason.NameNotFound : RenewalOrderReason.AttemptsExhausted,
                     Note: source.Message);
@@ -172,12 +177,4 @@ public static class RenewalOrderProjection
         _ => SourceState.NotStarted,
     };
 
-    public static SourceState FromBulk(BulkRenewalStatus status) => status switch
-    {
-        BulkRenewalStatus.RenewalCompleted => SourceState.Completed,
-        BulkRenewalStatus.RenewalQueued => SourceState.Queued,
-        BulkRenewalStatus.RenewalFailed => SourceState.Failed,
-        BulkRenewalStatus.Skipped => SourceState.Ineligible,
-        _ => SourceState.NotStarted,
-    };
 }

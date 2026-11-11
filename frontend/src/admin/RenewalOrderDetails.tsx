@@ -115,7 +115,6 @@ export default function RenewalOrderDetails() {
 
 const SOURCE_BUTTON: Record<RenewalOrderRow['source'], string> = {
   Ontraport: 'Open sale',
-  Bulk: 'Open bulk upload',
   Wizard: 'Open renewal',
   Manual: 'Open renewal',
 }

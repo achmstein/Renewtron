@@ -157,6 +157,7 @@ public sealed class RenewalsModule : ICarterModule
 
             foreach (var rid in renewalIds)
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
+            RenewalOrderService.EnqueueRefresh(jobs);
             EnqueuePaidEarlyEmail(jobs, lead, searchResults, request.RenewalYears, pricePer);
 
             // Signs the customer straight into the Business Portal from the confirmation page.
@@ -235,6 +236,7 @@ public sealed class RenewalsModule : ICarterModule
 
             foreach (var rid in renewalIds)
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
+            RenewalOrderService.EnqueueRefresh(jobs);
             EnqueuePaidEarlyEmail(jobs, lead, searchResults, request.RenewalYears, pricePer);
 
             return Results.Ok(new { renewalIds, total, portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt) });
@@ -619,6 +621,7 @@ public sealed class RenewalsModule : ICarterModule
                 renewal.Status = RenewalStatus.Pending;
                 renewal.NextRetryAt = null;
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
+            RenewalOrderService.EnqueueRefresh(jobs);
                 retried++;
             }
 
@@ -915,6 +918,7 @@ public sealed class RenewalsModule : ICarterModule
             await db.SaveChangesAsync();
 
             jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
+            RenewalOrderService.EnqueueRefresh(jobs);
 
             return Results.Ok(new
             {
@@ -980,6 +984,7 @@ public sealed class RenewalsModule : ICarterModule
             await db.SaveChangesAsync();
 
             jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
+            RenewalOrderService.EnqueueRefresh(jobs);
 
             return Results.Ok(new
             {

@@ -196,6 +196,7 @@ public class OntraportSalesService : IOntraportSalesService
 
             await _dbContext.SaveChangesAsync();
             _logger.LogInformation("Synced {Count} new Ontraport sales", synced.Count);
+            if (synced.Count > 0) RenewalOrderService.EnqueueRefresh(_backgroundJobClient);
         }
         catch (Exception ex)
         {
@@ -205,9 +206,14 @@ public class OntraportSalesService : IOntraportSalesService
         return synced;
     }
 
-    public async Task ProcessEligibleRenewalsAsync()
+    public Task ProcessEligibleRenewalsAsync() => ProcessAsync(onlySearchRetries: false);
+
+    /// <summary>Hourly: only the sales whose ASIC name search is due to be tried again.</summary>
+    public Task RetryNameSearchesAsync() => ProcessAsync(onlySearchRetries: true);
+
+    private async Task ProcessAsync(bool onlySearchRetries)
     {
-        _logger.LogInformation("Processing eligible Ontraport renewals");
+        _logger.LogInformation(onlySearchRetries ? "Retrying ASIC name searches for Ontraport sales" : "Processing eligible Ontraport renewals");
 
         // Find sales that are within 30 days of due date and haven't been processed yet
         var now = DateTime.UtcNow;
@@ -215,9 +221,12 @@ public class OntraportSalesService : IOntraportSalesService
             .Where(s => s.Status == OntraportSaleStatus.Synced
                      || s.Status == OntraportSaleStatus.WaitingForRenewalWindow
                      || s.Status == OntraportSaleStatus.AsicNotYetDue
-                     || s.Status == OntraportSaleStatus.RenewalInProgress)
+                     || s.Status == OntraportSaleStatus.RenewalInProgress
+                     // A name search ASIC didn't answer, due to be tried again.
+                     || (s.Status == OntraportSaleStatus.RenewalFailed && s.NextSearchAt != null && s.NextSearchAt <= now))
             .Where(s => s.RenewalDueDate != null)
             .Where(s => s.RenewalRequestId == null && s.HandledAt == null)
+            .Where(s => !onlySearchRetries || s.NextSearchAt != null)
             .ToListAsync();
 
         foreach (var sale in eligibleSales)
@@ -274,9 +283,22 @@ public class OntraportSalesService : IOntraportSalesService
                 {
                     sale.ErrorMessage = $"ASIC search failed: {asicSearch.ErrorMessage ?? "no business names returned"}";
                     sale.Status = OntraportSaleStatusClassifier.ClassifyError(asicSearch.ErrorMessage);
-                    _logger.LogWarning("ASIC search failed for ABN {Abn} → {Status}: {Message}", sale.Abn, sale.Status, sale.ErrorMessage);
+                    if (sale.Status == OntraportSaleStatus.RenewalFailed && !SearchRetry.AsicAnswered(asicSearch.Success, asicSearch.ErrorMessage))
+                    {
+                        // ASIC didn't answer: try the search again on its own instead of giving up.
+                        sale.SearchAttempts++;
+                        sale.NextSearchAt = SearchRetry.Delay(sale.SearchAttempts) is { } wait ? now + wait : null;
+                        if (sale.NextSearchAt == null)
+                            sale.ErrorMessage = $"ASIC search failed {sale.SearchAttempts} times: {asicSearch.ErrorMessage}";
+                    }
+                    else
+                    {
+                        sale.NextSearchAt = null;
+                    }
+                    _logger.LogWarning("ASIC search failed for ABN {Abn} → {Status} (next try {Next}): {Message}", sale.Abn, sale.Status, sale.NextSearchAt, sale.ErrorMessage);
                     continue;
                 }
+                sale.NextSearchAt = null;
 
                 // Spacing, "&", quotes and suffixes differ between Ontraport, uploads and ASIC: match loosely, never ambiguously.
                 var matched = BusinessNameText.FindName(asicSearch.BusinessNames, b => b.Name, sale.BusinessName);
@@ -346,6 +368,12 @@ public class OntraportSalesService : IOntraportSalesService
                 _logger.LogError(ex, "Error queuing renewal for Ontraport sale {SaleId}", sale.Id);
                 sale.Status = OntraportSaleStatus.RenewalFailed;
                 sale.ErrorMessage = ex.Message;
+                // Nothing was started at ASIC (no renewal exists yet): safe to try again later.
+                if (sale.RenewalRequestId == null)
+                {
+                    sale.SearchAttempts++;
+                    sale.NextSearchAt = SearchRetry.Delay(sale.SearchAttempts) is { } wait ? now + wait : null;
+                }
             }
         }
 

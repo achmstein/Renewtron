@@ -1,3 +1,4 @@
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
 using Renewtron.Modules;
@@ -7,7 +8,7 @@ namespace Renewtron.Services;
 public interface IRenewalOrderService
 {
     /// <summary>
-    /// Builds or refreshes one <see cref="RenewalOrder"/> per paid renewal from the sale, bulk and
+    /// Builds or refreshes one <see cref="RenewalOrder"/> per paid renewal from the sale and
     /// renewal records, and links every ASIC run to its order. With <paramref name="dryRun"/> it
     /// only reports what it would write.
     /// </summary>
@@ -37,6 +38,13 @@ public sealed record RenewalOrderRebuildReport(
 public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderService> logger) : IRenewalOrderService
 {
     public const string RecurringJobId = "renewal-orders-refresh";
+
+    /// <summary>
+    /// Money arrived (a sale synced, a wizard or manual payment): write its order now
+    /// rather than at the next 10-minute refresh, so it is a record from the moment it is paid.
+    /// </summary>
+    public static void EnqueueRefresh(IBackgroundJobClient jobs) =>
+        jobs.Enqueue<IRenewalOrderService>(s => s.RefreshAsync(CancellationToken.None));
 
     private sealed record Shell(
         RenewalOrderSource Source, Guid SourceId, Guid? ClientId, Guid? NameId, string Abn, string BusinessName,
@@ -90,7 +98,7 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
             .Select(s => new
             {
                 s.Id, s.ClientId, s.ClientBusinessNameId, s.Abn, s.BusinessName, s.RenewalDueDate, s.RenewalYears, s.AmountPaid,
-                s.SyncedAt, s.Status, s.ErrorMessage, s.HandledAt, s.HandledNote, s.RenewalRequestId,
+                s.SyncedAt, s.Status, s.ErrorMessage, s.HandledAt, s.HandledNote, s.RenewalRequestId, s.NextSearchAt,
             })
             .ToListAsync(ct);
         foreach (var s in sales)
@@ -99,27 +107,10 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
             // A completed sale's due date was rolled forward by the term it bought: the order is for the one before.
             if (s.Status == OntraportSaleStatus.RenewalCompleted && due is { } rolled) due = rolled.AddYears(-Math.Max(1, s.RenewalYears));
             var state = new RenewalOrderProjection.Source(RenewalOrderProjection.FromSale(s.Status), due, s.ErrorMessage,
-                s.HandledAt, s.HandledNote, s.Status == OntraportSaleStatus.AsicNotYetDue, s.RenewalRequestId);
+                s.HandledAt, s.HandledNote, s.Status == OntraportSaleStatus.AsicNotYetDue, s.RenewalRequestId, s.NextSearchAt);
             shells.Add(new Shell(RenewalOrderSource.Ontraport, s.Id, s.ClientId, s.ClientBusinessNameId, Helpers.NormalizeAbn(s.Abn),
                 s.BusinessName, due, s.RenewalYears, s.AmountPaid, s.SyncedAt, state));
             if (s.RenewalRequestId is { } rid) linked[(RenewalOrderSource.Ontraport, s.Id)] = rid;
-        }
-
-        var bulk = await db.BulkRenewalUploads.AsNoTracking()
-            .Select(b => new
-            {
-                b.Id, b.ClientId, b.ClientBusinessNameId, b.Abn, b.BusinessName, b.RenewalDueDate, b.RenewalYears, b.Amount,
-                b.UploadedAt, b.Status, b.ErrorMessage, b.RenewalRequestId,
-            })
-            .ToListAsync(ct);
-        foreach (var b in bulk)
-        {
-            var due = b.RenewalDueDate is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
-            var state = new RenewalOrderProjection.Source(RenewalOrderProjection.FromBulk(b.Status), due, b.ErrorMessage,
-                LinkedAttemptId: b.RenewalRequestId);
-            shells.Add(new Shell(RenewalOrderSource.Bulk, b.Id, b.ClientId, b.ClientBusinessNameId, Helpers.NormalizeAbn(b.Abn),
-                b.BusinessName, due, b.RenewalYears, b.Amount, b.UploadedAt, state));
-            if (b.RenewalRequestId is { } rid) linked[(RenewalOrderSource.Bulk, b.Id)] = rid;
         }
 
         // Wizard and manual renewals are their own paying record: one order each, if the client paid.
@@ -138,7 +129,7 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
             linked[(source, r.Id)] = r.Id;
         }
 
-        // Every run belongs to one order: its own link first, then (for runs a sale or bulk row let
+        // Every run belongs to one order: its own link first, then (for runs a sale let
         // go of) the order from the same source for the same name, paid most recently before the run.
         var attemptsOf = shells.ToDictionary(s => (s.Source, s.SourceId), _ => new List<RenewalOrderProjection.Attempt>());
         var orderOfRun = new Dictionary<Guid, (RenewalOrderSource, Guid)>();
@@ -152,7 +143,6 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
             var source = run.Source switch
             {
                 RenewalSource.Ontraport => RenewalOrderSource.Ontraport,
-                RenewalSource.BulkUpload => RenewalOrderSource.Bulk,
                 _ => (RenewalOrderSource?)null,
             };
             if (source is null || !byName.TryGetValue((source.Value, run.Abn, BusinessNameText.MatchKey(run.BusinessName)), out var candidates))

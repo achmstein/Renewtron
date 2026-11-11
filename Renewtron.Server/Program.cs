@@ -147,7 +147,6 @@ builder.Services.AddScoped<Renewtron.Services.AsicPortal.IAsicPortalLinkService,
 builder.Services.AddScoped<Renewtron.Services.Registration.IBusinessNameRegistrationService, Renewtron.Services.Registration.BusinessNameRegistrationService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>();
-builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
 
 // ASIC key pipeline: IMAP reader + the service that turns notification emails into
@@ -187,7 +186,7 @@ builder.Services.AddHangfireServer(options =>
 {
     // Default = min(20, ProcessorCount * 5). On a 16-core dev box this pegs ~80 threads,
     // each holding a SqlConnection while idle-polling. 4 is plenty for the recurring jobs
-    // we have (Ontraport sync, bulk renewal, reconciliation, outbox retry).
+    // we have (Ontraport sync, reconciliation, outbox retry).
     options.ServerName = $"{Environment.MachineName}:default";
     options.Queues = ["default"];
     options.WorkerCount = 4;
@@ -326,6 +325,13 @@ RecurringJob.AddOrUpdate<IOntraportSalesService>(
     "0 7 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
+// ASIC name searches that didn't get an answer (Ontraport sales): tried again on their own
+// with a growing wait (SearchRetry), instead of failing for good on one bad morning.
+RecurringJob.AddOrUpdate<IOntraportSalesService>(
+    "ontraport-search-retry",
+    service => service.RetryNameSearchesAsync(),
+    "40 * * * *");
+
 // Renewals paid early (before ASIC's renewal window): asks ASIC each morning about the ones
 // whose check date has come, and lodges each as soon as ASIC lists the name.
 RecurringJob.AddOrUpdate<IEarlyRenewalService>(
@@ -334,11 +340,8 @@ RecurringJob.AddOrUpdate<IEarlyRenewalService>(
     "15 7 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
-RecurringJob.AddOrUpdate<IBulkRenewalService>(
-    "bulk-renewal-process",
-    service => service.ProcessEligibleRenewalsAsync(),
-    "30 7 * * *",
-    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+// Bulk uploads were removed (Nov 2026): drop their jobs from Hangfire.
+RecurringJob.RemoveIfExists("bulk-renewal-process");
 
 // Reads back Airwallex BPAY payments still in flight and marks renewals paid once Airwallex
 // reports PAID (and unmarks one that fails late). Idle when nothing is in flight.

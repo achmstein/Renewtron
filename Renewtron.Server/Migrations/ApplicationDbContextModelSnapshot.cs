@@ -604,79 +604,6 @@ namespace Renewtron.Migrations
                     b.ToTable("AsicPortalLinks");
                 });
 
-            modelBuilder.Entity("Renewtron.Data.BulkRenewalUpload", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Abn")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("BusinessName")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<Guid?>("ClientBusinessNameId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("ClientId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ErrorMessage")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("OwnerName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTime?>("ProcessedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("RenewalDueDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid?>("RenewalRequestId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("RenewalYears")
-                        .HasColumnType("int");
-
-                    b.Property<string>("SourceFile")
-                        .HasMaxLength(260)
-                        .HasColumnType("nvarchar(260)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Abn");
-
-                    b.HasIndex("ClientBusinessNameId");
-
-                    b.HasIndex("ClientId");
-
-                    b.HasIndex("RenewalDueDate");
-
-                    b.HasIndex("RenewalRequestId");
-
-                    b.HasIndex("Status");
-
-                    b.ToTable("BulkRenewalUploads");
-                });
-
             modelBuilder.Entity("Renewtron.Data.BusinessNameImport", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1425,6 +1352,9 @@ namespace Renewtron.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTime?>("NextSearchAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("OntraportContactId")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1449,6 +1379,9 @@ namespace Renewtron.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("RenewalYears")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SearchAttempts")
                         .HasColumnType("int");
 
                     b.Property<string>("State")
@@ -2157,26 +2090,6 @@ namespace Renewtron.Migrations
                         .WithMany()
                         .HasForeignKey("ClientId")
                         .OnDelete(DeleteBehavior.NoAction);
-                });
-
-            modelBuilder.Entity("Renewtron.Data.BulkRenewalUpload", b =>
-                {
-                    b.HasOne("Renewtron.Data.ClientBusinessName", null)
-                        .WithMany()
-                        .HasForeignKey("ClientBusinessNameId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("Renewtron.Data.Client", null)
-                        .WithMany()
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("Renewtron.Data.RenewalRequest", "RenewalRequest")
-                        .WithMany()
-                        .HasForeignKey("RenewalRequestId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("RenewalRequest");
                 });
 
             modelBuilder.Entity("Renewtron.Data.BusinessNameRegistration", b =>

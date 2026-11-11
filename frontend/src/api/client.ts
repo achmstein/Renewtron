@@ -112,7 +112,7 @@ export interface TodayGroup { key: 'retry' | 'check' | 'refund' | 'bpay' | 'keys
 /** One paid renewal (RenewalOrder): one name, one term, one status. */
 export interface RenewalOrderRow {
   id: string
-  source: 'Ontraport' | 'Wizard' | 'Bulk' | 'Manual'
+  source: 'Ontraport' | 'Wizard' | 'Manual'
   sourceId: string
   clientId: string | null
   payerName: string | null
@@ -336,7 +336,6 @@ export interface ClientLinkResult {
   salesLinked: number
   leadsLinked: number
   keyRequestsLinked: number
-  bulkUploadsLinked: number
   renewalsLinked: number
   renewalsCompletedLater: number
   messagesLinked: number
@@ -1163,40 +1162,6 @@ export const api = {
       apiFetch<{ request: AsicKeyRequestDto }>(`/api/admin/asic-key-requests/for-sale/${saleId}`, { method: 'POST' }),
     recordAsicKeyRequestOutcome: (id: string, body: { referenceNumber: string; note: string }) =>
       apiFetch<AsicKeyRequestDto>(`/api/admin/asic-key-requests/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }),
-    bulkRenewals: (params: { status?: string; batch?: string } = {}) => {
-      const qs = new URLSearchParams()
-      if (params.status) qs.set('status', params.status)
-      if (params.batch) qs.set('batch', params.batch)
-      const suffix = qs.toString() ? `?${qs}` : ''
-      return apiFetch<{
-        totalCount: number
-        waitingCount: number
-        queuedCount: number
-        completedCount: number
-        failedCount: number
-        items: Array<{ id: string; businessName: string; abn: string; ownerName?: string; renewalYears: number; amount: number; status: string; uploadedAt: string; renewalDueDate?: string | null; sourceFile?: string; errorMessage?: string | null }>
-        facets: {
-          status: Facet
-          batch: Facet
-        }
-        stats: {
-          pipelineValueNext30d: number
-          lastUploadAt: string | null
-          today: number
-          yesterday: number
-          deltaPct: number | null
-          daily14d: Array<{ date: string; count: number }>
-          byBatch: Array<{ sourceFile: string; total: number; completed: number; failed: number; pipelineValue: number; lastUploadAt: string }>
-        }
-      }>(`/api/admin/bulk-renewals${suffix}`)
-    },
-    processEligibleBulk: () => apiFetch<{ jobId: string; message: string }>('/api/admin/bulk-renewals/process-eligible', { method: 'POST' }),
-    retryFailedBulk: () => apiFetch<{ retried: number }>('/api/admin/bulk-renewals/retry-failed', { method: 'POST' }),
-    uploadBulkRenewals: (file: File) => {
-      const form = new FormData()
-      form.append('file', file)
-      return apiFetch<{ totalRows: number; importedCount: number; skippedDuplicates: number; skippedInvalid: number; errors: string[] }>('/api/admin/bulk-renewals/upload', { method: 'POST', body: form })
-    },
     updatePricing: (body: { oneYearFee: number; threeYearFee: number }) => apiFetch<void>('/api/admin/settings/pricing', { method: 'PUT', body: JSON.stringify(body) }),
     testSendGridEmail: (to?: string) => apiFetch<{ ok: boolean; message: string }>('/api/admin/settings/sendgrid/test-email', { method: 'POST', body: JSON.stringify({ to: to ?? null }) }),
     emails: (params: { tab?: string; kind?: string; search?: string; clientId?: string; page?: number; pageSize?: number } = {}) =>

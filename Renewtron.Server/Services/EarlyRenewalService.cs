@@ -88,7 +88,7 @@ public class EarlyRenewalService(
         var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, Sydney));
 
-        // Wizard renewals only: Ontraport sales and bulk rows have their own daily loops.
+        // Wizard renewals only: Ontraport sales have their own daily loop.
         var waiting = await db.RenewalRequests
             .Include(r => r.SearchResult).ThenInclude(sr => sr.SearchLog)
             // Test customers too: the search is read only, and their run never reaches ASIC.

@@ -5,7 +5,7 @@ namespace Renewtron.Abstractions;
 public interface IClientLinkService
 {
     /// <summary>
-    /// Attaches every record not yet on a client (sales, leads, key requests, bulk uploads,
+    /// Attaches every record not yet on a client (sales, leads, key requests,
     /// renewals, messages, key letters) to its client, creating clients and their business
     /// names as needed, and refreshes names from the public register. A dry run does all the
     /// matching and reports what it would do without saving. The result is kept in
@@ -46,7 +46,6 @@ public sealed class ClientLinkResult
     public int SalesLinked { get; set; }
     public int LeadsLinked { get; set; }
     public int KeyRequestsLinked { get; set; }
-    public int BulkUploadsLinked { get; set; }
     public int RenewalsLinked { get; set; }
     /// <summary>Renewals linked earlier that have since completed, now applied to their name.</summary>
     public int RenewalsCompletedLater { get; set; }

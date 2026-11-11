@@ -76,11 +76,10 @@ public sealed class ClientLinkService(
             await LinkLeadsAsync(ct);
             await LinkKeyRequestsAsync(ct);
 
-            // The register's names go on before bulk uploads and renewals look names up, and
+            // The register's names go on before renewals look names up, and
             // again afterwards for ABNs those added; key letters then find any of them.
             QueueStaleAbns();
             await ReadRegisterAsync(ct);
-            await LinkBulkUploadsAsync(ct);
             await LinkRenewalsAsync(ct);
             await CatchUpCompletedRenewalsAsync(ct);
             await LinkMessagesAsync(ct);
@@ -247,31 +246,6 @@ public sealed class ClientLinkService(
         }
     }
 
-    /// <summary>Bulk uploads carry no email: the name goes on its ABN and the upload on the ABN's reminder contact.</summary>
-    private async Task LinkBulkUploadsAsync(CancellationToken ct)
-    {
-        var uploads = await db.BulkRenewalUploads.Where(b => b.ClientId == null).OrderBy(b => b.UploadedAt).ToListAsync(ct);
-        foreach (var b in uploads)
-        {
-            var abn = Digits(b.Abn);
-            var client = ReminderContact(abn);
-            var name = client == null ? null : AddName(abn, b.BusinessName, RecordSource.BulkUpload);
-            if (client == null || name == null) { _result.Skipped++; continue; }
-
-            b.ClientId = client.Id;
-            b.ClientBusinessNameId = name.Id;
-            client.HasPurchased = true;
-            _result.BulkUploadsLinked++;
-            if (b.RenewalDueDate is { } due)
-            {
-                if (b.Status == BulkRenewalStatus.RenewalCompleted && b.RenewalYears > 0)
-                    SetDue(name, DateOnly.FromDateTime(due).AddYears(b.RenewalYears), RenewalDueDateSource.Renewal);
-                else
-                    SetDue(name, DateOnly.FromDateTime(due), RenewalDueDateSource.BulkUpload);
-            }
-        }
-    }
-
     private async Task LinkRenewalsAsync(CancellationToken ct)
     {
         var renewals = await db.RenewalRequests
@@ -291,10 +265,6 @@ public sealed class ClientLinkService(
         foreach (var row in await db.OntraportSales.AsNoTracking().Where(s => s.RenewalRequestId != null && ids.Contains(s.RenewalRequestId.Value) && s.ClientId != null)
                      .Select(s => new { s.RenewalRequestId, s.ClientId }).ToListAsync(ct))
             viaSale.TryAdd(row.RenewalRequestId!.Value, row.ClientId!.Value);
-        var viaBulk = ClientsByRenewal(db.BulkRenewalUploads.Local.Where(b => b.RenewalRequestId != null).Select(b => (b.RenewalRequestId!.Value, b.ClientId)));
-        foreach (var row in await db.BulkRenewalUploads.AsNoTracking().Where(b => b.RenewalRequestId != null && ids.Contains(b.RenewalRequestId.Value) && b.ClientId != null)
-                     .Select(b => new { b.RenewalRequestId, b.ClientId }).ToListAsync(ct))
-            viaBulk.TryAdd(row.RenewalRequestId!.Value, row.ClientId!.Value);
 
         foreach (var r in renewals)
         {
@@ -302,7 +272,6 @@ public sealed class ClientLinkService(
             Client? client = null;
             if (r.LeadId is { } lid && leadClient.TryGetValue(lid, out var c1)) _byId.TryGetValue(c1, out client);
             if (client == null && viaSale.TryGetValue(r.Id, out var c2)) _byId.TryGetValue(c2, out client);
-            if (client == null && viaBulk.TryGetValue(r.Id, out var c3)) _byId.TryGetValue(c3, out client);
             client ??= Resolve(new Identity
             {
                 Email = r.Email,
@@ -795,7 +764,6 @@ public sealed class ClientLinkService(
         await db.Leads.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.OntraportSales.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.RenewalRequests.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
-        await db.BulkRenewalUploads.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.AsicKeyRequests.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.AsicPortalLinks.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);
         await db.OutboundMessages.Where(x => x.ClientId == sourceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.ClientId, targetId), ct);

@@ -23,7 +23,6 @@ import BpayPayments from './BpayPayments'
 import ManualRenewal from './ManualRenewal'
 import OntraportSales from './OntraportSales'
 import SaleDetails from './SaleDetails'
-import BulkRenewals from './BulkRenewals'
 import AsicKeys from './AsicKeys'
 import AsicKeyRequests from './AsicKeyRequests'
 import { KeyLetterDetails, KeyRequestDetails } from './KeyDetails'
@@ -66,7 +65,6 @@ export default function AdminRoutes() {
           <Route path="manual-renewal" element={<ManualRenewal />} />
           <Route path="ontraport-sales" element={<OntraportSales />} />
           <Route path="ontraport-sales/:id" element={<SaleDetails />} />
-          <Route path="bulk-renewals" element={<BulkRenewals />} />
           <Route path="asic-keys" element={<AsicKeys />} />
           <Route path="asic-key-requests" element={<AsicKeyRequests />} />
           <Route path="asic-key-requests/:id" element={<KeyRequestDetails />} />

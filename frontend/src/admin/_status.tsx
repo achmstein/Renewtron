@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils'
 import { Hint, StatusPill, type Tone } from './_ui'
 
 /**
- * The admin's one status vocabulary. Every page that shows the status of a renewal, sale, bulk
+ * The admin's one status vocabulary. Every page that shows the status of a renewal, sale
  * upload, key request, key letter, BPAY bill, wizard visit, email or business name takes its
  * words and colour from here, so the same state reads the same everywhere.
  *
@@ -34,7 +34,7 @@ export const MEANING_WORDS: Record<Meaning, string> = {
 export type StatusEntry = { label: string; meaning: Meaning; hint?: string }
 
 export type StatusKind =
-  | 'renewal' | 'sale' | 'bulk' | 'keyRequest' | 'keyLetter' | 'bpay'
+  | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter' | 'bpay'
   | 'lead' | 'email' | 'payment' | 'businessName' | 'asicPortal' | 'registration'
 
 const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
@@ -56,15 +56,6 @@ const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
     IneligibleForRenewal:    { label: 'Not eligible',      meaning: 'action', hint: 'Paid, but this name can’t be renewed with us. Decide: refund or contact the client.' },
     AsicNotYetDue:           { label: 'ASIC: not due yet', meaning: 'waiting', hint: 'ASIC said it isn’t due; the next run tries again.' },
     RenewalInProgress:       { label: 'Open at ASIC',      meaning: 'waiting', hint: 'ASIC has a renewal already open for this ABN; the next run tries again.' },
-  },
-  // BulkRenewalStatus
-  bulk: {
-    WaitingForRenewalWindow: { label: 'Waiting for window', meaning: 'waiting' },
-    RenewalQueued:           { label: 'Queued',             meaning: 'working' },
-    RenewalCompleted:        { label: 'Renewed',            meaning: 'done' },
-    RenewalFailed:           { label: 'Failed',             meaning: 'action' },
-    NotDueForRenewal:        { label: 'Not due',            meaning: 'quiet' },
-    Skipped:                 { label: 'Skipped',            meaning: 'quiet' },
   },
   // AsicKeyRequestStatus
   keyRequest: {

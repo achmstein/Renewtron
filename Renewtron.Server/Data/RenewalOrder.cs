@@ -6,7 +6,7 @@ namespace Renewtron.Data;
 /// are its attempts (<see cref="RenewalRequest"/>s with <c>RenewalOrderId</c>).
 ///
 /// For now (phases 1–2 of the refactor) the order is a projection: <c>RenewalOrderProjection</c>
-/// computes it from the sale/renewal/bulk records, and <c>RenewalOrderService</c> keeps it up to
+/// computes it from the sale/renewal records, and <c>RenewalOrderService</c> keeps it up to
 /// date. Later the order itself is what the pipeline writes.
 /// </summary>
 public class RenewalOrder
@@ -14,7 +14,7 @@ public class RenewalOrder
     public Guid Id { get; set; }
 
     public RenewalOrderSource Source { get; set; }
-    /// <summary>The record that paid for it: the Ontraport sale, bulk upload row, or (wizard and manual) the renewal.</summary>
+    /// <summary>The record that paid for it: the Ontraport sale, or (wizard and manual) the renewal.</summary>
     public Guid SourceId { get; set; }
 
     public Guid? ClientId { get; set; }
@@ -47,7 +47,7 @@ public enum RenewalOrderSource
 {
     Ontraport = 0,
     Wizard = 1,
-    Bulk = 2,
+    // 2 was Bulk (bulk uploads, removed Nov 2026).
     Manual = 3,
 }
 

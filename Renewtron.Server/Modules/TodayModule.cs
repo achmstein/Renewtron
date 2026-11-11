@@ -94,7 +94,6 @@ public sealed class TodayModule : ICarterModule
                         o.Id, o.ClientId, o.BusinessName, o.Abn, o.AmountPaid, o.Years, o.StageChangedAt, o.DueDate,
                         o.Note, Reason = o.Reason,
                         Who = db.OntraportSales.Where(s => s.Id == o.SourceId).Select(s => s.ContactName).FirstOrDefault()
-                            ?? db.BulkRenewalUploads.Where(b => b.Id == o.SourceId).Select(b => b.OwnerName).FirstOrDefault()
                             ?? db.RenewalRequests.Where(r => r.Id == o.SourceId).Select(r => r.Lead != null ? r.Lead.FullName : r.Email).FirstOrDefault(),
                     })
                     .ToListAsync();

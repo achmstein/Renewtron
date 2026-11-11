@@ -62,15 +62,11 @@ public sealed class PartnerModule : ICarterModule
                 })
                 .ToListAsync();
 
-            // Ontraport and bulk renewals have no Lead; their contact lives on the sale / upload row.
+            // Ontraport renewals have no Lead; their contact lives on the sale.
             var ids = rows.Select(r => r.Id).ToList();
             var sales = await db.OntraportSales.AsNoTracking()
                 .Where(s => s.RenewalRequestId != null && ids.Contains(s.RenewalRequestId.Value))
                 .Select(s => new { Id = s.RenewalRequestId!.Value, s.ContactName, s.MobileNumber, s.DateOfBirth })
-                .ToListAsync();
-            var uploads = await db.BulkRenewalUploads.AsNoTracking()
-                .Where(b => b.RenewalRequestId != null && ids.Contains(b.RenewalRequestId.Value))
-                .Select(b => new { Id = b.RenewalRequestId!.Value, b.OwnerName })
                 .ToListAsync();
             var saleBy = sales.GroupBy(s => s.Id).ToDictionary(g => g.Key, g => g.First());
 
@@ -83,12 +79,10 @@ public sealed class PartnerModule : ICarterModule
                     .ToListAsync())
                 .GroupBy(x => x.LeadId)
                 .ToDictionary(g => g.Key, g => g.ToList());
-            var uploadBy = uploads.GroupBy(b => b.Id).ToDictionary(g => g.Key, g => g.First());
 
             var items = rows.Select(r =>
             {
                 saleBy.TryGetValue(r.Id, out var sale);
-                uploadBy.TryGetValue(r.Id, out var upload);
                 return new
                 {
                     id = r.Id,
@@ -104,7 +98,7 @@ public sealed class PartnerModule : ICarterModule
                     renewalYears = r.RenewalYears,
                     amount = r.Amount,
                     email = r.Email,
-                    fullName = FirstNonEmpty(r.LeadName, sale?.ContactName, upload?.OwnerName),
+                    fullName = FirstNonEmpty(r.LeadName, sale?.ContactName),
                     mobileNumber = FirstNonEmpty(r.MobileNumber, r.LeadMobile, sale?.MobileNumber),
                     dateOfBirth = r.DateOfBirth?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                                   ?? (r.LeadDob is { } dob && dob != default ? dob.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null)

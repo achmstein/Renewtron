@@ -13,7 +13,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Lead> Leads { get; set; }
     public DbSet<OntraportSale> OntraportSales { get; set; }
     public DbSet<RenewalOrder> RenewalOrders { get; set; }
-    public DbSet<BulkRenewalUpload> BulkRenewalUploads { get; set; }
     public DbSet<OutboundMessage> OutboundMessages { get; set; }
     public DbSet<FunnelEvent> FunnelEvents { get; set; }
     public DbSet<OntraportSyncOutbox> OntraportSyncOutbox { get; set; }
@@ -177,26 +176,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
 
             entity.HasIndex(e => e.OntraportContactId);
-            entity.HasIndex(e => e.Abn);
-            entity.HasIndex(e => e.Status);
-            entity.HasIndex(e => e.RenewalDueDate);
-
-            entity.HasOne(e => e.RenewalRequest)
-                .WithMany()
-                .HasForeignKey(e => e.RenewalRequestId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-
-        modelBuilder.Entity<BulkRenewalUpload>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.Abn).IsRequired().HasMaxLength(20);
-            entity.Property(e => e.OwnerName).HasMaxLength(200);
-            entity.Property(e => e.Amount).HasPrecision(18, 2);
-            entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
-            entity.Property(e => e.SourceFile).HasMaxLength(260);
-
             entity.HasIndex(e => e.Abn);
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.RenewalDueDate);
@@ -425,9 +404,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<RenewalRequest>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<RenewalRequest>().HasIndex(e => e.ClientId);
         modelBuilder.Entity<RenewalRequest>().HasIndex(e => e.ClientBusinessNameId);
-        modelBuilder.Entity<BulkRenewalUpload>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
-        modelBuilder.Entity<BulkRenewalUpload>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
-        modelBuilder.Entity<BulkRenewalUpload>().HasIndex(e => e.ClientId);
         modelBuilder.Entity<AsicKeyRequest>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<AsicKeyRequest>().HasIndex(e => e.ClientId);
         modelBuilder.Entity<AsicKeyNotification>().HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);

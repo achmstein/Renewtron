@@ -185,7 +185,6 @@ const jobDisplay: Record<string, { label: string; staleAfterHours: number }> = {
   'renewal-reconciliation':     { label: 'Reconciliation',   staleAfterHours: 26 },
   'ontraport-sales-sync':       { label: 'Ontraport sync',   staleAfterHours: 26 },
   'ontraport-process-renewals': { label: 'Process renewals', staleAfterHours: 26 },
-  'bulk-renewal-process':       { label: 'Bulk process',     staleAfterHours: 26 },
   'ontraport-outbox-retry':     { label: 'Outbox retry',     staleAfterHours: 2 },
 }
 

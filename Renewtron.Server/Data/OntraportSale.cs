@@ -49,6 +49,14 @@ public class OntraportSale
     public DateTime? HandledAt { get; set; }
     public string? HandledNote { get; set; }
 
+    /// <summary>
+    /// The ASIC name search that finds the account number before a renewal can start. When ASIC
+    /// can't be reached it is tried again on its own (<see cref="NextSearchAt"/>), up to
+    /// <see cref="Services.SearchRetry.MaxAttempts"/> times, rather than failing for good.
+    /// </summary>
+    public int SearchAttempts { get; set; }
+    public DateTime? NextSearchAt { get; set; }
+
     // Link to RenewalRequest when queued
     public Guid? RenewalRequestId { get; set; }
     public RenewalRequest? RenewalRequest { get; set; }
