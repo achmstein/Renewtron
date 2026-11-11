@@ -44,21 +44,21 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private void ResetSession() => AsicHttp.ExpireCookies(_cookies, _http.BaseAddress);
+    private void ResetSession() => AsicHttp.ExpireCookies(_cookies, _http.BaseAddress!);
 
     public async Task<BusinessNamesResult> SearchByAbnAsync(string abn)
     {
         // The search is read-only, so transient failures (network blips, ASIC
         // maintenance pages that break session init) are safe to retry in place.
         const int maxAttempts = 3;
-        BusinessNamesResult result = null;
+        BusinessNamesResult? result = null;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             result = await SearchByAbnOnceAsync(abn);
             if (result.Success || !IsTransientSearchFailure(result)) return result;
             if (attempt < maxAttempts) await _delay(TimeSpan.FromSeconds(attempt * 3));
         }
-        return result;
+        return result!; // the loop runs at least once
     }
 
     private static bool IsTransientSearchFailure(BusinessNamesResult result)
@@ -241,13 +241,13 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         // Find the radio button ID for the specified account number
         // The HTML structure has radio buttons followed by business data
         // Each row contains: radio button, business name, account number, registration date
-        string radioButtonId = null;
+        string? radioButtonId = null;
 
         // Find all radio button IDs
-        var radioMatches = Regex.Matches(data.PageContent, @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
+        var radioMatches = Regex.Matches(data.PageContent ?? "", @"<span id=""(tmpt:region:\d+:form:sbr[^""]+)""[^>]*class=""selectBooleanRadioHiddenLabel");
 
         // Find all dataText spans (business names, account numbers, registration dates)
-        var dataTextMatches = Regex.Matches(data.PageContent, @"<span class=""dataText"">([^<]+)</span>");
+        var dataTextMatches = Regex.Matches(data.PageContent ?? "", @"<span class=""dataText"">([^<]+)</span>");
 
         // Match radio buttons to account numbers
         // Each table row has 3 dataText spans: [name, account, date]
@@ -767,7 +767,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
     private async Task<StepResult<RenewalStepData>> ProcessPaymentStepAsync(RenewalStepData data)
     {
         var paymentResult = await _paymentClient.ProcessPaymentAsync(
-            data.PaymentUrl,
+            data.PaymentUrl!, // set by Open Payment Gateway
             data.TransactionReference,
             data.CardDetails);
 
@@ -803,7 +803,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         return StepResult<RenewalStepData>.Success(data);
     }
 
-    private async Task<PaymentResult> CompletePaymentActionAsync(string sessionId, string hostedTokenizationId, string adfWindowId, string viewState, string pageContent)
+    private async Task<PaymentResult> CompletePaymentActionAsync(string? sessionId, string? hostedTokenizationId, string? adfWindowId, string? viewState, string? pageContent)
     {
         try
         {
@@ -878,7 +878,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         }
     }
 
-    private async Task<(string SessionId, string AdfWindowId, string ViewState)> InitializeSessionAsync()
+    private async Task<(string? SessionId, string? AdfWindowId, string? ViewState)> InitializeSessionAsync()
     {
         // Step 1: Initial GET to renewal page
         var response = await _http.GetAsync("public/faces/renewal");
@@ -888,7 +888,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         // serves an error/maintenance page or reuses the handler's existing cookie —
         // GetValues would throw "The given header was not found", so probe instead
         // and fall back to the cookie container the handler populates.
-        string sessionId = null;
+        string? sessionId = null;
         if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
         {
             sessionId = setCookies
@@ -896,7 +896,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
                 .Split(';')[0]
                 .Replace("JSESSIONID=", "");
         }
-        sessionId ??= _cookies.GetCookies(_http.BaseAddress)
+        sessionId ??= _cookies.GetCookies(_http.BaseAddress!)
             .FirstOrDefault(c => c.Name == "JSESSIONID" && !c.Expired)?.Value;
 
         // Step 2: answer ADF's loopback (an unreadable one is sent blank, and the session fails below)
@@ -939,7 +939,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         return (success, content);
     }
 
-    private List<BusinessName> ParseBusinessNamesFromResponse(string xmlContent)
+    private static List<BusinessName> ParseBusinessNamesFromResponse(string xmlContent)
     {
         var businessNames = new List<BusinessName>();
 
@@ -976,14 +976,14 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         return businessNames;
     }
 
-    private string ExtractCurrentRegionIndex(string content)
+    private static string ExtractCurrentRegionIndex(string? content)
     {
         // Look for patterns like: tmpt:region:N:form:componentId or tmpt:region:N:componentId
-        var match = Regex.Match(content, @"tmpt:region:(\d+):[^:]*");
+        var match = Regex.Match(content ?? "", @"tmpt:region:(\d+):[^:]*");
         return match.Success ? match.Groups[1].Value : "0";
     }
 
-    private string ExtractPayNowRegionIndex(string content)
+    private static string ExtractPayNowRegionIndex(string? content)
     {
         // The payNowPopup/payNow region index changes per page (ASIC ADF increments regions between transitions).
         // Prefer the exact region hosting payNowPopup, fall back to payNow, else default.
@@ -1001,7 +1001,7 @@ public class AsicRenewalClient : IAsicRenewalClient, IDisposable
         return "3";
     }
 
-    private string GetUserFriendlyErrorMessage(string content)
+    private static string? GetUserFriendlyErrorMessage(string content)
     {
         if (content.Contains("We are processing your renewal application"))
         {

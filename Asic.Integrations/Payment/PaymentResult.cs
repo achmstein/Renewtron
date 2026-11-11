@@ -3,10 +3,10 @@
 public class PaymentResult
 {
     public bool Success { get; private set; }
-    public string HostedTokenizationId { get; private set; }
-    public string Message { get; private set; }
+    public string? HostedTokenizationId { get; private set; }
+    public string Message { get; private set; } = "";
 
-    public static PaymentResult Succeeded(string hostedTokenizationId)
+    public static PaymentResult Succeeded(string? hostedTokenizationId)
     {
         return new PaymentResult
         {

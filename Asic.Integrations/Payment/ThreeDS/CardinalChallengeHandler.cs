@@ -31,7 +31,7 @@ public class CardinalChallengeHandler : IThreeDSChallengeHandler
     {
         try
         {
-            var challengeUri = new Uri(data.ThreeDSChallengeUrl);
+            var challengeUri = new Uri(data.ThreeDSChallengeUrl!);
             var queryParams = HttpUtility.ParseQueryString(challengeUri.Query);
             var oid = queryParams["oid"];
             var tid = queryParams["tid"];
@@ -43,7 +43,6 @@ public class CardinalChallengeHandler : IThreeDSChallengeHandler
             data.CardinalTid = tid;
             data.ThreeDSAcsTransId = tid;
             data.ThreeDSIssuerId = oid;
-            data.CardinalLanguageCode = "en-us";
 
             // Step 1: ChooseCredential (select SMS OTP option)
             var chooseRequest = new HttpRequestMessage(HttpMethod.Post, $"{CardinalBaseUrl}/Api/2_1_0/NextStep/ChooseCredential")

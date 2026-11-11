@@ -1,5 +1,6 @@
 using System.Net;
 using Asic.Integrations.Shared;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Renewtron.Tests.AsicClients;
 
@@ -70,5 +71,47 @@ public class AsicSharedTests
         AsicHttp.ExpireCookies(jar, host);
 
         Assert.Empty(jar.GetCookies(host));
+    }
+}
+
+/// <summary>The clients as Renewtron's container builds them.</summary>
+public class AsicRegistrationTests
+{
+    private sealed class NoSms : Asic.Integrations.Payment.ThreeDS.ISmsProvider
+    {
+        public Task<string> GetOtpAsync() => Task.FromResult("");
+        public Task<string?> CheckAsync() => Task.FromResult<string?>(null);
+    }
+
+    private static ServiceProvider Build()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddLogging();
+        services.AddAsic(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(), s => s.AddSingleton<Asic.Integrations.Payment.ThreeDS.ISmsProvider, NoSms>());
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+    }
+
+    [Fact]
+    public void Every_client_resolves()
+    {
+        using var provider = Build();
+        using var scope = provider.CreateScope();
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<Asic.Integrations.Renewal.IAsicRenewalClient>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<Asic.Integrations.Payment.IAsicPaymentClient>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<Asic.Integrations.Registry.IAsicRegistryClientFactory>().Create());
+    }
+
+    [Fact]
+    public async Task Ending_the_scope_closes_the_clients_connections()
+    {
+        using var provider = Build();
+        Asic.Integrations.Payment.IAsicPaymentClient client;
+        using (var scope = provider.CreateScope())
+            client = scope.ServiceProvider.GetRequiredService<Asic.Integrations.Payment.IAsicPaymentClient>();
+
+        // Its HttpClient was disposed with the scope: the payment fails before anything is sent.
+        var result = await client.ProcessPaymentAsync("https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SessionId=S&SST=T", "x",
+            new() { CardNumber = "4111111111111111", CardholderName = "x", ExpiryMonth = "1", ExpiryYear = "2030", Cvc = "1" });
+        Assert.StartsWith("Cannot access a disposed object", result.Message);
     }
 }

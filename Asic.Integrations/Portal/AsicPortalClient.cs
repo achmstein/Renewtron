@@ -1,4 +1,3 @@
-#nullable enable
 using System.Net;
 using System.Text.RegularExpressions;
 using AngleSharp.Html.Parser;

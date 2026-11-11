@@ -55,7 +55,7 @@ public class RsaChallengeHandler : IThreeDSChallengeHandler
 
             var submitUri = Uri.IsWellFormedUriString(submitAction, UriKind.Absolute)
                 ? new Uri(submitAction)
-                : new Uri(new Uri(data.ThreeDSChallengeUrl), submitAction);
+                : new Uri(new Uri(data.ThreeDSChallengeUrl!), submitAction);
 
             var radioOption = mainForm.QuerySelector("input[name='dataEntry'][type='radio']");
             if (radioOption != null)
@@ -73,7 +73,7 @@ public class RsaChallengeHandler : IThreeDSChallengeHandler
                         ["dataEntry"] = radioValue
                     })
                 };
-                AddNavigationHeaders(selectRequest, submitUri, data.ThreeDSChallengeUrl);
+                AddNavigationHeaders(selectRequest, submitUri, data.ThreeDSChallengeUrl!);
 
                 var selectResponse = await httpClient.SendAsync(selectRequest);
                 var selectContent = await selectResponse.Content.ReadAsStringAsync();
@@ -95,7 +95,7 @@ public class RsaChallengeHandler : IThreeDSChallengeHandler
                 var newAction = HttpUtility.HtmlDecode(otpForm.GetAttribute("action") ?? submitAction);
                 submitUri = Uri.IsWellFormedUriString(newAction, UriKind.Absolute)
                     ? new Uri(newAction)
-                    : new Uri(new Uri(data.ThreeDSChallengeUrl), newAction);
+                    : new Uri(new Uri(data.ThreeDSChallengeUrl!), newAction);
 
                 data.ThreeDSAcsTransId = acsTransID;
                 data.ThreeDSTransactionId = threeDSServerTransID;
@@ -124,7 +124,7 @@ public class RsaChallengeHandler : IThreeDSChallengeHandler
                     ["dataEntry"] = otp
                 })
             };
-            AddNavigationHeaders(submitRequest, submitUri, data.ThreeDSChallengeUrl);
+            AddNavigationHeaders(submitRequest, submitUri, data.ThreeDSChallengeUrl!);
 
             var submitResponse = await httpClient.SendAsync(submitRequest);
             var submitContent = await submitResponse.Content.ReadAsStringAsync();

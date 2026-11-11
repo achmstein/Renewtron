@@ -141,6 +141,7 @@ public class ThreeDSChallengeHandlerTests
         var (result, _) = await Run(new CardinalChallengeHandler(new FakeSms("1")), Data(CardinalUrl),
             new ScriptedHttp().Reply("""{"NextStep":"VALIDATE"}""").Reply("""<input type="hidden" name="StepupRequestId" value="SR-2">""").Reply("""{"NextStep":"RESULT"}"""));
 
+        Assert.True(result.IsSuccess, result.ErrorMessage);
         Assert.Equal("SR-2", result.Value.CardinalStepupRequestId);
     }
 

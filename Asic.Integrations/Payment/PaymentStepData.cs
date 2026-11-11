@@ -1,77 +1,50 @@
 namespace Asic.Integrations.Payment;
 
 /// <summary>
-/// Holds the accumulated state as the payment process progresses through steps.
-/// Each step can read from and add to this data.
+/// The payment's state as it moves through its steps: the inputs, then whatever each step
+/// learns from ASIC's payment page, the card gateway and the issuer's 3DS challenge.
 /// </summary>
 public class PaymentStepData
 {
-    // Input parameters
-    public string PaymentUrl { get; set; }
-    public string SessionId { get; set; }
-    public string AdfWindowId { get; set; }
-    public CreditCardDetails CardDetails { get; set; }
+    // Input
+    public required string PaymentUrl { get; set; }
+    /// <summary>ASIC's transaction reference: unknown when ASIC resumed a session and skipped the page that shows it.</summary>
+    public string? SessionId { get; set; }
+    public required CreditCardDetails CardDetails { get; set; }
 
-    // Payment gateway data
-    public string TokenizationFormUrl { get; set; }
-    public string ViewState { get; set; }
+    // ASIC's payment page
+    public string? AdfWindowId { get; set; }
+    public string? ViewState { get; set; }
+    public string? TokenizationFormUrl { get; set; }
 
-    // Card information
-    public string BrandName { get; set; }
+    // Card gateway
+    public string? BrandName { get; set; }
+    public string? ThreeDSServerTransactionId { get; set; }
+    public string? HostedTokenizationId { get; set; }
 
-    // ThreeDS preparation
-    public string ThreeDSServerTransactionId { get; set; }
-
-    // Tokenization result
-    public string HostedTokenizationId { get; set; }
-
-    // 3DS flow data
-    public string ThreeDSRedirectUrl { get; set; }
-    public string ThreeDSIframeUrl { get; set; }
-    public string ThreeDSFormAction { get; set; }
-    public string ThreeDSMethodData { get; set; }
-    public string ThreeDSCallbackUrl { get; set; }
-    public string ThreeDSCallbackData { get; set; }
-    public string ThreeDSResultUrl { get; set; }
+    // 3DS
+    public string? ThreeDSRedirectUrl { get; set; }
     public bool ThreeDSComplete { get; set; }
-
-    // 3DS Challenge data
-    public string ThreeDSChallengeResponseContent { get; set; }
-    public string ThreeDSChallengeUrl { get; set; }
-    public string ThreeDSSessionData { get; set; }
-    public string ThreeDSCReq { get; set; }
-    public string ThreeDSIssuerId { get; set; }
-    public string ThreeDSTransactionId { get; set; }
+    public string? ThreeDSChallengeResponseContent { get; set; }
+    public string? ThreeDSChallengeUrl { get; set; }
+    public string? ThreeDSSessionData { get; set; }
+    public string? ThreeDSCReq { get; set; }
+    public string? ThreeDSIssuerId { get; set; }
+    public string? ThreeDSTransactionId { get; set; }
     public bool ThreeDSRequiresOtp { get; set; }
+    public string? ThreeDSAcsTransId { get; set; }
+    public string? ThreeDSMessageVersion { get; set; }
+    public string? ThreeDSChallengeWindowSize { get; set; }
 
-    // 3DS provider dispatch: "Cardinal" (authentication.cardinalcommerce.com) or "Rsa" (rsa3dsauth.co.uk)
-    public string ThreeDSProvider { get; set; }
-    public string RsaIssuer { get; set; }
+    // Cardinal Commerce 3DS
+    public string? CardinalOid { get; set; }
+    public string? CardinalTid { get; set; }
+    public string? CardinalStepupRequestId { get; set; }
 
-    // SecureSuite 3DS Method data
-    public string ThreeDSMethodUrl { get; set; }
-    public string ThreeDSMethodNotificationUrl { get; set; }
-
-    // RSA 3DS data (NAB) - Legacy
-    public string ThreeDSAcsTransId { get; set; }
-    public string ThreeDSMessageVersion { get; set; }
-    public string ThreeDSChallengeWindowSize { get; set; }
-
-    // Cardinal Commerce 3DS data (New)
-    public string CardinalOid { get; set; }
-    public string CardinalTid { get; set; }
-    public string CardinalStepupRequestId { get; set; }
-    public string CardinalCredentialId { get; set; }
-    public string CardinalGroupId { get; set; }
-    public string CardinalLanguageCode { get; set; }
-
-    public static PaymentStepData Create(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
+    public static PaymentStepData Create(string paymentUrl, string? sessionId, CreditCardDetails cardDetails) => new()
     {
-        return new PaymentStepData
-        {
-            PaymentUrl = paymentUrl,
-            SessionId = sessionId,
-            CardDetails = cardDetails
-        };
-    }
+        PaymentUrl = paymentUrl,
+        SessionId = sessionId,
+        CardDetails = cardDetails,
+    };
 }

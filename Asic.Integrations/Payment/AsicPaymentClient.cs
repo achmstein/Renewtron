@@ -1,4 +1,6 @@
 using AngleSharp.Html.Parser;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Polly;
 using Polly.Retry;
 using System.Net;
@@ -17,16 +19,18 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
     private readonly HttpClient _http;
     private readonly HtmlParser _htmlParser;
     private readonly IReadOnlyList<IThreeDSChallengeHandler> _challengeHandlers;
+    private readonly ILogger _logger;
     private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0";
 
-    public AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers)
-        : this(challengeHandlers, handler: null)
+    public AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers, ILogger<AsicPaymentClient>? logger = null)
+        : this(challengeHandlers, handler: null, logger)
     {
     }
 
     /// <summary>Tests: a scripted <paramref name="handler"/> in place of ASIC and the card gateway.</summary>
-    internal AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers, HttpMessageHandler? handler)
+    internal AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers, HttpMessageHandler? handler, ILogger? logger = null)
     {
+        _logger = logger ?? NullLogger.Instance;
         // Its own cookie jar: the payment page's ADF session, then the card gateway's.
         _http = AsicHttp.CreateClient(handler ?? AsicHttp.CreateHandler(new AsicHttpSettings()), userAgent: UserAgent);
 
@@ -161,7 +165,7 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
     {
         try
         {
-            var token = ExtractTokenFromUrl(data.TokenizationFormUrl);
+            var token = ExtractTokenFromUrl(data.TokenizationFormUrl!); // set by Initialize Session
             var binUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/bin/getcardinformation/{token}";
 
             var cleanCardNumber = data.CardDetails.CardNumber.Replace(" ", "");
@@ -209,7 +213,7 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
     {
         try
         {
-            var token = ExtractTokenFromUrl(data.TokenizationFormUrl);
+            var token = ExtractTokenFromUrl(data.TokenizationFormUrl!);
             var threeDsUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/ThreeDSecure/PrepareThreeDS/{token}";
 
             var payload = new
@@ -237,10 +241,9 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            var json = JsonNode.Parse(content).AsObject();
+            var json = JsonNode.Parse(content)!.AsObject();
 
             data.ThreeDSServerTransactionId = json["threeDSServerTransactionId"]?.ToString();
-            data.ThreeDSMethodUrl = json["methodUrl"]?.ToString();
             data.ThreeDSMessageVersion = json["version"]?.ToString() ?? "2.2.0";
 
             return StepResult<PaymentStepData>.Success(data);
@@ -255,7 +258,7 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
     {
         try
         {
-            var token = ExtractTokenFromUrl(data.TokenizationFormUrl);
+            var token = ExtractTokenFromUrl(data.TokenizationFormUrl!);
             var submitUrl = $"https://payment.anzworldline-solutions.com.au/hostedtokenization/Tokenization/Submit/{token}";
 
             var formData = new StringBuilder();
@@ -305,9 +308,8 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
                     retryCount: 3,
                     sleepDurationProvider: _ => TimeSpan.FromSeconds(2),
                     onRetry: (outcome, timespan, retryAttempt, context) =>
-                    {
-                        Console.WriteLine($"[Retry {retryAttempt}] Retrying after 2 seconds due to {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}");
-                    });
+                        _logger.LogWarning(outcome.Exception, "Card tokenisation: retry {Attempt} in {Delay}s after {Reason}",
+                            retryAttempt, timespan.TotalSeconds, outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()));
 
             var response = await retryPolicy.ExecuteAsync(() => _http.SendAsync(request));
             var content = await response.Content.ReadAsStringAsync();
@@ -485,7 +487,7 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
             {
                 Content = new FormUrlEncodedContent(new Dictionary<string, string>
                 {
-                    { "creq", data.ThreeDSCReq },
+                    { "creq", data.ThreeDSCReq! }, // checked by Handle 3DS Method Orchestrator
                     { "threeDSSessionData", data.ThreeDSSessionData ?? "" }
                 })
             };
@@ -555,7 +557,7 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
         }
     }
 
-    private string ExtractTokenFromUrl(string url)
+    private static string ExtractTokenFromUrl(string url)
     {
         var uri = new Uri(url);
         var segments = uri.Segments;

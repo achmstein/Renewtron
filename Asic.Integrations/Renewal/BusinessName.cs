@@ -2,7 +2,7 @@
 
 public class BusinessName
 {
-    public string Name { get; set; }
-    public string AccountNumber { get; set; }
-    public string RegistrationDate { get; set; }
+    public required string Name { get; set; }
+    public required string AccountNumber { get; set; }
+    public required string RegistrationDate { get; set; }
 }

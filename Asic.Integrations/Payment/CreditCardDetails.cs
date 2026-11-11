@@ -2,9 +2,9 @@
 
 public class CreditCardDetails
 {
-    public string CardNumber { get; set; }
-    public string CardholderName { get; set; }
-    public string ExpiryMonth { get; set; }
-    public string ExpiryYear { get; set; }
-    public string Cvc { get; set; }
+    public required string CardNumber { get; set; }
+    public required string CardholderName { get; set; }
+    public required string ExpiryMonth { get; set; }
+    public required string ExpiryYear { get; set; }
+    public required string Cvc { get; set; }
 }

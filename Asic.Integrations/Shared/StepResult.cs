@@ -1,20 +1,25 @@
-using Asic.Integrations.Payment;
-using Asic.Integrations.Renewal;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Asic.Integrations.Shared;
 
 /// <summary>
-/// Represents the result of a single step in a multi-step process.
-/// Supports railway-oriented programming pattern for chaining operations.
+/// One step of a multi-step flow: the flow's state on success, or why and where it stopped.
+/// Steps chain with <see cref="StepResultExtensions.ThenAsync{T, TNext}"/>; the first failure
+/// skips the rest and is carried to the end unchanged.
 /// </summary>
-public class StepResult<T>
+public sealed class StepResult<T> where T : class
 {
+    [MemberNotNullWhen(true, nameof(Value))]
+    [MemberNotNullWhen(false, nameof(ErrorMessage), nameof(StepName))]
     public bool IsSuccess { get; }
-    public T Value { get; }
-    public string ErrorMessage { get; }
-    public string StepName { get; }
 
-    private StepResult(bool success, T value, string errorMessage, string stepName)
+    public T? Value { get; }
+    public string? ErrorMessage { get; }
+
+    /// <summary>The step that failed, as named in its own <see cref="Failure"/>.</summary>
+    public string? StepName { get; }
+
+    private StepResult(bool success, T? value, string? errorMessage, string? stepName)
     {
         IsSuccess = success;
         Value = value;
@@ -22,88 +27,20 @@ public class StepResult<T>
         StepName = stepName;
     }
 
-    public static StepResult<T> Success(T value) =>
-        new StepResult<T>(true, value, null, null);
+    public static StepResult<T> Success(T value) => new(true, value, null, null);
 
-    public static StepResult<T> Failure(string errorMessage, string stepName) =>
-        new StepResult<T>(false, default, errorMessage, stepName);
+    public static StepResult<T> Failure(string errorMessage, string stepName) => new(false, null, errorMessage, stepName);
 
-    /// <summary>
-    /// Chains the next async operation. Only executes if the current step succeeded.
-    /// </summary>
-    public async Task<StepResult<TNext>> ThenAsync<TNext>(
-        string stepName,
-        Func<T, Task<StepResult<TNext>>> next)
-    {
-        if (!IsSuccess)
-            return StepResult<TNext>.Failure(ErrorMessage, StepName);
-
-        return await next(Value);
-    }
-
-    /// <summary>
-    /// Chains the next synchronous operation. Only executes if the current step succeeded.
-    /// </summary>
-    public StepResult<TNext> Then<TNext>(
-        string stepName,
-        Func<T, StepResult<TNext>> next)
-    {
-        if (!IsSuccess)
-            return StepResult<TNext>.Failure(ErrorMessage, StepName);
-
-        return next(Value);
-    }
-
-    /// <summary>
-    /// Converts the step result to a RenewalResult.
-    /// </summary>
-    public RenewalResult ToRenewalResult(Func<T, RenewalResult> onSuccess)
-    {
-        return IsSuccess
-            ? onSuccess(Value)
-            : RenewalResult.Failed(ErrorMessage, StepName);
-    }
+    /// <summary>Runs <paramref name="next"/> after a success; a failure passes through untouched.</summary>
+    /// <param name="stepName">The step's name, for reading the chain: a failing step reports its own name.</param>
+    public async Task<StepResult<TNext>> ThenAsync<TNext>(string stepName, Func<T, Task<StepResult<TNext>>> next) where TNext : class =>
+        IsSuccess ? await next(Value) : StepResult<TNext>.Failure(ErrorMessage, StepName);
 }
 
-/// <summary>
-/// Extension methods for Task&lt;StepResult&lt;T&gt;&gt; to enable fluent async chaining.
-/// </summary>
 public static class StepResultExtensions
 {
-    /// <summary>
-    /// Chains the next async operation on a Task&lt;StepResult&lt;T&gt;&gt;.
-    /// Only executes if the previous step succeeded.
-    /// </summary>
-    public static async Task<StepResult<TNext>> ThenAsync<T, TNext>(
-        this Task<StepResult<T>> resultTask,
-        string stepName,
-        Func<T, Task<StepResult<TNext>>> next)
-    {
-        var result = await resultTask;
-        return await result.ThenAsync(stepName, next);
-    }
-
-    /// <summary>
-    /// Converts a Task&lt;StepResult&lt;T&gt;&gt; to a RenewalResult.
-    /// </summary>
-    public static async Task<RenewalResult> ToRenewalResultAsync<T>(
-        this Task<StepResult<T>> resultTask,
-        Func<T, RenewalResult> onSuccess)
-    {
-        var result = await resultTask;
-        return result.ToRenewalResult(onSuccess);
-    }
-
-    /// <summary>
-    /// Converts a Task&lt;StepResult&lt;T&gt;&gt; to a PaymentResult.
-    /// </summary>
-    public static async Task<PaymentResult> ToPaymentResultAsync<T>(
-        this Task<StepResult<T>> resultTask,
-        Func<T, PaymentResult> onSuccess)
-    {
-        var result = await resultTask;
-        return result.IsSuccess
-            ? onSuccess(result.Value)
-            : PaymentResult.Failed(result.ErrorMessage);
-    }
+    /// <inheritdoc cref="StepResult{T}.ThenAsync{TNext}"/>
+    public static async Task<StepResult<TNext>> ThenAsync<T, TNext>(this Task<StepResult<T>> resultTask, string stepName,
+        Func<T, Task<StepResult<TNext>>> next) where T : class where TNext : class =>
+        await (await resultTask).ThenAsync(stepName, next);
 }

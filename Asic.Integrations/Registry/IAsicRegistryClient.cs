@@ -1,4 +1,3 @@
-#nullable enable
 
 namespace Asic.Integrations.Registry;
 

@@ -48,7 +48,7 @@ public class ArcotChallengeHandler : IThreeDSChallengeHandler
                 .FirstOrDefault(v => v!.Contains("mobile", StringComparison.OrdinalIgnoreCase))
                 ?? "mobilenumber1";
 
-            var challengeUri = ResolveActionUri(selectForm.GetAttribute("action"), data.ThreeDSChallengeUrl);
+            var challengeUri = ResolveActionUri(selectForm.GetAttribute("action"), data.ThreeDSChallengeUrl!);
 
             data.ThreeDSIssuerId = acsAccountId;
 
@@ -60,7 +60,7 @@ public class ArcotChallengeHandler : IThreeDSChallengeHandler
                     ["acs_account_id"] = acsAccountId
                 })
             };
-            AddNavigationHeaders(triggerSmsRequest, challengeUri, data.ThreeDSChallengeUrl);
+            AddNavigationHeaders(triggerSmsRequest, challengeUri, data.ThreeDSChallengeUrl!);
 
             var triggerSmsResponse = await httpClient.SendAsync(triggerSmsRequest);
             var verifyPageContent = await triggerSmsResponse.Content.ReadAsStringAsync();
@@ -76,7 +76,7 @@ public class ArcotChallengeHandler : IThreeDSChallengeHandler
                 return StepResult<PaymentStepData>.Failure("Arcot OTP-entry form not returned", "Submit OTP");
 
             var verifyAcsAccountId = verifyForm.QuerySelector("input[name='acs_account_id']")?.GetAttribute("value") ?? acsAccountId;
-            var verifyChallengeUri = ResolveActionUri(verifyForm.GetAttribute("action"), data.ThreeDSChallengeUrl);
+            var verifyChallengeUri = ResolveActionUri(verifyForm.GetAttribute("action"), data.ThreeDSChallengeUrl!);
 
             // Step 3: wait for OTP
             string otp;
@@ -103,7 +103,7 @@ public class ArcotChallengeHandler : IThreeDSChallengeHandler
             {
                 Content = new FormUrlEncodedContent(otpFields)
             };
-            AddNavigationHeaders(otpRequest, verifyChallengeUri, data.ThreeDSChallengeUrl);
+            AddNavigationHeaders(otpRequest, verifyChallengeUri, data.ThreeDSChallengeUrl!);
 
             var otpResponse = await httpClient.SendAsync(otpRequest);
             var otpResponseContent = await otpResponse.Content.ReadAsStringAsync();
