@@ -11,19 +11,23 @@ public class AsicRenewalClient : IAsicRenewalClient
 {
 
     private readonly HttpClient _http;
-    private readonly HttpClientHandler _httpHandler;
+    private readonly CookieContainer _cookies;
+    private readonly Func<TimeSpan, Task> _delay;
     private readonly HtmlParser _htmlParser;
     private readonly IAsicPaymentClient _paymentClient;
 
     public AsicRenewalClient(IAsicPaymentClient paymentClient)
+        : this(paymentClient, new CookieContainer(), handler: null, delay: null)
     {
-        _httpHandler = new HttpClientHandler
-        {
-            UseCookies = true,
-            CookieContainer = new CookieContainer()
-        };
+    }
 
-        _http = new HttpClient(_httpHandler)
+    /// <summary>Tests: a scripted <paramref name="handler"/> in place of ASIC, and no real waiting between retries.</summary>
+    internal AsicRenewalClient(IAsicPaymentClient paymentClient, CookieContainer cookies, HttpMessageHandler? handler, Func<TimeSpan, Task>? delay)
+    {
+        _cookies = cookies;
+        _delay = delay ?? Task.Delay;
+
+        _http = new HttpClient(handler ?? new HttpClientHandler { UseCookies = true, CookieContainer = cookies })
         {
             BaseAddress = new Uri("https://asicconnect.asic.gov.au/"),
             Timeout = TimeSpan.FromSeconds(300),
@@ -38,7 +42,7 @@ public class AsicRenewalClient : IAsicRenewalClient
 
     private void ResetSession()
     {
-        var cookies = _httpHandler.CookieContainer.GetCookies(_http.BaseAddress);
+        var cookies = _cookies.GetCookies(_http.BaseAddress);
 
         foreach (Cookie cookie in cookies)
         {
@@ -57,7 +61,7 @@ public class AsicRenewalClient : IAsicRenewalClient
         {
             result = await SearchByAbnOnceAsync(abn);
             if (result.Success || !IsTransientSearchFailure(result)) return result;
-            if (attempt < maxAttempts) await Task.Delay(TimeSpan.FromSeconds(attempt * 3));
+            if (attempt < maxAttempts) await _delay(TimeSpan.FromSeconds(attempt * 3));
         }
         return result;
     }
@@ -182,7 +186,7 @@ public class AsicRenewalClient : IAsicRenewalClient
                 // fall through to the delayed retry below
             }
 
-            if (attempt < maxAttempts) await Task.Delay(TimeSpan.FromSeconds(attempt * 3));
+            if (attempt < maxAttempts) await _delay(TimeSpan.FromSeconds(attempt * 3));
         }
 
         return StepResult<RenewalStepData>.Failure("Failed to initialize renewal session", "Initialize Session");
@@ -899,7 +903,7 @@ public class AsicRenewalClient : IAsicRenewalClient
                 .Split(';')[0]
                 .Replace("JSESSIONID=", "");
         }
-        sessionId ??= _httpHandler.CookieContainer.GetCookies(_http.BaseAddress)
+        sessionId ??= _cookies.GetCookies(_http.BaseAddress)
             .FirstOrDefault(c => c.Name == "JSESSIONID" && !c.Expired)?.Value;
 
         // Extract parameters from JavaScript

@@ -20,8 +20,14 @@ public class AsicPaymentClient : IAsicPaymentClient
     private const string UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0";
 
     public AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers)
+        : this(challengeHandlers, handler: null)
     {
-        _http = new HttpClient();
+    }
+
+    /// <summary>Tests: a scripted <paramref name="handler"/> in place of ASIC and the card gateway.</summary>
+    internal AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers, HttpMessageHandler? handler)
+    {
+        _http = handler is null ? new HttpClient() : new HttpClient(handler);
         _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
 
         _htmlParser = new HtmlParser();

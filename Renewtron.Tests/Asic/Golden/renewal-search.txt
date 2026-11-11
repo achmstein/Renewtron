@@ -1,0 +1,22 @@
+#1 GET https://asicconnect.asic.gov.au/public/faces/renewal
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#2 GET https://asicconnect.asic.gov.au/public/faces/renewal;jsessionid=sess123?_afrLoop=4242&_afrWindowMode=2&Adf-Window-Id=win0&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#3 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 3
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    tmpt:region:0:form:accInput=
+    tmpt:region:0:form:it2=49642383462
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    javax.faces.ViewState=!vs1
+    Adf-Page-Id=1
+    event=tmpt%3Aregion%3A0%3Aform%3AnextButt
+    event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt

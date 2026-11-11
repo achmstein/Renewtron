@@ -1,0 +1,106 @@
+#1 GET https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SessionId=S1&SST=T1
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+#2 GET https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SessionId=S1&SST=T1&_afrLoop=77&_afrWindowMode=2&Adf-Window-Id=pw1&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+#3 GET https://payment.anzworldline-solutions.com.au/hostedtokenization/form/TOK1
+  Accept: text/html, application/xhtml+xml, application/xml; q=0.9, image/avif, image/webp, image/apng, */*; q=0.8
+  Referer: https://regpayment.asic.gov.au/
+  Sec-Fetch-Dest: iframe
+  Sec-Fetch-Mode: navigate
+  Sec-Fetch-Site: cross-site
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+#4 POST https://payment.anzworldline-solutions.com.au/hostedtokenization/bin/getcardinformation/TOK1
+  Accept: */*
+  Origin: https://payment.anzworldline-solutions.com.au
+  Referer: https://payment.anzworldline-solutions.com.au/hostedtokenization/form/TOK1
+  Sec-Fetch-Dest: empty
+  Sec-Fetch-Mode: cors
+  Sec-Fetch-Site: same-origin
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    firstdigits=4111111111111
+    partialDetection=false
+#5 POST https://payment.anzworldline-solutions.com.au/hostedtokenization/ThreeDSecure/PrepareThreeDS/TOK1
+  Accept: */*
+  Origin: https://payment.anzworldline-solutions.com.au
+  Referer: https://payment.anzworldline-solutions.com.au/hostedtokenization/form/TOK1
+  Sec-Fetch-Dest: empty
+  Sec-Fetch-Mode: cors
+  Sec-Fetch-Site: same-origin
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+  Content-Type: application/json; charset=utf-8
+    {"cardNumber":"4111111111111111 ","brandName":"visa"}
+#6 POST https://payment.anzworldline-solutions.com.au/hostedtokenization/Tokenization/Submit/TOK1
+  Accept-Encoding: gzip, deflate, br, zstd
+  Accept-Language: en-US,en;q=0.9
+  Accept: */*
+  Origin: https://payment.anzworldline-solutions.com.au
+  Referer: https://payment.anzworldline-solutions.com.au/hostedtokenization/form/TOK1
+  sec-ch-ua-mobile: ?0
+  sec-ch-ua-platform: "Windows"
+  sec-ch-ua: "Microsoft Edge";v="141", "Not?A_Brand";v="8", "Chromium";v="141"
+  Sec-Fetch-Dest: empty
+  Sec-Fetch-Mode: cors
+  Sec-Fetch-Site: same-origin
+  Sec-Fetch-Storage-Access: none
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+  Content-Type: application/x-www-form-urlencoded
+    isTemporary=false
+    brand=visa
+    hasMethodUrlSucceeded=true
+    threeDSServerTransactionId=3ds-1
+    cardnumber=4111 1111 1111 1111
+    browserColorDepth=24
+    browserJavaEnabled=false
+    browserLanguage=en-US
+    browserScreenHeight=1080
+    browserScreenWidth=1920
+    browserTimeZone=-120
+    cobadging=
+    cobadging-indicator=default
+    selected-brand-for-groupcards=visa
+    cardholdername=Test+Holder
+    cardexpirationmonth=12
+    cardexpirationyear=2030
+    cvc=123
+#7 POST https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?Adf-Window-Id=pw1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  Origin: https://regpayment.asic.gov.au
+  Referer: https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx?SST=HT-9&SessionId=7E1234567-AB
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    org.apache.myfaces.trinidad.faces.FORM=frmASICPayment
+    Adf-Window-Id=pw1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!pvs
+    event=r1%3A0%3AsubmitBtn
+    event.r1:0:submitBtn=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22_custom%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22acceptHeader%22%3E%3Cs%3Een-US%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22colorDepth%22%3E%3Cn%3E24%3C%2Fn%3E%3C%2Fk%3E%3Ck+v%3D%22screenHeight%22%3E%3Cn%3E1080%3C%2Fn%3E%3C%2Fk%3E%3Ck+v%3D%22screenWidth%22%3E%3Cn%3E1920%3C%2Fn%3E%3C%2Fk%3E%3Ck+v%3D%22locale%22%3E%3Cs%3Een-US%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22javaEnabled%22%3E%3Cb%3E0%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22timezoneOffsetUtcMinutes%22%3E%3Cn%3E-180%3C%2Fn%3E%3C%2Fk%3E%3Ck+v%3D%22ipAddress%22%3E%3Cs%3E0.0.0.0%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22userAgent%22%3E%3Cs%3EMozilla%2F5.0%20%28Windows%20NT%2010.0%3B%20Win64%3B%20x64%29%20AppleWebKit%2F537.36%20%28KHTML%2C%20like%20Gecko%29%20Chrome%2F141.0.0.0%20Safari%2F537.36%20Edg%2F141.0.0.0%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22immediate%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EinvokeJavaMethod%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=r1%3A0%3AsubmitBtn
+#8 GET https://payment.anzworldline-solutions.com.au/v1/redirect/handlerequest/g1
+  Accept: text/html, application/xhtml+xml, application/xml; q=0.9, image/avif, image/webp, image/apng, */*; q=0.8
+  Referer: https://regpayment.asic.gov.au/
+  Sec-Fetch-Dest: document
+  Sec-Fetch-Mode: navigate
+  Sec-Fetch-Site: cross-site
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+#9 POST https://acs.example-bank.com/challenge?a=1&b=2
+  Accept: text/html, application/xhtml+xml, application/xml; q=0.9, image/avif, image/webp, image/apng, */*; q=0.8, application/signed-exchange; v=b3; q=0.7
+  Origin: https://payment.anzworldline-solutions.com.au
+  Referer: https://payment.anzworldline-solutions.com.au/
+  Sec-Fetch-Dest: iframe
+  Sec-Fetch-Mode: navigate
+  Sec-Fetch-Site: cross-site
+  Sec-Fetch-Storage-Access: none
+  Upgrade-Insecure-Requests: 1
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+  Content-Type: application/x-www-form-urlencoded
+    creq=CREQ
+    threeDSSessionData=SD
+#10 POST https://regpayment.asic.gov.au/AsicPayment/faces/index.jspx
+  Adf-Rich-Message: true
+  Adf-Window-Unloaded: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    Adf-Window-Id=pw1
+    Adf-Page-Id=0

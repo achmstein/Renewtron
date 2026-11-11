@@ -1,0 +1,46 @@
+#1 POST https://authentication.cardinalcommerce.com/Api/2_1_0/NextStep/ChooseCredential
+  Accept: */*
+  Origin: https://authentication.cardinalcommerce.com
+  Referer: https://authentication.cardinalcommerce.com/ThreeDSecure/V2_1_0/CReq?oid=O1&tid=T1
+  X-Requested-With: XMLHttpRequest
+  Content-Type: application/x-www-form-urlencoded
+    CredentialId=a
+    TransactionId=T1
+    ChoiceTimeout=
+    IssuerId=O1
+    ChoiceType=Grouped
+    X-Requested-With=XMLHttpRequest
+    X-HTTP-Method-Override=FORM
+#2 POST https://authentication.cardinalcommerce.com/2_1_0/VALIDATE/O1
+  Accept: text/html, application/xhtml+xml, application/xml; q=0.9, */*; q=0.8
+  Origin: https://authentication.cardinalcommerce.com
+  Referer: https://authentication.cardinalcommerce.com/ThreeDSecure/V2_1_0/CReq?oid=O1&tid=T1
+  Content-Type: application/x-www-form-urlencoded
+    TransactionId=T1
+    GroupId=
+    Type=
+    LanguageCode=en-us
+    CardBrand=visa
+    Content.TemplateName=Choice_OneUpOneDown_GroupedList_FullWidth
+    Content.WorkflowScreenName=choice
+    ChoiceType=Grouped
+    IssuerId=O1
+#3 POST https://authentication.cardinalcommerce.com/Api/2_1_0/NextStep/ValidateCredential
+  Accept: */*
+  Origin: https://authentication.cardinalcommerce.com
+  Referer: https://authentication.cardinalcommerce.com/2_1_0/VALIDATE/O1
+  X-Requested-With: XMLHttpRequest
+  Content-Type: application/x-www-form-urlencoded
+    TransactionId=T1
+    StepupRequestId=SR-1
+    ValidateTimeout=
+    IssuerId=O1
+    ValidateReloadEnabled=True
+    VisaBehavioralAnalyticsEnabled=False
+    LanguageCode=en-us
+    LanguageShortCode=en
+    CredentialValidationMessage=Please+re-enter+your+code
+    Credential.Value=112233
+    Credential.Id=a
+    X-Requested-With=XMLHttpRequest
+    X-HTTP-Method-Override=FORM

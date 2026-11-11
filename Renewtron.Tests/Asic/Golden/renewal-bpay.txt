@@ -1,0 +1,183 @@
+#1 GET https://asicconnect.asic.gov.au/public/faces/renewal
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#2 GET https://asicconnect.asic.gov.au/public/faces/renewal;jsessionid=sess123?_afrLoop=4242&_afrWindowMode=2&Adf-Window-Id=win0&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#3 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    tmpt:region:0:form:accInput=
+    tmpt:region:0:form:it2=49642383462
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    javax.faces.ViewState=!vs1
+    Adf-Page-Id=1
+    event=tmpt%3Aregion%3A0%3Aform%3AnextButt
+    event.tmpt:region:0:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A0%3Aform%3AnextButt
+#4 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    bngrp=tmpt%3Aregion%3A1%3Aform%3Asbr0
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    oracle.adf.view.rich.DELTAS=%7Btmpt%3Awaitpopup%3D%7B_shown%3D%7D%7D
+    event=tmpt%3Aregion%3A1%3Aform%3Asbr0
+    event.tmpt:region:1:form:sbr0=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A1%3Aform%3Asbr0
+#5 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    bngrp=tmpt%3Aregion%3A1%3Aform%3Asbr0
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    event=tmpt%3Aregion%3A1%3Aform%3AnextBut
+    event.tmpt:region:1:form:nextBut=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A1%3Aform%3AnextBut
+#6 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    tmpt:region:2:form:selRen=0
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    event=tmpt%3Aregion%3A2%3Aform%3AselRen
+    event.tmpt:region:2:form:selRen=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A2%3Aform%3AselRen
+#7 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    tmpt:region:2:form:selRen=0
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    event=tmpt%3Aregion%3A2%3Aform%3AnextButt
+    event.tmpt:region:2:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A2%3Aform%3AnextButt
+#8 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    auth=tmpt%3Aregion%3A3%3Aauth2
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    event=tmpt%3Aregion%3A3%3Aauth2
+    event.tmpt:region:3:auth2=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A3%3Aauth2
+#9 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    auth=tmpt%3Aregion%3A3%3Aauth2
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    event=tmpt%3Aregion%3A3%3AnextButt
+    event.tmpt:region:3:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A3%3AnextButt
+#10 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    tmpt:region:4:form:emIn1=owner%40example.com
+    tmpt:region:4:form:emIn2=owner%40example.com
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    oracle.adf.view.rich.RENDER=tmpt%3Aregion
+    oracle.adf.view.rich.DELTAS=%7Btmpt%3Awaitpopup%3D%7B_shown%3D%7D%7D
+    event=tmpt%3Aregion%3A4%3Aform%3AnextButt
+    event.tmpt:region:4:form:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A4%3Aform%3AnextButt
+#11 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    popt=tmpt%3Aregion%3A5%3ApayLater
+    plopt=tmpt%3Aregion%3A5%3Abpay
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    event=tmpt%3Aregion%3A5%3ApayLater%2Ctmpt%3Aregion%3A5%3ApayNow
+    event.tmpt:region:5:payLater=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    event.tmpt:region:5:payNow=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22autoSubmit%22%3E%3Cb%3E1%3C%2Fb%3E%3C%2Fk%3E%3Ck+v%3D%22suppressMessageShow%22%3E%3Cs%3Etrue%3C%2Fs%3E%3C%2Fk%3E%3Ck+v%3D%22type%22%3E%3Cs%3EvalueChange%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%3A5%3ApayLater%2Ctmpt%3Aregion%3A5%3ApayNow
+#12 POST https://asicconnect.asic.gov.au/public/faces/renewal?Adf-Window-Id=w1&Adf-Page-Id=1
+  Adf-Ads-Page-Id: 2
+  Adf-Rich-Message: true
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    tmpt:connectHeaderView:searchWithinDropDown=
+    tmpt:connectHeaderView:searchForNeedle=
+    tmpt:connectHeaderView:searchForNeedle2=
+    tmpt:connectHeaderView:searchForNeedle3=
+    popt=tmpt%3Aregion%3A5%3ApayLater
+    plopt=tmpt%3Aregion%3A5%3Abpay
+    org.apache.myfaces.trinidad.faces.FORM=tmpt%3Aform
+    Adf-Window-Id=w1
+    Adf-Page-Id=1
+    javax.faces.ViewState=!vs1
+    oracle.adf.view.rich.RENDER=tmpt%3Aregion
+    event=tmpt%3Aregion%3A5%3AnextButt
+    event.tmpt:region:5:nextButt=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=tmpt%3Aregion%2Ctmpt%3Aregion%3A5%3AnextButt
