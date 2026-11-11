@@ -110,7 +110,10 @@ public enum RenewalOrderReason
     AsicRefused = 2,
     /// <summary>Renewtron couldn't get through to ASIC and has stopped retrying.</summary>
     AttemptsExhausted = 3,
-    /// <summary>Too late to renew: ASIC cancelled the name. Refund or contact the client.</summary>
+    /// <summary>
+    /// Too late to renew online: more than <see cref="Services.RenewalOrderProjection.TooLateDays"/> days
+    /// past the due date, when ASIC no longer offers it (or ASIC cancelled it). Register again or refund.
+    /// </summary>
     TooLate = 4,
     /// <summary>Paid less than the renewal fee.</summary>
     BelowMinimumFee = 5,
@@ -128,6 +131,8 @@ public enum RenewalOrderReason
     // Waiting
     /// <summary>Still registered, but ASIC isn't offering it for renewal now. Checked again on its own.</summary>
     NotOfferedNow = 11,
+    /// <summary>Neither Ontraport nor ASIC gave a due date, so Renewtron can't tell when to renew it.</summary>
+    NoDueDate = 12,
 
     // Closed
     /// <summary>Renewed outside Renewtron (by hand at ASIC, or by the client).</summary>

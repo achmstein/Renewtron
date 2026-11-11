@@ -12,6 +12,14 @@ public static class RenewalOrderProjection
     /// <summary>ASIC opens a name's renewal 29 days before it's due (David wants strictly under 30).</summary>
     public const int WindowDays = 29;
 
+    /// <summary>
+    /// ASIC stops offering a name for renewal online this long after it falls due: Renewtron has
+    /// never completed a renewal later than this (measured Nov 2026), and the sale pipeline gives up here.
+    /// </summary>
+    public const int TooLateDays = 30;
+
+    private const string TooLateNote = "Paid, but more than 30 days past the due date: ASIC no longer renews it online. Decide: register it again, or refund.";
+
     /// <summary>What the paying record says, before any ASIC run.</summary>
     public enum SourceState
     {
@@ -106,6 +114,7 @@ public static class RenewalOrderProjection
                 Note: source.HandledNote ?? current?.HandledNote ?? "Marked handled.", CurrentAttemptId: current?.Id ?? Latest(attempts)?.Id);
 
         var overdue = source.DueDate is { } due && due < today;
+        var tooLate = source.DueDate is { } late && today.DayNumber - late.DayNumber > TooLateDays;
 
         if (current is not null)
         {
@@ -116,7 +125,7 @@ public static class RenewalOrderProjection
                 return new(RenewalOrderStage.Waiting, NextActionAt: check, CurrentAttemptId: current.Id);
             if (current.NextRetryAt is { } retry)
                 return new(RenewalOrderStage.Renewing, NextActionAt: retry, CurrentAttemptId: current.Id);
-            return FromFailedAttempt(current, source, overdue, today);
+            return FromFailedAttempt(current, source, overdue, tooLate, today);
         }
 
         switch (source.State)
@@ -131,7 +140,14 @@ public static class RenewalOrderProjection
                     Note: source.Message);
         }
 
-        // Not started: ASIC saying "not due" after our due date has passed means someone renewed it.
+        // Not started. Without a due date nothing will start it: say so instead of "due".
+        if (source.DueDate is null)
+            return new(RenewalOrderStage.NeedsPerson, RenewalOrderReason.NoDueDate,
+                Note: "Neither Ontraport nor ASIC gave a due date, so Renewtron can't tell when to renew it. Check the name at ASIC.");
+        // Past ASIC's online window: the pipeline won't start it, and ASIC wouldn't take it.
+        if (tooLate)
+            return new(RenewalOrderStage.NeedsPerson, RenewalOrderReason.TooLate, Note: TooLateNote);
+        // ASIC saying "not due" within a month after our due date: someone renewed it.
         if (source.AsicSaidNotDue && overdue)
             return new(RenewalOrderStage.Closed, RenewalOrderReason.RenewedElsewhere,
                 Note: "ASIC says it isn't due, though our due date has passed: renewed outside Renewtron.");
@@ -140,7 +156,7 @@ public static class RenewalOrderProjection
         return new(RenewalOrderStage.Due);
     }
 
-    private static Result FromFailedAttempt(Attempt a, Source source, bool overdue, DateOnly today)
+    private static Result FromFailedAttempt(Attempt a, Source source, bool overdue, bool tooLate, DateOnly today)
     {
         Result Needs(RenewalOrderReason reason) => new(RenewalOrderStage.NeedsPerson, reason, Note: a.ErrorMessage, CurrentAttemptId: a.Id);
         switch (a.ErrorCategory)
@@ -152,6 +168,9 @@ public static class RenewalOrderProjection
             case RenewalErrorCategories.AlreadyInProgress:
                 return Needs(RenewalOrderReason.InProgressAtAsic);
             case RenewalErrorCategories.NotDueYet:
+                // More than a month late, "not due" is ASIC no longer offering it, not a renewal.
+                if (tooLate)
+                    return new(RenewalOrderStage.NeedsPerson, RenewalOrderReason.TooLate, Note: TooLateNote, CurrentAttemptId: a.Id);
                 if (overdue)
                     return new(RenewalOrderStage.Closed, RenewalOrderReason.RenewedElsewhere,
                         Note: "ASIC says it isn't due, though our due date has passed: renewed outside Renewtron.", CurrentAttemptId: a.Id);

@@ -94,6 +94,11 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
         var shells = new List<Shell>();
         var linked = new Dictionary<(RenewalOrderSource, Guid), Guid>();
 
+        // Each name's due date (ASIC's where it's been read): wizard renewals use it, and so does a
+        // sale Ontraport sent without one.
+        var nameDue = await db.ClientBusinessNames.AsNoTracking().Where(n => n.RenewalDueDate != null)
+            .Select(n => new { n.Id, n.RenewalDueDate }).ToDictionaryAsync(n => n.Id, n => n.RenewalDueDate, ct);
+
         var sales = await db.OntraportSales.AsNoTracking()
             .Select(s => new
             {
@@ -107,6 +112,7 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
             // A completed sale's due date is usually rolled forward by the term it bought (not always):
             // the order is for the date that was renewed.
             if (due is { } saleDue) due = SaleDueDates.Renewed(s.Status, saleDue, s.SyncedAt, s.RenewalYears);
+            else if (s.ClientBusinessNameId is { } nid && nameDue.TryGetValue(nid, out var known)) due = known;
             var state = new RenewalOrderProjection.Source(RenewalOrderProjection.FromSale(s.Status), due, s.ErrorMessage,
                 s.HandledAt, s.HandledNote, s.Status == OntraportSaleStatus.AsicNotYetDue, s.RenewalRequestId, s.NextSearchAt);
             shells.Add(new Shell(RenewalOrderSource.Ontraport, s.Id, s.ClientId, s.ClientBusinessNameId, Helpers.NormalizeAbn(s.Abn),
@@ -115,8 +121,6 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
         }
 
         // Wizard and manual renewals are their own paying record: one order each, if the client paid.
-        var nameDue = await db.ClientBusinessNames.AsNoTracking().Where(n => n.RenewalDueDate != null)
-            .Select(n => new { n.Id, n.RenewalDueDate }).ToDictionaryAsync(n => n.Id, n => n.RenewalDueDate, ct);
         var linkedRunIds = linked.Values.ToHashSet();
         foreach (var r in runById.Values.Where(r => r.Source == RenewalSource.Renewtron && !linkedRunIds.Contains(r.Id)))
         {

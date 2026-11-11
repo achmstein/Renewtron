@@ -16,7 +16,7 @@ public static class WorkQueues
 
     /// <summary>Paid renewals to look up at ASIC before anything else: ASIC may hold our money, or doesn't list the name.</summary>
     public static readonly RenewalOrderReason[] OrderCheckFirst =
-        [RenewalOrderReason.VerifyPaymentAtAsic, RenewalOrderReason.NameNotFound, RenewalOrderReason.NameMismatch, RenewalOrderReason.AsicRefused];
+        [RenewalOrderReason.VerifyPaymentAtAsic, RenewalOrderReason.NameNotFound, RenewalOrderReason.NameMismatch, RenewalOrderReason.AsicRefused, RenewalOrderReason.NoDueDate];
 
     /// <summary>Paid renewals waiting on a decision: renew anyway, refund, or (lapsed) offer to register it again.</summary>
     public static readonly RenewalOrderReason[] OrderDecide =

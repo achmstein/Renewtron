@@ -201,6 +201,9 @@ public class OntraportSalesService : IOntraportSalesService
         return synced;
     }
 
+    public const string NoDueDateMessage = "No renewal due date from Ontraport or ASIC: Renewtron can't tell when to renew it.";
+    public const string TooLateMessage = "More than 30 days past the due date: ASIC no longer renews it online. Register it again, or refund.";
+
     public Task ProcessEligibleRenewalsAsync() => ProcessAsync(onlySearchRetries: false);
 
     /// <summary>Hourly: only the sales whose ASIC name search is due to be tried again.</summary>
@@ -219,13 +222,30 @@ public class OntraportSalesService : IOntraportSalesService
                      || s.Status == OntraportSaleStatus.RenewalInProgress
                      // A name search ASIC didn't answer, due to be tried again.
                      || (s.Status == OntraportSaleStatus.RenewalFailed && s.NextSearchAt != null && s.NextSearchAt <= now))
-            .Where(s => s.RenewalDueDate != null)
             .Where(s => s.RenewalRequestId == null && s.HandledAt == null)
             .Where(s => !onlySearchRetries || s.NextSearchAt != null)
             .ToListAsync();
 
         foreach (var sale in eligibleSales)
         {
+            // Ontraport sometimes sends no due date: take the name's from ASIC, or say we can't
+            // tell (the paid renewal then asks a person) instead of skipping it forever.
+            if (sale.RenewalDueDate is null)
+            {
+                var known = sale.ClientBusinessNameId is { } nameId
+                    ? await _dbContext.ClientBusinessNames.Where(n => n.Id == nameId).Select(n => n.RenewalDueDate).FirstOrDefaultAsync()
+                    : null;
+                known ??= await AsicRegistry.AsicDueDateService.KnownDueDateAsync(_dbContext, sale.Abn, sale.BusinessName);
+                if (known is not { } due)
+                {
+                    sale.ErrorMessage = NoDueDateMessage;
+                    continue;
+                }
+                sale.RenewalDueDate = due.ToDateTime(new TimeOnly(2, 0), DateTimeKind.Utc);
+                if (sale.ErrorMessage == NoDueDateMessage) sale.ErrorMessage = null;
+                _logger.LogInformation("Ontraport sale {SaleId} ({BusinessName}) had no due date; using ASIC's {Due}", sale.Id, sale.BusinessName, due);
+            }
+
             var daysUntilDue = (sale.RenewalDueDate!.Value - now).TotalDays;
 
             if (daysUntilDue > 29)
@@ -240,9 +260,11 @@ public class OntraportSalesService : IOntraportSalesService
 
             if (daysUntilDue < -30)
             {
-                // Way past due, skip
+                // ASIC no longer renews it online this late (no renewal of ours ever went through
+                // past 30 days). The paid renewal shows "Too late" and asks a person: register it
+                // again, or refund.
                 sale.Status = OntraportSaleStatus.NotDueForRenewal;
-                sale.ErrorMessage = "Renewal due date is more than 30 days in the past";
+                sale.ErrorMessage = TooLateMessage;
                 continue;
             }
 

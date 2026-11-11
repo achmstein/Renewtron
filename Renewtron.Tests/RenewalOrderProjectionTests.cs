@@ -29,9 +29,36 @@ public class RenewalOrderProjectionTests
     [Theory]
     [InlineData(29)]
     [InlineData(0)]
-    [InlineData(-40)] // the old "more than 30 days past due" give-up: still due, ASIC decides
-    public void In_the_window_or_overdue_and_not_started_is_due(int dueInDays) =>
+    [InlineData(-30)]
+    public void In_the_window_or_up_to_a_month_overdue_and_not_started_is_due(int dueInDays) =>
         Assert.Equal(RenewalOrderStage.Due, Compute(Sale(SourceState.NotStarted, dueInDays), [], Today).Stage);
+
+    [Theory]
+    [InlineData(-31)]
+    [InlineData(-200)]
+    public void More_than_a_month_overdue_and_not_started_is_too_late_for_a_person(int dueInDays)
+    {
+        // ASIC stops offering it online, and the sale pipeline gives up: never "due" again.
+        var r = Compute(Sale(SourceState.NotStarted, dueInDays), [], Today);
+        Assert.Equal((RenewalOrderStage.NeedsPerson, RenewalOrderReason.TooLate), (r.Stage, r.Reason));
+        Assert.Contains("register it again, or refund", r.Note);
+    }
+
+    [Fact]
+    public void Not_started_without_a_due_date_asks_a_person()
+    {
+        var r = Compute(new Source(SourceState.NotStarted, null), [], Today);
+        Assert.Equal((RenewalOrderStage.NeedsPerson, RenewalOrderReason.NoDueDate), (r.Stage, r.Reason));
+    }
+
+    [Fact]
+    public void Asic_not_due_more_than_a_month_late_is_too_late_not_renewed_elsewhere()
+    {
+        var run = Run(RenewalStatus.Failed, RenewalErrorCategories.NotDueYet);
+        var r = Compute(Sale(SourceState.Queued, -60, linked: run.Id), [run], Today);
+        Assert.Equal((RenewalOrderStage.NeedsPerson, RenewalOrderReason.TooLate), (r.Stage, r.Reason));
+        Assert.Equal(RenewalOrderReason.TooLate, Compute(Sale(SourceState.NotStarted, -60, asicNotDue: true), [], Today).Reason);
+    }
 
     [Fact]
     public void A_completed_run_is_renewed_even_when_a_later_run_failed()
