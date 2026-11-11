@@ -10,6 +10,7 @@ import { getPrefill } from '../lib/prefill'
 import { loadSiteConfig } from '../lib/siteConfig'
 import { FunnelStep, trackStep } from '../lib/tracking'
 import { useLead } from '../lib/useLead'
+import { orderSummary, parseSelection, payForRenewals, stripeKeyFor } from './payment'
 
 const steps = [
   { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
@@ -18,8 +19,7 @@ const steps = [
 export default function PaymentPage() {
   const { leadId } = useParams<{ leadId: string }>()
   const [params] = useSearchParams()
-  const ids = (params.get('ids') ?? '').split(',').filter(Boolean)
-  const years = (Number(params.get('years')) || 1) as 1 | 3
+  const { ids, years } = parseSelection(params)
   const navigate = useNavigate()
 
   const { lead, waitUntilVerified } = useLead(leadId, () => navigate('/'))
@@ -41,22 +41,18 @@ export default function PaymentPage() {
 
   // Test customers pay with Stripe's test keys. Elements only mounts once the lead has
   // loaded, so the key never switches under it.
-  const stripeKey = lead?.testMode ? (lead.testStripePublishableKey || null) : liveStripeKey
+  const stripeKey = stripeKeyFor(lead, liveStripeKey)
 
   const stripePromise = useMemo<Promise<Stripe | null> | null>(
     () => (stripeKey ? loadStripe(stripeKey) : null),
     [stripeKey],
   )
 
-  const selectedNames = (lead?.businessNames ?? []).filter((b) => ids.includes(b.id))
-  // Names from our copy of the register that ASIC then said it won't renew.
-  const droppedCount = lead?.verified ? ids.length - selectedNames.length : 0
+  const { selectedNames, droppedCount, pricePerItem, total } = orderSummary(lead, ids, years, pricing)
 
   useEffect(() => {
     if (lead?.verified && lead.outcome !== 'RenewalAvailable') navigate(`/not-available/${lead.id}`)
   }, [lead, navigate])
-  const pricePerItem = pricing ? (years === 1 ? pricing.oneYearFee : pricing.threeYearFee) : 0
-  const total = pricePerItem * selectedNames.length
 
   const trackedView = useRef(false)
   useEffect(() => {
@@ -238,84 +234,29 @@ function PaymentForm({ leadId, abn, ids, years, total, waitUntilVerified, cardho
       const card = elements.getElement(CardElement)
       if (!card) throw new Error('Card element not ready.')
 
-      const pmResult = await stripe.createPaymentMethod({
-        type: 'card',
-        card,
-        billing_details: { name: cardHolder },
+      const done = await payForRenewals({ leadId, ids, years, cardholderName: cardHolder }, {
+        createPaymentMethod: async () => {
+          const pmResult = await stripe.createPaymentMethod({
+            type: 'card',
+            card,
+            billing_details: { name: cardHolder },
+          })
+          if (pmResult.error) throw new Error(pmResult.error.message ?? 'Card error.')
+          return pmResult.paymentMethod.id
+        },
+        waitUntilVerified,
+        createBatchRenewal: api.createBatchRenewal,
+        handleNextAction: (clientSecret) => stripe.handleNextAction({ clientSecret }),
+        completeBatchRenewal: api.completeBatchRenewal,
+        onStatus: (status) => { setProcessing(true); setProcessingStatus(status) },
+        onCharging: () => trackStep(FunnelStep.PaymentSubmitted, {
+          leadId,
+          abn,
+          detail: `${ids.length} name(s), ${years}yr`,
+          value: total,
+        }),
       })
-      if (pmResult.error) throw new Error(pmResult.error.message ?? 'Card error.')
-
-      setProcessing(true)
-      // Names listed from our copy of the register are confirmed with ASIC in the
-      // background; usually done by now, otherwise wait here before charging.
-      setProcessingStatus('Confirming your business names with ASIC...')
-      const confirmed = await waitUntilVerified()
-      const stillAvailable = new Set(confirmed.businessNames.map((b) => b.id))
-      if (confirmed.outcome !== 'RenewalAvailable' || ids.some((id) => !stillAvailable.has(id))) {
-        throw new Error(
-          "ASIC can't renew one or more of these business names right now, so you haven't been charged. " +
-          'Please go back to your selection to review it.',
-        )
-      }
-
-      setProcessingStatus('Creating renewal requests...')
-      trackStep(FunnelStep.PaymentSubmitted, {
-        leadId,
-        abn,
-        detail: `${ids.length} name(s), ${years}yr`,
-        value: total,
-      })
-      const result = await api.createBatchRenewal({
-        leadId,
-        searchResultIds: ids,
-        renewalYears: years,
-        paymentMethodId: pmResult.paymentMethod.id,
-        cardholderName: cardHolder,
-      })
-
-      if (result.requiresAction && result.clientSecret) {
-        // The bank wants 3D Secure. Stripe pops its challenge over this page; nothing
-        // has been charged or recorded until it passes and the server verifies it.
-        setProcessingStatus('Verifying your card with your bank...')
-        const next = await stripe.handleNextAction({ clientSecret: result.clientSecret })
-        if (next.error) throw new Error(next.error.message ?? 'Card authentication failed.')
-        if (next.paymentIntent?.status !== 'succeeded')
-          throw new Error('Card authentication was not completed. You have not been charged — please try again.')
-
-        setProcessingStatus('Creating renewal requests...')
-        // The card is charged at this point. The completion call is idempotent
-        // server-side, so retry transient failures instead of telling the customer
-        // to pay again.
-        let completed: { renewalIds: string[]; portalSignInUrl?: string | null } | null = null
-        let completeError: unknown = null
-        for (let attempt = 0; attempt < 3 && !completed; attempt++) {
-          try {
-            completed = await api.completeBatchRenewal({
-              leadId,
-              searchResultIds: ids,
-              renewalYears: years,
-              paymentIntentId: next.paymentIntent.id,
-              cardholderName: cardHolder,
-            })
-          } catch (e) {
-            completeError = e
-            await new Promise((r) => setTimeout(r, 1500))
-          }
-        }
-        if (!completed) {
-          const reason = completeError instanceof Error ? ` (${completeError.message})` : ''
-          throw new Error(
-            `Your payment went through, but we couldn't finish setting up the renewal${reason}. ` +
-            `Please do not pay again — contact support and quote payment reference ${next.paymentIntent.id}.`,
-          )
-        }
-        setProcessingStatus('Scheduling renewal processing...')
-        onComplete(completed.renewalIds, completed.portalSignInUrl)
-        return
-      }
-
-      setProcessingStatus('Scheduling renewal processing...')
-      onComplete(result.renewalIds, result.portalSignInUrl)
+      onComplete(done.renewalIds, done.portalSignInUrl)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred.'
       trackStep(FunnelStep.PaymentFailed, { leadId, abn, detail: message, value: total })

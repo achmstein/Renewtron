@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleCheck, CreditCard, Loader2, Search } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
@@ -18,7 +18,7 @@ type SearchResult = { id: string; businessName: string; accountNumber: string; r
 export default function ManualRenewal() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [pricing, setPricing] = useState<{ oneYearFee: number; threeYearFee: number } | null>(null)
+  const { data: pricing } = useQuery({ queryKey: ['pricing'], queryFn: () => api.pricing() })
 
   const [searchAbn, setSearchAbn] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -28,19 +28,18 @@ export default function ManualRenewal() {
   const [customerEmail, setCustomerEmail] = useState('')
   const [mobileNumber, setMobileNumber] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
-  const [amount, setAmount] = useState(0)
+  // Until someone types an amount (or picks a term), it's our 1-year price.
+  const [amountInput, setAmount] = useState<number | null>(null)
+  const amount = amountInput ?? pricing?.oneYearFee ?? 0
 
-  useEffect(() => {
-    api.pricing().then((p) => {
-      setPricing(p)
-      setAmount(p.oneYearFee)
-    }).catch(() => {})
-  }, [])
-
-  // Try to prefill customer info from existing leads when ABN matches
-  useEffect(() => {
-    if (!selectedResult || customerEmail) return
-    api.admin.leads({ search: searchAbn, take: 1 })
+  // Picking a business tries to prefill the customer from an existing lead on the ABN.
+  const selectResult = (result: SearchResult | null) => {
+    setSelectedResult(result)
+    if (!result || customerEmail) return
+    queryClient.fetchQuery({
+      queryKey: ['admin-leads', { search: searchAbn, take: 1 }],
+      queryFn: () => api.admin.leads({ search: searchAbn, take: 1 }),
+    })
       .then((r) => {
         const found = r.items[0]
         if (found && !customerEmail) {
@@ -49,7 +48,7 @@ export default function ManualRenewal() {
         }
       })
       .catch(() => {})
-  }, [selectedResult]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const onYearsChange = (years: 1 | 3) => {
     setRenewalYears(years)
@@ -136,7 +135,7 @@ export default function ManualRenewal() {
               className="mt-5 gap-2"
               aria-label="Business"
               value={selectedResult?.id ?? ''}
-              onValueChange={(id) => setSelectedResult(searchResults.find((r) => r.id === id) ?? null)}
+              onValueChange={(id) => selectResult(searchResults.find((r) => r.id === id) ?? null)}
             >
               {searchResults.map((r) => (
                 <label

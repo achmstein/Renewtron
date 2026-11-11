@@ -15,12 +15,12 @@ import ClientDuplicates from './ClientDuplicates'
 import Leads from './Leads'
 import LeadDetails from './LeadDetails'
 import Funnel from './Funnel'
-import Renewals from './Renewals'
+import Renewals from './renewals/RenewalsPage'
 import RenewalDetails from './RenewalDetails'
 import Payments from './Payments'
 import BpayPayments from './BpayPayments'
 import ManualRenewal from './ManualRenewal'
-import OntraportSales from './OntraportSales'
+import OntraportSales from './ontraport-sales/OntraportSalesPage'
 import SaleDetails from './SaleDetails'
 import AsicKeys from './AsicKeys'
 import AsicKeyRequests from './AsicKeyRequests'
@@ -32,7 +32,7 @@ import Emails from './Emails'
 import EmailTemplates from './EmailTemplates'
 // The editor brings Monaco and TipTap: loaded only when a template is opened.
 const EmailTemplateEditor = lazy(() => import('./EmailTemplateEditor'))
-import Settings from './Settings'
+import Settings from './settings/SettingsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
