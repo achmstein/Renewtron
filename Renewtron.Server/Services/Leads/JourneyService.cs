@@ -11,7 +11,15 @@ public enum JourneyRecord { Lead, Search, Run, Order, Sale, Email }
 /// <param name="Meaning">How it reads: action (a person must act), waiting, working, done, quiet (the admin's status colours).</param>
 public sealed record JourneyEvent(DateTime At, string Text, string? Detail, string Meaning, JourneyRecord Record, Guid RecordId);
 
-public sealed record Journey(IReadOnlyList<JourneyEvent> Events);
+/// <summary>One fact about a record, shown when a line about it is opened.</summary>
+public sealed record JourneyFact(string Label, string Value, bool Mono = false);
+
+/// <summary>What the admin shows when a line is opened: the record's key facts and what staff can do to it now.</summary>
+/// <param name="Actions">Only what is allowed right now: retry (an ASIC run), bpay-paid (a run's BPAY bill paid at the
+/// bank), put-back (undo "handled" on a run or sale), resend (an email that wasn't sent).</param>
+public sealed record JourneyCard(JourneyRecord Record, Guid Id, string Title, IReadOnlyList<JourneyFact> Facts, IReadOnlyList<string> Actions);
+
+public sealed record Journey(IReadOnlyList<JourneyEvent> Events, IReadOnlyList<JourneyCard> Records);
 
 /// <summary>
 /// Everything that happened around one record (a lead, a search, an ASIC run, a paid renewal, an
@@ -47,8 +55,8 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
         }
 
         await GatherAsync(set, ct);
-        var events = await DescribeAsync(set, ct);
-        return events.Count == 0 ? null : new Journey(events);
+        var (events, cards) = await DescribeAsync(set, ct);
+        return events.Count == 0 ? null : new Journey(events, cards);
     }
 
     /* ───────────── Which records belong ───────────── */
@@ -120,13 +128,19 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
 
     /* ───────────── What happened ───────────── */
 
-    private async Task<List<JourneyEvent>> DescribeAsync(Gathered g, CancellationToken ct)
+    private async Task<(List<JourneyEvent> Events, List<JourneyCard> Cards)> DescribeAsync(Gathered g, CancellationToken ct)
     {
         var events = new List<JourneyEvent>();
         void Add(DateTime? at, string text, string meaning, JourneyRecord record, Guid id, string? detail = null)
         {
             if (at is { } t) events.Add(new(DateTime.SpecifyKind(t, DateTimeKind.Utc), text, string.IsNullOrWhiteSpace(detail) ? null : detail.Trim(), meaning, record, id));
         }
+        var cards = new List<JourneyCard>();
+        void Card(JourneyRecord record, Guid id, string title, IEnumerable<JourneyFact?> facts, params string?[] actions) =>
+            cards.Add(new(record, id, title,
+                facts.OfType<JourneyFact>().Where(f => !string.IsNullOrWhiteSpace(f.Value)).ToList(),
+                actions.OfType<string>().ToList()));
+        static JourneyFact? Fact(string label, string? value, bool mono = false) => value is null ? null : new(label, value.Trim(), mono);
 
         var searchIds = g.Searches.ToList();
         var searches = await db.SearchLogs.AsNoTracking().Include(s => s.Results).Where(s => searchIds.Contains(s.Id)).ToListAsync(ct);
@@ -143,6 +157,14 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 Add(s.SearchedAt, $"{who} ABN {s.Abn}, but ASIC didn't answer", "quiet", JourneyRecord.Search, s.Id, s.ErrorMessage);
             if (s.VerifiedAt is { } v)
                 Add(v, "Renewtron checked the lookup with ASIC again", string.IsNullOrEmpty(s.VerificationError) ? "done" : "quiet", JourneyRecord.Search, s.Id, s.VerificationError);
+
+            Card(JourneyRecord.Search, s.Id, $"Lookup of ABN {s.Abn}",
+            [
+                Fact("ABN", s.Abn, mono: true),
+                Fact("Looked up", $"{When(s.SearchedAt)} by {s.InitiatedBy switch { SearchInitiator.Admin => "staff", SearchInitiator.System => "Renewtron", _ => "the visitor" }}"),
+                Fact("Found", s.Success ? (s.Results.Count == 0 ? "No business names" : string.Join(", ", s.Results.Select(r => r.BusinessName))) : null),
+                Fact("Error", s.Success ? null : s.ErrorMessage ?? "ASIC didn't answer"),
+            ]);
         }
 
         var leadIds = g.Leads.ToList();
@@ -151,6 +173,14 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             Add(l.CreatedAt, $"{(string.IsNullOrWhiteSpace(l.FullName) ? "The visitor" : l.FullName)} gave their details for ABN {l.Abn} ({l.Email})", "done", JourneyRecord.Lead, l.Id);
             Add(l.NamesShownAt, $"{FirstName(l.FullName)} saw the names to renew", "done", JourneyRecord.Lead, l.Id);
             Add(l.ReachedPaymentAt, $"{FirstName(l.FullName)} opened the payment page", "done", JourneyRecord.Lead, l.Id);
+
+            Card(JourneyRecord.Lead, l.Id, string.IsNullOrWhiteSpace(l.FullName) ? "Lead" : $"Lead: {l.FullName}",
+            [
+                Fact("Email", l.Email),
+                Fact("Mobile", l.MobileNumber, mono: true),
+                Fact("ABN", l.Abn, mono: true),
+                Fact("Got to", l.ReachedPaymentAt != null ? "The payment page" : l.NamesShownAt != null ? "The names to renew" : "Their details"),
+            ]);
         }
 
         var saleIds = g.Sales.ToList();
@@ -160,6 +190,16 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             if (!string.IsNullOrEmpty(s.ErrorMessage))
                 Add(s.ProcessedAt ?? s.SyncedAt, "The Ontraport sale couldn't be renewed as it stood", "action", JourneyRecord.Sale, s.Id, s.ErrorMessage);
             Add(s.HandledAt, "Staff marked the Ontraport sale handled", "quiet", JourneyRecord.Sale, s.Id, s.HandledNote);
+
+            Card(JourneyRecord.Sale, s.Id, $"Ontraport sale: {s.BusinessName}",
+            [
+                Fact("Customer", $"{s.ContactName} · {s.Email}"),
+                Fact("Paid", $"${s.AmountPaid:0.00} for {Plural(s.RenewalYears, "year")}, {When(s.SyncedAt)}"),
+                Fact("ABN", s.Abn, mono: true),
+                Fact("Status", Capital(Words(s.Status.ToString()))),
+                Fact("Handled", s.HandledAt is { } h ? $"{When(h)}{(s.HandledNote is { Length: > 0 } n ? $": {n}" : "")}" : null),
+                Fact("Error", s.ErrorMessage),
+            ], s.HandledAt != null ? "put-back" : null);
         }
 
         var runIds = g.Runs.ToList();
@@ -183,6 +223,17 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                     string.Join(". ", new[] { o.Evidence, o.OutcomeReference is { Length: > 0 } reference ? $"Reference {reference}" : null }.Where(x => !string.IsNullOrWhiteSpace(x))));
             if (o.Note is { Length: > 0 } note)
                 Add(o.StageChangedAt, "Note on the renewal", "quiet", JourneyRecord.Order, o.Id, note);
+
+            Card(JourneyRecord.Order, o.Id, $"Paid renewal: {o.BusinessName}",
+            [
+                Fact("Paid", $"${o.AmountPaid:0.00} for {Plural(o.Years, "year")}, {When(o.PaidAt)}"),
+                Fact("Through", o.Source switch { RenewalOrderSource.Ontraport => "Ontraport", RenewalOrderSource.Manual => "Recorded by staff", _ => "The website" }),
+                Fact("Stage", Capital(Words(o.Stage.ToString()))),
+                Fact("Outcome", o.Outcome is { } why ? Capital(Words(why.ToString())) : null),
+                Fact("Evidence", o.Evidence),
+                Fact("Reference", o.OutcomeReference, mono: true),
+                Fact("Note", o.Note),
+            ]);
         }
 
         foreach (var r in runs)
@@ -223,6 +274,26 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 Add(r.LastAttemptAt ?? r.InitiatedAt, $"Renewing {name} at ASIC now", "working", JourneyRecord.Run, r.Id);
 
             Add(r.HandledAt, "Staff marked the ASIC run handled", "quiet", JourneyRecord.Run, r.Id, r.HandledNote);
+
+            var bpayOwed = r.BpayReference is { Length: > 0 } && r.BpayPaidAt == null;
+            Card(JourneyRecord.Run, r.Id, $"ASIC run: {name}",
+            [
+                Fact("Status", RunStatus(r)),
+                Fact("For", $"{Plural(r.RenewalYears, "year")}, client paid ${r.Amount:0.00}"),
+                Fact("Tries", r.AttemptCount > 0 ? $"{r.AttemptCount}{(r.LastAttemptAt is { } last ? $", last {When(last)}" : "")}" : null),
+                Fact("Failed at", r.Status == RenewalStatus.Failed ? r.FailedAtStep : null),
+                Fact("Next try", r.Status == RenewalStatus.Failed && r.HandledAt == null && r.NextRetryAt is { } nextTry ? When(nextTry) : null),
+                Fact("ASIC reference", r.TransactionReference, mono: true),
+                Fact("BPAY", r.BpayReference is { Length: > 0 } bref
+                    ? $"Biller {r.BpayBillerCode}, ref {bref}{(r.BpayAmount is { } bill ? $", ${bill:0.00}" : "")}: {(r.BpayPaidAt is { } bp ? $"paid {When(bp)}" : "not paid yet")}"
+                    : null, mono: true),
+                Fact("BPAY problem", bpayOwed ? r.BpayPaymentError : null),
+                Fact("Handled", r.HandledAt is { } h ? $"{When(h)}{(r.HandledNote is { Length: > 0 } n ? $": {n}" : "")}" : null),
+                Fact("Error", r.Status == RenewalStatus.Failed ? r.ErrorMessage : null),
+            ],
+                r.Status == RenewalStatus.Failed && r.HandledAt == null && RenewalRetry.Check(r) == null ? "retry" : null,
+                bpayOwed && r.Status == RenewalStatus.Completed ? "bpay-paid" : null,
+                r.HandledAt != null && r.Status != RenewalStatus.Completed ? "put-back" : null);
         }
 
         var emailRuns = runIds;
@@ -239,11 +310,42 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 var opened = m.OpenedAt != null ? " (opened)" : m.DeliveryStatus is { Length: > 0 } d ? $" ({Words(d).ToLowerInvariant()})" : "";
                 Add(m.SentAt ?? m.CreatedAt, $"{channel} {m.Recipient} {what}{opened}", m.Status == OutboundStatus.Queued ? "waiting" : "quiet", JourneyRecord.Email, m.Id);
             }
+
+            var sms = m.Channel == OutboundChannel.Sms;
+            Card(JourneyRecord.Email, m.Id, sms ? $"Text to {m.Recipient}" : $"Email: {m.Subject}",
+            [
+                Fact("To", m.Recipient),
+                Fact(sms ? "Message" : "Template", m.Template),
+                Fact("Status", Capital(Words(m.Status.ToString()))
+                    + (m.DeliveryStatus is { Length: > 0 } delivery ? $" · {Words(delivery)}" : "")
+                    + (m.OpenedAt is { } o ? $" · opened {When(o)}" : "")),
+                Fact("Sent", m.SentAt is { } sent ? When(sent) : null),
+                Fact("Error", m.Status == OutboundStatus.Failed ? m.ErrorMessage : null),
+            ], !sms && m.Status == OutboundStatus.Failed && (m.BodyHtml != null || m.BodyText != null) ? "resend" : null);
         }
 
         // Oldest first; things at the same moment keep the order they were told in.
-        return events.Select((e, i) => (e, i)).OrderBy(x => x.e.At).ThenBy(x => x.i).Select(x => x.e).ToList();
+        var ordered = events.Select((e, i) => (e, i)).OrderBy(x => x.e.At).ThenBy(x => x.i).Select(x => x.e).ToList();
+        return (ordered, cards);
     }
+
+    /// <summary>A run's state in a few words.</summary>
+    private static string RunStatus(RenewalRequest r)
+    {
+        if (r.HandledAt != null && r.Status != RenewalStatus.Completed) return "Handled outside Renewtron";
+        return r.Status switch
+        {
+            RenewalStatus.Completed when r.BpayReference is { Length: > 0 } && r.BpayPaidAt == null => "Lodged; ASIC's BPAY bill still to pay",
+            RenewalStatus.Completed => "Renewed",
+            RenewalStatus.Processing => "Lodging with ASIC now",
+            RenewalStatus.Pending => "Queued to lodge with ASIC",
+            _ when r.NextRetryAt != null => $"Failed; Renewtron tries again {When(r.NextRetryAt.Value)}",
+            _ => r.ErrorCategory is { Length: > 0 } c ? $"Failed ({Words(c)})" : "Failed",
+        };
+    }
+
+    private static string When(DateTime utc) => $"{Sydney(utc):d MMM yyyy, h:mm tt}";
+    private static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
     /* ───────────── Words ───────────── */
 

@@ -159,6 +159,46 @@ public class JourneyTests
     }
 
     [Fact]
+    public async Task Each_record_has_a_card_with_only_the_actions_allowed_now()
+    {
+        var (db, ids) = Seed();
+        var records = (await Journey(db, JourneyRecord.Lead, ids.Lead))!.Records;
+
+        // Every line opens to a card for its record.
+        var events = (await Journey(db, JourneyRecord.Lead, ids.Lead))!.Events;
+        Assert.All(events, e => Assert.Contains(records, c => c.Record == e.Record && c.Id == e.RecordId));
+
+        // The declined run was handled: it can be put back, not retried. The BPAY run is paid: nothing to do.
+        var first = Assert.Single(records, c => c.Id == ids.FirstRun);
+        Assert.Equal(["put-back"], first.Actions);
+        Assert.Contains(first.Facts, f => f.Label == "Status" && f.Value == "Handled outside Renewtron");
+        var retry = Assert.Single(records, c => c.Id == ids.RetryRun);
+        Assert.Empty(retry.Actions);
+        Assert.Contains(retry.Facts, f => f.Label == "BPAY" && f.Value.StartsWith("Biller 17301, ref 8596799759492, $54.00: paid"));
+
+        // Unhandled, retryable failure: Retry. Lodged but BPAY owed: Paid at the bank.
+        var run = db.RenewalRequests.Single(r => r.Id == ids.FirstRun);
+        run.HandledAt = null;
+        run.FailedAtStep = "Search";
+        db.RenewalRequests.Single(r => r.Id == ids.RetryRun).BpayPaidAt = null;
+        db.SaveChanges();
+        records = (await Journey(db, JourneyRecord.Lead, ids.Lead))!.Records;
+        Assert.Equal(["retry"], Assert.Single(records, c => c.Id == ids.FirstRun).Actions);
+        Assert.Equal(["bpay-paid"], Assert.Single(records, c => c.Id == ids.RetryRun).Actions);
+    }
+
+    [Fact]
+    public async Task A_run_that_may_hold_asics_money_offers_no_retry()
+    {
+        var (db, ids) = Seed();
+        db.RenewalRequests.Single(r => r.Id == ids.FirstRun).HandledAt = null; // failed at "Complete Payment Action"
+        db.SaveChanges();
+
+        var first = Assert.Single((await Journey(db, JourneyRecord.Run, ids.FirstRun))!.Records, c => c.Id == ids.FirstRun);
+        Assert.DoesNotContain("retry", first.Actions);
+    }
+
+    [Fact]
     public async Task An_unknown_record_has_no_story()
     {
         var (db, _) = Seed();

@@ -29,6 +29,15 @@ public sealed class JourneyModule : ICarterModule
                         record = e.Record.ToString().ToLowerInvariant(),
                         recordId = e.RecordId,
                     }),
+                    // What a line shows when it's opened: its record's key facts and what staff can do now.
+                    records = journey.Records.Select(c => new
+                    {
+                        record = c.Record.ToString().ToLowerInvariant(),
+                        id = c.Id,
+                        title = c.Title,
+                        facts = c.Facts.Select(f => new { label = f.Label, value = f.Value, mono = f.Mono }),
+                        actions = c.Actions,
+                    }),
                 });
         });
     }
