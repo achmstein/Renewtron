@@ -1,0 +1,25 @@
+#1 GET https://connectonline.asic.gov.au/RegistrySearch/faces/landing/panelSearch.jspx?searchType=Bn&searchName=&searchNumber=49642383462
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#2 GET https://connectonline.asic.gov.au/RegistrySearch/faces/landing/panelSearch.jspx?searchType=Bn&searchName=&searchNumber=49642383462&_afrLoop=55&_afrWindowMode=2&Adf-Window-Id=rw0&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=924&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#3 POST https://connectonline.asic.gov.au/RegistrySearch/faces/landing/panelSearch.jspx?Adf-Window-Id=rw1&Adf-Page-Id=0
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+  Content-Type: application/x-www-form-urlencoded; charset=utf-8
+    bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6
+    bnConnectionTemplate:pt_s5:searchSurname=
+    bnConnectionTemplate:pt_s5:searchFirstName=
+    bnConnectionTemplate:pt_s5:templateSearchInputText=
+    bnConnectionTemplate:pt_s5:searchName=Name
+    bnConnectionTemplate:pt_s5:searchNumber=Number
+    g-recaptcha-response=TOKEN-1
+    bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchTypesLovId=0
+    bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchSurname=
+    bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchFirstName=
+    bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchForTextId=Name+or+Number
+    org.apache.myfaces.trinidad.faces.FORM=f1
+    Adf-Window-Id=rw1
+    Adf-Page-Id=0
+    javax.faces.ViewState=!rvs
+    event=bnConnectionTemplate%3Ar1%3A0%3AsearchButtonCap
+    event.bnConnectionTemplate:r1:0:searchButtonCap=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E
+    oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A0%3AsearchButtonCap

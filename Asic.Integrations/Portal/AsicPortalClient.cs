@@ -2,6 +2,7 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using AngleSharp.Html.Parser;
+using Asic.Integrations.Shared;
 
 namespace Asic.Integrations.Portal;
 
@@ -68,23 +69,21 @@ public sealed partial class AsicPortalClient : IDisposable
     private const string UserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0";
 
-    private readonly HttpClientHandler _handler;
+    private readonly CookieContainer _cookies = new();
     private readonly HttpClient _http;
     private readonly HtmlParser _parser = new();
 
     public AsicPortalClient()
     {
-        _handler = new HttpClientHandler
+        var handler = AsicHttp.CreateHandler(new AsicHttpSettings
         {
-            UseCookies = true,
-            CookieContainer = new CookieContainer(),
+            Cookies = _cookies,
             // Redirects are followed by hand (SendAsync below): ASIC sometimes redirects to its own
             // pages over http://, which .NET won't follow from https; a browser just upgrades them.
             AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.All,
-        };
-        _http = new HttpClient(_handler) { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(180) };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+            Decompression = DecompressionMethods.All,
+        });
+        _http = AsicHttp.CreateClient(handler, BaseUrl, TimeSpan.FromSeconds(180), UserAgent);
         _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
         _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "en-AU,en;q=0.9");
     }
@@ -214,17 +213,13 @@ public sealed partial class AsicPortalClient : IDisposable
         {
             var path = new Uri(url).GetLeftPart(UriPartial.Path);
             var separator = path.Contains(";jsessionid=", StringComparison.OrdinalIgnoreCase) ? "" : loop.SessionSuffix;
-            var reload = $"{path}{separator}?_afrLoop={loop.Loop}&_afrWindowMode=0&Adf-Window-Id={loop.WindowId}" +
-                         "&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0";
+            var reload = $"{path}{separator}?{Adf.LoopbackQuery(loop.Loop, loop.WindowId, windowMode: 0)}";
             (url, html) = await GetAsync(reload, ct);
         }
 
         var doc = await _parser.ParseDocumentAsync(html, ct);
-        var page = new AsicPortalPage(
-            url,
-            html,
-            doc.QuerySelector("input[name='Adf-Window-Id']")?.GetAttribute("value"),
-            doc.QuerySelector("input[name='javax.faces.ViewState']")?.GetAttribute("value"));
+        var (windowId, viewState) = Adf.HiddenFields(doc);
+        var page = new AsicPortalPage(url, html, windowId, viewState);
         Current = page;
         return page;
     }
@@ -232,16 +227,12 @@ public sealed partial class AsicPortalClient : IDisposable
     private void ForgetSession()
     {
         foreach (var host in new[] { new Uri(BaseUrl), new Uri($"https://{AuthHost}/") })
-            foreach (Cookie cookie in _handler.CookieContainer.GetCookies(host))
+            foreach (Cookie cookie in _cookies.GetCookies(host))
                 cookie.Expired = true;
         Current = null;
     }
 
-    public void Dispose()
-    {
-        _http.Dispose();
-        _handler.Dispose();
-    }
+    public void Dispose() => _http.Dispose(); // and its handler
 
     /* ───────────── ADF events (confirmed live, 7 Nov 2026) ───────────── */
 
@@ -883,15 +874,11 @@ public sealed partial class AsicPortalClient : IDisposable
     /// <summary>The values in ADF's AdfLoopbackUtils.runLoopback(...) call, when the page is one.</summary>
     public static Loopback? ParseLoopback(string html)
     {
-        var loop = LoopRe().Match(html);
-        var window = WindowRe().Match(html);
-        if (!loop.Success || !window.Success) return null;
+        if (Adf.LoopId(html) is not { } loop || Adf.ScriptWindowId(html) is not { } window) return null;
         var session = SessionRe().Match(html);
-        return new Loopback(loop.Groups[1].Value, window.Groups[1].Value, session.Success ? session.Groups[1].Value : "");
+        return new Loopback(loop, window, session.Success ? session.Groups[1].Value : "");
     }
 
-    [GeneratedRegex(@"'_afrLoop',\s*'(\d+)'")] private static partial Regex LoopRe();
-    [GeneratedRegex(@"'_afrPage',\s*'',\s*'(\w+)'")] private static partial Regex WindowRe();
     [GeneratedRegex(@"'(;jsessionid=[^']+)'")] private static partial Regex SessionRe();
     [GeneratedRegex(@"<redirect\s+url=""([^""]+)""")] private static partial Regex RedirectRe();
     [GeneratedRegex(@"id=""javax\.faces\.ViewState""><!\[CDATA\[([^\]]+)\]\]>")] private static partial Regex PartialViewStateRe();

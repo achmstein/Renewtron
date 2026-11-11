@@ -12,7 +12,7 @@ using Asic.Integrations.Shared;
 
 namespace Asic.Integrations.Payment;
 
-public class AsicPaymentClient : IAsicPaymentClient
+public class AsicPaymentClient : IAsicPaymentClient, IDisposable
 {
     private readonly HttpClient _http;
     private readonly HtmlParser _htmlParser;
@@ -27,11 +27,18 @@ public class AsicPaymentClient : IAsicPaymentClient
     /// <summary>Tests: a scripted <paramref name="handler"/> in place of ASIC and the card gateway.</summary>
     internal AsicPaymentClient(IEnumerable<IThreeDSChallengeHandler> challengeHandlers, HttpMessageHandler? handler)
     {
-        _http = handler is null ? new HttpClient() : new HttpClient(handler);
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+        // Its own cookie jar: the payment page's ADF session, then the card gateway's.
+        _http = AsicHttp.CreateClient(handler ?? AsicHttp.CreateHandler(new AsicHttpSettings()), userAgent: UserAgent);
 
         _htmlParser = new HtmlParser();
         _challengeHandlers = challengeHandlers.ToList();
+    }
+
+    /// <summary>Closes this client's connections. The container disposes it with its scope.</summary>
+    public void Dispose()
+    {
+        _http.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     public async Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
@@ -91,22 +98,13 @@ public class AsicPaymentClient : IAsicPaymentClient
                 return StepResult<PaymentStepData>.Failure("ADF loopback script not found", "Initialize Session");
             }
 
-            var afrLoopMatch = Regex.Match(initialContent, @"'_afrLoop',\s*'(\d+)'");
-            var windowIdMatch = Regex.Match(initialContent,
-              @"'Adf-Window-Id'\s*,\s*'_afrPage'\s*,\s*''\s*,\s*'([^']+)'",
-              RegexOptions.Singleline);
-
-            if (!afrLoopMatch.Success || !windowIdMatch.Success)
+            if (Adf.LoopId(initialContent) is not { } afrLoop || Adf.ScriptWindowId(initialContent) is not { } afdWindowId)
             {
                 return StepResult<PaymentStepData>.Failure("Missing ADF parameters in script", "Initialize Session");
             }
 
-            var afrLoop = afrLoopMatch.Groups[1].Value;
-            var afdWindowId = windowIdMatch.Groups[1].Value;
-
             var loopbackUrl = $"{uri.Scheme}://{uri.Host}/AsicPayment/faces/index.jspx?SessionId={sessionId}&SST={sst}" +
-                              $"&_afrLoop={afrLoop}&_afrWindowMode=2&Adf-Window-Id={afdWindowId}" +
-                              "&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=926&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0";
+                              $"&{Adf.LoopbackQuery(afrLoop, afdWindowId)}";
 
             var loopbackResponse = await _http.GetAsync(loopbackUrl);
             var content = await loopbackResponse.Content.ReadAsStringAsync();

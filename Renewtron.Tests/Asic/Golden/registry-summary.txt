@@ -1,0 +1,4 @@
+#1 GET https://connectonline.asic.gov.au/RegistrySearch/faces/landing/panelSearch.jspx?searchType=Bn&searchName=&searchNumber=49642383462
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0
+#2 GET https://connectonline.asic.gov.au/RegistrySearch/faces/landing/panelSearch.jspx?searchType=Bn&searchName=&searchNumber=49642383462&_afrLoop=55&_afrWindowMode=2&Adf-Window-Id=rw0&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=924&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0

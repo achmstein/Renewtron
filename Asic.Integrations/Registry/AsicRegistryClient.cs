@@ -1,9 +1,11 @@
 #nullable enable
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
+using Asic.Integrations.Shared;
 
 namespace Asic.Integrations.Registry;
 
@@ -24,21 +26,28 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
     private string? _viewState;
 
     public AsicRegistryClient(AsicRegistryOptions options, ICaptchaSolver captcha)
+        : this(options, captcha, handler: null)
+    {
+    }
+
+    /// <summary>Tests: a scripted <paramref name="handler"/> in place of ASIC.</summary>
+    internal AsicRegistryClient(AsicRegistryOptions options, ICaptchaSolver captcha, HttpMessageHandler? handler)
     {
         _options = options;
         _captcha = captcha;
 
-        // Dedicated handler with its own cookie jar so a run's ASIC session is
-        // isolated (the scraper relies on session cookies + ADF window ids), and with
-        // the TLS settings Cloudflare requires — see AsicRegistryHttp.
-        var handler = AsicRegistryHttp.CreateHandler(_options);
-
-        _http = new HttpClient(handler)
+        // Its own cookie jar so a run's ASIC session is isolated (the scraper relies on session
+        // cookies + ADF window ids), with the TLS settings Cloudflare requires and the optional proxy.
+        handler ??= AsicHttp.CreateHandler(new AsicHttpSettings
         {
-            BaseAddress = new Uri(_options.BaseUrl),
-            Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds)
-        };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", _options.UserAgent);
+            Decompression = DecompressionMethods.All,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            ForceTls13 = _options.ForceTls13,
+            ProxyUrl = _options.ProxyUrl,
+            ProxyUsername = _options.ProxyUsername,
+            ProxyPassword = _options.ProxyPassword,
+        });
+        _http = AsicHttp.CreateClient(handler, _options.BaseUrl, TimeSpan.FromSeconds(_options.TimeoutSeconds), _options.UserAgent);
     }
 
     public async Task<AsicRegistrySearchResult> SearchByAbnAndNameAsync(string abn, string businessName, CancellationToken cancellationToken)
@@ -151,19 +160,15 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
 
         var content = await _http.GetStringAsync(url, cancellationToken);
 
-        var afrLoop = Regex.Match(content, @"_afrLoop',\n '(?<AfrLoop>\d+)'").Groups["AfrLoop"].Value;
-        var afrPage = Regex.Match(content, @"_afrPage',\n '',\n '(?<AfrPage>\w+)'").Groups["AfrPage"].Value;
-
         content = await _http.GetStringAsync(
-            $"RegistrySearch/faces/landing/panelSearch.jspx?searchType=Bn&searchName=&searchNumber={abn}&_afrLoop={afrLoop}&_afrWindowMode=2&Adf-Window-Id={afrPage}&_afrFS=16&_afrMT=screen&_afrMFW=1865&_afrMFH=924&_afrMFDW=1920&_afrMFDH=1080&_afrMFC=8&_afrMFCI=0&_afrMFM=0&_afrMFR=96&_afrMFG=0&_afrMFS=0&_afrMFO=0",
+            $"RegistrySearch/faces/landing/panelSearch.jspx?searchType=Bn&searchName=&searchNumber={abn}&{Adf.LoopbackQuery(Adf.LoopId(content), Adf.ScriptWindowId(content), windowHeight: 924)}",
             cancellationToken);
 
         var document = await _htmlParser.ParseDocumentAsync(content, cancellationToken);
 
         if (!content.Contains("Business names search results") && !content.Contains("Business Name Summary"))
         {
-            _adfWindowId = document.QuerySelector("input[name='Adf-Window-Id']")?.GetAttribute("value");
-            _viewState = document.QuerySelector("input[name='javax.faces.ViewState']")?.GetAttribute("value");
+            (_adfWindowId, _viewState) = Adf.HiddenFields(document);
 
             if (!_captcha.IsConfigured)
             {
@@ -183,8 +188,9 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
             document = await _htmlParser.ParseDocumentAsync(content, cancellationToken);
         }
 
-        _adfWindowId = document.QuerySelector("input[name='Adf-Window-Id']")?.GetAttribute("value") ?? _adfWindowId;
-        _viewState = document.QuerySelector("input[name='javax.faces.ViewState']")?.GetAttribute("value") ?? _viewState;
+        var (windowId, viewState) = Adf.HiddenFields(document);
+        _adfWindowId = windowId ?? _adfWindowId;
+        _viewState = viewState ?? _viewState;
 
         return document;
     }
@@ -192,7 +198,7 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
     private async Task<IHtmlDocument> GetBusinessNameDocumentAsync(string? id, int regionIndex, bool useRichMessage, CancellationToken cancellationToken)
     {
         var url = $"RegistrySearch/faces/landing/panelSearch.jspx?Adf-Window-Id={_adfWindowId}&Adf-Page-Id=1";
-        var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&bnConnectionTemplate:r1:{regionIndex}:totalItemsSelected=0&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchTypesLovId=1&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchSurname=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchFirstName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForTextId=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForNumber=&bnConnectionTemplate:r1:{regionIndex}:fetchsize=0&bnConnectionTemplate:r1:{regionIndex}:fetchsizetwin=0&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={_adfWindowId}&javax.faces.ViewState={_viewState}&Adf-Page-Id=1&oracle.adf.view.rich.RENDER=bnConnectionTemplate%3Ar1&oracle.adf.view.rich.DELTAS=%7BbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3D%7Brows%3D10%7D%7D&event={id}%3AorgName&event.{id}:orgName=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2C{id}%3AorgName";
+        var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&bnConnectionTemplate:r1:{regionIndex}:totalItemsSelected=0&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchTypesLovId=1&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchSurname=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchFirstName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForTextId=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForNumber=&bnConnectionTemplate:r1:{regionIndex}:fetchsize=0&bnConnectionTemplate:r1:{regionIndex}:fetchsizetwin=0&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={_adfWindowId}&javax.faces.ViewState={_viewState}&Adf-Page-Id=1&oracle.adf.view.rich.RENDER=bnConnectionTemplate%3Ar1&oracle.adf.view.rich.DELTAS=%7BbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3D%7Brows%3D10%7D%7D&event={id}%3AorgName&event.{id}:orgName={Adf.ActionEvent}&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2C{id}%3AorgName";
 
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
@@ -220,7 +226,7 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
     private async Task<IHtmlDocument> GoBackToSearchResultsAsync(int regionIndex, CancellationToken cancellationToken)
     {
         var url = $"RegistrySearch/faces/landing/panelSearch.jspx?Adf-Window-Id={_adfWindowId}&Adf-Page-Id=1";
-        var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={_adfWindowId}&javax.faces.ViewState={_viewState}&Adf-Page-Id=1&oracle.adf.view.rich.RENDER=bnConnectionTemplate%3Ar1&oracle.adf.view.rich.DELTAS=%7BbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3D%7Brows%3D10%7D%7D&event=bnConnectionTemplate%3Ar1%3A{regionIndex}%3Acb7&event.bnConnectionTemplate:r1:{regionIndex}:cb7=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A{regionIndex}%3Acb7";
+        var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={_adfWindowId}&javax.faces.ViewState={_viewState}&Adf-Page-Id=1&oracle.adf.view.rich.RENDER=bnConnectionTemplate%3Ar1&oracle.adf.view.rich.DELTAS=%7BbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3D%7Brows%3D10%7D%7D&event=bnConnectionTemplate%3Ar1%3A{regionIndex}%3Acb7&event.bnConnectionTemplate:r1:{regionIndex}:cb7={Adf.ActionEvent}&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A{regionIndex}%3Acb7";
 
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
@@ -237,7 +243,7 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
     private async Task<IHtmlDocument> NavigateToNextPageAsync(int regionIndex, CancellationToken cancellationToken)
     {
         var url = $"RegistrySearch/faces/landing/panelSearch.jspx?Adf-Window-Id={_adfWindowId}&Adf-Page-Id=1";
-        var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&bnConnectionTemplate:r1:{regionIndex}:totalItemsSelected=0&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchTypesLovId=1&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchSurname=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchFirstName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForTextId=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForNumber=&bnConnectionTemplate:r1:{regionIndex}:fetchsize=0&bnConnectionTemplate:r1:{regionIndex}:fetchsizetwin=0&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={_adfWindowId}&javax.faces.ViewState={_viewState}&Adf-Page-Id=1&oracle.adf.view.rich.RENDER=bnConnectionTemplate%3Ar1&oracle.adf.view.rich.DELTAS=%7BbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3D%7Brows%3D10%7D%7D&event=bnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3Anext&event.bnConnectionTemplate:r1:{regionIndex}:t1:next=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3Anext";
+        var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&bnConnectionTemplate:r1:{regionIndex}:totalItemsSelected=0&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchTypesLovId=1&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchSurname=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchFirstName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForTextId=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForName=&bnConnectionTemplate:r1:{regionIndex}:generalSearchPanelFragment:s4:searchForNumber=&bnConnectionTemplate:r1:{regionIndex}:fetchsize=0&bnConnectionTemplate:r1:{regionIndex}:fetchsizetwin=0&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={_adfWindowId}&javax.faces.ViewState={_viewState}&Adf-Page-Id=1&oracle.adf.view.rich.RENDER=bnConnectionTemplate%3Ar1&oracle.adf.view.rich.DELTAS=%7BbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3D%7Brows%3D10%7D%7D&event=bnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3Anext&event.bnConnectionTemplate:r1:{regionIndex}:t1:next={Adf.ActionEvent}&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A{regionIndex}%3At1%3Anext";
 
         var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
@@ -346,7 +352,7 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
 
             var token = solve.Token;
 
-            var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&g-recaptcha-response={token}&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchTypesLovId=0&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchSurname=&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchFirstName=&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchForTextId=Name+or+Number&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={adfWindowId}&Adf-Page-Id=0&javax.faces.ViewState={viewState}&event=bnConnectionTemplate%3Ar1%3A0%3AsearchButtonCap&event.bnConnectionTemplate:r1:0:searchButtonCap=%3Cm+xmlns%3D%22http%3A%2F%2Foracle.com%2FrichClient%2Fcomm%22%3E%3Ck+v%3D%22type%22%3E%3Cs%3Eaction%3C%2Fs%3E%3C%2Fk%3E%3C%2Fm%3E&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A0%3AsearchButtonCap";
+            var body = $"bnConnectionTemplate:pt_s5:templateSearchTypesListOfValuesId=6&bnConnectionTemplate:pt_s5:searchSurname=&bnConnectionTemplate:pt_s5:searchFirstName=&bnConnectionTemplate:pt_s5:templateSearchInputText=&bnConnectionTemplate:pt_s5:searchName=Name&bnConnectionTemplate:pt_s5:searchNumber=Number&g-recaptcha-response={token}&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchTypesLovId=0&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchSurname=&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchFirstName=&bnConnectionTemplate:r1:0:searchPanelLanding:dc1:s1:searchForTextId=Name+or+Number&org.apache.myfaces.trinidad.faces.FORM=f1&Adf-Window-Id={adfWindowId}&Adf-Page-Id=0&javax.faces.ViewState={viewState}&event=bnConnectionTemplate%3Ar1%3A0%3AsearchButtonCap&event.bnConnectionTemplate:r1:0:searchButtonCap={Adf.ActionEvent}&oracle.adf.view.rich.PROCESS=bnConnectionTemplate%3Ar1%2CbnConnectionTemplate%3Ar1%3A0%3AsearchButtonCap";
 
             var response = await _http.PostAsync(url,
                 new StringContent(body, Encoding.UTF8, "application/x-www-form-urlencoded"), cancellationToken);
