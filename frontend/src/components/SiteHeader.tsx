@@ -28,6 +28,14 @@ export default function SiteHeader() {
             >
               Renew Business Name
             </NavLink>
+            <NavLink
+              to="/register"
+              className={({ isActive }) =>
+                `${isActive ? 'nav-link-active' : 'nav-link-inactive'} rounded-md px-4 py-2.5 text-sm font-medium transition-all`
+              }
+            >
+              Register Business Name
+            </NavLink>
             <a href="https://applyforanabn.com.au/abnapplication/" className="nav-link-inactive rounded-md px-4 py-2.5 text-sm font-medium transition-all">
               Register an ABN
             </a>
@@ -63,8 +71,11 @@ export default function SiteHeader() {
         {mobileOpen ? (
           <div className="md:hidden border-t border-gray-200">
             <div className="space-y-1 px-4 pb-3 pt-2">
-              <NavLink to="/" end className={({ isActive }) => `${isActive ? 'nav-link-active' : 'nav-link-inactive'} block rounded-md px-3 py-2 text-base font-medium`}>
+              <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({ isActive }) => `${isActive ? 'nav-link-active' : 'nav-link-inactive'} block rounded-md px-3 py-2 text-base font-medium`}>
                 Renew Business Name
+              </NavLink>
+              <NavLink to="/register" onClick={() => setMobileOpen(false)} className={({ isActive }) => `${isActive ? 'nav-link-active' : 'nav-link-inactive'} block rounded-md px-3 py-2 text-base font-medium`}>
+                Register Business Name
               </NavLink>
               <a href="https://applyforanabn.com.au/abnapplication/" className="nav-link-inactive block rounded-md px-3 py-2 text-base font-medium">
                 Register an ABN

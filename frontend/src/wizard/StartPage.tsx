@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import WizardProgress from '../components/WizardProgress'
@@ -133,6 +133,10 @@ export default function StartPage() {
               </button>
             </div>
           </form>
+          <p className="mt-8 text-center text-sm text-gray-600">
+            Need a new business name instead?{' '}
+            <Link to="/register" className="font-semibold text-brand hover:underline">Register a business name →</Link>
+          </p>
         </div>
         )}
       </div>
