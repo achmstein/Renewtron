@@ -8,9 +8,10 @@ namespace Renewtron.Services;
 /// ASIC's renewal page (what it offers for renewal under an ABN). Pure, so every rule is tested.
 ///
 /// The register has no due dates (ASIC dropped them in 2025), but it does show which names are
-/// still registered, and ASIC cancels an unrenewed name 28 to 48 days after it falls due. So a
-/// name still registered more than <see cref="CancelGraceDays"/> after its due date was renewed;
-/// one gone from the register by then has lapsed.
+/// still registered. A name gone from the register more than <see cref="CancelGraceDays"/> after
+/// its due date has lapsed. A name still registered may or may not have been renewed (ASIC often
+/// leaves unrenewed names registered for a long time): only ASIC's own due date, from its register
+/// search, moving past the order's shows a renewal.
 /// </summary>
 public static class AsicCheckRules
 {
@@ -23,19 +24,30 @@ public static class AsicCheckRules
         public bool StillDue => Outcome is null;
     }
 
-    /// <summary>What the register file says, or null when it can't tell yet (too soon after the due date).</summary>
+    /// <summary>A renewal moves ASIC's due date on by at least a year; this much later than the order's means it was renewed.</summary>
+    public const int RenewedAfterDays = 180;
+
+    /// <summary>
+    /// What the register file says, or null when it can't tell (too soon after the due date, or the
+    /// name is still registered and ASIC's own due date for it isn't known to have moved on).
+    /// Still being registered proves nothing: ASIC leaves unrenewed names registered for months,
+    /// even years, past their due date (seen across 947 names in Nov 2026). Only ASIC's due date
+    /// moving past the one the order paid for shows it was renewed.
+    /// </summary>
     /// <param name="registerNames">Every registered name under the order's ABN in the register file.</param>
-    public static Finding? FromRegister(string businessName, DateOnly due, DateOnly registerDate, IReadOnlyList<string> registerNames)
+    /// <param name="asicDue">The name's due date as ASIC's register search last showed it, if known.</param>
+    public static Finding? FromRegister(string businessName, DateOnly due, DateOnly registerDate, IReadOnlyList<string> registerNames, DateOnly? asicDue = null)
     {
-        var settled = due.AddDays(CancelGraceDays) < registerDate;
-        if (!settled) return null;
-        var days = registerDate.DayNumber - due.DayNumber;
         var registered = BusinessNameText.FindName(registerNames, n => n, businessName) is not null;
-        if (registered)
+        if (registered && asicDue is { } next && next.DayNumber - due.DayNumber > RenewedAfterDays)
             return new(RenewalOrderReason.RenewedElsewhere,
-                $"Still registered at ASIC on {registerDate:d MMM yyyy}, {days} days after it was due on {due:d MMM yyyy}. "
-                + $"ASIC cancels an unrenewed name within {CancelGraceDays} days, so it was renewed outside Renewtron. The payment is kept.",
+                $"ASIC's register search shows it next due on {next:d MMM yyyy}, after the {due:d MMM yyyy} this order paid for: "
+                + "it was renewed outside Renewtron. The payment is kept.",
                 OrderEvidenceSource.AsicRegister);
+
+        var settled = due.AddDays(CancelGraceDays) < registerDate;
+        if (!settled || registered) return null;
+        var days = registerDate.DayNumber - due.DayNumber;
         return new(RenewalOrderReason.Lapsed,
             $"Not on ASIC's register of {registerDate:d MMM yyyy}, {days} days after it was due on {due:d MMM yyyy}: ASIC cancelled it."
             + OtherNames(registerNames, "under this ABN on the register"),

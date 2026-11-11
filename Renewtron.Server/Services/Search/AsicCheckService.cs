@@ -58,6 +58,7 @@ public class AsicCheckService(
         var today = DateOnly.FromDateTime(now);
         var candidates = await Candidates().ToListAsync(ct);
         var (registerDate, register) = await RegisterAsync(candidates.Select(o => o.Abn), ct);
+        var asicDue = await AsicDueByNameAsync(candidates.Select(o => o.ClientBusinessNameId), ct);
 
         var items = new List<AsicCheckReport.Item>();
         int asked = 0, stillDue = 0;
@@ -65,7 +66,9 @@ public class AsicCheckService(
         {
             if (order.DueDate is not { } due) continue;
             var names = register.TryGetValue(order.Abn, out var n) ? n : [];
-            var finding = registerDate is { } rd ? AsicCheckRules.FromRegister(order.BusinessName, due, rd, names) : null;
+            var finding = registerDate is { } rd
+                ? AsicCheckRules.FromRegister(order.BusinessName, due, rd, names, AsicDueOf(asicDue, order))
+                : null;
 
             if (finding is null && asked < MaxAsicLookups && NeedsAsking(order, today, now))
             {
@@ -100,10 +103,11 @@ public class AsicCheckService(
         var today = DateOnly.FromDateTime(now);
         var (registerDate, register) = await RegisterAsync([order.Abn], ct);
         var names = register.TryGetValue(order.Abn, out var n) ? n : [];
+        var asicDue = await AsicDueByNameAsync([order.ClientBusinessNameId], ct);
 
         // A person asked: ask ASIC itself, and fall back on the register only when ASIC doesn't answer.
         var finding = await AskAsicAsync(order, due, today, registerDate is null ? null : names, ct)
-            ?? (registerDate is { } rd ? AsicCheckRules.FromRegister(order.BusinessName, due, rd, names) : null);
+            ?? (registerDate is { } rd ? AsicCheckRules.FromRegister(order.BusinessName, due, rd, names, AsicDueOf(asicDue, order)) : null);
         order.AsicCheckedAt = now;
         if (finding is not null && CanSet(order)) await ApplyAsync(order, finding, registerDate, now, ct);
         await db.SaveChangesAsync(ct);
@@ -191,6 +195,19 @@ public class AsicCheckService(
             name.UpdatedAt = now;
         }
     }
+
+    /// <summary>ASIC's own due date for each of these names, where its register search has shown one.</summary>
+    private async Task<Dictionary<Guid, DateOnly>> AsicDueByNameAsync(IEnumerable<Guid?> nameIds, CancellationToken ct)
+    {
+        var ids = nameIds.OfType<Guid>().Distinct().ToList();
+        if (ids.Count == 0) return [];
+        return await db.ClientBusinessNames.AsNoTracking()
+            .Where(n => ids.Contains(n.Id) && n.DueDateSource == RenewalDueDateSource.AsicRegister && n.RenewalDueDate != null)
+            .ToDictionaryAsync(n => n.Id, n => n.RenewalDueDate!.Value, ct);
+    }
+
+    private static DateOnly? AsicDueOf(Dictionary<Guid, DateOnly> asicDue, RenewalOrder order) =>
+        order.ClientBusinessNameId is { } id && asicDue.TryGetValue(id, out var d) ? d : null;
 
     public static void ClearOutcome(RenewalOrder order)
     {

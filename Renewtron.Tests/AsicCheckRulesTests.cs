@@ -11,12 +11,22 @@ public class AsicCheckRulesTests
     private static readonly DateOnly Today = new(2026, 11, 12);
 
     [Fact]
-    public void Still_registered_well_after_due_was_renewed_elsewhere()
+    public void Still_registered_with_asics_due_date_moved_on_was_renewed_elsewhere()
     {
-        var f = AsicCheckRules.FromRegister("Joe's Plumbing", Register.AddDays(-60), Register, ["JOES PLUMBING", "OTHER CO"]);
+        var due = Register.AddDays(-60);
+        var f = AsicCheckRules.FromRegister("Joe's Plumbing", due, Register, ["JOES PLUMBING", "OTHER CO"], asicDue: due.AddYears(1));
         Assert.Equal(RenewalOrderReason.RenewedElsewhere, f!.Outcome);
         Assert.Equal(OrderEvidenceSource.AsicRegister, f.Source);
         Assert.Contains("payment is kept", f.Evidence);
+    }
+
+    [Fact]
+    public void Still_registered_long_after_due_proves_nothing_on_its_own()
+    {
+        // ASIC leaves unrenewed names registered for months: without its due date moving on, it can't tell.
+        var due = Register.AddDays(-200);
+        Assert.Null(AsicCheckRules.FromRegister("Joe's Plumbing", due, Register, ["JOES PLUMBING"]));
+        Assert.Null(AsicCheckRules.FromRegister("Joe's Plumbing", due, Register, ["JOES PLUMBING"], asicDue: due));
     }
 
     [Fact]
