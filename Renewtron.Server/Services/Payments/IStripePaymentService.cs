@@ -39,4 +39,16 @@ public interface IStripePaymentService
 
     /// <param name="testMode">Use the test customers' Stripe test keys (Settings → Test mode).</param>
     Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId, bool testMode = false);
+
+    /// <summary>
+    /// Refunds a PaymentIntent in full. The same <paramref name="idempotencyKey"/> always returns the
+    /// same refund, so a retried request can't refund twice. Returns the refund's id and status, or
+    /// the error Stripe gave.
+    /// </summary>
+    Task<StripeRefundResult> RefundAsync(string paymentIntentId, string idempotencyKey, bool testMode = false);
+
+    /// <summary>How much of a PaymentIntent has been refunded already, in cents (null when it can't be read).</summary>
+    Task<long?> RefundedCentsAsync(string paymentIntentId, bool testMode = false);
 }
+
+public record StripeRefundResult(bool Success, string? RefundId, string? Status, string? ErrorMessage);

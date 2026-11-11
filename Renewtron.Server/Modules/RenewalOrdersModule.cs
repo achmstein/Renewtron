@@ -109,6 +109,21 @@ public sealed class RenewalOrdersModule : ICarterModule
         group.MapPost("/{id:guid}/check-asic", async (Guid id, IAsicCheckService check, CancellationToken ct) =>
             await check.CheckOneAsync(id, ct) is { } item ? Results.Ok(item) : Results.BadRequest(new { error = "This renewal has no due date or ABN to check." }));
 
+        // The payments behind a paid renewal that a person could refund (nothing is refunded here).
+        group.MapGet("/{id:guid}/refund", async (Guid id, IOrderRefundService refunds, CancellationToken ct) =>
+            await refunds.OptionsAsync(id, ct) is { } options ? Results.Ok(options) : Results.NotFound());
+
+        // Refunds the one payment a person picked, to the customer's card, through where they paid.
+        group.MapPost("/{id:guid}/refund", async (Guid id, RefundRequest body, ClaimsPrincipal user, IOrderRefundService refunds, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Payment)) return Results.BadRequest(new { error = "Pick the payment to refund." });
+            var by = user.Identity?.Name ?? "Staff";
+            var outcome = await refunds.RefundAsync(id, body.Payment, by, body.Note, ct);
+            return outcome.Ok
+                ? Results.Ok(new { message = outcome.Message, reference = outcome.Reference })
+                : Results.Conflict(new { error = outcome.Message });
+        });
+
         // A person's decision on how the order ends (or, for a lapsed name, what happens next), with
         // the note and reference it rests on.
         group.MapPost("/{id:guid}/outcome", async (Guid id, OutcomeRequest body, ClaimsPrincipal user, ApplicationDbContext db, IRenewalOrderService orders, CancellationToken ct) =>
@@ -253,6 +268,7 @@ public sealed class RenewalOrdersModule : ICarterModule
 
     public sealed record OutcomeRequest(string Outcome, string? Note, string? Reference);
     public sealed record FixNameRequest(string BusinessName);
+    public sealed record RefundRequest(string Payment, string? Note);
 
     private static string? Trim(string? s, int max) => s is { Length: > 0 } && s.Length > max ? s[..max] : s;
 

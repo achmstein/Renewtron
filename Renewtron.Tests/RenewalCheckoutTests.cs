@@ -33,6 +33,8 @@ public class RenewalCheckoutTests
         }
 
         public Task<StripeIntentState?> GetPaymentIntentAsync(string paymentIntentId, bool testMode = false) => Task.FromResult(Intent);
+        public Task<StripeRefundResult> RefundAsync(string paymentIntentId, string idempotencyKey, bool testMode = false) => throw new NotSupportedException();
+        public Task<long?> RefundedCentsAsync(string paymentIntentId, bool testMode = false) => throw new NotSupportedException();
     }
 
     private sealed class FakeJobs : IBackgroundJobClient

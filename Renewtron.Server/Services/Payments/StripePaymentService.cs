@@ -117,6 +117,41 @@ public class StripePaymentService : IStripePaymentService
         }
     }
 
+    public async Task<StripeRefundResult> RefundAsync(string paymentIntentId, string idempotencyKey, bool testMode = false)
+    {
+        try
+        {
+            var refund = await new RefundService().CreateAsync(new RefundCreateOptions
+            {
+                PaymentIntent = paymentIntentId,
+                Reason = "requested_by_customer",
+            }, Options(testMode, idempotencyKey));
+            // "pending" is normal for some cards: the refund is accepted and settles later.
+            var ok = refund.Status is "succeeded" or "pending";
+            return new StripeRefundResult(ok, refund.Id, refund.Status, ok ? null : $"Stripe says the refund {refund.Status}.");
+        }
+        catch (StripeException ex)
+        {
+            return new StripeRefundResult(false, null, null, ex.StripeError?.Message ?? ex.Message);
+        }
+    }
+
+    public async Task<long?> RefundedCentsAsync(string paymentIntentId, bool testMode = false)
+    {
+        try
+        {
+            var intent = await new PaymentIntentService().GetAsync(paymentIntentId, new PaymentIntentGetOptions
+            {
+                Expand = ["latest_charge"],
+            }, Options(testMode));
+            return intent.LatestCharge?.AmountRefunded ?? 0;
+        }
+        catch (StripeException)
+        {
+            return null;
+        }
+    }
+
     private static StripeCardInfo? CardOf(PaymentIntent paymentIntent)
     {
         var card = paymentIntent.LatestCharge?.PaymentMethodDetails?.Card;

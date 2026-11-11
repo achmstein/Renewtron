@@ -65,6 +65,14 @@ export const renewalOrdersAdminApi = {
   /** A person's decision on how a paid renewal ends, with what it rests on. */
   setRenewalOrderOutcome: (id: string, body: { outcome: string; note?: string; reference?: string }) =>
     apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }),
+  /** The payments behind a paid renewal and which can be refunded (nothing is refunded by this). */
+  renewalOrderRefundOptions: (id: string) => apiFetch<{
+    payments: Array<{ key: string; label: string; paidAt: string | null; amount: number; refundable: boolean; why: string | null }>
+    note: string | null
+  }>(`/api/admin/renewal-orders/${id}/refund`),
+  /** Refunds the picked payment to the customer's card, through Ontraport or Stripe. Can't be undone. */
+  refundRenewalOrder: (id: string, body: { payment: string; note?: string }) =>
+    apiFetch<{ message: string; reference: string }>(`/api/admin/renewal-orders/${id}/refund`, { method: 'POST', body: JSON.stringify(body) }),
   reopenRenewalOrder: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/reopen`, { method: 'POST' }),
   fixRenewalOrderName: (id: string, businessName: string) =>
     apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/fix-name`, { method: 'POST', body: JSON.stringify({ businessName }) }),

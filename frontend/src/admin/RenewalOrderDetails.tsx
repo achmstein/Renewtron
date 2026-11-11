@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, Loader2, PenLine, RefreshCw, RotateCcw, SearchCheck } from 'lucide-react'
+import { Banknote, Copy, Loader2, PenLine, RefreshCw, RotateCcw, SearchCheck } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type RenewalOrderAttempt, type RenewalOrderDecision, type RenewalOrderRow } from '../api/client'
 import { Status, inSentence, orderStatus, renewalStatus } from './_status'
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { pageClass } from './_ui'
+import { cn } from '@/lib/utils'
 
 /**
  * One paid renewal, in the shape every details page shares: what happened in a sentence, the next
@@ -68,6 +69,7 @@ export default function RenewalOrderDetails() {
   const queryClient = useQueryClient()
   const [deciding, setDeciding] = useState<string | null>(null)
   const [fixingName, setFixingName] = useState(false)
+  const [refunding, setRefunding] = useState(false)
   const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-renewal-order', id],
     queryFn: () => api.admin.renewalOrder(id!),
@@ -135,6 +137,10 @@ export default function RenewalOrderDetails() {
       </Button>
     ) : null,
     source: <Button asChild size="sm" variant="outline"><Link to={data.source.to}>{SOURCE_BUTTON[o.source]}</Link></Button>,
+    // Any paid renewal except one at ASIC right now; the dialog says which payments can go back.
+    refund: o.stage !== 'Renewing' && o.source !== 'Manual' ? (
+      <Button size="sm" variant="ghost" onClick={() => setRefunding(true)} disabled={busy}><Banknote />Refund…</Button>
+    ) : null,
   }
 
   return (
@@ -180,6 +186,7 @@ export default function RenewalOrderDetails() {
 
       <DecideDialog orderId={o.id} outcome={deciding} onClose={() => setDeciding(null)} onDone={refresh} />
       <FixNameDialog orderId={o.id} current={o.businessName} open={fixingName} onClose={() => setFixingName(false)} onDone={refresh} />
+      <RefundDialog orderId={o.id} who={who} renewed={o.stage === 'Renewed'} open={refunding} onClose={() => setRefunding(false)} onDone={refresh} />
     </div>
     </Skeletonizer>
   )
@@ -204,34 +211,104 @@ function headline(o: RenewalOrderRow, who: string): string {
   }
 }
 
-type Buttons = Record<'retry' | 'check' | 'fixName' | 'elsewhere' | 'lapsed' | 'reopen' | 'source', ReactNode>
+type Buttons = Record<'retry' | 'check' | 'fixName' | 'elsewhere' | 'lapsed' | 'reopen' | 'source' | 'refund', ReactNode>
 
 function nextStep(o: RenewalOrderRow, d: RenewalOrderDecision, hint: string | undefined, b: Buttons): ReactNode {
   const note = o.note ? <span title={o.note}>{o.note.length > 160 ? o.note.slice(0, 159) + '…' : o.note}</span> : null
   switch (o.stage) {
     case 'NeedsPerson':
       if (o.reason === 'Lapsed')
-        return <NextStep meaning="action" title="Decide: refund the client, or offer to register the name again." actions={<>{b.lapsed}{b.check}{b.reopen}</>}>{note}</NextStep>
+        return <NextStep meaning="action" title="Decide: refund the client, or offer to register the name again." actions={<>{b.lapsed}{b.check}{b.reopen}{b.refund}</>}>{note}</NextStep>
       if (o.reason === 'NameMismatch' || o.reason === 'NameNotFound')
-        return <NextStep meaning="action" title={hint ?? 'Check the name at ASIC.'} actions={<>{b.fixName}{b.check}{b.elsewhere}{b.reopen}</>}>{note}</NextStep>
-      return <NextStep meaning="action" title={hint ?? 'This renewal needs you.'} actions={<>{b.retry}{b.check}{b.elsewhere}{b.source}</>}>{note}</NextStep>
+        return <NextStep meaning="action" title={hint ?? 'Check the name at ASIC.'} actions={<>{b.fixName}{b.check}{b.elsewhere}{b.reopen}{b.refund}</>}>{note}</NextStep>
+      return <NextStep meaning="action" title={hint ?? 'This renewal needs you.'} actions={<>{b.retry}{b.check}{b.elsewhere}{b.source}{b.refund}</>}>{note}</NextStep>
     case 'Renewing':
       return <NextStep meaning="working" title="Nothing to do; Renewtron is renewing it." actions={b.source}>{o.nextActionAt ? <>Next try <When at={o.nextActionAt} />.{o.note ? ` ${o.note}` : ''}</> : 'This page updates by itself.'}</NextStep>
     case 'Due':
-      return <NextStep meaning="working" title="Nothing to do yet." actions={<>{b.check}{b.source}</>}>The next processing run (07:00) renews it.</NextStep>
+      return <NextStep meaning="working" title="Nothing to do yet." actions={<>{b.check}{b.source}{b.refund}</>}>The next processing run (07:00) renews it.</NextStep>
     case 'Waiting':
-      return <NextStep meaning="waiting" title="Nothing to do; Renewtron looks after it." actions={<>{b.check}{b.elsewhere}{b.reopen}{b.source}</>}>
+      return <NextStep meaning="waiting" title="Nothing to do; Renewtron looks after it." actions={<>{b.check}{b.elsewhere}{b.reopen}{b.source}{b.refund}</>}>
         {o.reason === 'NotOfferedNow' ? note : o.nextActionAt ? <>ASIC opens the window <When at={o.nextActionAt} />.</> : null}
       </NextStep>
     case 'Renewed':
-      return <NextStep meaning="done" title="Nothing to do." actions={b.source}>{o.renewedAt ? <>Renewed <When at={o.renewedAt} />.</> : 'Renewed.'}</NextStep>
+      return <NextStep meaning="done" title="Nothing to do." actions={<>{b.source}{b.refund}</>}>{o.renewedAt ? <>Renewed <When at={o.renewedAt} />.</> : 'Renewed.'}</NextStep>
     default:
-      return <NextStep meaning="quiet" title={o.reason === 'RenewedElsewhere' ? 'Nothing to do. The payment is kept.' : 'Nothing to do.'} actions={<>{b.reopen}{b.source}</>}>
+      return <NextStep meaning="quiet" title={o.reason === 'RenewedElsewhere' ? 'Nothing to do. The payment is kept.' : 'Nothing to do.'} actions={<>{b.reopen}{b.source}{b.refund}</>}>
         {d.reference ? <>Reference {d.reference}. </> : null}{d.by ? <>Decided by {d.by}{d.at ? <> <When at={d.at} /></> : null}.</> : hint}
       </NextStep>
   }
 }
 
+
+/**
+ * Refunds one payment behind this renewal to the customer's card, through where they paid
+ * (Ontraport or Stripe). Lists every payment and why one can't be refunded; nothing moves until the
+ * person picks one and confirms. Closes the renewal as refunded and stops Renewtron renewing it.
+ */
+function RefundDialog({ orderId, who, renewed, open, onClose, onDone }: { orderId: string; who: string; renewed: boolean; open: boolean; onClose: () => void; onDone: () => void }) {
+  const [picked, setPicked] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+  const options = useQuery({ queryKey: ['admin-renewal-order-refund', orderId], queryFn: () => api.admin.renewalOrderRefundOptions(orderId), enabled: open, staleTime: 0 })
+  const refund = useMutation({ mutationFn: () => api.admin.refundRenewalOrder(orderId, { payment: picked!, note: note.trim() || undefined }) })
+  const payments = options.data?.payments ?? []
+  const choice = payments.find((p) => p.key === picked && p.refundable)
+    ?? (payments.filter((p) => p.refundable).length === 1 ? payments.find((p) => p.refundable) : undefined)
+  const close = () => { onClose(); setPicked(null); setNote('') }
+  const submit = () => {
+    if (!choice) return
+    setPicked(choice.key)
+    void sileo.promise(refund.mutateAsync(), {
+      loading: { title: `Refunding ${fmtMoney2(choice.amount)}…` },
+      success: (r) => ({ title: r.message, description: r.reference }),
+      error: (e) => ({ title: 'Not refunded', description: e instanceof Error ? e.message : undefined }),
+    }).then(() => { onDone(); close() }).catch(() => { void options.refetch() })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !refund.isPending) close() }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Refund {who}</DialogTitle>
+          <DialogDescription>
+            The money goes back to their card through where they paid. This can’t be undone.
+            {renewed ? ' Renewtron renewed this name: refund only a payment made twice or by mistake.' : ''}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="space-y-4">
+          {options.isPending ? <p className="text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Looking up their payments…</p>
+            : options.isError ? <p className="text-sm text-destructive">The payments couldn’t be loaded. Try again.</p>
+            : (
+              <div className="space-y-2">
+                {options.data?.note ? <p className="text-caption text-muted-foreground">{options.data.note}</p> : null}
+                {payments.map((p) => (
+                  <label key={p.key} className={cn('flex items-start gap-3 rounded-md border px-3 py-2 text-sm', p.refundable ? 'cursor-pointer hover:bg-muted/50' : 'opacity-60', choice?.key === p.key && 'border-primary bg-accent/60')}>
+                    <input type="radio" name="refund-payment" className="mt-1" disabled={!p.refundable || refund.isPending}
+                      checked={choice?.key === p.key} onChange={() => setPicked(p.key)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium tabular-nums">{fmtMoney2(p.amount)}</span> · {p.label}
+                      {p.paidAt ? <span className="text-muted-foreground"> · paid {fmtDateTime(p.paidAt)}</span> : null}
+                      {p.why ? <span className="mt-0.5 block text-caption text-muted-foreground">{p.why}</span> : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          <div className="grid gap-1.5">
+            <Label htmlFor="refund-note">Why (kept on the renewal)</Label>
+            <Textarea id="refund-note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Paid twice; not renewed in time; client asked…" />
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={close} disabled={refund.isPending}>Cancel</Button>
+          <Button variant="destructive" onClick={submit} disabled={!choice || refund.isPending}>
+            {refund.isPending ? <Loader2 className="animate-spin" /> : null}
+            {choice ? `Refund ${fmtMoney2(choice.amount)}` : 'Refund'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 /** What ASIC (or a person) said that the order's outcome rests on. */
 function AsicSaid({ d }: { d: RenewalOrderDecision }) {

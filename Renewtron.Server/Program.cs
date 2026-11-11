@@ -156,6 +156,8 @@ builder.Services.AddScoped<Renewtron.Services.AsicPortal.IAsicPortalLinkService,
 builder.Services.AddScoped<Renewtron.Services.Registration.IBusinessNameRegistrationService, Renewtron.Services.Registration.BusinessNameRegistrationService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>().AddOntraportApi();
 builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>().AddOntraportApi();
+builder.Services.AddSingleton<RefundHold>();
+builder.Services.AddHttpClient<IOrderRefundService, OrderRefundService>().AddOntraportApi();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
 
 // ASIC key pipeline: IMAP reader + the service that turns notification emails into
