@@ -13,12 +13,12 @@ WORKDIR /src
 # Restore first, against project files only, so a source-only change doesn't re-download packages.
 # Every package comes from nuget.org, so the root NuGet.config (with its GitHub source) stays out.
 COPY Directory.Build.props .
-COPY Asic.Client/Asic.Client.csproj                             Asic.Client/
+COPY Asic.Integrations/Asic.Integrations.csproj                             Asic.Integrations/
 COPY Renewtron.ServiceDefaults/Renewtron.ServiceDefaults.csproj Renewtron.ServiceDefaults/
 COPY Renewtron.Server/Renewtron.Server.csproj                   Renewtron.Server/
 RUN dotnet restore Renewtron.Server/Renewtron.Server.csproj
 
-COPY Asic.Client/              Asic.Client/
+COPY Asic.Integrations/              Asic.Integrations/
 COPY Renewtron.ServiceDefaults/ Renewtron.ServiceDefaults/
 COPY Renewtron.Server/         Renewtron.Server/
 

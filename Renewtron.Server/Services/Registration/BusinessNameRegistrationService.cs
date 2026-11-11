@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using Asic.Client;
-using Asic.Client.Abstractions;
-using Asic.Client.Models;
+using Asic.Integrations;
+using Asic.Integrations.Abstractions;
+using Asic.Integrations.Models;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

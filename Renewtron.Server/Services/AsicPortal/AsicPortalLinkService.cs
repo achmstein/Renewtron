@@ -1,4 +1,4 @@
-using Asic.Client;
+using Asic.Integrations;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

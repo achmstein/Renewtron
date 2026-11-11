@@ -1,4 +1,4 @@
-﻿using Asic.Client.Abstractions;
+﻿using Asic.Integrations.Abstractions;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;

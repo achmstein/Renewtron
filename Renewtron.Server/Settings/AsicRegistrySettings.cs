@@ -3,7 +3,7 @@ namespace Renewtron.Settings;
 /// <summary>
 /// How Renewtron uses ASIC's register search to read names' real renewal dates (the register
 /// file no longer carries them: ASIC removed BN_RENEW_DT in April 2025). Shares the
-/// "AsicRegistry" section with the connection settings (proxy, 2Captcha key: Asic.Client's
+/// "AsicRegistry" section with the connection settings (proxy, 2Captcha key: Asic.Integrations's
 /// <c>AsicRegistryOptions</c>).
 /// </summary>
 public class AsicRegistrySettings

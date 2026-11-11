@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
-using Asic.Client.Abstractions;
-using Asic.Client.Models;
+using Asic.Integrations.Abstractions;
+using Asic.Integrations.Models;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Renewtron.Services;

@@ -1,6 +1,6 @@
 using System.Text;
-using Asic.Client.Abstractions;
-using Asic.Client.Models;
+using Asic.Integrations.Abstractions;
+using Asic.Integrations.Models;
 using Carter;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;

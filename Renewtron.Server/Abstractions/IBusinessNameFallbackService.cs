@@ -1,4 +1,4 @@
-using Asic.Client.Models;
+using Asic.Integrations.Models;
 
 namespace Renewtron.Abstractions;
 

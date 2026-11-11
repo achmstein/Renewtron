@@ -482,13 +482,13 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
-/Asic.Client/HTTPArchive18052026.har
+/Asic.Integrations/HTTPArchive18052026.har
 
 # Runtime-mutable production settings (holds live secrets) and HAR capture tooling
 settings.overrides.json
-Asic.Client/*.har
-Asic.Client/*_har.ps1
-Asic.Client/temp_matches.txt
+Asic.Integrations/*.har
+Asic.Integrations/*_har.ps1
+Asic.Integrations/temp_matches.txt
 
 # asic-keytool: the developer's own login, never committed or published
 Asic.KeyTool/appsettings.Development.json

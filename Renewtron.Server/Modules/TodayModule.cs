@@ -1,4 +1,4 @@
-using Asic.Client.Abstractions;
+using Asic.Integrations.Abstractions;
 using Carter;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;

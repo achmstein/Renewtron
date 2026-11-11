@@ -1,4 +1,4 @@
-using Asic.Client.Abstractions;
+using Asic.Integrations.Abstractions;
 using Carter;
 using Hangfire;
 using Microsoft.AspNetCore.RateLimiting;

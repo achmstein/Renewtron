@@ -1,4 +1,4 @@
-using Asic.Client.Models;
+using Asic.Integrations.Models;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;

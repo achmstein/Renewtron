@@ -1,4 +1,4 @@
-using Asic.Client;
+using Asic.Integrations;
 using Renewtron.Data;
 using Renewtron.Services.Registration;
 
