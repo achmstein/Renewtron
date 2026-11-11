@@ -5,7 +5,7 @@ import { Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { StatusPill } from './_ui'
-import { renewalStatus, statusOf, type StatusEntry } from './_status'
+import { orderStatus, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When, agoWords, dueWords } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
@@ -36,6 +36,7 @@ function statusFor(d: Detail): StatusEntry {
 // The page drawn as a skeleton while the renewal loads.
 const SAMPLE_RENEWAL: Detail = {
   id: sample.id(0),
+  order: null,
   client: { id: sample.id(1), fullName: sample.name(2) },
   clientBusinessNameId: sample.id(2),
   searchLogId: sample.id(3),
@@ -145,8 +146,10 @@ export default function RenewalDetails() {
       <RecordCrumbs
         client={data.client}
         businessName={data.businessName}
-        list={{ to: '/admin/renewals', label: 'Renewals' }}
-        here={`Renewal of ${new Date(data.initiatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+        list={data.order
+          ? { to: `/admin/renewal-orders/${data.order.id}`, label: `Paid ${new Date(data.order.paidAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` }
+          : { to: '/admin/renewals', label: 'ASIC runs' }}
+        here={`ASIC run of ${new Date(data.initiatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`}
       />
 
       <RecordHeader
@@ -321,7 +324,11 @@ function story(d: Detail, status: StatusEntry): StoryStep[] {
         ? { label: `Paid ${fmtMoney2(d.amount)}`, meaning: 'done', at: d.stripePayment?.paidAt ?? d.initiatedAt }
         : { label: 'Payment', meaning: 'quiet', note: statusOf('payment', d.stripePayment?.paymentStatus).label.toLowerCase() })
   }
-  steps.push({ label: `Renewal: ${status.label.toLowerCase()}`, meaning: status.meaning, at: d.completedAt ?? d.lastAttemptAt ?? d.initiatedAt, current: true })
+  steps.push({ label: `This ASIC run: ${status.label.toLowerCase()}`, meaning: status.meaning, at: d.completedAt ?? d.lastAttemptAt ?? d.initiatedAt, current: true })
+  if (d.order) {
+    const o = orderStatus(d.order.stage, d.order.reason)
+    steps.push({ label: `Paid renewal: ${o.label.toLowerCase()}`, meaning: o.meaning, to: `/admin/renewal-orders/${d.order.id}` })
+  }
   if (d.bpayReference) {
     steps.push(d.bpayPaidAt
       ? { label: 'ASIC fee paid', meaning: 'done', at: d.bpayPaidAt, to: '/admin/bpay' }

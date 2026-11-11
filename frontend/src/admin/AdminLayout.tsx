@@ -82,9 +82,10 @@ const navSections: NavSection[] = [
   {
     kicker: 'Records',
     items: [
-      { to: '/admin/leads', label: 'Leads', icon: Icon.Users },
+      { to: '/admin/renewal-orders', label: 'Renewals', icon: Icon.Refresh },
+      { to: '/admin/leads', label: 'Visits', icon: Icon.Users },
       { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
-      { to: '/admin/renewals', label: 'Renewals', icon: Icon.Refresh },
+      { to: '/admin/renewals', label: 'ASIC runs', icon: Icon.Wrench },
       { to: '/admin/ontraport-sales', label: 'Ontraport sales', icon: Icon.Cart },
       { to: '/admin/asic-keys', label: 'Key letters', icon: Icon.Key },
       { to: '/admin/emails', label: 'Emails', icon: Icon.Mail },

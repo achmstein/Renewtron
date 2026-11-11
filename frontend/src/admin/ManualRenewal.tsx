@@ -86,7 +86,7 @@ export default function ManualRenewal() {
       dateOfBirth: dateOfBirth || undefined,
       amount,
     }),
-    onSuccess: () => { setTimeout(() => navigate('/admin/renewals'), 1800) },
+    onSuccess: () => { setTimeout(() => navigate('/admin/renewal-orders'), 1800) },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['admin-renewals'] }),
   })
   const process = () => {

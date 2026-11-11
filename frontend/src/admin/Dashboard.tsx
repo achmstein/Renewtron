@@ -99,7 +99,7 @@ function Body({ data }: { data: DashboardResponse }) {
           <CardHeader className="border-b py-4 [.border-b]:pb-4">
             <CardTitle>Recent renewals</CardTitle>
             <CardAction>
-              <Button asChild size="sm" variant="ghost" className="-my-1 text-muted-foreground"><Link to="/admin/renewals">View all</Link></Button>
+              <Button asChild size="sm" variant="ghost" className="-my-1 text-muted-foreground"><Link to="/admin/renewal-orders">View all</Link></Button>
             </CardAction>
           </CardHeader>
           {recentRenewals.length === 0 ? (

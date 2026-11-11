@@ -658,12 +658,18 @@ public sealed class RenewalsModule : ICarterModule
             var sale = await db.OntraportSales.AsNoTracking().Where(s => s.RenewalRequestId == r.Id)
                 .Select(s => new { id = s.Id, syncedAt = s.SyncedAt, amountPaid = s.AmountPaid, renewalDueDate = s.RenewalDueDate })
                 .FirstOrDefaultAsync();
+            var order = r.RenewalOrderId is { } oid
+                ? await db.RenewalOrders.AsNoTracking().Where(o => o.Id == oid)
+                    .Select(o => new { id = o.Id, stage = o.Stage.ToString(), reason = o.Reason.HasValue ? o.Reason.Value.ToString() : null, paidAt = o.PaidAt })
+                    .FirstOrDefaultAsync()
+                : null;
             var nameDue = r.ClientBusinessNameId is { } nameId
                 ? await db.ClientBusinessNames.AsNoTracking().Where(n => n.Id == nameId).Select(n => n.RenewalDueDate).FirstOrDefaultAsync()
                 : null;
 
             return Results.Ok(new
             {
+                order,
                 id = r.Id,
                 client,
                 clientBusinessNameId = r.ClientBusinessNameId,

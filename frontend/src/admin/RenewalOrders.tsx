@@ -63,7 +63,7 @@ export default function RenewalOrders() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
       <PageHeader
-        title={view === 'to-fix' ? 'Renewals to fix' : 'Paid renewals'}
+        title={view === 'to-fix' ? 'Renewals to fix' : 'Renewals'}
         subtitle="Every name a client paid us to renew, with where it is now."
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />

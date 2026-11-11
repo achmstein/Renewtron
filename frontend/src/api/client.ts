@@ -944,6 +944,8 @@ export const api = {
     },
     renewal: (id: string) => apiFetch<{
       id: string
+      /** The paid renewal this ASIC run is an attempt at. */
+      order: { id: string; stage: string; reason: string | null; paidAt: string } | null
       client: { id: string; fullName: string } | null
       clientBusinessNameId: string | null
       searchLogId: string
