@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, type RenewalOrderRow } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch } from './_ui'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
 import { inSentence, orderStatus } from './_status'
 import { fmtMoney0, fmtMoney2 } from './_utils'
@@ -11,7 +11,6 @@ import { sample } from '@/components/skeleton-samples'
 import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const PAGE_SIZE = 50
 
@@ -81,11 +80,7 @@ export default function RenewalOrders() {
       </Skeletonizer>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Tabs className="min-w-0 max-w-full" value={view} onValueChange={(v) => { setPage(1); setSearchParams(v === 'all' ? {} : { view: v }) }}>
-          <TabsList>
-            {VIEWS.map((v) => <TabsTrigger key={v.value} value={v.value}>{v.label}</TabsTrigger>)}
-          </TabsList>
-        </Tabs>
+        <ViewSwitch label="Show" className="min-w-0" value={view} options={VIEWS} onChange={(v) => { setPage(1); setSearchParams(v === 'all' ? {} : { view: v }) }} />
         <Input className="h-8 w-full sm:w-56" placeholder="Business name or ABN" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} />
       </div>
 

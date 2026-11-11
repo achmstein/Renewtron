@@ -5,7 +5,7 @@ import { Check, Mail, PlusCircle, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { DateRangeFilter, Pagination, useDebouncedValue } from './_components'
-import { Cell, EmptyState, FunnelPills, PageHeader, pageClass, RefreshButton, Stat, StatStrip, ViewToggle, type Tone } from './_ui'
+import { Cell, EmptyState, FunnelPills, PageHeader, pageClass, RefreshButton, Stat, StatStrip, ViewSwitch, ViewToggle, type Tone } from './_ui'
 import { Lookups } from './Searches'
 import { LeadSentence, SentenceList } from './_sentences'
 import { Status, visitStatus } from './_status'
@@ -23,7 +23,6 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 type LeadsResponse = Awaited<ReturnType<typeof api.admin.leads>>
@@ -71,12 +70,9 @@ export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams()
   const view = searchParams.get('view') === 'lookups' ? 'lookups' : 'leads'
   const tabs = (
-    <Tabs className="mb-6" value={view} onValueChange={(v) => setSearchParams(v === 'lookups' ? { view: 'lookups' } : {})}>
-      <TabsList>
-        <TabsTrigger value="leads">Leads</TabsTrigger>
-        <TabsTrigger value="lookups">Other lookups</TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <ViewSwitch label="Show" className="mb-6" value={view}
+      options={[{ value: 'leads', label: 'Leads' }, { value: 'lookups', label: 'Other lookups' }]}
+      onChange={(v) => setSearchParams(v === 'lookups' ? { view: 'lookups' } : {})} />
   )
   return (
     <div className={pageClass()}>

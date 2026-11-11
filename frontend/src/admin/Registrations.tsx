@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { registrationsApi, type AdminRegistration } from '../api/registrations'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, pageClass, PageHeader, RefreshButton } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, ViewSwitch } from './_ui'
 import { Status } from './_status'
 import { When } from './_rows'
 import { fmtMoney2, formatAbn } from './_utils'
@@ -11,7 +11,6 @@ import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { sample } from '@/components/skeleton-samples'
 import { sampleRows } from '@/components/skeletonizer'
 import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 /*
  * New business names from the public /register page (/admin/registrations): who applied, where
@@ -123,12 +122,8 @@ export default function Registrations() {
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <ToggleGroup type="single" variant="outline" size="sm" value={view}
-          onValueChange={(v) => { if (v) { setPage(1); setView(v as View) } }}>
-          {(Object.keys(VIEWS) as View[]).map((k) => (
-            <ToggleGroupItem key={k} value={k} className="px-3">{VIEWS[k].label}</ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <ViewSwitch<View> label="Show" value={view} onChange={(v) => { setPage(1); setView(v) }}
+          options={(Object.keys(VIEWS) as View[]).map((k) => ({ value: k, label: VIEWS[k].label }))} />
         <Input value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} placeholder="Name, email, ABN or ASIC ref"
                className="h-8 w-full sm:w-72" />
       </div>

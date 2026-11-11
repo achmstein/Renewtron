@@ -5,7 +5,7 @@ import { Loader2, TriangleAlert, Users, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientLinkResult, type ClientListItem } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, Hint, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, Hint, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { sample } from '@/components/skeleton-samples'
@@ -15,8 +15,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 
 const filters = [
   { value: '', label: 'All' },
@@ -196,27 +194,8 @@ export default function Clients() {
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, ABN or business name…" className="h-8 w-full sm:w-72" />
-        {/* Phones: the four filters don't fit in a row, so they're a dropdown there. */}
-        <Select value={filter || 'all'} onValueChange={(v) => update({ filter: v === 'all' ? '' : v })}>
-          <SelectTrigger size="sm" aria-label="Show" className="sm:hidden">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {filters.map((f) => <SelectItem key={f.value || 'all'} value={f.value || 'all'}>{f.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <ToggleGroup
-          className="hidden sm:flex"
-          type="single"
-          variant="outline"
-          size="sm"
-          value={filter || 'all'}
-          onValueChange={(v) => { if (v) update({ filter: v === 'all' ? '' : v }) }}
-        >
-          {filters.map((f) => (
-            <ToggleGroupItem key={f.value} value={f.value || 'all'} className="px-3">{f.label}</ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <ViewSwitch label="Show" value={filter || 'all'} onChange={(v) => update({ filter: v === 'all' ? '' : v })}
+          options={filters.map((f) => ({ value: f.value || 'all', label: f.label }))} />
         {search || filter ? (
           <Button variant="ghost" size="sm" onClick={() => { setSearch(''); update({ filter: '', q: '' }) }}>
             Reset <X />

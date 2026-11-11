@@ -5,7 +5,7 @@ import { CircleAlert, Info, KeyRound, ListRestart, Loader2, RefreshCw, X } from 
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch, ViewToggle } from './_ui'
 import { SaleSentence, SentenceList } from './_sentences'
 import { HANDLED, Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
@@ -19,7 +19,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 type SalesResponse = Awaited<ReturnType<typeof api.admin.ontraportSales>>
@@ -323,14 +322,12 @@ export default function OntraportSales() {
 
       {/* Due-date tabs and filters, resolved on the server; the view and refresh sit at the end. */}
       <div className="mt-8 flex flex-wrap items-center gap-2">
-        <Tabs className="min-w-0 max-w-full" value={dueFilter} onValueChange={(v) => setDueFilter(v as DueFilter)}>
-          <TabsList className="h-8">
-            <DueTab value="overdue" count={tabCounts.overdue}>Overdue</DueTab>
-            <DueTab value="7d" count={tabCounts.soon7}><span className="sm:hidden">7 days</span><span className="hidden sm:inline">Next 7 days</span></DueTab>
-            <DueTab value="30d" count={tabCounts.soon30}><span className="sm:hidden">30 days</span><span className="hidden sm:inline">Next 30 days</span></DueTab>
-            <DueTab value="all" count={tabCounts.all}>All</DueTab>
-          </TabsList>
-        </Tabs>
+        <ViewSwitch<DueFilter> label="Due" className="min-w-0" value={dueFilter} onChange={setDueFilter} options={[
+          { value: 'overdue', label: 'Overdue', count: tabCounts.overdue },
+          { value: '7d', label: <><span className="sm:hidden">7 days</span><span className="hidden sm:inline">Next 7 days</span></>, count: tabCounts.soon7 },
+          { value: '30d', label: <><span className="sm:hidden">30 days</span><span className="hidden sm:inline">Next 30 days</span></>, count: tabCounts.soon30 },
+          { value: 'all', label: 'All', count: tabCounts.all },
+        ]} />
         <Input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -496,14 +493,6 @@ function defaultStats(): Stats {
   }
 }
 
-function DueTab({ value, count, children }: { value: DueFilter; count: number; children: React.ReactNode }) {
-  return (
-    <TabsTrigger value={value}>
-      {children}
-      <span className="text-muted-foreground tabular-nums">{count.toLocaleString()}</span>
-    </TabsTrigger>
-  )
-}
 
 /** "3 days overdue", "today", "in 9 days", with a dot when it's close. */
 function DueWords({ days }: { days: number }) {

@@ -288,6 +288,42 @@ export function ViewToggle<T extends string>({ value, options, onChange }: {
   )
 }
 
+export interface ViewSwitchOption<T extends string> {
+  value: T
+  label: ReactNode
+  /** Shown muted after the label: how many rows that view holds. */
+  count?: number
+  title?: string
+}
+
+/**
+ * Which slice of a list to show (All / To fix / Renewed…, a date range, a record kind): joined
+ * outline buttons, the one look for this on every page, beside the outline filter buttons. One
+ * row; on a narrow screen it scrolls sideways instead of wrapping (wrapping breaks the joined
+ * buttons). For switching how rows are drawn (sentences, table, cards) use ViewToggle.
+ */
+export function ViewSwitch<T extends string>({ value, options, onChange, label, className }: {
+  value: T
+  options: ViewSwitchOption<T>[]
+  onChange: (v: T) => void
+  /** What the buttons choose, for screen readers ("Show", "Range"). */
+  label?: string
+  className?: string
+}) {
+  return (
+    <div className={cn('max-w-full overflow-x-auto [scrollbar-width:none]', className)}>
+      <ToggleGroup type="single" variant="outline" size="sm" value={value} onValueChange={(v) => v && onChange(v as T)} aria-label={label}>
+        {options.map((o) => (
+          <ToggleGroupItem key={o.value} value={o.value} title={o.title} className="px-3 whitespace-nowrap">
+            {o.label}
+            {o.count != null ? <span className="text-muted-foreground tabular-nums">{o.count.toLocaleString()}</span> : null}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  )
+}
+
 /* ─────────────────── Form helpers ─────────────────── */
 
 /** A label and its input, for filter and settings forms. */

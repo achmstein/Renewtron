@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, KeyRound, Link2, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicDeclareAs, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
-import { Cell, EmptyState, pageClass, StatusPill } from './_ui'
+import { Cell, EmptyState, pageClass, StatusPill, ViewSwitch } from './_ui'
 import { Status, statusOf } from './_status'
 import { DueIn, Queue, When, useRowKeyboard } from './_rows'
 import { StoryStrip, type StoryStep } from './_record'
@@ -22,7 +22,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
 const errorText = (e: unknown) => (e instanceof Error ? e.message : undefined)
@@ -260,22 +259,15 @@ function Timeline({ client }: { client: ClientDetail }) {
   if (events.length === 0) return <p className="text-sm text-muted-foreground">Nothing here yet.</p>
   const counts = events.reduce<Partial<Record<TimelineKind, number>>>((acc, e) => ({ ...acc, [e.kind]: (acc[e.kind] ?? 0) + 1 }), {})
   const visible = events.filter((e) => !kind || e.kind === kind)
-  const option = (value: TimelineKind | 'all', label: string, count: number) => (
-    <ToggleGroupItem key={value} value={value} className="px-3">
-      {label} <span className="text-muted-foreground tabular-nums">{count}</span>
-    </ToggleGroupItem>
-  )
 
   return (
     <div>
-      {/* One row that scrolls sideways when it's wider than the screen (wrapping breaks the joined buttons). */}
-      <div className="mb-3 overflow-x-auto [scrollbar-width:none]">
-        <ToggleGroup type="single" variant="outline" size="sm" value={kind || 'all'}
-          onValueChange={(v) => { if (!v) return; setKind(v === 'all' ? '' : (v as TimelineKind)); setShown(TIMELINE_STEP) }}>
-          {option('all', 'All', events.length)}
-          {(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => option(k, KIND_LABELS[k], counts[k]!))}
-        </ToggleGroup>
-      </div>
+      <ViewSwitch<TimelineKind | 'all'> label="Show" className="mb-3" value={kind || 'all'}
+        onChange={(v) => { setKind(v === 'all' ? '' : v); setShown(TIMELINE_STEP) }}
+        options={[
+          { value: 'all', label: 'All', count: events.length },
+          ...(Object.keys(KIND_LABELS) as TimelineKind[]).filter((k) => counts[k]).map((k) => ({ value: k, label: KIND_LABELS[k], count: counts[k]! })),
+        ]} />
       <ol className="divide-y">
         {visible.slice(0, shown).map((e) => (
           <li key={e.key} className="flex items-start gap-3 py-2.5">

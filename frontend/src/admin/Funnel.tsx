@@ -4,14 +4,13 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, type FunnelResponse } from '../api/client'
-import { Chip, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { Chip, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch } from './_ui'
 import { sample } from '@/components/skeleton-samples'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
 function isoDaysAgo(days: number) {
@@ -118,9 +117,7 @@ export default function Funnel() {
         subtitle="How far people get through the renewal wizard."
         right={
           <>
-            <ToggleGroup type="single" variant="outline" size="sm" value={days} onValueChange={(v) => v && setDays(v)} aria-label="Range">
-              {RANGES.map((r) => <ToggleGroupItem key={r.value} value={r.value} className="px-3">{r.label}</ToggleGroupItem>)}
-            </ToggleGroup>
+            <ViewSwitch label="Range" value={days} onChange={setDays} options={RANGES} />
             <Select value={source || ALL_SOURCES} onValueChange={(v) => setSource(v === ALL_SOURCES ? '' : v)}>
               <SelectTrigger size="sm" aria-label="Source" className="min-w-36">
                 <SelectValue />
