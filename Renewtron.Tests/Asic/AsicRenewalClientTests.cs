@@ -422,11 +422,42 @@ public class AsicRenewalClientTests
     [InlineData("<td>Biller Code</td><td><b>17301</b></td><td>Customer Reference Number</td><td>8596799759492</td>", "17301", "8596799759492")]
     [InlineData("biller code:&#160;123 customer reference number:&nbsp;123456", "123", "123456")]
     public void Bpay_details_are_read_with_or_without_markup(string html, string biller, string reference) =>
-        Assert.Equal((biller, reference), AsicRenewalClient.ReadBpay(html));
+        Assert.Equal((biller, reference), RenewalPages.ReadBpay(html));
 
     [Theory]
     [InlineData(null)]
     [InlineData("Biller Code: 17301")]
     [InlineData("Customer Reference Number: 8596799759492")]
-    public void Bpay_details_need_both(string? html) => Assert.Null(AsicRenewalClient.ReadBpay(html));
+    public void Bpay_details_need_both(string? html) => Assert.Null(RenewalPages.ReadBpay(html));
+
+    /* ───────────── Reading pages ───────────── */
+
+    [Fact]
+    public void Names_are_read_inside_adf_cdata_sections()
+    {
+        // ASIC's partial responses wrap the HTML in CDATA, which an HTML parser would drop.
+        var partial = "<partial-response><changes><update id=\"tmpt:region\"><![CDATA[" + TwoNames + "]]></update></changes></partial-response>";
+
+        Assert.Equal(["BEAUTIQUE HAIR LOUNGE & BEAUTY BAR", "SECOND NAME"], RenewalPages.Names(partial).Select(n => n.Name));
+        Assert.Equal("tmpt:region:1:form:sbr1", RenewalPages.RadioFor(partial, "987654321"));
+    }
+
+    [Fact]
+    public void A_partial_row_is_not_a_name() =>
+        Assert.Equal(2, RenewalPages.Names(TwoNames + "<span class=\"dataText\">ORPHAN</span>").Count);
+
+    [Theory]
+    [InlineData(null, "0", "3")]
+    [InlineData("<p>no ids</p>", "0", "3")]
+    [InlineData("<span id=\"tmpt:region:5:payNow\"></span>", "5", "5")]
+    [InlineData("<span id=\"tmpt:region:5:x\"></span><span id=\"tmpt:region:6:payNowPopup\"></span>", "5", "6")]
+    public void Region_ids_come_from_the_current_page(string? page, string region, string payNowRegion)
+    {
+        Assert.Equal(region, RenewalPages.Region(page));
+        Assert.Equal(payNowRegion, RenewalPages.PayNowRegion(page));
+    }
+
+    [Fact]
+    public void Snippet_is_the_pages_text_cut_short() =>
+        Assert.Equal(new string('a', 300) + "…", RenewalPages.Snippet("<p>" + new string('a', 400) + "</p>"));
 }
