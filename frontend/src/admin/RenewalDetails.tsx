@@ -5,9 +5,10 @@ import { Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { pageClass, StatusPill } from './_ui'
-import { orderStatus, renewalStatus, statusOf, type StatusEntry } from './_status'
+import { renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When, agoWords, dueWords } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
+import { JourneyTimeline } from './_journey'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
@@ -158,8 +159,9 @@ export default function RenewalDetails() {
         status={status}
       >
         {next}
-        <StoryStrip steps={story(data, status)} />
       </RecordHeader>
+
+      <JourneyTimeline kind="run" id={id} className="mt-6" />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who it’s for">
@@ -311,31 +313,6 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
   )
 }
 
-/** Visit → paid → renewal → ASIC fee: the records either side of this one. */
-function story(d: Detail, status: StatusEntry): StoryStep[] {
-  const steps: StoryStep[] = []
-  if (d.sale) {
-    steps.push({ label: 'Ontraport sale', meaning: 'done', at: d.sale.syncedAt, to: `/admin/ontraport-sales/${d.sale.id}` })
-  } else {
-    steps.push({ label: d.initiatedByLabel === 'Customer' ? 'Wizard search' : 'Name search', meaning: 'done', at: d.searchedAt, to: `/admin/searches/${d.searchLogId}` })
-    steps.push(d.paymentType === 'External'
-      ? { label: 'Paid', meaning: 'done', note: 'outside Renewtron' }
-      : paidByClient(d)
-        ? { label: `Paid ${fmtMoney2(d.amount)}`, meaning: 'done', at: d.stripePayment?.paidAt ?? d.initiatedAt }
-        : { label: 'Payment', meaning: 'quiet', note: statusOf('payment', d.stripePayment?.paymentStatus).label.toLowerCase() })
-  }
-  steps.push({ label: `This ASIC run: ${status.label.toLowerCase()}`, meaning: status.meaning, at: d.completedAt ?? d.lastAttemptAt ?? d.initiatedAt, current: true })
-  if (d.order) {
-    const o = orderStatus(d.order.stage, d.order.reason)
-    steps.push({ label: `Paid renewal: ${o.label.toLowerCase()}`, meaning: o.meaning, to: `/admin/renewal-orders/${d.order.id}` })
-  }
-  if (d.bpayReference) {
-    steps.push(d.bpayPaidAt
-      ? { label: 'ASIC fee paid', meaning: 'done', at: d.bpayPaidAt, to: '/admin/bpay' }
-      : { label: 'ASIC fee', meaning: d.status === 'Completed' ? 'action' : 'quiet', note: 'BPAY to pay', to: '/admin/bpay' })
-  }
-  return steps
-}
 
 function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s

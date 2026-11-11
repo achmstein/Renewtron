@@ -132,6 +132,7 @@ builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
 builder.Services.AddScoped<Renewtron.Services.AsicRegistry.IAsicDueDateService, Renewtron.Services.AsicRegistry.AsicDueDateService>();
 builder.Services.AddScoped<IAsicCheckService, AsicCheckService>();
+builder.Services.AddScoped<IJourneyService, JourneyService>();
 builder.Services.AddScoped<IPaymentFollowUpService, PaymentFollowUpService>();
 builder.Services.AddScoped<IBpayAutoPayService, BpayAutoPayService>();
 builder.Services.AddScoped<IRenewalOrderService, RenewalOrderService>();

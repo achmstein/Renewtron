@@ -28,6 +28,18 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 export interface MeResponse { email: string; name: string }
+
+/** The kinds of record a journey links (see JourneyService on the server). */
+export type JourneyRecord = 'lead' | 'search' | 'run' | 'order' | 'sale' | 'email'
+/** One thing that happened, as a sentence, on the record it happened to. */
+export interface JourneyEvent {
+  at: string
+  text: string
+  detail: string | null
+  meaning: 'action' | 'waiting' | 'working' | 'done' | 'quiet'
+  record: JourneyRecord
+  recordId: string
+}
 export interface OntraportSettingsBody {
   apiAppId: string
   apiKey: string
@@ -611,6 +623,9 @@ export const api = {
   batchStatus: (ids: string[]) => apiFetch<RenewalStatusItem[]>(`/api/renewals/batch?ids=${ids.join(',')}`),
 
   admin: {
+    /** Everything that happened around a record, oldest first: the same story on every record page of the journey. */
+    journey: (kind: Exclude<JourneyRecord, 'email'>, id: string) =>
+      apiFetch<{ events: JourneyEvent[] }>(`/api/admin/journey/${kind}/${id}`),
     dashboard: () => apiFetch<DashboardResponse>('/api/admin/dashboard'),
     settings: () => apiFetch<{
       sendGrid: { apiKey: string; fromEmail: string; fromName: string; eventWebhookPublicKey?: string }

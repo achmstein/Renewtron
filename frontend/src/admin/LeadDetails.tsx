@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf } from './_status'
 import { When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
+import { JourneyTimeline } from './_journey'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
@@ -84,7 +85,8 @@ export default function LeadDetails() {
         {nextStep(data, latest)}
       </RecordHeader>
 
-      <div className="mt-6"><StoryStrip steps={story(data, latest)} /></div>
+      <JourneyTimeline kind="lead" id={id} className="mt-6" />
+
 
       <Card className="mt-6 gap-0 py-0">
         <CardHeader className="border-b py-4"><CardTitle>What ASIC said</CardTitle></CardHeader>
@@ -217,36 +219,7 @@ function nextStep(d: Detail, latest: Renewal | undefined): ReactNode {
   return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>No business name here can be renewed.</NextStep>
 }
 
-/** Details → names shown → payment page → paid → renewed: the same steps on every visit. */
-function story(d: Detail, latest: Renewal | undefined): StoryStep[] {
-  const rank = { Details: 0, NamesShown: 1, PaymentPage: 2, Paid: 3 }[d.progress] ?? 0
-  const reached = (n: number) => rank >= n
-  const stopped = (n: number) => rank === n - 1 && !latest
-  const steps: StoryStep[] = [
-    { label: 'Details', meaning: 'done', at: d.createdAt, current: true },
-    { label: 'Names shown', meaning: reached(1) ? 'done' : 'quiet', at: d.namesShownAt,
-      note: reached(1) ? undefined : stopped(1) ? asicShort(d.outcome) : undefined },
-    { label: 'Payment page', meaning: reached(2) ? 'done' : 'quiet', at: d.reachedPaymentAt, note: reached(2) ? undefined : stopped(2) ? 'Left here' : undefined },
-    { label: 'Paid', meaning: reached(3) ? 'done' : rank === 2 ? 'waiting' : 'quiet', at: d.convertedAt, note: !reached(3) && rank === 2 ? 'Left the payment page' : undefined },
-  ]
-  if (latest) {
-    const s = renewalStatus(latest)
-    steps.push({ label: 'Renewed', meaning: latest.status === 'Completed' ? 'done' : s.meaning, at: latest.status === 'Completed' ? latest.initiatedAt : undefined,
-      note: latest.status === 'Completed' ? undefined : s.label, to: latest.orderId ? `/admin/renewal-orders/${latest.orderId}` : `/admin/renewals/${latest.id}` })
-  } else {
-    steps.push({ label: 'Renewed', meaning: 'quiet' })
-  }
-  return steps
-}
 
-function asicShort(outcome: string): string {
-  switch (outcome) {
-    case 'NotDueForRenewal': return 'ASIC: not due'
-    case 'RenewalInProgress': return 'ASIC: renewal open'
-    case 'NoBusinessNames': return 'ASIC: no names'
-    default: return 'Left here'
-  }
-}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

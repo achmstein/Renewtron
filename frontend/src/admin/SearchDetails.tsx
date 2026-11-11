@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
+import { JourneyTimeline } from './_journey'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
@@ -78,8 +79,9 @@ export default function SearchDetails() {
         status={status}
       >
         {nextStep(data)}
-        <StoryStrip steps={story(data)} />
       </RecordHeader>
+
+      <JourneyTimeline kind="search" id={id} className="mt-6" />
 
       <Card className="mt-6 gap-4">
         <CardHeader><CardTitle>What ASIC returned</CardTitle></CardHeader>
@@ -162,23 +164,4 @@ function nextStep(d: Detail): ReactNode {
   return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>They searched and left without giving their details.</NextStep>
 }
 
-/** Search → wizard visit → renewal(s). */
-function story(d: Detail): StoryStep[] {
-  const steps: StoryStep[] = [
-    { label: 'ASIC search', meaning: d.success ? 'done' : 'quiet', at: d.searchedAt, note: d.success ? undefined : 'no answer', current: true },
-  ]
-  steps.push(d.lead
-    ? { label: 'Lead', meaning: 'done', note: statusOf('lead', d.lead.outcome).label.toLowerCase(), to: `/admin/leads/${d.lead.id}` }
-    : { label: 'Lead', meaning: 'quiet', note: 'didn’t continue' })
-  const renewals = d.results.filter((r) => r.renewalRequest)
-  if (renewals.length === 0) {
-    steps.push({ label: 'Renewal', meaning: 'quiet', note: 'none' })
-  } else {
-    for (const r of renewals.slice(0, 3)) {
-      const s = renewalStatus(r.renewalRequest!)
-      steps.push({ label: r.businessName, meaning: s.meaning, note: s.label.toLowerCase(), to: `/admin/renewals/${r.renewalRequest!.id}` })
-    }
-  }
-  return steps
-}
 

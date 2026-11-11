@@ -6,8 +6,9 @@ import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { HANDLED, Status, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
-import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
+import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
+import { JourneyTimeline } from './_journey'
+import { fmtDateTime, formatAbn } from './_utils'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
@@ -123,8 +124,9 @@ export default function SaleDetails() {
         status={status}
       >
         {nextStep(data, tryAgainButton, keyButton, undoButton)}
-        <StoryStrip steps={story(data)} />
       </RecordHeader>
+
+      <JourneyTimeline kind="sale" id={id} className="mt-6" />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who bought it">
@@ -251,37 +253,6 @@ function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s
 }
 
-/** Sale → renewal → ASIC fee → ASIC key. */
-function story(d: Detail): StoryStep[] {
-  const steps: StoryStep[] = [{ label: `Paid ${fmtMoney2(d.amountPaid)}`, meaning: 'done', at: d.syncedAt, note: undefined, current: true }]
-  const r = d.renewal
-  if (r) {
-    const s = renewalStatus(r)
-    steps.push({ label: `Renewal: ${s.label.toLowerCase()}`, meaning: s.meaning, at: r.completedAt ?? r.initiatedAt, to: `/admin/renewals/${r.id}` })
-    if (r.bpayReference) {
-      steps.push(r.bpayPaidAt
-        ? { label: 'ASIC fee paid', meaning: 'done', at: r.bpayPaidAt, to: '/admin/bpay' }
-        : { label: 'ASIC fee', meaning: r.status === 'Completed' ? 'action' : 'quiet', note: 'BPAY to pay', to: '/admin/bpay' })
-    }
-  } else if (d.handledAt) {
-    steps.push({ label: 'Renewal', meaning: 'done', note: 'handled outside Renewtron', at: undefined })
-  } else {
-    const s = statusOf('sale', d.status)
-    steps.push({ label: 'Renewal', meaning: s.meaning === 'done' ? 'done' : s.meaning, note: s.label.toLowerCase() })
-  }
-  const letter = d.keyLetters.find((k) => k.hasKey) ?? d.keyLetters[0]
-  const request = d.keyRequests[0]
-  if (letter) {
-    const s = statusOf('keyLetter', letter.status)
-    steps.push({ label: 'ASIC key', meaning: s.meaning, at: letter.receivedAt, note: s.label.toLowerCase(), to: `/admin/asic-keys/${letter.id}` })
-  } else if (request) {
-    const s = statusOf('keyRequest', request.status)
-    steps.push({ label: 'ASIC key', meaning: s.meaning, note: s.label.toLowerCase(), to: `/admin/asic-key-requests/${request.id}` })
-  } else {
-    steps.push({ label: 'ASIC key', meaning: 'quiet', note: 'not requested' })
-  }
-  return steps
-}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

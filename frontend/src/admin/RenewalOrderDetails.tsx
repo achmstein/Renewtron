@@ -6,7 +6,8 @@ import { sileo } from 'sileo'
 import { api, type RenewalOrderAttempt, type RenewalOrderDecision, type RenewalOrderRow } from '../api/client'
 import { Status, inSentence, orderStatus, renewalStatus } from './_status'
 import { DueIn, When } from './_rows'
-import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, DetailRow, type StoryStep } from './_record'
+import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
+import { JourneyTimeline } from './_journey'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
@@ -150,7 +151,8 @@ export default function RenewalOrderDetails() {
         {nextStep(o, d, status.hint, buttons)}
       </RecordHeader>
 
-      <div className="mt-6"><StoryStrip steps={story(o, data)} /></div>
+      <JourneyTimeline kind="order" id={id} className="mt-6" />
+
 
       {d.evidence || d.asicCheckedAt ? <AsicSaid d={d} /> : null}
 
@@ -230,25 +232,6 @@ function nextStep(o: RenewalOrderRow, d: RenewalOrderDecision, hint: string | un
   }
 }
 
-/** Visit → paid → lodged at ASIC → renewed, or how it ended instead. The same step names everywhere. */
-function story(o: RenewalOrderRow, data: OrderData): StoryStep[] {
-  const lodged = data.attempts.find((a) => a.status === 'Completed') ?? data.attempts.find((a) => a.current) ?? data.attempts[0]
-  const steps: StoryStep[] = []
-  steps.push(data.visit
-    ? { label: 'Lead', meaning: 'done', at: data.visit.at, to: `/admin/leads/${data.visit.id}` }
-    : { label: o.source === 'Ontraport' ? 'Ontraport' : 'Lead', meaning: o.source === 'Ontraport' ? 'done' : 'quiet', note: o.source === 'Ontraport' ? 'Sold in Ontraport' : 'Not on the website' })
-  steps.push({ label: 'Paid', meaning: 'done', at: o.paidAt, current: true, note: <>{fmtMoney2(o.amountPaid)} · <When at={o.paidAt} /></> })
-  steps.push(lodged
-    ? { label: 'Lodged at ASIC', meaning: renewalStatus(lodged).meaning, at: lodged.initiatedAt, to: `/admin/renewals/${lodged.id}`,
-        note: <>{renewalStatus(lodged).label} · <When at={lodged.initiatedAt} /></> }
-    : { label: 'Lodged at ASIC', meaning: o.stage === 'Closed' ? 'quiet' : o.stage === 'NeedsPerson' ? 'action' : 'waiting', note: 'Not started' })
-  if (o.stage === 'Closed')
-    steps.push({ label: orderStatus(o.stage, o.reason).label, meaning: o.reason === 'RenewedElsewhere' ? 'done' : 'quiet', at: data.decision.at ?? o.stageChangedAt })
-  else
-    steps.push({ label: 'Renewed', meaning: o.stage === 'Renewed' ? 'done' : o.stage === 'NeedsPerson' ? 'action' : 'quiet', at: o.renewedAt,
-      note: o.stage === 'Renewed' ? undefined : orderStatus(o.stage, o.reason).label })
-  return steps
-}
 
 /** What ASIC (or a person) said that the order's outcome rests on. */
 function AsicSaid({ d }: { d: RenewalOrderDecision }) {
