@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sileo'
 import 'sileo/styles.css'
 import AdminLayout from './AdminLayout'
@@ -8,7 +8,6 @@ import Dashboard from './Dashboard'
 import Today from './Today'
 import RenewalOrders from './RenewalOrders'
 import RenewalOrderDetails from './RenewalOrderDetails'
-import Searches from './Searches'
 import SearchDetails from './SearchDetails'
 import Clients from './Clients'
 import ClientDetails from './ClientDetails'
@@ -48,7 +47,8 @@ export default function AdminRoutes() {
         <Route element={<AdminLayout />}>
           <Route index element={<Today />} />
           <Route path="overview" element={<Dashboard />} />
-          <Route path="searches" element={<Searches />} />
+          {/* Lookups live on the Leads page now; old links still land there. */}
+          <Route path="searches" element={<Navigate to="/admin/leads?view=lookups" replace />} />
           <Route path="searches/:id" element={<SearchDetails />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/duplicates" element={<ClientDuplicates />} />

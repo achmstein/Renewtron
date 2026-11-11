@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Mail, PlusCircle, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { DateRangeFilter, Pagination, useDebouncedValue } from './_components'
-import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle, type Tone } from './_ui'
+import { Cell, EmptyState, FunnelPills, PageHeader, pageClass, RefreshButton, Stat, StatStrip, ViewToggle, type Tone } from './_ui'
+import { Lookups } from './Searches'
 import { LeadSentence, SentenceList } from './_sentences'
 import { Status, visitStatus } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
@@ -22,6 +23,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 type LeadsResponse = Awaited<ReturnType<typeof api.admin.leads>>
@@ -60,7 +62,36 @@ const reminderLabels: Record<string, string> = {
   NotOptedIn: 'Not opted in',
 }
 
+/**
+ * Leads: people who typed their ABN and details on the site, each with the lookup it came with.
+ * "Other lookups" lists the ABN lookups no lead came from (staff, Renewtron, visitors who left
+ * before giving details); it replaces the separate Searches page.
+ */
 export default function Leads() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('view') === 'lookups' ? 'lookups' : 'leads'
+  const tabs = (
+    <Tabs className="mb-6" value={view} onValueChange={(v) => setSearchParams(v === 'lookups' ? { view: 'lookups' } : {})}>
+      <TabsList>
+        <TabsTrigger value="leads">Leads</TabsTrigger>
+        <TabsTrigger value="lookups">Other lookups</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  )
+  return (
+    <div className={pageClass()}>
+      {view === 'lookups' ? (
+        <>
+          <PageHeader title="Leads" subtitle="ABN lookups no lead came from: staff checks, Renewtron's own, and visitors who left before giving their details." />
+          {tabs}
+          <Lookups />
+        </>
+      ) : <LeadsList tabs={tabs} />}
+    </div>
+  )
+}
+
+function LeadsList({ tabs }: { tabs: ReactNode }) {
   // Deep link from the dashboard ("?outcome=RenewalAvailable") seeds the facet on first render.
   const [searchParams] = useSearchParams()
   const [page, setPage] = useState(1)
@@ -226,7 +257,7 @@ export default function Leads() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <>
       <PageHeader
         title="Leads"
         subtitle="People who looked up their ABN and left their details."
@@ -243,6 +274,7 @@ export default function Leads() {
           </Button>
         }
       />
+      {tabs}
 
       <Skeletonizer loading={isPending}><StatsStrip stats={stats} /></Skeletonizer>
 
@@ -294,7 +326,7 @@ export default function Leads() {
           onConfirm={sendWinBack}
         />
       ) : null}
-    </div>
+    </>
   )
 }
 

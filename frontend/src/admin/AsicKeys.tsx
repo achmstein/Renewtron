@@ -5,7 +5,7 @@ import { ExternalLink, Inbox, Loader2, RotateCw, TriangleAlert, UserPlus, X } fr
 import { sileo } from 'sileo'
 import { api, type AsicKeyJobStatus, type AsicKeyNotificationListItem } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { Cell, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -251,7 +251,7 @@ export default function AsicKeys() {
   const scanFailed = stats.lastScanState === 'Failed'
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title={toSort ? 'Keys to sort' : 'ASIC key letters'}
         subtitle={toSort ? 'Key letters we couldn’t read or place.' : 'Keys from ASIC’s emails, written onto the client.'}

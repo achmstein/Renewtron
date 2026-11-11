@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { api, type ActivityItem, type ActivityKind, type DashboardResponse } from '../api/client'
 import { Status } from './_status'
-import { EmptyState, PageHeader, Stat, StatStrip, StatusPill, type Tone } from './_ui'
+import { EmptyState, pageClass, PageHeader, Stat, StatStrip, StatusPill, type Tone } from './_ui'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -45,7 +45,7 @@ export default function Dashboard() {
   })
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader title="Overview" subtitle="Money worth chasing and how the system is running." />
 
       {error ? (

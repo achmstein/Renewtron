@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, type FunnelResponse } from '../api/client'
-import { Chip, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { Chip, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { sample } from '@/components/skeleton-samples'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -112,7 +112,7 @@ export default function Funnel() {
   const daily = data?.daily ?? []
   const period = `Last ${days} days`
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="Funnel"
         subtitle="How far people get through the renewal wizard."

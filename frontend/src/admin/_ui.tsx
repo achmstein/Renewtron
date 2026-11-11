@@ -18,6 +18,15 @@ import { cn } from '@/lib/utils'
 
 /* ─────────────────── Page chrome ─────────────────── */
 
+/**
+ * The page column: one width for every admin page, so lists, forms and records line up as you
+ * move between them. `vertical` replaces the default vertical padding (e.g. 'py-12 text-center'
+ * for a loading or not-found state).
+ */
+export function pageClass(vertical = 'py-6 sm:py-8') {
+  return `mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 ${vertical}`
+}
+
 /** Page title, one optional line under it, and the page's actions on the right. */
 export function PageHeader({ title, subtitle, right }: { kicker?: string; title: string; subtitle?: string; right?: ReactNode }) {
   return (

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { StatusPill } from './_ui'
+import { pageClass, StatusPill } from './_ui'
 import { orderStatus, renewalStatus, statusOf, type StatusEntry } from './_status'
 import { DueIn, When, agoWords, dueWords } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, StoryStrip, TechnicalDetail, type StoryStep, DetailRow } from './_record'
@@ -114,7 +114,7 @@ export default function RenewalDetails() {
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+      <div className={pageClass('py-12 text-center')}>
         <h3 className="text-heading">Renewal not found</h3>
         <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/renewals">Back to renewals</Link></Button>
       </div>
@@ -142,7 +142,7 @@ export default function RenewalDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs
         client={data.client}
         businessName={data.businessName}
@@ -167,7 +167,7 @@ export default function RenewalDetails() {
             <DetailRow label="Client" value={<Link to={`/admin/clients/${data.client.id}`} className="font-medium text-link hover:underline">{data.client.fullName || 'Unnamed client'}</Link>} />
           ) : null}
           {data.lead ? (
-            <DetailRow label="Wizard visit" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-link hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
+            <DetailRow label="Lead" value={<Link to={`/admin/leads/${data.lead.id}`} className="text-link hover:underline">{data.lead.fullName} · {data.lead.email}</Link>} />
           ) : null}
           <DetailRow label="Email" value={data.email ?? '—'} />
           <DetailRow label="Mobile" value={data.mobileNumber ?? '—'} mono />

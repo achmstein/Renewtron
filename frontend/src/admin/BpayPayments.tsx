@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Info, RotateCw, Send, TriangleAlert } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type BpayBill } from '../api/client'
-import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status } from './_status'
 import { fmtMoney2, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -184,7 +184,7 @@ export default function BpayPayments() {
   const owed = toPay.reduce((s, b) => s + (b.amount ?? 0), 0)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="BPAY to pay"
         subtitle="Renewals lodged with ASIC to pay by BPAY, one Airwallex payment per bill."

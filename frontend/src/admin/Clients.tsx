@@ -5,7 +5,7 @@ import { Loader2, TriangleAlert, Users, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientLinkResult, type ClientListItem } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, Hint, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, Hint, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { sample } from '@/components/skeleton-samples'
@@ -156,7 +156,7 @@ export default function Clients() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="Clients"
         subtitle="One record per person, with every business name they hold."

@@ -6,7 +6,7 @@ import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { DateRangeFilter, ErrorModal, Pagination, useDebouncedValue } from './_components'
 import { RenewalSentence, SentenceList } from './_sentences'
-import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
+import { Cell, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
 import { renewalStatus, Status, statusLabel } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -247,7 +247,7 @@ export default function Renewals() {
   ], [retryOneMutation.isPending, retryOneMutation.variables])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title={toFix ? 'Renewals to fix' : 'Renewals'}
         subtitle={toFix ? 'Failed, and nothing will retry them on their own.' : 'Every renewal, from every channel.'}

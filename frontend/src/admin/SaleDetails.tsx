@@ -12,6 +12,7 @@ import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { pageClass } from './_ui'
 
 type Detail = Awaited<ReturnType<typeof api.admin.ontraportSale>>
 
@@ -86,7 +87,7 @@ export default function SaleDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+      <div className={pageClass('py-12 text-center')}>
         <h3 className="text-heading">Sale not found</h3>
         <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/ontraport-sales">Back to Ontraport sales</Link></Button>
       </div>
@@ -112,7 +113,7 @@ export default function SaleDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs client={data.client} businessName={data.businessName}
         list={{ to: '/admin/ontraport-sales', label: 'Ontraport sales' }} here={`Sale of ${shortDate(data.syncedAt)}`} />
 

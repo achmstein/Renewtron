@@ -10,6 +10,7 @@ import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { pageClass } from './_ui'
 
 type Detail = Awaited<ReturnType<typeof api.admin.search>>
 
@@ -52,28 +53,28 @@ export default function SearchDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+      <div className={pageClass('py-12 text-center')}>
         <h3 className="text-heading">Search not found</h3>
-        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/searches">Back to searches</Link></Button>
+        <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/leads?view=lookups">Back to lookups</Link></Button>
       </div>
     )
   }
 
   const status: StatusEntry = data.success
     ? { label: data.resultsCount ? 'Found names' : 'No names', meaning: data.resultsCount ? 'done' : 'quiet' }
-    : { label: 'Search failed', meaning: 'quiet', hint: data.lead ? 'ASIC didn’t answer this lookup; the wizard carried on (see the wizard visit).' : 'ASIC didn’t answer; the visitor saw an error.' }
+    : { label: 'Search failed', meaning: 'quiet', hint: data.lead ? 'ASIC didn’t answer this lookup; the wizard carried on (see the lead).' : 'ASIC didn’t answer; the visitor saw an error.' }
   const by = BY[data.initiatedBy] ?? data.initiatedBy
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <RecordCrumbs client={data.client} list={{ to: '/admin/searches', label: 'Searches' }} here={`ASIC search of ${shortDate(data.searchedAt)}`} />
+    <div className={pageClass()}>
+      <RecordCrumbs client={data.client} list={data.lead ? { to: '/admin/leads', label: 'Leads' } : { to: '/admin/leads?view=lookups', label: 'Other lookups' }} here={`ASIC search of ${shortDate(data.searchedAt)}`} />
 
       <RecordHeader
         title={!data.success
           ? `${by} looked up ABN ${formatAbn(data.abn)}; ASIC didn’t answer`
           : `${by} found ${data.resultsCount} business name${data.resultsCount === 1 ? '' : 's'} on ABN ${formatAbn(data.abn)}`}
-        sub={<><When at={data.searchedAt} />{data.lead ? <> · went on to the wizard as {data.lead.fullName}</> : ' · no wizard visit followed'}</>}
+        sub={<><When at={data.searchedAt} />{data.lead ? <> · went on to the wizard as {data.lead.fullName}</> : ' · no lead followed'}</>}
         status={status}
       >
         {nextStep(data)}
@@ -144,7 +145,7 @@ function nextStep(d: Detail): ReactNode {
   const openClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
   if (!d.success && d.lead) {
     return (
-      <NextStep meaning="quiet" title="This lookup failed; the wizard visit carried on." actions={<Button asChild size="sm" variant="outline"><Link to={`/admin/leads/${d.lead.id}`}>Open wizard visit</Link></Button>}>
+      <NextStep meaning="quiet" title="This lookup failed; the lead carried on." actions={<Button asChild size="sm" variant="outline"><Link to={`/admin/leads/${d.lead.id}`}>Open lead</Link></Button>}>
         ASIC didn’t answer this search, so the wizard used our copy of the register and checked with ASIC again. {d.lead.fullName}: {statusOf('lead', d.lead.outcome).label.toLowerCase()}.
       </NextStep>
     )
@@ -153,7 +154,7 @@ function nextStep(d: Detail): ReactNode {
   if (renewals.some((r) => r.status === 'Completed')) return <NextStep meaning="done" title="Nothing to do." actions={openClient}>A name from this search was renewed.</NextStep>
   if (d.lead) {
     return (
-      <NextStep meaning="quiet" title="Follow the wizard visit." actions={<Button asChild size="sm" variant="outline"><Link to={`/admin/leads/${d.lead.id}`}>Open wizard visit</Link></Button>}>
+      <NextStep meaning="quiet" title="Follow the lead." actions={<Button asChild size="sm" variant="outline"><Link to={`/admin/leads/${d.lead.id}`}>Open lead</Link></Button>}>
         {d.lead.fullName}: {statusOf('lead', d.lead.outcome).label.toLowerCase()}.
       </NextStep>
     )
@@ -167,8 +168,8 @@ function story(d: Detail): StoryStep[] {
     { label: 'ASIC search', meaning: d.success ? 'done' : 'quiet', at: d.searchedAt, note: d.success ? undefined : 'no answer', current: true },
   ]
   steps.push(d.lead
-    ? { label: 'Wizard visit', meaning: 'done', note: statusOf('lead', d.lead.outcome).label.toLowerCase(), to: `/admin/leads/${d.lead.id}` }
-    : { label: 'Wizard visit', meaning: 'quiet', note: 'didn’t continue' })
+    ? { label: 'Lead', meaning: 'done', note: statusOf('lead', d.lead.outcome).label.toLowerCase(), to: `/admin/leads/${d.lead.id}` }
+    : { label: 'Lead', meaning: 'quiet', note: 'didn’t continue' })
   const renewals = d.results.filter((r) => r.renewalRequest)
   if (renewals.length === 0) {
     steps.push({ label: 'Renewal', meaning: 'quiet', note: 'none' })

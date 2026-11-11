@@ -82,10 +82,10 @@ const navSections: NavSection[] = [
   {
     kicker: 'Records',
     items: [
+      // A renewal's ASIC runs are on its page; a lead's lookup on the lead's page, and other
+      // lookups under Leads. Their lists keep their addresses (/admin/renewals) for digging.
       { to: '/admin/renewal-orders', label: 'Renewals', icon: Icon.Refresh },
-      { to: '/admin/leads', label: 'Visits', icon: Icon.Users },
-      { to: '/admin/searches', label: 'Searches', icon: Icon.Search },
-      { to: '/admin/renewals', label: 'ASIC runs', icon: Icon.Wrench },
+      { to: '/admin/leads', label: 'Leads', icon: Icon.Users },
       { to: '/admin/ontraport-sales', label: 'Ontraport sales', icon: Icon.Cart },
       { to: '/admin/asic-keys', label: 'Key letters', icon: Icon.Key },
       { to: '/admin/emails', label: 'Emails', icon: Icon.Mail },
@@ -104,22 +104,31 @@ const allItems = navSections.flatMap((s) => s.items)
 /**
  * The one entry to highlight: the longest path containing the current one (a client's page
  * lights "All clients", the duplicates page lights "Duplicates"), and among those the entry
- * whose `view` matches ("Renewals to fix" vs "Renewals").
+ * whose `view` matches ("Renewals to fix" vs "Renewals"). A view with no entry of its own
+ * (Leads' "Other lookups", a renewal stage tab) lights the page's plain entry.
+ * Pages whose list left the sidebar light where they're reached from.
  */
 function activeItem(pathname: string, search: string): NavItem | undefined {
+  const reachedFrom: Record<string, string> = { '/admin/searches': '/admin/leads', '/admin/renewals': '/admin/renewal-orders' }
+  for (const [from, to] of Object.entries(reachedFrom))
+    if (pathname === from || pathname.startsWith(from + '/')) pathname = to
   const view = new URLSearchParams(search).get('view')
-  let best: NavItem | undefined
-  let bestLen = -1
-  for (const item of allItems) {
-    const [path, query] = item.to.split('?')
-    const within = path === '/admin'
-      ? pathname === '/admin' || pathname === '/admin/'
-      : pathname === path || pathname.startsWith(path + '/')
-    if (!within) continue
-    if (new URLSearchParams(query ?? '').get('view') !== view) continue
-    if (path.length > bestLen) { best = item; bestLen = path.length }
+  const find = (matchView: boolean) => {
+    let best: NavItem | undefined
+    let bestLen = -1
+    for (const item of allItems) {
+      const [path, query] = item.to.split('?')
+      const within = path === '/admin'
+        ? pathname === '/admin' || pathname === '/admin/'
+        : pathname === path || pathname.startsWith(path + '/')
+      if (!within) continue
+      const itemView = new URLSearchParams(query ?? '').get('view')
+      if (matchView ? itemView !== view : itemView !== null) continue
+      if (path.length > bestLen) { best = item; bestLen = path.length }
+    }
+    return best
   }
-  return best
+  return find(true) ?? find(false)
 }
 
 function AdminSidebar({ onSearch }: { onSearch: () => void }) {

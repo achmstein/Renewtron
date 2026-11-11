@@ -5,7 +5,7 @@ import { CircleAlert, Info, KeyRound, ListRestart, Loader2, RefreshCw, X } from 
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle } from './_ui'
 import { SaleSentence, SentenceList } from './_sentences'
 import { HANDLED, Status } from './_status'
 import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
@@ -249,7 +249,7 @@ export default function OntraportSales() {
   ], [keyRequestMutation.isPending])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="Ontraport sales"
         subtitle="Paid in Ontraport, renewed once the name is inside ASIC’s window."

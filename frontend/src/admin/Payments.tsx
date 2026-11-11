@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CalendarRange, CircleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
 import { ErrorModal, Pagination, useDebouncedValue } from './_components'
-import { EmptyState, Field, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, Field, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -157,7 +157,7 @@ export default function Payments() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="Payments"
         subtitle="Every Stripe attempt, paid or declined."

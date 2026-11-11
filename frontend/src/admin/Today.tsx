@@ -5,7 +5,7 @@ import { ChevronRight, CircleCheck, TriangleAlert } from 'lucide-react'
 import { api, type TodayGroup, type TodayItem, type TodayResponse } from '../api/client'
 import { Queue, useDoneItems, useRowKeyboard } from './_rows'
 import type { Meaning } from './_status'
-import { RefreshButton } from './_ui'
+import { pageClass, RefreshButton } from './_ui'
 import { fmtMoney0 } from './_utils'
 import { LinkButton, WorkRow, workKey } from './_work'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -101,7 +101,7 @@ export default function Today() {
   ]
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <p className="text-caption text-muted-foreground">{now.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>

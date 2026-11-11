@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Info } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicPortalSettings, type RegistrationSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
-import { PageHeader } from './_ui'
+import { pageClass, PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -219,7 +219,7 @@ export default function Settings() {
   const card = { title: active.title, description: active.description, tip: active.tip, status: status[active.key] }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader title="Settings" subtitle="Integrations, payments and pricing." />
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-4">

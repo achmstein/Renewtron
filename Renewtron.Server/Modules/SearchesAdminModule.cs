@@ -18,6 +18,7 @@ public sealed class SearchesAdminModule : ICarterModule
             DateTime? dateFrom = null,
             DateTime? dateTo = null,
             bool includeSystem = false,
+            bool? hasLead = null,
             int page = 1,
             int pageSize = 25) =>
         {
@@ -46,9 +47,18 @@ public sealed class SearchesAdminModule : ICarterModule
             // counts can be computed under the OTHER selections (classic faceted search).
             // The default hide-System rule belongs to the initiatedBy dimension: the facet
             // must still show System's count so the operator can opt in by selecting it.
+            // hasLead=false: lookups no lead came from (staff, Renewtron's own, visitors who left
+            // before giving their details). The Leads page lists these beside its leads.
+            IQueryable<SearchLog> WithLeadFilter(IQueryable<SearchLog> q) => hasLead switch
+            {
+                true => q.Where(s => db.Leads.Any(l => l.SearchLogId == s.Id)),
+                false => q.Where(s => !db.Leads.Any(l => l.SearchLogId == s.Id)),
+                null => q,
+            };
+
             IQueryable<SearchLog> Filtered(bool applySuccess = true, bool applyInitiatedBy = true)
             {
-                IQueryable<SearchLog> q = db.SearchLogs.AsNoTracking();
+                IQueryable<SearchLog> q = WithLeadFilter(db.SearchLogs.AsNoTracking());
                 if (!string.IsNullOrWhiteSpace(abn))
                     q = q.Where(s => s.Abn.Contains(abn));
                 if (dateFrom.HasValue)
@@ -180,7 +190,7 @@ public sealed class SearchesAdminModule : ICarterModule
             var todayStart = now.Date.ToUniversalTime();
             var yesterdayStart = todayStart.AddDays(-1);
 
-            var statsBase = db.SearchLogs.AsNoTracking().AsQueryable();
+            var statsBase = WithLeadFilter(db.SearchLogs.AsNoTracking());
             if (initiatedByValues.Length > 0)
                 statsBase = statsBase.Where(s => initiatedByValues.Contains(s.InitiatedBy));
             else if (hideSystem)

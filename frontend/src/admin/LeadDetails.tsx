@@ -10,6 +10,7 @@ import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { pageClass } from './_ui'
 
 type Detail = Awaited<ReturnType<typeof api.admin.lead>>
 type Renewal = Detail['renewalRequests'][number]
@@ -60,8 +61,8 @@ export default function LeadDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
-        <h3 className="text-heading">Wizard visit not found</h3>
+      <div className={pageClass('py-12 text-center')}>
+        <h3 className="text-heading">Lead not found</h3>
         <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/leads">Back to leads</Link></Button>
       </div>
     )
@@ -72,8 +73,8 @@ export default function LeadDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <RecordCrumbs client={data.client} list={{ to: '/admin/leads', label: 'Visits' }} here={`Visit of ${shortDate(data.createdAt)}`} />
+    <div className={pageClass()}>
+      <RecordCrumbs client={data.client} list={{ to: '/admin/leads', label: 'Leads' }} here={`Lead of ${shortDate(data.createdAt)}`} />
 
       <RecordHeader
         title={headline(data, latest)}
@@ -107,7 +108,7 @@ export default function LeadDetails() {
 
         <Section title={names.length ? `${names.length} business name${names.length === 1 ? '' : 's'} on the ABN` : 'Business names on the ABN'}>
           {names.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{data.searchLog ? 'ASIC found no business names on this ABN.' : 'No ASIC search is linked to this visit.'}</p>
+            <p className="text-sm text-muted-foreground">{data.searchLog ? 'ASIC found no business names on this ABN.' : 'No ASIC search is linked to this lead.'}</p>
           ) : names.map((n) => {
             const r = data.renewalRequests.filter((x) => x.businessName === n.businessName).sort((a, b) => b.initiatedAt.localeCompare(a.initiatedAt))[0]
             return (

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { registrationsApi, type AdminRegistration } from '../api/registrations'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton } from './_ui'
 import { Status } from './_status'
 import { When } from './_rows'
 import { fmtMoney2, formatAbn } from './_utils'
@@ -116,7 +116,7 @@ export default function Registrations() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="New business names"
         subtitle="Applications from the register page, lodged through our ASIC Connect login."

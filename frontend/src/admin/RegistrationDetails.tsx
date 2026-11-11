@@ -12,6 +12,7 @@ import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { pageClass } from './_ui'
 
 /*
  * One new business name application (/admin/registrations/:id): what the customer asked for,
@@ -52,7 +53,7 @@ export default function RegistrationDetails() {
   const payAsic = useMutation({ mutationFn: (amount: number) => registrationsApi.admin.payAsic(id!, amount), onSettled: refresh })
   const refunded = useMutation({ mutationFn: () => registrationsApi.admin.refunded(id!), onSettled: refresh })
 
-  if (isError || !d) return <div className="mx-auto max-w-5xl px-4 py-12 text-center"><h3 className="text-heading">Application not found</h3></div>
+  if (isError || !d) return <div className={pageClass('py-12 text-center')}><h3 className="text-heading">Application not found</h3></div>
   const r = d.registration
 
   const toast = <T,>(p: Promise<T>, loading: string, done: string, failed: string) =>
@@ -129,7 +130,7 @@ export default function RegistrationDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs client={null} businessName={r.businessName} list={{ to: '/admin/registrations', label: 'New business names' }} here="Application" />
       <RecordHeader
         title={r.businessName}

@@ -5,7 +5,7 @@ import { Eye, EyeOff, TriangleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
 import { DateRangeFilter, ErrorModal, Pagination, useDebouncedValue } from './_components'
 import { SearchSentence, SentenceList } from './_sentences'
-import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, searchFunnelStages, Stat, StatStrip, ViewToggle } from './_ui'
+import { Cell, EmptyState, FunnelPills, RefreshButton, searchFunnelStages, Stat, StatStrip, ViewToggle } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -37,7 +37,12 @@ const SKELETON_STATS: Stats = {
 }
 const PAGE_SIZE = 10
 
-export default function Searches() {
+/**
+ * Lookups no lead came from: staff checks, Renewtron's own (hidden unless asked for), and
+ * visitors who typed an ABN but left before giving their details. Shown on the Leads page;
+ * a lead's own lookup is on the lead's page.
+ */
+export function Lookups() {
   // Cards are the usable default on phones; the wide table needs a desktop viewport.
   const [viewMode, setViewMode] = useState<ViewMode>('Sentences')
   const [page, setPage] = useState(1)
@@ -62,6 +67,7 @@ export default function Searches() {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       includeSystem: includeSystem || undefined,
+      hasLead: false,
       page,
       pageSize: PAGE_SIZE,
     }),
@@ -174,9 +180,7 @@ export default function Searches() {
   ], [])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-      <PageHeader title="Searches" subtitle="ABN lookups from the wizard, staff and Renewtron itself." />
-
+    <>
       <Skeletonizer loading={isPending}><StatsStrip stats={stats} /></Skeletonizer>
 
       {/* Filters, resolved on the server with live counts; the view and refresh sit at the end. */}
@@ -230,7 +234,7 @@ export default function Searches() {
       </div>
 
       <ErrorModal open={errorModal !== null} message={errorModal ?? ''} onClose={() => setErrorModal(null)} title="Search error details" />
-    </div>
+    </>
   )
 }
 
@@ -248,7 +252,7 @@ function StatsStrip({ stats }: { stats: Stats }) {
   return (
     <StatStrip>
       <Stat
-        label="Searches"
+        label="Lookups"
         period="All time"
         value={stats.totalAllTime.toLocaleString()}
         sub={`${stats.total30d.toLocaleString()} in the last 30 days`}
@@ -272,8 +276,8 @@ function StatsStrip({ stats }: { stats: Stats }) {
         value={stats.today.toLocaleString()}
         sub={`${stats.yesterday.toLocaleString()} yesterday`}
         trend={stats.daily14d.map((d) => ({ date: d.date, count: d.count }))}
-        trendLabel="searches"
-        hint="Searches today; the line is the last 14 days"
+        trendLabel="lookups"
+        hint="Lookups today; the line is the last 14 days"
       />
     </StatStrip>
   )

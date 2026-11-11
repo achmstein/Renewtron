@@ -12,6 +12,7 @@ import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { pageClass } from './_ui'
 
 /*
  * Record pages for the two ends of getting a client's ASIC key: the request we send ASIC
@@ -57,7 +58,7 @@ const SAMPLE_REQUEST: Awaited<ReturnType<typeof api.admin.asicKeyRequest>> = {
 
 function NotFound({ what, back }: { what: string; back: { to: string; label: string } }) {
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+    <div className={pageClass('py-12 text-center')}>
       <h3 className="text-heading">{what} not found</h3>
       <Button asChild variant="ghost" size="sm" className="mt-4"><Link to={back.to}>Back to {back.label}</Link></Button>
     </div>
@@ -138,7 +139,7 @@ export function KeyLetterDetails() {
 
   return (
     <Skeletonizer loading={loading}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs client={ctx?.client} businessName={k.businessName} list={{ to: '/admin/asic-keys', label: 'Key letters' }} here={`Key letter of ${shortDate(k.receivedAt)}`} />
       <RecordHeader
         title={(LETTER_HEADLINES[k.status] ?? (() => status.label))(k)}
@@ -252,7 +253,7 @@ export function KeyRequestDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs client={data.client} businessName={r.businessName} list={{ to: '/admin/asic-key-requests', label: 'Key requests' }} here={`Key request of ${shortDate(r.createdAt)}`} />
       <RecordHeader
         title={requestHeadline(r)}

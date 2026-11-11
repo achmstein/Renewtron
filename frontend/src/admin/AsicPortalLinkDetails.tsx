@@ -12,6 +12,7 @@ import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { pageClass } from './_ui'
 
 /*
  * One "link to our ASIC account" run (/admin/asic-portal/:id): link the name in ASIC Connect with
@@ -68,7 +69,7 @@ export default function AsicPortalLinkDetails() {
     },
   })
 
-  if (isError || !r) return <div className="mx-auto max-w-5xl px-4 py-12 text-center"><h3 className="text-heading">Run not found</h3></div>
+  if (isError || !r) return <div className={pageClass('py-12 text-center')}><h3 className="text-heading">Run not found</h3></div>
 
   const status = statusOf('asicPortal', r.status)
   const client = r.clientId ? { id: r.clientId, fullName: r.clientName ?? 'Client' } : null
@@ -111,7 +112,7 @@ export default function AsicPortalLinkDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs client={client} businessName={r.businessName} list={{ to: '/admin/clients', label: 'Clients' }} here="Link to our ASIC account" />
       <RecordHeader
         title={`Link ${r.businessName} to our ASIC account`}

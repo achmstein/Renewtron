@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { sample } from '@/components/skeleton-samples'
 import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { PageHeader } from './_ui'
+import { pageClass, PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 
 /*
@@ -27,7 +27,7 @@ export default function EmailTemplates() {
   const q = useQuery({ queryKey: ['email-templates'], queryFn: templatesApi.list })
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className={pageClass('py-8')}>
       <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
         <Link to="/admin/emails"><ArrowLeft /> Emails</Link>
       </Button>

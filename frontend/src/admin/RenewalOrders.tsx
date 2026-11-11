@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, type RenewalOrderRow } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
 import { inSentence, orderStatus } from './_status'
 import { fmtMoney0, fmtMoney2 } from './_utils'
@@ -31,8 +31,12 @@ const SKELETON: OrdersResponse = {
   ],
 }
 
-/** The views of paid renewals, as tabs. "to-fix" is the sidebar's "Renewals to fix". */
+/**
+ * The views of paid renewals, as tabs. "All" (the latest paid first) is where the sidebar's
+ * "Renewals" opens; "to-fix" is the sidebar's "Renewals to fix". The rest are worked soonest due first.
+ */
 const VIEWS = [
+  { value: 'all', label: 'All' },
   { value: 'to-fix', label: 'To fix' },
   { value: 'decide', label: 'Renew or refund' },
   { value: 'Due', label: 'Due' },
@@ -40,13 +44,12 @@ const VIEWS = [
   { value: 'Waiting', label: 'Waiting' },
   { value: 'Renewed', label: 'Renewed' },
   { value: 'Closed', label: 'Closed' },
-  { value: 'all', label: 'All' },
 ]
 
 /** Paid renewals: one row per name a client paid us to renew, with the one status that matters. */
 export default function RenewalOrders() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const view = searchParams.get('view') ?? 'to-fix'
+  const view = searchParams.get('view') ?? 'all'
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const debounced = useDebouncedValue(search, 300)
@@ -61,10 +64,10 @@ export default function RenewalOrders() {
   const stage = (s: string) => data?.byStage.find((b) => b.stage === s)
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title={view === 'to-fix' ? 'Renewals to fix' : 'Renewals'}
-        subtitle="Every name a client paid us to renew, with where it is now."
+        subtitle={view === 'all' ? 'Every name a client paid us to renew, the latest first.' : 'Every name a client paid us to renew, with where it is now.'}
         right={<RefreshButton onClick={() => void refetch()} busy={isFetching} />}
       />
 
@@ -78,7 +81,7 @@ export default function RenewalOrders() {
       </Skeletonizer>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Tabs className="min-w-0 max-w-full" value={view} onValueChange={(v) => { setPage(1); setSearchParams({ view: v }) }}>
+        <Tabs className="min-w-0 max-w-full" value={view} onValueChange={(v) => { setPage(1); setSearchParams(v === 'all' ? {} : { view: v }) }}>
           <TabsList>
             {VIEWS.map((v) => <TabsTrigger key={v.value} value={v.value}>{v.label}</TabsTrigger>)}
           </TabsList>

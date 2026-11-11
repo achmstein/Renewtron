@@ -16,6 +16,7 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { pageClass } from './_ui'
 
 /**
  * One paid renewal, in the shape every details page shares: what happened in a sentence, the next
@@ -92,7 +93,7 @@ export default function RenewalOrderDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center sm:px-6 lg:px-8">
+      <div className={pageClass('py-12 text-center')}>
         <h3 className="text-heading">Renewal not found</h3>
         <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/renewal-orders">Back to renewals</Link></Button>
       </div>
@@ -137,7 +138,7 @@ export default function RenewalOrderDetails() {
 
   return (
     <Skeletonizer loading={isPending}>
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <RecordCrumbs client={data.client} businessName={o.businessName}
         list={{ to: '/admin/renewal-orders', label: 'Renewals' }} here={`Paid ${new Date(o.paidAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`} />
 
@@ -234,8 +235,8 @@ function story(o: RenewalOrderRow, data: OrderData): StoryStep[] {
   const lodged = data.attempts.find((a) => a.status === 'Completed') ?? data.attempts.find((a) => a.current) ?? data.attempts[0]
   const steps: StoryStep[] = []
   steps.push(data.visit
-    ? { label: 'Visit', meaning: 'done', at: data.visit.at, to: `/admin/leads/${data.visit.id}` }
-    : { label: o.source === 'Ontraport' ? 'Ontraport' : 'Visit', meaning: o.source === 'Ontraport' ? 'done' : 'quiet', note: o.source === 'Ontraport' ? 'Sold in Ontraport' : 'Not on the website' })
+    ? { label: 'Lead', meaning: 'done', at: data.visit.at, to: `/admin/leads/${data.visit.id}` }
+    : { label: o.source === 'Ontraport' ? 'Ontraport' : 'Lead', meaning: o.source === 'Ontraport' ? 'done' : 'quiet', note: o.source === 'Ontraport' ? 'Sold in Ontraport' : 'Not on the website' })
   steps.push({ label: 'Paid', meaning: 'done', at: o.paidAt, current: true, note: <>{fmtMoney2(o.amountPaid)} · <When at={o.paidAt} /></> })
   steps.push(lodged
     ? { label: 'Lodged at ASIC', meaning: renewalStatus(lodged).meaning, at: lodged.initiatedAt, to: `/admin/renewals/${lodged.id}`,

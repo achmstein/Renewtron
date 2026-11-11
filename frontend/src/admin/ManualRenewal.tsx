@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CircleCheck, CreditCard, Loader2, Search } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { Field, PageHeader } from './_ui'
+import { Field, pageClass, PageHeader } from './_ui'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -105,13 +105,14 @@ export default function ManualRenewal() {
   const threeYearDefault = pricing?.threeYearFee.toFixed(2) ?? '—'
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="Manual renewal"
         subtitle="Renew a name for a client who paid us another way."
       />
 
-      <div className="space-y-6">
+      {/* Side by side on wide screens: pick the name on the left, fill in its renewal on the right. */}
+      <div className="grid items-start gap-6 lg:grid-cols-2">
         <Step n={1} title="Find the business" subtitle="Look up the ABN at ASIC.">
           <div className="flex gap-2">
             <Input

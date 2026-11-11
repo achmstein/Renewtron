@@ -42,8 +42,11 @@ public sealed class RenewalOrdersModule : ICarterModule
                 q = q.Where(o => o.BusinessName.Contains(term) || (digits.Length >= 3 && o.Abn.Contains(digits)));
             }
             var total = await q.CountAsync();
-            var items = await Rows(db, q.OrderBy(o => o.DueDate == null).ThenBy(o => o.DueDate).ThenBy(o => o.PaidAt)
-                .Skip((page - 1) * pageSize).Take(pageSize)).ToListAsync();
+            // All renewals: the latest paid first. A queue or stage: the soonest due first, as it's worked.
+            var ordered = string.IsNullOrEmpty(view)
+                ? q.OrderByDescending(o => o.PaidAt).ThenByDescending(o => o.Id)
+                : q.OrderBy(o => o.DueDate == null).ThenBy(o => o.DueDate).ThenBy(o => o.PaidAt);
+            var items = await Rows(db, ordered.Skip((page - 1) * pageSize).Take(pageSize)).ToListAsync();
             var byStage = await db.RenewalOrders.AsNoTracking().GroupBy(o => o.Stage)
                 .Select(g => new { stage = g.Key.ToString(), count = g.Count(), amount = g.Sum(o => o.AmountPaid) }).ToListAsync();
             return Results.Ok(new { total, page, pageSize, items, byStage });

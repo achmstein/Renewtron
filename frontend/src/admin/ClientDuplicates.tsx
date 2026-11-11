@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronLeft, Loader2, TriangleAlert } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type ClientDetail } from '../api/client'
-import { EmptyState, PageHeader } from './_ui'
+import { EmptyState, pageClass, PageHeader } from './_ui'
 import { fmtDate, formatAbn, relativeTime } from './_utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -53,7 +53,7 @@ export default function ClientDuplicates() {
   const busy = merge.isPending || dismiss.isPending
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <Button variant="ghost" size="sm" asChild className="-ml-2 mb-2 text-muted-foreground">
         <Link to="/admin/clients"><ChevronLeft /> Clients</Link>
       </Button>
@@ -220,7 +220,7 @@ function compareRows(a: ClientDetail, b: ClientDetail): Array<{ label: string; a
     : <span className="text-muted-foreground">—</span>
   const text = (v: string | null | undefined, mono = false) => v ? <span className={cn(mono && 'font-mono tabular-nums')}>{v}</span> : <span className="text-muted-foreground">—</span>
   const history = (c: ClientDetail) =>
-    `${c.renewals.length} renewal${c.renewals.length === 1 ? '' : 's'} · ${c.sales.length} sale${c.sales.length === 1 ? '' : 's'} · ${c.leads.length} wizard visit${c.leads.length === 1 ? '' : 's'}`
+    `${c.renewals.length} renewal${c.renewals.length === 1 ? '' : 's'} · ${c.sales.length} sale${c.sales.length === 1 ? '' : 's'} · ${c.leads.length} lead${c.leads.length === 1 ? '' : 's'}`
 
   return [
     { label: 'Name', a: text(a.fullName), b: text(b.fullName), same: !!norm(a.fullName) && norm(a.fullName) === norm(b.fullName) },

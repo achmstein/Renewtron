@@ -627,7 +627,7 @@ export const api = {
       registration: RegistrationSettings
       testMode: TestModeSettings & { stripeReady: boolean }
     }>('/api/admin/settings'),
-    searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
+    searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; hasLead?: boolean; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.abn) qs.set('abn', params.abn)
       if (params.success) qs.set('success', params.success)
@@ -635,6 +635,7 @@ export const api = {
       if (params.dateFrom) qs.set('dateFrom', params.dateFrom)
       if (params.dateTo) qs.set('dateTo', params.dateTo)
       if (params.includeSystem) qs.set('includeSystem', 'true')
+      if (params.hasLead != null) qs.set('hasLead', String(params.hasLead))
       if (params.page) qs.set('page', String(params.page))
       if (params.pageSize) qs.set('pageSize', String(params.pageSize))
       const suffix = qs.toString() ? `?${qs}` : ''

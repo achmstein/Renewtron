@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, KeyRound, Link2, Mail, MoreHorizontal, RefreshCw, ShoppingCart, Users } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicDeclareAs, type ClientAbnDto, type ClientBusinessNameDto, type ClientDetail } from '../api/client'
-import { Cell, EmptyState, StatusPill } from './_ui'
+import { Cell, EmptyState, pageClass, StatusPill } from './_ui'
 import { Status, statusOf } from './_status'
 import { DueIn, Queue, When, useRowKeyboard } from './_rows'
 import { StoryStrip, type StoryStep } from './_record'
@@ -58,7 +58,7 @@ export default function ClientDetails() {
 
   if (isError || !data) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-12 text-center">
+      <div className={pageClass('py-12 text-center')}>
         <h3 className="text-heading">Client not found</h3>
         <p className="mt-1 text-caption text-muted-foreground">It may have been merged into another client.</p>
         <Button asChild variant="ghost" size="sm" className="mt-4"><Link to="/admin/clients">Back to clients</Link></Button>
@@ -71,7 +71,7 @@ export default function ClientDetails() {
   return (
     <Skeletonizer loading={isPending}>
     {/* Keyed so the notes box and other local state start from the real client, not the sample. */}
-    <div key={isPending ? 'sample' : data.id} className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div key={isPending ? 'sample' : data.id} className={pageClass('space-y-6 py-6 sm:py-8')}>
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink asChild><Link to="/admin/clients">Clients</Link></BreadcrumbLink></BreadcrumbItem>
@@ -216,7 +216,7 @@ function SummaryStrip({ client }: { client: ClientDetail }) {
 }
 
 type TimelineKind = 'renewal' | 'sale' | 'keyRequest' | 'lead' | 'email'
-const KIND_LABELS: Record<TimelineKind, string> = { renewal: 'Renewals', sale: 'Ontraport sales', keyRequest: 'Key requests', lead: 'Wizard visits', email: 'Emails' }
+const KIND_LABELS: Record<TimelineKind, string> = { renewal: 'Renewals', sale: 'Ontraport sales', keyRequest: 'Key requests', lead: 'Leads', email: 'Emails' }
 const KIND_ICONS: Record<TimelineKind, ReactNode> = {
   renewal: <RefreshCw className="size-4" />,
   sale: <ShoppingCart className="size-4" />,
@@ -246,7 +246,7 @@ function Timeline({ client }: { client: ClientDetail }) {
         sub: k.asicReferenceNumber ? `ref ${k.asicReferenceNumber}` : '', status: k.status,
       })),
       ...client.leads.map((l) => ({
-        key: `l${l.id}`, kind: 'lead' as const, at: l.createdAt, to: `/admin/leads/${l.id}`, title: `Wizard visit: ABN ${formatAbn(l.abn)}`,
+        key: `l${l.id}`, kind: 'lead' as const, at: l.createdAt, to: `/admin/leads/${l.id}`, title: `Lead: ABN ${formatAbn(l.abn)}`,
         sub: l.email, status: l.outcome,
       })),
       ...client.messages.map((m) => ({

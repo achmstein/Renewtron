@@ -5,7 +5,7 @@ import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyRequestDto } from '../api/client'
 import { ClientLink, Pagination, useDebouncedValue } from './_components'
-import { Cell, EmptyState, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
+import { Cell, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
@@ -220,7 +220,7 @@ export default function AsicKeyRequests() {
   const toDo = pendingCount + manualCount
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <div className={pageClass()}>
       <PageHeader
         title="ASIC key requests"
         subtitle="Ask ASIC to email a client’s key, then record the reference."
