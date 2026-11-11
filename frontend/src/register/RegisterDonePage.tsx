@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { registrationsApi, type PublicRegistration } from '../api/registrations'
-import { Shell } from './RegisterPage'
+import { Shell } from './fields'
+import { clearDraft, DONE_STEP } from './registerForm'
 
 /** After payment: follows the application while it's lodged (the ASIC job takes a minute or two). */
 export default function RegisterDonePage() {
   const { id } = useParams<{ id: string }>()
   const [reg, setReg] = useState<PublicRegistration | null>(null)
   const [error, setError] = useState('')
+
+  // Paid: the next name registered in this tab starts from a blank form.
+  useEffect(() => clearDraft(), [])
 
   useEffect(() => {
     if (!id) return
@@ -28,7 +32,7 @@ export default function RegisterDonePage() {
   }, [id])
 
   return (
-    <Shell step={4}>
+    <Shell step={DONE_STEP}>
       <div className="mx-auto max-w-md">
         {error ? <p className="rounded-md bg-red-50 p-4 text-sm text-red-800">{error}</p> : null}
         {reg ? <Status reg={reg} /> : null}

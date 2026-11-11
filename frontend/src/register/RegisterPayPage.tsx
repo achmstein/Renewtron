@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js'
 import { registrationsApi, type PublicRegistration } from '../api/registrations'
-import { Shell } from './RegisterPage'
+import { Shell } from './fields'
+import { FORM_STEPS, PAY_STEP } from './registerForm'
 
 const formatAbn = (abn: string) =>
   abn.length === 11 ? `${abn.slice(0, 2)} ${abn.slice(2, 5)} ${abn.slice(5, 8)} ${abn.slice(8)}` : abn
@@ -31,7 +32,7 @@ export default function RegisterPayPage() {
   const stripePromise = useMemo<Promise<Stripe | null> | null>(() => (key ? loadStripe(key) : null), [key])
 
   return (
-    <Shell step={3}>
+    <Shell step={PAY_STEP} onStepClick={(s) => navigate(s <= 1 ? '/register' : `/register?step=${s}`)}>
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Payment</h1>
         <p className="mt-3 text-base leading-7 text-gray-600">We lodge your application with ASIC as soon as it’s paid.</p>
@@ -61,7 +62,7 @@ export default function RegisterPayPage() {
           </div>
         ) : null}
 
-        <button type="button" onClick={() => navigate('/register')} className="w-full text-center text-sm text-gray-500 hover:text-gray-700">
+        <button type="button" onClick={() => navigate(`/register?step=${FORM_STEPS}`)} className="w-full text-center text-sm text-gray-500 hover:text-gray-700">
           ← Change the application
         </button>
       </div>
