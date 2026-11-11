@@ -1236,6 +1236,9 @@ namespace Renewtron.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTime?>("NamesShownAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("OntraportContactId")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -1246,6 +1249,15 @@ namespace Renewtron.Migrations
                     b.Property<string>("OutcomeMessage")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("PaymentFollowUpSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Progress")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ReachedPaymentAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("ReminderOptIn")
                         .HasColumnType("bit");

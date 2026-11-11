@@ -13,6 +13,9 @@ public interface ILeadEmailService
     /// <paramref name="outboundMessageId"/> is the row win-back already wrote for it, so the send records on that row.
     /// Throws when the win-back template is switched off, so that row is marked failed rather than sent.</summary>
     Task SendWinBackEmailAsync(Lead lead, string? firstBusinessName = null, Guid? outboundMessageId = null);
+
+    /// <summary>The "payment not finished" follow-up. False when the template is switched off.</summary>
+    Task<bool> SendPaymentNotFinishedEmailAsync(Lead lead, string? firstBusinessName, string renewLink);
 }
 
 /// <summary>Emails about a lead. The wording is in their templates (Emails → Templates); this fills in the values and sends.</summary>
@@ -29,10 +32,15 @@ public class LeadEmailService(IEmailSender sender, IEmailTemplates templates, IL
             throw new InvalidOperationException("The win-back email is switched off in Emails → Templates.");
     }
 
+    public Task<bool> SendPaymentNotFinishedEmailAsync(Lead lead, string? firstBusinessName, string renewLink) =>
+        SendAsync(EmailTemplateCatalog.PaymentNotFinished, lead, firstBusinessName, extra: new() { ["renew_link"] = renewLink });
+
     /// <summary>False when the template is switched off (nothing sent).</summary>
-    private async Task<bool> SendAsync(string key, Lead lead, string? firstBusinessName = null, Guid? messageId = null)
+    private async Task<bool> SendAsync(string key, Lead lead, string? firstBusinessName = null, Guid? messageId = null, Dictionary<string, object?>? extra = null)
     {
-        var email = await templates.RenderAsync(key, EmailModels.Lead(lead, firstBusinessName));
+        var model = EmailModels.Lead(lead, firstBusinessName);
+        foreach (var (k, v) in extra ?? []) model[k] = v;
+        var email = await templates.RenderAsync(key, model);
         if (!email.Enabled)
         {
             logger.LogInformation("{Key} email not sent: the template is switched off", key);

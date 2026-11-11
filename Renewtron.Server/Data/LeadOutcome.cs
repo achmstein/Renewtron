@@ -31,7 +31,20 @@ public enum LeadOutcome
     NoBusinessNames = 4,
 
     /// <summary>
-    /// Lead successfully completed renewal and payment
+    /// Old: written over what ASIC said once they paid. Paying is now <see cref="LeadProgress.Paid"/>;
+    /// no longer written (Nov 2026), and old rows were moved back to RenewalAvailable.
     /// </summary>
     RenewalCompleted = 5
+}
+
+/// <summary>How far a visitor got on the renewal site, step by step. Kept apart from what ASIC said.</summary>
+public enum LeadProgress
+{
+    /// <summary>Gave their details; no names shown (ASIC had none to renew, or they left).</summary>
+    Details = 0,
+    /// <summary>Saw their business names to pick from.</summary>
+    NamesShown = 1,
+    /// <summary>Opened the payment page (card form) and didn't pay.</summary>
+    PaymentPage = 2,
+    Paid = 3,
 }

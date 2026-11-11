@@ -712,6 +712,7 @@ export const api = {
           mobileNumber: string
           createdAt: string
           outcome: string
+          progress?: string | null
           reminderOptIn: boolean
           convertedToRenewal: boolean
           convertedAt?: string | null
@@ -767,6 +768,11 @@ export const api = {
       sessionId?: string | null
       outcome: string
       outcomeMessage?: string | null
+      /** How far they got: Details, NamesShown, PaymentPage, Paid. Apart from what ASIC said (outcome). */
+      progress: 'Details' | 'NamesShown' | 'PaymentPage' | 'Paid'
+      namesShownAt?: string | null
+      reachedPaymentAt?: string | null
+      paymentFollowUpSentAt?: string | null
       reminderOptIn: boolean
       convertedToRenewal: boolean
       convertedAt?: string | null
@@ -776,9 +782,9 @@ export const api = {
         success: boolean
         errorMessage?: string | null
         resultsCount: number
-        results: Array<{ id: string; businessName: string; accountNumber: string; registrationDate: string }>
+        results: Array<{ id: string; businessName: string; accountNumber: string; registrationDate: string; isAvailable: boolean }>
       } | null
-      renewalRequests: Array<{ id: string; status: string; amount: number; renewalYears: number; initiatedAt: string; businessName?: string | null }>
+      renewalRequests: Array<{ id: string; status: string; amount: number; renewalYears: number; initiatedAt: string; businessName?: string | null; orderId?: string | null }>
     }>(`/api/admin/leads/${id}`),
     renewals: (params: { abn?: string; status?: string; initiatedBy?: string; source?: string; failedAtStep?: string; errorCategory?: string; dateFrom?: string; dateTo?: string; view?: 'toFix'; page?: number; pageSize?: number } = {}) => {
       const qs = new URLSearchParams()

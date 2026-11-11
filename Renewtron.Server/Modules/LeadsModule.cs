@@ -391,6 +391,7 @@ public sealed class LeadsModule : ICarterModule
                     createdAt = l.CreatedAt,
                     source = l.Source,
                     outcome = l.Outcome.ToString(),
+                    progress = l.Progress.ToString(),
                     reminderOptIn = l.ReminderOptIn,
                     convertedToRenewal = l.ConvertedToRenewal,
                     convertedAt = l.ConvertedAt,
@@ -426,7 +427,7 @@ public sealed class LeadsModule : ICarterModule
                 .Select(g => new
                 {
                     Total = g.Count(),
-                    Converted = g.Count(l => l.Outcome == LeadOutcome.RenewalCompleted),
+                    Converted = g.Count(l => l.ConvertedToRenewal),
                 })
                 .FirstOrDefaultAsync();
             var total30d = thirty?.Total ?? 0;
@@ -436,7 +437,7 @@ public sealed class LeadsModule : ICarterModule
             // Avg time-to-renewal (Lead.CreatedAt → first Completed RenewalRequest.CompletedAt)
             decimal? avgHoursToConvert = null;
             var convertedSamples = await db.Leads.AsNoTracking()
-                .Where(l => l.Outcome == LeadOutcome.RenewalCompleted
+                .Where(l => l.ConvertedToRenewal
                     && l.CreatedAt >= thirtyDaysAgo
                     && l.RenewalRequests.Any(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null))
                 .Select(l => new
@@ -545,6 +546,10 @@ public sealed class LeadsModule : ICarterModule
                 ontraportContactId = l.OntraportContactId,
                 outcome = l.Outcome.ToString(),
                 outcomeMessage = l.OutcomeMessage,
+                progress = l.Progress.ToString(),
+                namesShownAt = l.NamesShownAt,
+                reachedPaymentAt = l.ReachedPaymentAt,
+                paymentFollowUpSentAt = l.PaymentFollowUpSentAt,
                 reminderOptIn = l.ReminderOptIn,
                 convertedToRenewal = l.ConvertedToRenewal,
                 convertedAt = l.ConvertedAt,
@@ -561,6 +566,7 @@ public sealed class LeadsModule : ICarterModule
                         businessName = r.BusinessName,
                         accountNumber = r.AccountNumber,
                         registrationDate = r.RegistrationDate,
+                        isAvailable = r.IsAvailable,
                     }),
                 },
                 renewalRequests = l.RenewalRequests.Select(r => new
@@ -571,6 +577,7 @@ public sealed class LeadsModule : ICarterModule
                     renewalYears = r.RenewalYears,
                     initiatedAt = r.InitiatedAt,
                     businessName = r.SearchResult != null ? r.SearchResult.BusinessName : null,
+                    orderId = r.RenewalOrderId,
                 }),
             });
         });

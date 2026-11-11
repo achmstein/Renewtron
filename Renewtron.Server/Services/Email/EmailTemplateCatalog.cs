@@ -33,6 +33,7 @@ public static class EmailTemplateCatalog
     public const string NoBusinessNames = "no business names";
     public const string RenewalInProgress = "renewal in progress";
     public const string WinBack = "win-back";
+    public const string PaymentNotFinished = "payment not finished";
     public const string RegistrationReceived = "registration received";
     public const string RegistrationLodged = "registration lodged";
     public const string RegistrationRefused = "registration refused";
@@ -221,6 +222,25 @@ public static class EmailTemplateCatalog
             "lead",
             [FullName, Abn, Email, new("business_name", "Business name", "Their first business name, or \"your business name\".", TemplateVariableKind.Text, "Citizen Plumbing")],
             "", "", ""),
+
+        new(PaymentNotFinished, "Payment not finished",
+            "Sent once, a couple of hours after someone opened the payment page and left without paying.",
+            "lead",
+            [FullName, Abn, Email,
+             new("business_name", "Business name", "Their first business name, or \"your business name\".", TemplateVariableKind.Text, "Citizen Plumbing"),
+             new("renew_link", "Link back", "The renewal site, to pick up where they left off.", TemplateVariableKind.Text, "https://businessnames.applyforanabn.au/")],
+            "Finish renewing {{ business_name }}",
+            "Your renewal isn't finished",
+            """
+            <p>Hi {{ full_name }},</p>
+            <p>You were one step from renewing <strong>{{ business_name }}</strong>, but the payment didn't go through. Nothing has been charged.</p>
+            <table class="details"><tbody>
+            <tr><th>ABN</th><td>{{ abn }}</td></tr>
+            </tbody></table>
+            <p>It takes about a minute to finish. Enter your ABN again and pick up where you left off.</p>
+            <div class="button-row"><a class="button" href="{{ renew_link }}">Finish my renewal</a></div>
+            <p>If you've already renewed, you can ignore this email.</p>
+            """),
 
         new(RegistrationReceived, "Registration received",
             "Sent when a customer pays to register a new business name, before it goes to ASIC.",

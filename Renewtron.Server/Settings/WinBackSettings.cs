@@ -2,6 +2,15 @@ namespace Renewtron.Settings;
 
 public class WinBackSettings
 {
+    /// <summary>The renewal site, linked from the follow-up and win-back emails.</summary>
+    public string SiteUrl { get; set; } = "https://businessnames.applyforanabn.au/";
+
+    /// <summary>Email people who opened the payment page and didn't pay (Emails → Templates → "Payment not finished").</summary>
+    public bool PaymentFollowUpEnabled { get; set; } = true;
+
+    /// <summary>How long after they left the payment page the follow-up goes.</summary>
+    public int PaymentFollowUpAfterHours { get; set; } = 2;
+
     /// <summary>Subject line. Supports merge tags: {{FullName}}, {{Abn}}, {{BusinessName}}.</summary>
     public string Subject { get; set; } = "Your business name is still due for renewal — finish in 90 seconds";
 

@@ -1,6 +1,7 @@
 using Carter;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
+using Renewtron.Services;
 
 namespace Renewtron.Modules;
 
@@ -67,6 +68,10 @@ public sealed class FunnelModule : ICarterModule
                     IpAddress = Trim(ip, 50),
                     UserAgent = Trim(ua, 500),
                 });
+                // The visit's own record of how far they got: the payment page is only seen here.
+                if (request.Step == FunnelSteps.PaymentViewed && request.LeadId is { } leadId
+                    && await db.Leads.FirstOrDefaultAsync(l => l.Id == leadId) is { } lead)
+                    LeadService.Reached(lead, LeadProgress.PaymentPage);
                 await db.SaveChangesAsync();
             }
             catch (Exception ex)

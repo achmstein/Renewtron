@@ -213,6 +213,16 @@ export function orderStatus(stage: string, reason?: string | null): StatusEntry 
   return ORDER_STAGE[stage] ?? { label: words(stage), meaning: 'quiet' }
 }
 
+/**
+ * A visit's status for lists: how far they got when it's past the names (paid, left at the payment
+ * page), otherwise what ASIC said. The visit page shows both facts apart.
+ */
+export function visitStatus(v: { outcome: string; progress?: string | null; convertedToRenewal?: boolean }): StatusEntry {
+  if (v.progress === 'Paid' || v.convertedToRenewal) return { label: 'Paid', meaning: 'done' }
+  if (v.progress === 'PaymentPage') return { label: 'Left at payment', meaning: 'waiting', hint: 'Opened the payment page and didn’t pay. The “payment not finished” email follows on its own.' }
+  return statusOf('lead', v.outcome)
+}
+
 /** A sale or renewal settled outside Renewtron (renewed by hand at ASIC, refunded): off the queues. */
 export const HANDLED: StatusEntry = { label: 'Handled', meaning: 'done', hint: 'Settled outside Renewtron; off the work queues.' }
 

@@ -7,7 +7,7 @@ import { api } from '../api/client'
 import { DateRangeFilter, Pagination, useDebouncedValue } from './_components'
 import { Cell, EmptyState, FunnelPills, PageHeader, RefreshButton, Stat, StatStrip, ViewToggle, type Tone } from './_ui'
 import { LeadSentence, SentenceList } from './_sentences'
-import { Status } from './_status'
+import { Status, visitStatus } from './_status'
 import { durationShort, fmtDate, fmtMoney0, fmtTime, relativeTime } from './_utils'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { sample } from '@/components/skeleton-samples'
@@ -163,7 +163,7 @@ export default function Leads() {
     {
       accessorKey: 'outcome',
       header: 'Outcome',
-      cell: ({ row }) => <OutcomePill outcome={row.original.outcome} />,
+      cell: ({ row }) => <OutcomePill row={row.original} />,
     },
     {
       id: 'names',
@@ -434,8 +434,8 @@ function leadFunnelStages(l: Lead): Array<{ label: string; tone: Tone; active: b
   ]
 }
 
-function OutcomePill({ outcome }: { outcome: string }) {
-  return <Status kind="lead" status={outcome} />
+function OutcomePill({ row }: { row: { outcome: string; progress?: string | null; convertedToRenewal?: boolean } }) {
+  return <Status entry={visitStatus(row)} />
 }
 
 function RenewalStatusPill({ status }: { status: string }) {

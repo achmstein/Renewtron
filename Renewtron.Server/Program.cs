@@ -130,6 +130,7 @@ builder.Services.AddScoped<EmailMaintenance>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
 builder.Services.AddScoped<IAsicCheckService, AsicCheckService>();
+builder.Services.AddScoped<IPaymentFollowUpService, PaymentFollowUpService>();
 builder.Services.AddScoped<IRenewalOrderService, RenewalOrderService>();
 builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportService>(client =>
 {
@@ -408,6 +409,13 @@ RecurringJob.AddOrUpdate<IAsicCheckService>(
     service => service.CheckAllAsync(false, CancellationToken.None),
     "0 4 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// "Payment not finished": emails visitors who opened the payment page and left, once,
+// a couple of hours later (Settings → Win-back for the delay; the wording is a template).
+RecurringJob.AddOrUpdate<IPaymentFollowUpService>(
+    PaymentFollowUpService.RecurringJobId,
+    service => service.SendDueAsync(CancellationToken.None),
+    "25 * * * *");
 
 // Keeps the paid-renewal records (RenewalOrders) in step with the pipeline.
 RecurringJob.AddOrUpdate<IRenewalOrderService>(

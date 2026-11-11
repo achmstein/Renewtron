@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { Status, renewalStatus, statusOf, type StatusEntry } from './_status'
@@ -46,6 +46,8 @@ export default function SearchDetails() {
     enabled: !!id,
   })
   const data = loaded ?? (isPending ? SAMPLE_SEARCH : undefined)
+  // A wizard search is part of its visit: the visit page shows it, so go there.
+  if (loaded?.lead) return <Navigate to={`/admin/leads/${loaded.lead.id}`} replace />
 
 
   if (isError || !data) {

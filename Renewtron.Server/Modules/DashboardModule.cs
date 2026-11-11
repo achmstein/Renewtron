@@ -37,7 +37,7 @@ public sealed class DashboardModule : ICarterModule
             var renewalsPending = await renewals.CountAsync(r => r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing);
 
             var totalLeads = await leads.CountAsync();
-            var convertedLeads = await leads.CountAsync(l => l.Outcome == LeadOutcome.RenewalCompleted);
+            var convertedLeads = await leads.CountAsync(l => l.ConvertedToRenewal);
             var notDueLeads = await leads.CountAsync(l => l.Outcome == LeadOutcome.NotDueForRenewal);
 
             // Channel breakdown for the current month — COMPLETED renewals only. Counting

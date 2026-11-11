@@ -34,9 +34,17 @@ public class Lead
     /// <summary>Browser-stable id from the tracking helper, so funnel events join to the lead.</summary>
     public string? VisitorId { get; set; }
 
-    // Outcome
+    /// <summary>What ASIC said about the ABN (names to renew, not due, in progress, none). Never how far they got.</summary>
     public LeadOutcome Outcome { get; set; } = LeadOutcome.Pending;
     public string? OutcomeMessage { get; set; }
+
+    /// <summary>How far the visitor got: details, names shown, payment page, paid. Only moves forward.</summary>
+    public LeadProgress Progress { get; set; } = LeadProgress.Details;
+    public DateTime? NamesShownAt { get; set; }
+    /// <summary>When they first opened the payment page (the card form).</summary>
+    public DateTime? ReachedPaymentAt { get; set; }
+    /// <summary>When the "you didn't finish paying" email went (once per visit).</summary>
+    public DateTime? PaymentFollowUpSentAt { get; set; }
 
     /// <summary>A test customer (Settings → Test mode): Stripe test keys, no ASIC, no Ontraport.</summary>
     public bool IsTest { get; set; }

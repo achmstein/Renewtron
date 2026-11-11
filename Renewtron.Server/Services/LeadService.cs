@@ -90,6 +90,7 @@ public class LeadService : ILeadService
 
         lead.Outcome = outcome;
         lead.OutcomeMessage = message;
+        if (outcome == LeadOutcome.RenewalAvailable) Reached(lead, LeadProgress.NamesShown);
 
         await _dbContext.SaveChangesAsync();
         return lead;
@@ -113,9 +114,19 @@ public class LeadService : ILeadService
 
         lead.ConvertedToRenewal = true;
         lead.ConvertedAt = DateTime.UtcNow;
-        lead.Outcome = LeadOutcome.RenewalCompleted;
+        Reached(lead, LeadProgress.Paid);
 
         await _dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>Moves the visitor's progress forward (never back), stamping when each step was first reached.</summary>
+    public static void Reached(Lead lead, LeadProgress step)
+    {
+        if (lead.Progress >= step) return;
+        var now = DateTime.UtcNow;
+        if (step >= LeadProgress.NamesShown) lead.NamesShownAt ??= now;
+        if (step >= LeadProgress.PaymentPage) lead.ReachedPaymentAt ??= now;
+        lead.Progress = step;
     }
 
     public async Task UpdateReminderOptInAsync(Guid leadId, bool optIn)
