@@ -45,7 +45,7 @@ public class AsicPaymentClient : IAsicPaymentClient, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public async Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
+    public async Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string? sessionId, CreditCardDetails cardDetails)
     {
         try
         {

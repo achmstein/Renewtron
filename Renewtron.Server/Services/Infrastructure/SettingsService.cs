@@ -160,6 +160,11 @@ public class SettingsService : ISettingsService
         await UpdateSettingsSectionAsync("Registration", settings);
     }
 
+    public async Task UpdateAsicRegistrySettingsAsync(AsicRegistrySection settings)
+    {
+        await UpdateSettingsSectionAsync(Asic.Integrations.Registry.AsicRegistryOptions.SectionName, settings);
+    }
+
     private async Task UpdateSettingsSectionAsync(string sectionName, object settings)
     {
         // Load existing overrides if present, else start empty. We never touch

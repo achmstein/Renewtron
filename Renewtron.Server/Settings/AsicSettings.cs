@@ -10,12 +10,12 @@ public class AsicSettings
     /// wizard stops at "Not due for renewal yet" as before.
     /// </summary>
     public bool AllowPayEarly { get; set; } = true;
-    public string Email { get; set; }
-    public string CardNumber { get; set; }
-    public string CardholderName { get; set; }
-    public string ExpiryMonth { get; set; }
-    public string ExpiryYear { get; set; }
-    public string Cvc { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string CardNumber { get; set; } = string.Empty;
+    public string CardholderName { get; set; } = string.Empty;
+    public string ExpiryMonth { get; set; } = string.Empty;
+    public string ExpiryYear { get; set; } = string.Empty;
+    public string Cvc { get; set; } = string.Empty;
 
     /// <summary>
     /// How renewals are paid at ASIC: "Card" pays now with the card above; "Bpay" picks

@@ -119,7 +119,7 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
         var linkedRunIds = linked.Values.ToHashSet();
         foreach (var r in runById.Values.Where(r => r.Source == RenewalSource.Renewtron && !linkedRunIds.Contains(r.Id)))
         {
-            var paid = r.PaymentType == PaymentType.External || r.StripeStatus == "succeeded";
+            var paid = r.PaymentType == PaymentType.External || r.StripeStatus == StripePaymentStatuses.Succeeded;
             if (!paid) continue;
             var source = r.PaymentType == PaymentType.Stripe ? RenewalOrderSource.Wizard : RenewalOrderSource.Manual;
             var due = r.Attempt.Status != RenewalStatus.Completed && r.NameId is { } nid && nameDue.TryGetValue(nid, out var nd) ? nd : null;

@@ -6,9 +6,9 @@ public class SearchResult
     public Guid SearchLogId { get; set; }
 
     // Business Name Details (from ASIC Renewal Service)
-    public string BusinessName { get; set; }
-    public string AccountNumber { get; set; }
-    public string RegistrationDate { get; set; }
+    public string BusinessName { get; set; } = string.Empty;
+    public string AccountNumber { get; set; } = string.Empty;
+    public string RegistrationDate { get; set; } = string.Empty;
 
     /// <summary>
     /// False when the name came from our local copy but ASIC's renewal search didn't list
@@ -24,6 +24,6 @@ public class SearchResult
     public bool PayEarly { get; set; }
 
     // Navigation properties
-    public SearchLog SearchLog { get; set; }
+    public SearchLog SearchLog { get; set; } = null!;
     public RenewalRequest? RenewalRequest { get; set; }
 }

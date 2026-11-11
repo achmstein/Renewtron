@@ -69,10 +69,6 @@ public class OntraportContactPushService : IOntraportContactPushService
         _settings = settings;
         _logger = logger;
 
-        _httpClient.BaseAddress = new Uri("https://api.ontraport.com/1/");
-        _httpClient.DefaultRequestHeaders.Add("Api-Appid", settings.Value.ApiAppId);
-        _httpClient.DefaultRequestHeaders.Add("Api-Key", settings.Value.ApiKey);
-        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
     }
 
     private bool Enabled =>

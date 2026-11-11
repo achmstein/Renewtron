@@ -49,6 +49,22 @@ public sealed class TwoCaptchaSolver(IOptionsMonitor<AsicRegistryOptions> option
         }
     }
 
+    /// <summary>The account balance for a key (lets Settings check a key before saving it).</summary>
+    public static async Task<CaptchaBalanceResult> GetBalanceAsync(string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+            return new CaptchaBalanceResult(null, "Enter a 2Captcha API key first.");
+        try
+        {
+            var balance = await new TwoCaptcha.TwoCaptcha(apiKey.Trim()).Balance();
+            return new CaptchaBalanceResult((decimal)balance, null);
+        }
+        catch (Exception ex)
+        {
+            return new CaptchaBalanceResult(null, Describe(ex));
+        }
+    }
+
     private static string Describe(Exception ex)
     {
         var raw = ex.Message?.Trim();

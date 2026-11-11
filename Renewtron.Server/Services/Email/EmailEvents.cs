@@ -53,19 +53,30 @@ public static class EmailEvents
         return events;
     }
 
+    /// <summary>SendGrid event kinds we store in OutboundMessage.DeliveryStatus (lower-case, as SendGrid sends them).</summary>
+    public static class Kinds
+    {
+        public const string Bounce = "bounce";
+        public const string Dropped = "dropped";
+        public const string SpamReport = "spamreport";
+        public const string Delivered = "delivered";
+        public const string Deferred = "deferred";
+        public const string Open = "open";
+    }
+
     /// <summary>How final each delivery event is: a later event only replaces one that isn't more final.</summary>
     public static int Rank(string? kind) => kind switch
     {
-        "bounce" or "dropped" or "spamreport" => 3,
-        "delivered" => 2,
-        "deferred" => 1,
+        Kinds.Bounce or Kinds.Dropped or Kinds.SpamReport => 3,
+        Kinds.Delivered => 2,
+        Kinds.Deferred => 1,
         _ => 0,
     };
 
     /// <summary>Applies one event to its row: delivery status (never stepping back), opened, and the reason.</summary>
     public static void Apply(OutboundMessage m, Event e)
     {
-        if (e.Kind == "open") { m.OpenedAt ??= e.At; return; }
+        if (e.Kind == Kinds.Open) { m.OpenedAt ??= e.At; return; }
         if (Rank(e.Kind) == 0) return; // processed, click, unsubscribe…
         if (Rank(e.Kind) < Rank(m.DeliveryStatus)) return;
         m.DeliveryStatus = e.Kind;

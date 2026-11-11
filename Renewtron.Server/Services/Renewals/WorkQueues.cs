@@ -46,7 +46,7 @@ public static class WorkQueues
         && r.NextRetryAt == null
         && (r.ErrorCategory == null || r.ErrorCategory != RenewalErrorCategories.NotDueYet)
         && (r.PaymentType == PaymentType.External
-            || (r.StripePayment != null && r.StripePayment.PaymentStatus == "succeeded"));
+            || (r.StripePayment != null && r.StripePayment.PaymentStatus == StripePaymentStatuses.Succeeded));
 
     /// <summary>How long a renewal may sit queued or lodging before we call it stuck.</summary>
     public static readonly TimeSpan StuckAfter = TimeSpan.FromHours(2);

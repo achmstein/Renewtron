@@ -283,7 +283,7 @@ public sealed class SearchesAdminModule : ICarterModule
             var resultIds = s.Results.Select(r => r.Id).ToList();
             var renewalsRaw = await db.RenewalRequests.AsNoTracking()
                 .Where(r => resultIds.Contains(r.SearchResultId))
-                .Select(r => new { r.SearchResultId, r.Id, Status = r.Status.ToString(), r.InitiatedAt, r.RenewalYears, r.Amount })
+                .Select(r => new { r.SearchResultId, r.Id, r.Status, r.InitiatedAt, r.RenewalYears, r.Amount })
                 .ToListAsync();
             var latestByResult = renewalsRaw
                 .GroupBy(r => r.SearchResultId)
@@ -296,14 +296,14 @@ public sealed class SearchesAdminModule : ICarterModule
                 accountNumber = r.AccountNumber,
                 registrationDate = r.RegistrationDate,
                 renewalRequest = latestByResult.TryGetValue(r.Id, out var rr)
-                    ? new { id = rr.Id, status = rr.Status, initiatedAt = rr.InitiatedAt, renewalYears = rr.RenewalYears, amount = rr.Amount }
+                    ? new { id = rr.Id, status = rr.Status.ToString(), initiatedAt = rr.InitiatedAt, renewalYears = rr.RenewalYears, amount = rr.Amount }
                     : null,
             }).ToList();
 
             // Same funnel facts the list returns, aggregated across every renewal attempt.
-            var anyPaid = renewalsRaw.Any(r => r.Status == "Completed");
-            var anyInflight = renewalsRaw.Any(r => r.Status is "Pending" or "Processing");
-            var anyFailed = renewalsRaw.Any(r => r.Status == "Failed");
+            var anyPaid = renewalsRaw.Any(r => r.Status == RenewalStatus.Completed);
+            var anyInflight = renewalsRaw.Any(r => r.Status is RenewalStatus.Pending or RenewalStatus.Processing);
+            var anyFailed = renewalsRaw.Any(r => r.Status == RenewalStatus.Failed);
 
             var client = await ClientRefs.ByIdAsync(db, lead?.ClientId) ?? await ClientRefs.ByAbnAsync(db, s.Abn);
 

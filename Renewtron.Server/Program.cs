@@ -144,14 +144,15 @@ builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportSer
 builder.Services.AddSingleton<IAsicSearchCoordinator, AsicSearchCoordinator>();
 builder.Services.AddScoped<ISearchVerificationService, SearchVerificationService>();
 builder.Services.AddScoped<ILeadService, LeadService>();
+builder.Services.AddScoped<RenewalCheckout>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>();
 builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationService>();
 builder.Services.AddScoped<IEarlyRenewalService, EarlyRenewalService>();
 builder.Services.AddScoped<Renewtron.Services.AsicPortal.IAsicPortalLinkService, Renewtron.Services.AsicPortal.AsicPortalLinkService>();
 builder.Services.AddScoped<Renewtron.Services.Registration.IBusinessNameRegistrationService, Renewtron.Services.Registration.BusinessNameRegistrationService>();
-builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
-builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>();
+builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>().AddOntraportApi();
+builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>().AddOntraportApi();
 builder.Services.AddScoped<IWinBackService, WinBackService>();
 
 // ASIC key pipeline: IMAP reader + the service that turns notification emails into
@@ -222,7 +223,7 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddAsic(builder.Configuration, services =>
 {
-    services.AddHttpClient<ISmsProvider, OntraportSmsProvider>();
+    services.AddHttpClient<ISmsProvider, OntraportSmsProvider>().AddOntraportApi();
 });
 
 // The wizard surface is unauthenticated by design; rate limiting is the only brake on

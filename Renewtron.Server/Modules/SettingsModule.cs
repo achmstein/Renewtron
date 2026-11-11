@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using Asic.Integrations.Registry;
 using Carter;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
@@ -48,6 +49,8 @@ public sealed class SettingsModule : ICarterModule
         if (string.IsNullOrWhiteSpace(body.MessageTemplate)) body.MessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate;
     }
 
+    public record TwoCaptchaTestBody(string? TwoCaptchaApiKey);
+
     public record AsicPortalBody(bool Enabled, string? Username, string? Password, string? BusinessEmail,
         string? KeepRepresentatives, string? DeclareAs, string? OntraportLinkFieldId, string? WrongKeyCampaignId);
 
@@ -58,8 +61,12 @@ public sealed class SettingsModule : ICarterModule
         group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions,
             IOptionsMonitor<AirwallexSettings> airwallexOptions,
             IOptionsMonitor<AsicPortalSettings> asicPortalOptions,
-            IOptionsMonitor<RegistrationSettings> registrationOptions) =>
+            IOptionsMonitor<RegistrationSettings> registrationOptions,
+            IOptionsMonitor<AsicRegistrySettings> registrySettings,
+            IOptionsMonitor<AsicRegistryOptions> registryOptions) =>
         {
+            var registry = registrySettings.CurrentValue;
+            var registryConnection = registryOptions.CurrentValue;
             var registration = registrationOptions.CurrentValue;
             var testMode = testModeOptions.CurrentValue;
             var airwallex = airwallexOptions.CurrentValue;
@@ -159,6 +166,18 @@ public sealed class SettingsModule : ICarterModule
                     defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
                     messageTemplate = asicKeyRequest.MessageTemplate,
                     defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
+                },
+                asicRegistry = new
+                {
+                    enabled = registry.Enabled,
+                    maxLookupsPerRun = registry.MaxLookupsPerRun,
+                    recheckAfterDays = registry.RecheckAfterDays,
+                    recheckWhenDueWithinDays = registry.RecheckWhenDueWithinDays,
+                    consecutiveFailureLimit = registry.ConsecutiveFailureLimit,
+                    twoCaptchaApiKey = Mask(registryConnection.TwoCaptchaApiKey),
+                    proxyUrl = registryConnection.ProxyUrl ?? "",
+                    proxyUsername = registryConnection.ProxyUsername ?? "",
+                    proxyPassword = Mask(registryConnection.ProxyPassword),
                 },
                 testMode = new
                 {
@@ -289,6 +308,32 @@ public sealed class SettingsModule : ICarterModule
             body.ApiKey = Unmask(body.ApiKey, current.CurrentValue.ApiKey)?.Trim();
             await settings.UpdateAirwallexSettingsAsync(body);
             return Results.NoContent();
+        });
+
+        // ASIC's register search, which reads names' real renewal dates (behind reCAPTCHA).
+        group.MapPut("/asic-registry", async (AsicRegistrySection body, IOptionsMonitor<AsicRegistryOptions> current, ISettingsService settings) =>
+        {
+            if (body.MaxLookupsPerRun < 0 || body.RecheckAfterDays < 0 || body.RecheckWhenDueWithinDays < 0 || body.ConsecutiveFailureLimit < 0)
+                return Results.BadRequest(new { error = "Numbers can't be negative." });
+            var proxyUrl = (body.ProxyUrl ?? "").Trim();
+            if (proxyUrl.Length > 0 && !Uri.TryCreate(proxyUrl, UriKind.Absolute, out _))
+                return Results.BadRequest(new { error = "Proxy URL must look like http://host:port or socks5://host:port." });
+
+            body.TwoCaptchaApiKey = Unmask(body.TwoCaptchaApiKey, current.CurrentValue.TwoCaptchaApiKey).Trim();
+            body.ProxyPassword = Unmask(body.ProxyPassword, current.CurrentValue.ProxyPassword);
+            body.ProxyUrl = proxyUrl;
+            body.ProxyUsername = (body.ProxyUsername ?? "").Trim();
+            await settings.UpdateAsicRegistrySettingsAsync(body);
+            return Results.NoContent();
+        });
+
+        // Reads the 2Captcha balance for the key in the form (masked = the saved key), so a
+        // wrong or empty account shows up before the nightly due-date run hits a CAPTCHA.
+        group.MapPost("/asic-registry/test", async (TwoCaptchaTestBody body, IOptionsMonitor<AsicRegistryOptions> current) =>
+        {
+            var key = Unmask(body.TwoCaptchaApiKey, current.CurrentValue.TwoCaptchaApiKey);
+            var result = await TwoCaptchaSolver.GetBalanceAsync(key);
+            return Results.Ok(new { ok = result.Error is null, balance = result.Balance, error = result.Error });
         });
 
         // Logs in with the saved keys, so a wrong key shows up before anyone tries to pay.

@@ -46,9 +46,9 @@ public sealed class EmailsModule : ICarterModule
             static IQueryable<OutboundMessage> InTab(IQueryable<OutboundMessage> q, string? t) => (t ?? "all") switch
             {
                 "problem" => q.Where(m => m.Status == OutboundStatus.Failed
-                    || m.DeliveryStatus == "bounce" || m.DeliveryStatus == "dropped" || m.DeliveryStatus == "spamreport"),
+                    || m.DeliveryStatus == EmailEvents.Kinds.Bounce || m.DeliveryStatus == EmailEvents.Kinds.Dropped || m.DeliveryStatus == EmailEvents.Kinds.SpamReport),
                 "sent" => q.Where(m => m.Status == OutboundStatus.Sent && m.DeliveryStatus == null),
-                "delivered" => q.Where(m => m.DeliveryStatus == "delivered"),
+                "delivered" => q.Where(m => m.DeliveryStatus == EmailEvents.Kinds.Delivered),
                 "opened" => q.Where(m => m.OpenedAt != null),
                 _ => q,
             };

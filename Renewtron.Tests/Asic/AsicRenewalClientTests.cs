@@ -42,8 +42,8 @@ public class AsicRenewalClientTests
 
     private sealed class FakePayment(PaymentResult answer) : IAsicPaymentClient
     {
-        public List<(string Url, string SessionId, CreditCardDetails Card)> Calls { get; } = [];
-        public Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string sessionId, CreditCardDetails cardDetails)
+        public List<(string Url, string? SessionId, CreditCardDetails Card)> Calls { get; } = [];
+        public Task<PaymentResult> ProcessPaymentAsync(string paymentUrl, string? sessionId, CreditCardDetails cardDetails)
         {
             Calls.Add((paymentUrl, sessionId, cardDetails));
             return Task.FromResult(answer);

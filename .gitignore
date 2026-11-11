@@ -492,3 +492,6 @@ Asic.Integrations/temp_matches.txt
 
 # asic-keytool: the developer's own login, never committed or published
 Asic.KeyTool/appsettings.Development.json
+
+# ASP.NET Data Protection keys (sign-in cookie encryption) are per machine, never committed.
+**/dataprotection-keys/

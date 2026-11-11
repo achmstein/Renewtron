@@ -90,7 +90,6 @@ public class BusinessNameRegistrationService(
     IAirwallexClient airwallex,
     IAsicPaymentClient asicPayment,
     ISmsProvider sms,
-    IEmailService email,
     IBackgroundJobClient jobs,
     ILogger<BusinessNameRegistrationService> logger) : IBusinessNameRegistrationService
 {
@@ -206,8 +205,8 @@ public class BusinessNameRegistrationService(
         if (!intent.Metadata.TryGetValue("registration_id", out var rid) || rid != reg.Id.ToString())
             return Failed("That payment isn't for this application.");
         if (intent.AmountInCents != (long)Math.Round(reg.Amount * 100m)) return Failed("The amount paid doesn't match.");
-        if (intent.Status == "requires_action") return Failed("The card still needs to be verified.");
-        if (intent.Status != "succeeded") return Failed("The payment didn't go through. Please try another card.");
+        if (intent.Status == StripePaymentStatuses.RequiresAction) return Failed("The card still needs to be verified.");
+        if (intent.Status != StripePaymentStatuses.Succeeded) return Failed("The payment didn't go through. Please try another card.");
 
         await MarkPaidAsync(reg, intent.PaymentIntentId);
         return new(true, false, null, null);

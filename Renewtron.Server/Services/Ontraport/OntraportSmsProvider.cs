@@ -25,12 +25,6 @@ public class OntraportSmsProvider : ISmsProvider
         _settings = settings.Value;
         _logger = logger;
 
-        // Configure default headers
-        _httpClient.BaseAddress = new Uri("https://api.ontraport.com/1/");
-        _httpClient.DefaultRequestHeaders.Add("Api-Appid", _settings.ApiAppId);
-        _httpClient.DefaultRequestHeaders.Add("Api-Key", _settings.ApiKey);
-        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-
         // SMS-forwarding to Ontraport has been observed to take up to ~9 minutes end-to-end, so the
         // total window must comfortably exceed that. 60 polls × 10s = 10 minutes.
         // A conversation that no longer exists won't come back by waiting, so that one fails at once.

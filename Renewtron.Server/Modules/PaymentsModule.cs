@@ -65,7 +65,7 @@ public sealed class PaymentsModule : ICarterModule
             var payments = await db.StripePayments.AsNoTracking()
                 .Include(p => p.RenewalRequest).ThenInclude(r => r.SearchResult).ThenInclude(s => s.SearchLog)
                 .Include(p => p.RenewalRequest).ThenInclude(r => r.Lead)
-                .Where(p => p.PaymentStatus == "succeeded")
+                .Where(p => p.PaymentStatus == StripePaymentStatuses.Succeeded)
                 .Where(p => !p.RenewalRequest.IsTest) // test customers paid with Stripe's test keys
                 .ToListAsync();
 

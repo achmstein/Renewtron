@@ -23,3 +23,16 @@ public class AsicRegistrySettings
     /// <summary>Stop a run after this many lookups fail in a row: ASIC is clearly not answering.</summary>
     public int ConsecutiveFailureLimit { get; set; } = 5;
 }
+
+/// <summary>
+/// The parts of the "AsicRegistry" section editable from Settings: the schedule above plus the
+/// connection settings. Saved as one override section; keys left out (BaseUrl, site key, TLS)
+/// keep their appsettings values.
+/// </summary>
+public class AsicRegistrySection : AsicRegistrySettings
+{
+    public string? TwoCaptchaApiKey { get; set; }
+    public string? ProxyUrl { get; set; }
+    public string? ProxyUsername { get; set; }
+    public string? ProxyPassword { get; set; }
+}

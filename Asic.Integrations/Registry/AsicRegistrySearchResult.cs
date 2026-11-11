@@ -22,6 +22,9 @@ public sealed record AsicRegistrySearchResult(bool Succeeded, IReadOnlyList<Asic
     public static AsicRegistrySearchResult Ok(IReadOnlyList<AsicRegistryBusinessName> names, bool hasMultiple = false) => new(true, names, hasMultiple);
 }
 
+/// <summary>A 2Captcha account balance, or why it couldn't be read (bad key, network).</summary>
+public sealed record CaptchaBalanceResult(decimal? Balance, string? Error);
+
 /// <summary>A CAPTCHA solve: a token, or why there isn't one (zero balance, bad key, timeout).</summary>
 public sealed record CaptchaSolveResult(string? Token, string? Error)
 {

@@ -155,7 +155,7 @@ public class RenewalProcessingService : IRenewalProcessingService
 
             // Verify payment was successful (either Stripe or external payment)
             if (renewalRequest.PaymentType == PaymentType.Stripe &&
-                (renewalRequest.StripePayment == null || renewalRequest.StripePayment.PaymentStatus != "succeeded"))
+                (renewalRequest.StripePayment == null || renewalRequest.StripePayment.PaymentStatus != StripePaymentStatuses.Succeeded))
             {
                 _logger.LogError("Renewal request {RenewalRequestId} does not have successful payment", renewalRequestId);
                 renewalRequest.Status = RenewalStatus.Failed;

@@ -27,4 +27,7 @@ public interface ISettingsService
     Task UpdateAirwallexSettingsAsync(AirwallexSettings settings);
     Task UpdateAsicPortalSettingsAsync(AsicPortalSettings settings);
     Task UpdateRegistrationSettingsAsync(RegistrationSettings settings);
+    /// <summary>The "AsicRegistry" section, which both AsicRegistrySettings (lookup schedule) and
+    /// Asic.Integrations's AsicRegistryOptions (2Captcha key, proxy) bind from.</summary>
+    Task UpdateAsicRegistrySettingsAsync(AsicRegistrySection settings);
 }

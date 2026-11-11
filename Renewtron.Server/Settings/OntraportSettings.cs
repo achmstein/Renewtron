@@ -2,9 +2,9 @@
 
 public class OntraportSettings
 {
-    public string ApiAppId { get; set; }
-    public string ApiKey { get; set; }
-    public string ConversationId { get; set; }
+    public string ApiAppId { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public string ConversationId { get; set; } = string.Empty;
     public int DefaultPollingTimeoutSeconds { get; set; } = 60;
 
     /// <summary>Create/update an Ontraport contact for everyone who fills in the Renewtron wizard.</summary>

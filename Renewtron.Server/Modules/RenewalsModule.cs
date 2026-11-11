@@ -14,37 +14,24 @@ namespace Renewtron.Modules;
 public sealed class RenewalsModule : ICarterModule
 {
 
-    public record BatchRenewalRequest(
-        Guid LeadId,
-        Guid[] SearchResultIds,
-        int RenewalYears,
-        string PaymentMethodId,
-        string? CardholderName);
+    /// <summary>Query string of GET /api/admin/renewals (all optional).</summary>
+    public sealed class RenewalListRequest
+    {
+        public string? Abn { get; set; }
+        public string? Status { get; set; }
+        public string? InitiatedBy { get; set; }
+        public string? Source { get; set; }
+        public string? FailedAtStep { get; set; }
+        public string? ErrorCategory { get; set; }
+        public DateTime? DateFrom { get; set; }
+        public DateTime? DateTo { get; set; }
+        public string? View { get; set; }
+        public int? Page { get; set; }
+        public int? PageSize { get; set; }
 
-    public record BatchRenewalCompleteRequest(
-        Guid LeadId,
-        Guid[] SearchResultIds,
-        int RenewalYears,
-        string PaymentIntentId,
-        string? CardholderName);
-
-    public record ManualRenewalRequest(
-        string Abn,
-        string BusinessName,
-        string AccountNumber,
-        string? RegistrationDate,
-        int RenewalYears,
-        string? Email);
-
-    public record ManualSearchRequest(string Abn);
-
-    public record ManualRenewalSubmitRequest(
-        Guid SearchResultId,
-        int RenewalYears,
-        string Email,
-        string? MobileNumber,
-        DateOnly? DateOfBirth,
-        decimal Amount);
+        public RenewalListQuery ToQuery() => new(Abn, Status, InitiatedBy, Source, FailedAtStep, ErrorCategory,
+            DateFrom, DateTo, View, Page ?? 1, PageSize ?? 10);
+    }
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -55,191 +42,12 @@ public sealed class RenewalsModule : ICarterModule
             Results.Json(new { error = "Use /api/renewals/batch" }, statusCode: StatusCodes.Status410Gone))
             .WithTags("Wizard");
 
-        app.MapPost("/api/renewals/batch", async (
-            BatchRenewalRequest request,
-            ApplicationDbContext db,
-            IStripePaymentService stripe,
-            IBackgroundJobClient jobs,
-            ILeadService leadService,
-            IOptionsSnapshot<PricingSettings> pricing,
-            IOptionsSnapshot<PortalSettings> portal,
-            IOptionsSnapshot<AsicSettings> asicSettings,
-            IOptionsSnapshot<TestModeSettings> testMode) =>
-        {
-            if (request.RenewalYears != 1 && request.RenewalYears != 3)
-                return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
-            if (request.SearchResultIds.Length == 0)
-                return Results.BadRequest(new { error = "At least one business name is required." });
+        app.MapPost("/api/renewals/batch", async (BatchRenewalRequest request, RenewalCheckout checkout) =>
+            ToResult(await checkout.PayAsync(request), includePaymentFields: true)).WithTags("Wizard");
 
-            var lead = await db.Leads.FirstOrDefaultAsync(l => l.Id == request.LeadId);
-            if (lead is null) return Results.NotFound(new { error = "Lead not found." });
-            if (lead.IsTest && !testMode.Value.StripeReady)
-                return Results.Conflict(new { error = "Test mode is missing its Stripe test keys (Admin → Settings → Test mode)." });
-
-            var searchResults = await db.SearchResults
-                .Include(sr => sr.SearchLog)
-                .Where(sr => request.SearchResultIds.Contains(sr.Id))
-                .OrderBy(sr => sr.Id)
-                .ToListAsync();
-
-            if (searchResults.Count == 0)
-                return Results.NotFound(new { error = "Search results not found." });
-
-            // Names listed from our copy of the register are only payable once ASIC has
-            // confirmed them (account numbers in, names it won't renew struck out).
-            if (!asicSettings.Value.ForceFallback && searchResults.Any(sr => !sr.SearchLog.IsVerified))
-                return Results.Conflict(new { error = "We're still confirming your business names with ASIC. Please wait a moment and try again.", code = "verifying" });
-            if (searchResults.Any(sr => !sr.IsAvailable))
-                return Results.Conflict(new { error = "ASIC can't renew one or more of the selected business names right now. Please go back and review your selection.", code = "unavailable" });
-
-            // A double-submit (double-click, client retry) must never charge twice: refuse
-            // names that already have a succeeded payment, and pin the Stripe call with an
-            // idempotency key derived from the batch's identity.
-            var resultIds = searchResults.Select(sr => sr.Id).ToList();
-            var alreadyPaid = await db.StripePayments
-                .Where(p => p.PaymentStatus == "succeeded")
-                .Where(p => db.RenewalRequests.Any(r => r.Id == p.RenewalRequestId && resultIds.Contains(r.SearchResultId)))
-                .AnyAsync();
-            if (alreadyPaid)
-                return Results.Conflict(new { error = "One or more of these business names has already been paid for. Refresh the page to see the current status." });
-
-            var pricePer = pricing.Value.GetCustomerPrice(request.RenewalYears);
-            var total = pricePer * searchResults.Count;
-            var businessNames = string.Join(", ", searchResults.Select(s => s.BusinessName));
-
-            // Everything sent to Stripe when the intent is created must be in the key, or a
-            // retry after a price or email change hits Stripe's "same key, different parameters" error.
-            var idempotencySource = $"batch:{lead.Id}:{request.RenewalYears}:{string.Join(",", resultIds.OrderBy(id => id))}:{total}:{lead.Email}";
-            var idempotencyKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(idempotencySource)));
-            var idsHash = IdsHash(resultIds);
-
-            var confirm = await stripe.ConfirmPaymentAsync(
-                total,
-                lead.Email,
-                $"Business Name Renewal - {searchResults.Count} renewal(s)",
-                new Dictionary<string, string>
-                {
-                    ["renewal_count"] = searchResults.Count.ToString(),
-                    ["business_names"] = businessNames.Length > 500 ? businessNames[..500] : businessNames,
-                    ["renewal_years"] = request.RenewalYears.ToString(),
-                    ["lead_id"] = lead.Id.ToString(),
-                    // Pins the intent to the exact names being paid for; /batch/complete
-                    // verifies it so a paid intent can't be redirected to different names.
-                    ["ids_hash"] = idsHash,
-                },
-                request.PaymentMethodId,
-                idempotencyKey,
-                testMode: lead.IsTest);
-
-            if (confirm.RequiresAction)
-            {
-                // Card wants 3D Secure. Nothing is recorded yet — the browser runs
-                // stripe.handleNextAction(clientSecret) and then posts /batch/complete.
-                return Results.Ok(new
-                {
-                    renewalIds = Array.Empty<Guid>(),
-                    total,
-                    requiresAction = true,
-                    clientSecret = confirm.ClientSecret,
-                });
-            }
-
-            if (!confirm.Success)
-                return Results.UnprocessableEntity(new { error = confirm.ErrorMessage ?? "Payment failed." });
-
-            var renewalIds = await UpsertPaidRenewalsAsync(
-                db, lead, searchResults, request.RenewalYears, pricePer,
-                confirm.PaymentIntentId!, request.CardholderName, confirm.Card);
-
-            try { await leadService.MarkConvertedAsync(lead.Id); } catch { }
-            jobs.Enqueue<IOntraportContactPushService>(s => s.PushPaymentAsync(lead.Id, request.RenewalYears));
-
-            foreach (var rid in renewalIds)
-                jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
-            RenewalOrderService.EnqueueRefresh(jobs);
-            EnqueuePaidEarlyEmail(jobs, lead, searchResults, request.RenewalYears, pricePer);
-
-            // Signs the customer straight into the Business Portal from the confirmation page.
-            return Results.Ok(new
-            {
-                renewalIds, total, requiresAction = false, clientSecret = (string?)null,
-                portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt),
-            });
-        }).WithTags("Wizard");
-
-        // Second leg of the 3DS flow: the browser has finished the challenge, we verify the
-        // PaymentIntent with Stripe ourselves (never trust the client's word) and only then
-        // record the renewals — the same writes the one-shot path above does.
-        app.MapPost("/api/renewals/batch/complete", async (
-            BatchRenewalCompleteRequest request,
-            ApplicationDbContext db,
-            IStripePaymentService stripe,
-            IBackgroundJobClient jobs,
-            ILeadService leadService,
-            IOptionsSnapshot<PricingSettings> pricing,
-            IOptionsSnapshot<PortalSettings> portal,
-            IOptionsSnapshot<TestModeSettings> testMode) =>
-        {
-            if (request.RenewalYears != 1 && request.RenewalYears != 3)
-                return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
-            if (request.SearchResultIds.Length == 0)
-                return Results.BadRequest(new { error = "At least one business name is required." });
-            if (string.IsNullOrWhiteSpace(request.PaymentIntentId))
-                return Results.BadRequest(new { error = "PaymentIntentId is required." });
-
-            var lead = await db.Leads.FirstOrDefaultAsync(l => l.Id == request.LeadId);
-            if (lead is null) return Results.NotFound(new { error = "Lead not found." });
-            if (lead.IsTest && !testMode.Value.StripeReady)
-                return Results.Conflict(new { error = "Test mode is missing its Stripe test keys (Admin → Settings → Test mode)." });
-
-            var searchResults = await db.SearchResults
-                .Include(sr => sr.SearchLog)
-                .Where(sr => request.SearchResultIds.Contains(sr.Id))
-                .ToListAsync();
-
-            if (searchResults.Count == 0)
-                return Results.NotFound(new { error = "Search results not found." });
-
-            var pricePer = pricing.Value.GetCustomerPrice(request.RenewalYears);
-            var total = pricePer * searchResults.Count;
-
-            var intent = await stripe.GetPaymentIntentAsync(request.PaymentIntentId, testMode: lead.IsTest);
-            if (intent is null)
-                return Results.UnprocessableEntity(new { error = "Payment could not be verified. Please contact support." });
-            if (intent.Status != "succeeded")
-                return Results.UnprocessableEntity(new { error = $"Payment was not completed (status: {intent.Status}). You have not been charged — please try again." });
-            if (!intent.Metadata.TryGetValue("lead_id", out var intentLeadId) || intentLeadId != lead.Id.ToString())
-                return Results.UnprocessableEntity(new { error = "Payment does not belong to this renewal." });
-            if (intent.AmountInCents != (long)(total * 100))
-                return Results.UnprocessableEntity(new { error = "Payment amount does not match the order. Please contact support." });
-            // Same lead + same amount is not enough — the intent must be for these exact names.
-            if (intent.Metadata.TryGetValue("ids_hash", out var intentIdsHash)
-                && intentIdsHash != IdsHash(request.SearchResultIds))
-                return Results.UnprocessableEntity(new { error = "Payment does not match the selected business names." });
-
-            // Idempotent: a retry / double-click after the renewals were already recorded
-            // just returns the existing ids instead of charging the work twice.
-            var alreadyRecorded = await db.StripePayments
-                .Where(p => p.PaymentIntentId == intent.PaymentIntentId)
-                .Select(p => p.RenewalRequestId)
-                .ToListAsync();
-            if (alreadyRecorded.Count > 0)
-                return Results.Ok(new { renewalIds = alreadyRecorded, total, portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt) });
-
-            var renewalIds = await UpsertPaidRenewalsAsync(
-                db, lead, searchResults, request.RenewalYears, pricePer,
-                intent.PaymentIntentId, request.CardholderName, intent.Card);
-
-            try { await leadService.MarkConvertedAsync(lead.Id); } catch { }
-            jobs.Enqueue<IOntraportContactPushService>(s => s.PushPaymentAsync(lead.Id, request.RenewalYears));
-
-            foreach (var rid in renewalIds)
-                jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(rid));
-            RenewalOrderService.EnqueueRefresh(jobs);
-            EnqueuePaidEarlyEmail(jobs, lead, searchResults, request.RenewalYears, pricePer);
-
-            return Results.Ok(new { renewalIds, total, portalSignInUrl = portal.Value.CheckoutSignInUrl(lead.Email, DateTimeOffset.UtcNow, lead.CreatedAt) });
-        }).WithTags("Wizard");
+        // Second leg of the 3DS flow: the browser has finished the challenge.
+        app.MapPost("/api/renewals/batch/complete", async (BatchRenewalCompleteRequest request, RenewalCheckout checkout) =>
+            ToResult(await checkout.CompleteAsync(request), includePaymentFields: false)).WithTags("Wizard");
 
         app.MapGet("/api/renewals/batch", async (string ids, ApplicationDbContext db) =>
         {
@@ -293,281 +101,11 @@ public sealed class RenewalsModule : ICarterModule
         var admin = app.MapGroup("/api/admin/renewals").RequireAuthorization().WithTags("Admin.Renewals")
             .AddEndpointFilter<RenewalOrderRefreshFilter>();
 
-        admin.MapGet("/", async (
-            ApplicationDbContext db,
-            string? abn = null,
-            string? status = null,
-            string? initiatedBy = null,
-            string? source = null,
-            string? failedAtStep = null,
-            string? errorCategory = null,
-            DateTime? dateFrom = null,
-            DateTime? dateTo = null,
-            string? view = null,
-            int page = 1,
-            int pageSize = 10) =>
+        admin.MapGet("/", async ([AsParameters] RenewalListRequest request, ApplicationDbContext db) =>
         {
-            page = Math.Max(1, page);
-            // view=toFix: the "Renewals to fix" queue, same test as the sidebar badge.
-            var toFix = string.Equals(view, "toFix", StringComparison.OrdinalIgnoreCase);
-            pageSize = Math.Clamp(pageSize, 1, 200);
-
-            // Facet params accept comma-separated multi-values ("Failed,Pending").
-            var statusValues = Helpers.ParseEnumList<RenewalStatus>(status);
-            var sourceValues = Helpers.ParseEnumList<RenewalSource>(source);
-            var initiatedByValues = Helpers.ParseEnumList<SearchInitiator>(initiatedBy);
-            var categoryValues = (errorCategory ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-            // One filter pipeline, with each facet dimension excludable so its own option
-            // counts can be computed under the OTHER selections (classic faceted search).
-            IQueryable<RenewalRequest> Filtered(bool applyStatus = true, bool applySource = true, bool applyInitiatedBy = true, bool applyCategory = true)
-            {
-                IQueryable<RenewalRequest> q = db.RenewalRequests.AsNoTracking();
-                if (toFix)
-                    q = q.Where(r => !r.IsTest).Where(WorkQueues.RenewalNeedsPerson);
-                if (!string.IsNullOrWhiteSpace(abn))
-                    q = q.Where(r => r.SearchResult.SearchLog.Abn.Contains(abn));
-                if (!string.IsNullOrWhiteSpace(failedAtStep))
-                    q = q.Where(r => r.FailedAtStep == failedAtStep);
-                if (dateFrom.HasValue)
-                    q = q.Where(r => r.InitiatedAt >= dateFrom.Value);
-                if (dateTo.HasValue)
-                {
-                    var dt = dateTo.Value.AddDays(1);
-                    q = q.Where(r => r.InitiatedAt < dt);
-                }
-                if (applyStatus && statusValues.Length > 0)
-                    q = q.Where(r => statusValues.Contains(r.Status));
-                if (applySource && sourceValues.Length > 0)
-                    q = q.Where(r => sourceValues.Contains(r.Source));
-                if (applyInitiatedBy && initiatedByValues.Length > 0)
-                    q = q.Where(r => initiatedByValues.Contains(r.SearchResult.SearchLog.InitiatedBy));
-                if (applyCategory && categoryValues.Length > 0)
-                    q = q.Where(r => r.ErrorCategory != null && categoryValues.Contains(r.ErrorCategory));
-                return q;
-            }
-
-            var query = Filtered()
-                .Include(r => r.SearchResult).ThenInclude(s => s.SearchLog)
-                .Include(r => r.StripePayment)
-                .Include(r => r.Lead);
-
-            var statusFacet = await Filtered(applyStatus: false)
-                .GroupBy(r => r.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
-            var sourceFacet = await Filtered(applySource: false)
-                .GroupBy(r => r.Source).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
-            var initiatedByFacet = await Filtered(applyInitiatedBy: false)
-                .GroupBy(r => r.SearchResult.SearchLog.InitiatedBy).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
-            var categoryFacet = await Filtered(applyCategory: false)
-                .Where(r => r.ErrorCategory != null)
-                .GroupBy(r => r.ErrorCategory).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
-
-            var facets = new
-            {
-                status = statusFacet.OrderByDescending(f => f.Count).Select(f => new { value = f.Key.ToString(), count = f.Count }),
-                source = sourceFacet.OrderByDescending(f => f.Count).Select(f => new { value = f.Key.ToString(), count = f.Count }),
-                initiatedBy = initiatedByFacet.OrderByDescending(f => f.Count).Select(f => new { value = f.Key.ToString(), count = f.Count }),
-                errorCategory = categoryFacet.OrderByDescending(f => f.Count).Select(f => new { value = f.Key!, count = f.Count }),
-            };
-
-            var totalCount = await query.CountAsync();
-            var now = DateTime.UtcNow;
-
-            var rows = await query
-                .OrderByDescending(r => r.InitiatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(r => new
-                {
-                    id = r.Id,
-                    abn = r.SearchResult.SearchLog.Abn,
-                    businessName = r.SearchResult.BusinessName,
-                    renewalYears = r.RenewalYears,
-                    amount = r.Amount,
-                    status = r.Status.ToString(),
-                    source = r.Source.ToString(),
-                    isTest = r.IsTest,
-                    paymentType = r.PaymentType.ToString(),
-                    initiatedAt = r.InitiatedAt,
-                    completedAt = r.CompletedAt,
-                    email = r.Email,
-                    errorMessage = r.ErrorMessage,
-                    failedAtStep = r.FailedAtStep,
-                    errorCategory = r.ErrorCategory,
-                    attemptCount = r.AttemptCount,
-                    nextRetryAt = r.NextRetryAt,
-                    handledAt = r.HandledAt,
-                    transactionReference = r.TransactionReference,
-                    bpayReference = r.BpayReference,
-                    bpayPaidAt = r.BpayPaidAt,
-                    initiatedByLabel = r.SearchResult.SearchLog.InitiatedBy.ToString(),
-                    stripePaymentSucceeded = r.StripePayment != null && r.StripePayment.PaymentStatus == "succeeded",
-                    cardBrand = r.StripePayment != null ? r.StripePayment.CardBrand : null,
-                    cardLast4 = r.StripePayment != null ? r.StripePayment.CardLast4 : null,
-                    lead = r.Lead == null ? null : new { id = r.Lead.Id, fullName = r.Lead.FullName, email = r.Lead.Email },
-                })
-                .ToListAsync();
-
-            // Time the row has been in its CURRENT status (TimeSpan ops aren't translatable in EF,
-            // so compute in memory). A terminal row entered its status at CompletedAt; an in-flight
-            // row (or a failed one, which has no CompletedAt) has been in status since it was initiated.
-            var items = rows.Select(r => new
-            {
-                r.id, r.abn, r.businessName, r.renewalYears, r.amount, r.status, r.source, r.isTest,
-                r.paymentType, r.initiatedAt, r.completedAt, r.email, r.errorMessage, r.failedAtStep,
-                r.errorCategory, r.attemptCount, r.nextRetryAt,
-                r.transactionReference, r.bpayReference, r.bpayPaidAt, r.initiatedByLabel, r.stripePaymentSucceeded,
-                r.cardBrand, r.cardLast4, r.lead,
-                timeInStatusHours = r.completedAt.HasValue
-                    ? Math.Round((now - r.completedAt.Value).TotalHours, 1)
-                    : Math.Round((now - r.initiatedAt).TotalHours, 1),
-            }).ToList();
-
-            // ─────────── Stats block ───────────
-            // Deliberately computed on the UNFILTERED table: these read as global KPIs, and
-            // when they silently tracked the grid filter a status=Failed filter made the
-            // success rate 0% and revenue $0. Day/month boundaries are AEST — the business
-            // (and every recurring job) runs on Sydney time, not UTC.
-            var all = db.RenewalRequests.AsNoTracking().Where(r => !r.IsTest); // test customers aren't revenue
-            var aest = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
-            var aestNow = TimeZoneInfo.ConvertTimeFromUtc(now, aest);
-            var todayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(aestNow.Date, DateTimeKind.Unspecified), aest);
-            var yesterdayStart = todayStart.AddDays(-1);
-            var fourteenDaysAgo = todayStart.AddDays(-13);
-            var monthStart = TimeZoneInfo.ConvertTimeToUtc(new DateTime(aestNow.Year, aestNow.Month, 1, 0, 0, 0, DateTimeKind.Unspecified), aest);
-            var thirtyDaysAgo = now.AddDays(-30);
-            var staleCutoff = now.AddHours(-2);
-
-            // Success rate over DECIDED outcomes: completed vs failures that are actually
-            // final. Timing states (not-due-yet, in-progress recheck, scheduled auto-retry)
-            // aren't decisions and used to drag the rate to a meaningless 41%.
-            var thirty = await all
-                .Where(r => r.InitiatedAt >= thirtyDaysAgo)
-                .GroupBy(r => 1)
-                .Select(g => new
-                {
-                    Total = g.Count(),
-                    Completed = g.Count(r => r.Status == RenewalStatus.Completed),
-                    RealFailed = g.Count(r => r.Status == RenewalStatus.Failed
-                        && r.NextRetryAt == null
-                        && r.ErrorCategory != RenewalErrorCategories.NotDueYet
-                        && r.ErrorCategory != RenewalErrorCategories.AlreadyInProgress),
-                })
-                .FirstOrDefaultAsync();
-            var total30d = thirty?.Total ?? 0;
-            var completed30d = thirty?.Completed ?? 0;
-            var decided30d = completed30d + (thirty?.RealFailed ?? 0);
-            var successRate30d = decided30d > 0 ? Math.Round((decimal)completed30d * 100m / decided30d, 1) : 0m;
-
-            // Avg completion minutes — the 100 most recent completions; a retried renewal
-            // measures from its last attempt, not the original initiation days earlier.
-            var completionSamples = await all
-                .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null && r.CompletedAt >= thirtyDaysAgo)
-                .OrderByDescending(r => r.CompletedAt)
-                .Select(r => new { r.InitiatedAt, r.LastAttemptAt, CompletedAt = r.CompletedAt!.Value })
-                .Take(100)
-                .ToListAsync();
-            decimal? avgCompletionMinutes = null;
-            if (completionSamples.Count > 0)
-            {
-                var totalMinutes = completionSamples.Sum(s => (s.CompletedAt - (s.LastAttemptAt ?? s.InitiatedAt)).TotalMinutes);
-                avgCompletionMinutes = (decimal)Math.Round(totalMinutes / completionSamples.Count, 1);
-            }
-
-            var revenueMtd = await all
-                .Where(r => r.Status == RenewalStatus.Completed && r.CompletedAt != null && r.CompletedAt >= monthStart)
-                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
-
-            // Honest pipeline split. "In flight" is only what actually has a live run;
-            // stale rows are surfaced as stuck (the reconciliation sweep repairs them),
-            // scheduled retries carry their NextRetryAt, and needs-review is the human queue.
-            var pipelineRows = await all
-                .Where(r => r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing || r.Status == RenewalStatus.Failed)
-                .Select(r => new { r.Status, r.Amount, r.InitiatedAt, r.LastAttemptAt, r.NextRetryAt, r.ErrorCategory, r.HandledAt })
-                .ToListAsync();
-            var inflight = pipelineRows.Where(r => r.Status != RenewalStatus.Failed).ToList();
-            var liveValue = inflight.Where(r => (r.LastAttemptAt ?? r.InitiatedAt) >= staleCutoff).Sum(r => r.Amount);
-            var stuckRows = inflight.Where(r => r.HandledAt == null && (r.LastAttemptAt ?? r.InitiatedAt) < staleCutoff).ToList();
-            var stuckValue = stuckRows.Sum(r => r.Amount);
-            var stuckCount = stuckRows.Count;
-            var scheduledRetryValue = pipelineRows
-                .Where(r => r.Status == RenewalStatus.Failed && r.NextRetryAt != null)
-                .Sum(r => r.Amount);
-            // Close to WorkQueues.RenewalNeedsPerson (the "Renewals to fix" queue), which also requires the client paid.
-            var needsReviewRows = pipelineRows
-                .Where(r => r.Status == RenewalStatus.Failed && r.HandledAt == null && r.NextRetryAt == null && r.ErrorCategory != RenewalErrorCategories.NotDueYet)
-                .ToList();
-            var needsReviewCount = needsReviewRows.Count;
-            var needsReviewValue = needsReviewRows.Sum(r => r.Amount);
-
-            var failedValue30d = await all
-                .Where(r => r.Status == RenewalStatus.Failed && r.InitiatedAt >= thirtyDaysAgo)
-                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
-
-            var todayCount = await all.CountAsync(r => r.InitiatedAt >= todayStart);
-            var yesterdayCount = await all.CountAsync(r => r.InitiatedAt >= yesterdayStart && r.InitiatedAt < todayStart);
-            decimal? deltaPct = null;
-            if (yesterdayCount > 0)
-                deltaPct = Math.Round(((decimal)(todayCount - yesterdayCount) * 100m) / yesterdayCount, 1);
-
-            // AEST day buckets (the timezone shift isn't EF-translatable; bucket in memory).
-            var dailyTimes = await all
-                .Where(r => r.InitiatedAt >= fourteenDaysAgo)
-                .Select(r => r.InitiatedAt)
-                .ToListAsync();
-            var dailyMap = dailyTimes
-                .GroupBy(t => DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(t, aest).Date))
-                .ToDictionary(g => g.Key, g => g.Count());
-            var daily14d = Enumerable.Range(0, 14).Select(i =>
-            {
-                var date = DateOnly.FromDateTime(aestNow.Date.AddDays(-13 + i));
-                return new { date = date.ToString("yyyy-MM-dd"), count = dailyMap.GetValueOrDefault(date, 0) };
-            }).ToList();
-
-            // Failure breakdown by category (typed, actionable) — retryable categories are
-            // the machine's problem, the rest are the operator's.
-            var categoryBreakdown = await all
-                .Where(r => r.Status == RenewalStatus.Failed && r.InitiatedAt >= thirtyDaysAgo && r.ErrorCategory != null)
-                .GroupBy(r => r.ErrorCategory)
-                .Select(g => new { Category = g.Key!, Count = g.Count() })
-                .OrderByDescending(g => g.Count)
-                .ToListAsync();
-
-            return Results.Ok(new
-            {
-                totalCount,
-                page,
-                pageSize,
-                items,
-                facets,
-                stats = new
-                {
-                    successRate30d,
-                    completed30d,
-                    decided30d,
-                    total30d,
-                    avgCompletionMinutes,
-                    revenueMtd,
-                    liveValue,
-                    stuckValue,
-                    stuckCount,
-                    scheduledRetryValue,
-                    needsReviewCount,
-                    needsReviewValue,
-                    failedValue30d,
-                    today = todayCount,
-                    yesterday = yesterdayCount,
-                    deltaPct,
-                    daily14d,
-                    errorCategoryBreakdown = categoryBreakdown.Select(c => new
-                    {
-                        category = c.Category,
-                        count = c.Count,
-                        retryable = c.Category == RenewalErrorCategories.Transient || c.Category == RenewalErrorCategories.AlreadyInProgress,
-                    }).ToList(),
-                },
-            });
+            var list = await RenewalAdminQueries.ListAsync(db, request.ToQuery());
+            var stats = await RenewalAdminQueries.StatsAsync(db);
+            return Results.Ok(new { totalCount = list.TotalCount, page = list.Page, pageSize = list.PageSize, items = list.Items, facets = list.Facets, stats });
         });
 
         admin.MapPost("/retry-bulk", async (
@@ -597,33 +135,17 @@ public sealed class RenewalsModule : ICarterModule
 
             foreach (var renewal in candidates)
             {
-                // Same eligibility as per-row /retry: Stripe payments must have succeeded;
-                // External renewals are always eligible to retry the ASIC step.
-                if (renewal.PaymentType == PaymentType.Stripe &&
-                    (renewal.StripePayment is null || renewal.StripePayment.PaymentStatus != "succeeded"))
+                switch (RenewalRetry.Check(renewal))
                 {
-                    skipped++;
-                    continue;
+                    case RetryBlock.MayHoldPayment: skippedPaymentRisk++; continue;
+                    case not null: skipped++; continue;
                 }
-
-                // A run that may have paid ASIC, or lodged it to pay later by BPAY, must not be
-                // blindly re-run: it could pay or lodge twice. These need checking at ASIC first.
-                if (renewal.FailedAtStep == "Submit Pay Later"
-                    || RenewalErrorClassifier.MayHoldPayment(renewal.FailedAtStep, renewal.HostedTokenizationId, renewal.ErrorCategory))
-                {
-                    skippedPaymentRisk++;
-                    continue;
-                }
-
-                // Keep ErrorMessage/FailedAtStep — the next run overwrites them, and until
-                // then the operator can still see why the last attempt failed.
-                renewal.Status = RenewalStatus.Pending;
-                renewal.NextRetryAt = null;
+                RenewalRetry.Requeue(renewal);
                 jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
-            RenewalOrderService.EnqueueRefresh(jobs);
                 retried++;
             }
 
+            if (retried > 0) RenewalOrderService.EnqueueRefresh(jobs);
             await db.SaveChangesAsync();
             return Results.Ok(new { retried, skipped, skippedPaymentRisk });
         });
@@ -758,379 +280,42 @@ public sealed class RenewalsModule : ICarterModule
                 .FirstOrDefaultAsync(r => r.Id == id);
 
             if (renewal is null) return Results.NotFound(new { error = "Renewal request not found" });
-            if (renewal.Status == RenewalStatus.Completed)
-                return Results.BadRequest(new { error = "This renewal has already been completed successfully" });
-            if (renewal.PaymentType == PaymentType.Stripe &&
-                (renewal.StripePayment is null || renewal.StripePayment.PaymentStatus != "succeeded"))
-                return Results.BadRequest(new { error = "Cannot retry: Payment was not successful. Customer needs to retry payment." });
-            if (RenewalErrorClassifier.MayHoldPayment(renewal.FailedAtStep, renewal.HostedTokenizationId, renewal.ErrorCategory))
-                return Results.BadRequest(new { error = "Cannot retry automatically: ASIC may have already taken payment for this run. Verify the renewal at ASIC before retrying." });
+            switch (RenewalRetry.Check(renewal))
+            {
+                case RetryBlock.AlreadyCompleted:
+                    return Results.BadRequest(new { error = "This renewal has already been completed successfully" });
+                case RetryBlock.NotPaid:
+                    return Results.BadRequest(new { error = "Cannot retry: Payment was not successful. Customer needs to retry payment." });
+                case RetryBlock.MayHoldPayment:
+                    return Results.BadRequest(new { error = "Cannot retry automatically: ASIC may have already taken payment for this run. Verify the renewal at ASIC before retrying." });
+            }
 
-            // Keep ErrorMessage/FailedAtStep — the next run overwrites them, and until
-            // then the operator can still see why the last attempt failed.
-            renewal.Status = RenewalStatus.Pending;
-            renewal.NextRetryAt = null;
-            renewal.HandledAt = null;
-            renewal.HandledNote = null;
+            RenewalRetry.Requeue(renewal);
             await db.SaveChangesAsync();
 
             jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(id));
             return Results.Ok(new { message = "Renewal has been queued for retry and will be processed shortly." });
         });
-
-        app.MapPost("/api/admin/manual-search", async (
-            ManualSearchRequest request,
-            ApplicationDbContext db,
-            IAsicRenewalClient asic,
-            IBusinessNameFallbackService fallback,
-            IOptionsSnapshot<AsicSettings> asicSettings,
-            HttpContext httpContext) =>
-        {
-            if (!Helpers.IsValidAbn(request.Abn))
-                return Results.BadRequest(new { error = "Please enter a valid 11-digit ABN" });
-
-            var abn = Helpers.NormalizeAbn(request.Abn);
-            var (ip, ua) = Helpers.ClientInfo(httpContext);
-
-            BusinessNamesResult result;
-            var source = asicSettings.Value.ForceFallback ? SearchSource.Local : SearchSource.Asic;
-            try
-            {
-                result = asicSettings.Value.ForceFallback
-                    ? await fallback.SearchByAbnAsync(abn)
-                    : await asic.SearchByAbnAsync(abn);
-
-                if (!result.Success && !asicSettings.Value.ForceFallback)
-                {
-                    // Names from our copy of the register — no ASIC account numbers.
-                    var fb = await fallback.SearchByAbnAsync(abn);
-                    if (fb.Success) { result = fb; source = SearchSource.Local; }
-                }
-            }
-            catch (Exception ex)
-            {
-                db.SearchLogs.Add(new SearchLog
-                {
-                    Id = Guid.NewGuid(),
-                    Abn = abn,
-                    SearchedAt = DateTime.UtcNow,
-                    IpAddress = ip,
-                    UserAgent = ua,
-                    SessionId = httpContext.TraceIdentifier,
-                    Success = false,
-                    InitiatedBy = SearchInitiator.Admin,
-                    ErrorMessage = $"Exception: {ex.Message}",
-                    ResultsCount = 0,
-                });
-                await db.SaveChangesAsync();
-                return Results.Problem(detail: ex.Message, statusCode: 500);
-            }
-
-            if (!result.Success || result.BusinessNames.Count == 0)
-            {
-                db.SearchLogs.Add(new SearchLog
-                {
-                    Id = Guid.NewGuid(),
-                    Abn = abn,
-                    SearchedAt = DateTime.UtcNow,
-                    IpAddress = ip,
-                    UserAgent = ua,
-                    SessionId = httpContext.TraceIdentifier,
-                    Success = result.Success,
-                    InitiatedBy = SearchInitiator.Admin,
-                    ErrorMessage = result.Success ? null : result.ErrorMessage,
-                    ResultsCount = 0,
-                });
-                await db.SaveChangesAsync();
-                return Results.Ok(new
-                {
-                    success = false,
-                    errorMessage = result.Success ? "No business names found for this ABN" : (result.ErrorMessage ?? "Failed to search ASIC renewal service"),
-                    results = Array.Empty<object>(),
-                });
-            }
-
-            var searchLog = new SearchLog
-            {
-                Id = Guid.NewGuid(),
-                Abn = abn,
-                SearchedAt = DateTime.UtcNow,
-                Source = source,
-                IpAddress = ip,
-                UserAgent = ua,
-                SessionId = httpContext.TraceIdentifier,
-                Success = true,
-                InitiatedBy = SearchInitiator.Admin,
-                ResultsCount = result.BusinessNames.Count,
-            };
-            var saved = result.BusinessNames.Select(b => new SearchResult
-            {
-                Id = Guid.NewGuid(),
-                SearchLogId = searchLog.Id,
-                BusinessName = b.Name,
-                AccountNumber = b.AccountNumber,
-                RegistrationDate = b.RegistrationDate,
-            }).ToList();
-            searchLog.Results = saved;
-            db.SearchLogs.Add(searchLog);
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new
-            {
-                success = true,
-                results = saved.Select(r => new
-                {
-                    id = r.Id,
-                    businessName = r.BusinessName,
-                    accountNumber = r.AccountNumber,
-                    registrationDate = r.RegistrationDate,
-                }),
-            });
-        }).RequireAuthorization().WithTags("Admin.Renewals");
-
-        app.MapPost("/api/admin/manual-renewal/submit", async (
-            ManualRenewalSubmitRequest request,
-            ApplicationDbContext db,
-            IBackgroundJobClient jobs) =>
-        {
-            if (request.SearchResultId == Guid.Empty)
-                return Results.BadRequest(new { error = "Please select a business" });
-            if (string.IsNullOrWhiteSpace(request.Email))
-                return Results.BadRequest(new { error = "Please enter customer email" });
-            if (request.Amount <= 0)
-                return Results.BadRequest(new { error = "Please enter amount paid by customer" });
-            if (request.RenewalYears != 1 && request.RenewalYears != 3)
-                return Results.BadRequest(new { error = "Renewal years must be 1 or 3" });
-
-            var searchResult = await db.SearchResults.FirstOrDefaultAsync(r => r.Id == request.SearchResultId);
-            if (searchResult is null) return Results.NotFound(new { error = "Search result not found" });
-
-            var renewal = new RenewalRequest
-            {
-                Id = Guid.NewGuid(),
-                SearchResultId = request.SearchResultId,
-                InitiatedAt = DateTime.UtcNow,
-                RenewalYears = request.RenewalYears,
-                Email = request.Email,
-                MobileNumber = request.MobileNumber,
-                DateOfBirth = request.DateOfBirth,
-                Source = RenewalSource.Renewtron,
-                PaymentType = PaymentType.External,
-                Amount = request.Amount,
-                Status = RenewalStatus.Pending,
-            };
-            db.RenewalRequests.Add(renewal);
-            await db.SaveChangesAsync();
-
-            jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
-            RenewalOrderService.EnqueueRefresh(jobs);
-
-            return Results.Ok(new
-            {
-                renewalId = renewal.Id,
-                businessName = searchResult.BusinessName,
-                message = $"Manual renewal queued successfully for {searchResult.BusinessName}. The renewal will be processed shortly.",
-            });
-        }).RequireAuthorization().WithTags("Admin.Renewals");
-
-        // Queues the ASIC renewal instead of running it inline: the flow can take 10+ minutes
-        // (OTP waits) and an aborted HTTP request used to strand the row in Processing.
-        // Callers poll GET /api/admin/renewals/{id} for the outcome.
-        app.MapPost("/api/admin/manual-renewal", async (
-            ManualRenewalRequest request,
-            ApplicationDbContext db,
-            IBackgroundJobClient jobs,
-            IOptionsSnapshot<PricingSettings> pricing) =>
-        {
-            if (!Helpers.IsValidAbn(request.Abn))
-                return Results.BadRequest(new { error = "ABN must be 11 digits." });
-            if (request.RenewalYears != 1 && request.RenewalYears != 3)
-                return Results.BadRequest(new { error = "RenewalYears must be 1 or 3." });
-            if (string.IsNullOrWhiteSpace(request.AccountNumber))
-                return Results.BadRequest(new { error = "Account number is required." });
-            if (string.IsNullOrWhiteSpace(request.BusinessName))
-                return Results.BadRequest(new { error = "Business name is required." });
-
-            var abn = Helpers.NormalizeAbn(request.Abn);
-
-            var log = new SearchLog
-            {
-                Id = Guid.NewGuid(),
-                Abn = abn,
-                SearchedAt = DateTime.UtcNow,
-                Success = true,
-                ResultsCount = 1,
-                InitiatedBy = SearchInitiator.Admin,
-            };
-            var searchResult = new SearchResult
-            {
-                Id = Guid.NewGuid(),
-                SearchLogId = log.Id,
-                BusinessName = request.BusinessName,
-                AccountNumber = request.AccountNumber,
-                RegistrationDate = request.RegistrationDate ?? string.Empty,
-            };
-            log.Results.Add(searchResult);
-            db.SearchLogs.Add(log);
-
-            var renewal = new RenewalRequest
-            {
-                Id = Guid.NewGuid(),
-                SearchResultId = searchResult.Id,
-                InitiatedAt = DateTime.UtcNow,
-                RenewalYears = request.RenewalYears,
-                Email = request.Email,
-                Source = RenewalSource.Renewtron,
-                PaymentType = PaymentType.External,
-                Amount = pricing.Value.GetCustomerPrice(request.RenewalYears),
-                Status = RenewalStatus.Pending,
-            };
-            db.RenewalRequests.Add(renewal);
-            await db.SaveChangesAsync();
-
-            jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(renewal.Id));
-            RenewalOrderService.EnqueueRefresh(jobs);
-
-            return Results.Ok(new
-            {
-                renewalId = renewal.Id,
-                status = renewal.Status.ToString(),
-                message = "Renewal queued. Poll /api/admin/renewals/{id} for the outcome.",
-            });
-        }).RequireAuthorization().WithTags("Admin.Renewals");
     }
 
-    /// <summary>Stable fingerprint of a set of search-result ids, order-independent.</summary>
-    private static string IdsHash(IEnumerable<Guid> ids) =>
-        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-            Encoding.UTF8.GetBytes(string.Join(",", ids.OrderBy(id => id)))));
-
-    /// <summary>
-    /// Records the renewals for a batch that has already been paid — shared by the
-    /// immediate-success path and the post-3DS completion endpoint so the two can't drift.
-    /// Reuses an existing RenewalRequest per search result (a failed earlier attempt), else creates one.
-    /// </summary>
-    /// <summary>
-    /// Names paid for before ASIC takes them: one email telling the customer we have the payment
-    /// and will lodge the renewal when ASIC opens it. The renewal site itself doesn't say.
-    /// </summary>
-    private static void EnqueuePaidEarlyEmail(IBackgroundJobClient jobs, Lead lead, List<SearchResult> searchResults, int renewalYears, decimal pricePer)
+    /// <summary>The wire shapes the wizard has always received for each checkout outcome.</summary>
+    private static IResult ToResult(CheckoutOutcome outcome, bool includePaymentFields) => outcome switch
     {
-        var early = searchResults.Where(sr => sr.PayEarly).Select(sr => sr.BusinessName).ToArray();
-        if (early.Length == 0 || string.IsNullOrWhiteSpace(lead.Email)) return;
-        var email = lead.Email;
-        var abn = lead.Abn;
-        var amount = pricePer * early.Length;
-        var leadId = (Guid?)lead.Id;
-        jobs.Enqueue<IEmailService>(e => e.SendPaidEarlyAsync(email, abn, early, renewalYears, amount, leadId));
-    }
-
-    private static async Task<List<Guid>> UpsertPaidRenewalsAsync(
-        ApplicationDbContext db,
-        Lead lead,
-        List<SearchResult> searchResults,
-        int renewalYears,
-        decimal pricePer,
-        string paymentIntentId,
-        string? cardholderName,
-        StripeCardInfo? card)
-    {
-        var renewalIds = new List<Guid>();
-        foreach (var sr in searchResults)
+        CheckoutOutcome.NeedsAction a => Results.Ok(new
         {
-            var existing = await db.RenewalRequests
-                .Include(r => r.StripePayment)
-                .FirstOrDefaultAsync(r => r.SearchResultId == sr.Id);
-
-            RenewalRequest renewal;
-            if (existing is not null)
-            {
-                renewal = existing;
-                renewal.LeadId = lead.Id;
-                renewal.RenewalYears = renewalYears;
-                renewal.Email = lead.Email;
-                renewal.MobileNumber = lead.MobileNumber;
-                renewal.DateOfBirth = lead.DateOfBirth;
-                renewal.Tfn = lead.Tfn;
-                renewal.PaymentType = PaymentType.Stripe;
-                renewal.IsTest = lead.IsTest;
-                renewal.Amount = pricePer;
-                renewal.Status = RenewalStatus.Pending;
-                renewal.CompletedAt = null;
-                renewal.TransactionReference = null;
-                renewal.HostedTokenizationId = null;
-                renewal.ErrorMessage = null;
-                renewal.FailedAtStep = null;
-                renewal.ErrorCategory = null;
-                renewal.NextRetryAt = null;
-            }
-            else
-            {
-                renewal = new RenewalRequest
-                {
-                    Id = Guid.NewGuid(),
-                    SearchResultId = sr.Id,
-                    LeadId = lead.Id,
-                    InitiatedAt = DateTime.UtcNow,
-                    RenewalYears = renewalYears,
-                    Email = lead.Email,
-                    MobileNumber = lead.MobileNumber,
-                    DateOfBirth = lead.DateOfBirth,
-                    Tfn = lead.Tfn,
-                    Source = RenewalSource.Renewtron,
-                    PaymentType = PaymentType.Stripe,
-                    IsTest = lead.IsTest,
-                    Amount = pricePer,
-                    Status = RenewalStatus.Pending,
-                };
-                db.RenewalRequests.Add(renewal);
-            }
-
-            // Paid before ASIC will take it: the renewal waits, and the morning check lodges it
-            // once ASIC lists the name (EarlyRenewalService).
-            if (sr.PayEarly)
-            {
-                var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
-                var knownDue = await Renewtron.Services.AsicRegistry.AsicDueDateService.KnownDueDateAsync(db, lead.Abn, sr.BusinessName);
-                EarlyRenewalService.MarkWaiting(renewal, EarlyRenewalService.NextCheck(today, sr.RegistrationDate, knownDue));
-            }
-            await db.SaveChangesAsync();
-
-            // Payment rows are never deleted — a reused renewal's row is updated in place.
-            // (The batch endpoint refuses names whose payment already succeeded, so this
-            // only ever overwrites a non-succeeded prior attempt.)
-            if (renewal.StripePayment is not null)
-            {
-                var payment = renewal.StripePayment;
-                payment.PaymentIntentId = paymentIntentId;
-                payment.PaymentStatus = "succeeded";
-                payment.PaidAt = DateTime.UtcNow;
-                payment.CardholderName = cardholderName;
-                payment.CardBrand = card?.Brand;
-                payment.CardLast4 = card?.Last4;
-                payment.CardExpMonth = card?.ExpMonth;
-                payment.CardExpYear = card?.ExpYear;
-            }
-            else
-            {
-                db.StripePayments.Add(new StripePayment
-                {
-                    Id = Guid.NewGuid(),
-                    RenewalRequestId = renewal.Id,
-                    PaymentIntentId = paymentIntentId,
-                    PaymentStatus = "succeeded",
-                    PaidAt = DateTime.UtcNow,
-                    CardholderName = cardholderName,
-                    CardBrand = card?.Brand,
-                    CardLast4 = card?.Last4,
-                    CardExpMonth = card?.ExpMonth,
-                    CardExpYear = card?.ExpYear,
-                });
-            }
-            await db.SaveChangesAsync();
-
-            renewalIds.Add(renewal.Id);
-        }
-        return renewalIds;
-    }
+            renewalIds = Array.Empty<Guid>(),
+            total = a.Total,
+            requiresAction = true,
+            clientSecret = a.ClientSecret,
+        }),
+        CheckoutOutcome.Paid p when includePaymentFields => Results.Ok(new
+        {
+            renewalIds = p.RenewalIds, total = p.Total, requiresAction = false, clientSecret = (string?)null,
+            portalSignInUrl = p.PortalSignInUrl,
+        }),
+        CheckoutOutcome.Paid p => Results.Ok(new { renewalIds = p.RenewalIds, total = p.Total, portalSignInUrl = p.PortalSignInUrl }),
+        CheckoutOutcome.Refused { Code: { } code } r => Results.Json(new { error = r.Error, code }, statusCode: r.StatusCode),
+        CheckoutOutcome.Refused r => Results.Json(new { error = r.Error }, statusCode: r.StatusCode),
+        _ => throw new InvalidOperationException($"Unhandled checkout outcome {outcome.GetType().Name}"),
+    };
 }

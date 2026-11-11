@@ -3,7 +3,7 @@ namespace Renewtron.Data;
 public class SearchLog
 {
     public Guid Id { get; set; }
-    public string Abn { get; set; }
+    public string Abn { get; set; } = string.Empty;
     public DateTime SearchedAt { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }

@@ -1,3 +1,4 @@
+using Renewtron.Data;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
 using Renewtron.Settings;
@@ -69,7 +70,7 @@ public class StripePaymentService : IStripePaymentService
 
             return paymentIntent.Status switch
             {
-                "succeeded" => new StripeConfirmResult(
+                StripePaymentStatuses.Succeeded => new StripeConfirmResult(
                     Success: true, RequiresAction: false,
                     paymentIntent.Id, paymentIntent.ClientSecret,
                     CardOf(paymentIntent), ErrorMessage: null),

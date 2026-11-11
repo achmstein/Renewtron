@@ -50,7 +50,6 @@ public class OntraportSalesService : IOntraportSalesService
         ApplicationDbContext dbContext,
         IBackgroundJobClient backgroundJobClient,
         IAsicRenewalClient asicClient,
-        IOptionsSnapshot<OntraportSettings> settings,
         IOptionsSnapshot<PricingSettings> pricingSettings,
         IOptionsMonitor<AsicKeyRequestSettings> asicKeyRequestSettings,
         IOptionsMonitor<AsicKeyInboxSettings> asicKeyInboxSettings,
@@ -67,10 +66,6 @@ public class OntraportSalesService : IOntraportSalesService
         _asicKeyInboxSettings = asicKeyInboxSettings;
         _logger = logger;
 
-        _httpClient.BaseAddress = new Uri("https://api.ontraport.com/1/");
-        _httpClient.DefaultRequestHeaders.Add("Api-Appid", settings.Value.ApiAppId);
-        _httpClient.DefaultRequestHeaders.Add("Api-Key", settings.Value.ApiKey);
-        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
     }
 
     public async Task<List<OntraportSale>> SyncSalesAsync()
@@ -121,7 +116,7 @@ public class OntraportSalesService : IOntraportSalesService
 
                     // Parse renewal term
                     var termValue = contact.GetValueOrDefault(FieldRenewalTerm, "0");
-                    var renewalYears = RenewalTermMap.GetValueOrDefault(termValue, 1);
+                    var renewalYears = RenewalTermMap.GetValueOrDefault(termValue ?? "0", 1);
 
                     // Amount from spent field
                     var spentStr = contact.GetValueOrDefault("spent", "0");
@@ -152,8 +147,8 @@ public class OntraportSalesService : IOntraportSalesService
                         OntraportContactId = contactId,
                         OntraportTransactionId = "",
                         ContactName = $"{contact.GetValueOrDefault("firstname", "")} {contact.GetValueOrDefault("lastname", "")}".Trim(),
-                        Email = contact.GetValueOrDefault("email", ""),
-                        MobileNumber = contact.GetValueOrDefault("sms_number", ""),
+                        Email = contact.GetValueOrDefault("email") ?? "",
+                        MobileNumber = contact.GetValueOrDefault("sms_number") ?? "",
                         DateOfBirth = contact.GetValueOrDefault(FieldDateOfBirth, null),
                         BusinessName = businessName,
                         Abn = abn,

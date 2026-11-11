@@ -73,7 +73,7 @@ public class RenewalRequest
     public string? ErrorCategory { get; set; }
 
     // Navigation properties
-    public SearchResult SearchResult { get; set; }
+    public SearchResult SearchResult { get; set; } = null!;
     public StripePayment? StripePayment { get; set; } // Only populated for Stripe payments
     public Lead? Lead { get; set; }
 }

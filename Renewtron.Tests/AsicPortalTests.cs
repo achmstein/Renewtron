@@ -228,7 +228,7 @@ public class AsicPortalLiveTests(ITestOutputHelper output)
             : $"second visit: {again.Url[..Math.Min(120, again.Url.Length)]} ({again.Html.Length} chars), logged-in home: {again.IsLoggedInHome}, window {again.WindowId}");
         if (Environment.GetEnvironmentVariable("ASIC_PORTAL_DUMP") is { Length: > 0 } dump)
         {
-            File.WriteAllText(Path.Combine(dump, "home1.html"), login.Home.Html);
+            File.WriteAllText(Path.Combine(dump, "home1.html"), login.Home!.Html);
             if (again is not null) File.WriteAllText(Path.Combine(dump, "home2.html"), again.Html);
         }
         if (again is { IsLoggedInHome: false })

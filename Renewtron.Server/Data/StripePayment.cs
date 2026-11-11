@@ -1,5 +1,12 @@
 namespace Renewtron.Data;
 
+/// <summary>Stripe's PaymentIntent statuses we compare against (stored as Stripe sends them).</summary>
+public static class StripePaymentStatuses
+{
+    public const string Succeeded = "succeeded";
+    public const string RequiresAction = "requires_action";
+}
+
 /// <summary>
 /// Represents Stripe payment information for a renewal request
 /// </summary>
