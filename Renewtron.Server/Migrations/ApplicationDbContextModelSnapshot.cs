@@ -953,6 +953,9 @@ namespace Renewtron.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DueDateCheckedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("DueDateSource")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");

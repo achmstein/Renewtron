@@ -31,6 +31,11 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IAsicRenewalClient, AsicRenewalClient>();
         services.AddTransient<IAsicPaymentClient, AsicPaymentClient>();
 
+        // ASIC's public register search (renewal dates), behind reCAPTCHA solved via 2Captcha.
+        services.AddOptions<AsicRegistryOptions>().Bind(configuration.GetSection(AsicRegistryOptions.SectionName));
+        services.AddSingleton<ICaptchaSolver, TwoCaptchaSolver>();
+        services.AddSingleton<IAsicRegistryClientFactory, AsicRegistryClientFactory>();
+
         return services;
     }
 }

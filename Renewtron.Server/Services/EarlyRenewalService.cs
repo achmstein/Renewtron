@@ -2,6 +2,7 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Abstractions;
 using Renewtron.Data;
+using Renewtron.Services.AsicRegistry;
 
 namespace Renewtron.Services;
 
@@ -25,6 +26,7 @@ public class EarlyRenewalService(
     ApplicationDbContext db,
     IAsicSearchCoordinator asic,
     IBackgroundJobClient jobs,
+    IAsicDueDateService dueDates,
     ILogger<EarlyRenewalService> logger) : IEarlyRenewalService
 {
     public const string RecurringJobId = "early-renewal-check";
@@ -50,13 +52,15 @@ public class EarlyRenewalService(
 
     /// <summary>
     /// When to ask ASIC next about a renewal it said isn't due: the day its renewal window
-    /// should open (29 days before the estimated due date), or tomorrow when we're already
-    /// inside that window. With no registration date, in a week.
+    /// opens (29 days before the due date), or tomorrow when we're already inside that window.
+    /// The due date is <paramref name="knownDue"/> (ASIC's own, from its register search) when
+    /// there is one still ahead, otherwise estimated from the registration date. With neither, in a week.
     /// </summary>
-    public static DateOnly NextCheck(DateOnly today, string? registrationDate)
+    public static DateOnly NextCheck(DateOnly today, string? registrationDate, DateOnly? knownDue = null)
     {
-        if (EstimatedDueDate(today, registrationDate) is not { } due) return today.AddDays(7);
-        var opens = due.AddDays(-RenewalOrderProjection.WindowDays);
+        var due = knownDue is { } k && k >= today ? k : EstimatedDueDate(today, registrationDate);
+        if (due is null) return today.AddDays(7);
+        var opens = due.Value.AddDays(-RenewalOrderProjection.WindowDays);
         return opens > today ? opens : today.AddDays(1);
     }
 
@@ -102,6 +106,23 @@ public class EarlyRenewalService(
         foreach (var byAbn in waiting.GroupBy(r => r.SearchResult.SearchLog.Abn))
         {
             var result = await asic.SearchAsync(byAbn.Key);
+
+            // ASIC's real due dates for this ABN, read from its register search at most once,
+            // and only when a renewal is still waiting and Renewtron doesn't already hold the date.
+            IReadOnlyDictionary<string, AsicNameDue>? asicDates = null;
+            var askedRegister = false;
+            async Task<DateOnly?> RealDueAsync(string? businessName)
+            {
+                if (await AsicDueDateService.KnownDueDateAsync(db, byAbn.Key, businessName) is { } known) return known;
+                if (!askedRegister)
+                {
+                    askedRegister = true;
+                    asicDates = await dueDates.LookupAsync(byAbn.Key, CancellationToken.None);
+                    if (asicDates is not null) await dueDates.ApplyAsync(byAbn.Key, asicDates, now, CancellationToken.None);
+                }
+                return asicDates is not null && asicDates.TryGetValue(BusinessNameText.MatchKey(businessName), out var d) ? d.RenewalDate : null;
+            }
+
             foreach (var renewal in byAbn)
             {
                 var sr = renewal.SearchResult;
@@ -147,7 +168,7 @@ public class EarlyRenewalService(
                 // Not due yet, or a renewal already in progress: look again later.
                 var next = LeadOutcomes.FromAsicError(message) == LeadOutcome.RenewalInProgress
                     ? today.AddDays(1)
-                    : NextCheck(today, sr.RegistrationDate);
+                    : NextCheck(today, sr.RegistrationDate, await RealDueAsync(sr.BusinessName));
                 MarkWaiting(renewal, next);
                 stillWaiting++;
             }

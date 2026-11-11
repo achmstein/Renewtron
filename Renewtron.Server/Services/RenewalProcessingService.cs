@@ -233,7 +233,9 @@ public class RenewalProcessingService : IRenewalProcessingService
                 && renewalRequest.ErrorCategory == RenewalErrorCategories.NotDueYet)
             {
                 var sydneyToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
-                EarlyRenewalService.MarkWaiting(renewalRequest, EarlyRenewalService.NextCheck(sydneyToday, renewalRequest.SearchResult.RegistrationDate));
+                var knownDue = await Renewtron.Services.AsicRegistry.AsicDueDateService.KnownDueDateAsync(
+                    _dbContext, renewalRequest.SearchResult.SearchLog.Abn, renewalRequest.SearchResult.BusinessName);
+                EarlyRenewalService.MarkWaiting(renewalRequest, EarlyRenewalService.NextCheck(sydneyToday, renewalRequest.SearchResult.RegistrationDate, knownDue));
             }
 
             await _dbContext.SaveChangesAsync();

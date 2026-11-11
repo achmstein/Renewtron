@@ -1092,7 +1092,8 @@ public sealed class RenewalsModule : ICarterModule
             if (sr.PayEarly)
             {
                 var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
-                EarlyRenewalService.MarkWaiting(renewal, EarlyRenewalService.NextCheck(today, sr.RegistrationDate));
+                var knownDue = await Renewtron.Services.AsicRegistry.AsicDueDateService.KnownDueDateAsync(db, lead.Abn, sr.BusinessName);
+                EarlyRenewalService.MarkWaiting(renewal, EarlyRenewalService.NextCheck(today, sr.RegistrationDate, knownDue));
             }
             await db.SaveChangesAsync();
 

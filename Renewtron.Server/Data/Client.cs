@@ -64,13 +64,13 @@ public enum RecordSource
 /// <summary>Where a business name's due date came from, weakest first: a stronger source replaces a weaker one.</summary>
 public enum RenewalDueDateSource
 {
-    /// <summary>Worked out by Renewtron's ASIC check (renewed elsewhere: the old due date plus a year). The weakest.</summary>
+    /// <summary>Worked out by Renewtron's ASIC check (renewed elsewhere: the old due date plus a year) when ASIC's register search couldn't be read. The weakest.</summary>
     Estimated = 0,
     Ontraport = 1,
     BulkUpload = 2,
     /// <summary>Worked out from a renewal we lodged: the most reliable.</summary>
     Renewal = 3,
-    /// <summary>ASIC's own renewal date for the name, read from its register (e.g. a Businesstron run).</summary>
+    /// <summary>ASIC's own renewal date for the name, read from its register search (AsicDueDateService).</summary>
     AsicRegister = 4,
 }
 
@@ -149,12 +149,15 @@ public class ClientBusinessName
     public string? AsicAccountNumber { get; set; }
 
     /// <summary>
-    /// Next renewal due date, when we know it. The public register no longer publishes one
-    /// (ASIC removed BN_RENEW_DT in April 2025) and terms are 1 or 3 years, so it comes from
-    /// our own renewals, Ontraport's due-date field or bulk uploads.
+    /// Next renewal due date, when we know it. The register file no longer publishes one (ASIC
+    /// removed BN_RENEW_DT in April 2025), but ASIC's register search still shows each name's
+    /// renewal date: the nightly due-date refresh reads it there (AsicDueDateService). Otherwise
+    /// it comes from our own renewals, Ontraport's due-date field, or an estimate.
     /// </summary>
     public DateOnly? RenewalDueDate { get; set; }
     public RenewalDueDateSource? DueDateSource { get; set; }
+    /// <summary>When ASIC's register search was last asked for this name's renewal date.</summary>
+    public DateTime? DueDateCheckedAt { get; set; }
 
     public string? AsicKey { get; set; }
     public DateTime? AsicKeyReceivedAt { get; set; }

@@ -118,6 +118,7 @@ builder.Services.AddOptions<TestModeSettings>().BindConfiguration("TestMode");
 builder.Services.AddOptions<AirwallexSettings>().BindConfiguration("Airwallex");
 builder.Services.AddOptions<AsicPortalSettings>().BindConfiguration("AsicPortal");
 builder.Services.AddOptions<RegistrationSettings>().BindConfiguration("Registration");
+builder.Services.AddOptions<AsicRegistrySettings>().BindConfiguration("AsicRegistry");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
@@ -129,6 +130,7 @@ builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddScoped<EmailMaintenance>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
+builder.Services.AddScoped<Renewtron.Services.AsicRegistry.IAsicDueDateService, Renewtron.Services.AsicRegistry.AsicDueDateService>();
 builder.Services.AddScoped<IAsicCheckService, AsicCheckService>();
 builder.Services.AddScoped<IPaymentFollowUpService, PaymentFollowUpService>();
 builder.Services.AddScoped<IBpayAutoPayService, BpayAutoPayService>();
@@ -340,6 +342,14 @@ RecurringJob.AddOrUpdate<IEarlyRenewalService>(
     EarlyRenewalService.RecurringJobId,
     service => service.CheckWaitingAsync(),
     "15 7 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// Real renewal due dates from ASIC's register search (the register file no longer has them),
+// replacing estimates. Runs before the 04:00 ASIC check and the 07:15 paid-early check.
+RecurringJob.AddOrUpdate<Renewtron.Services.AsicRegistry.IAsicDueDateService>(
+    Renewtron.Services.AsicRegistry.AsicDueDateService.RecurringJobId,
+    service => service.RefreshAsync(CancellationToken.None),
+    "0 2 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
 // Bulk uploads were removed (Nov 2026): drop their jobs from Hangfire.

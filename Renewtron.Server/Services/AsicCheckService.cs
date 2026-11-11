@@ -3,6 +3,7 @@ using Asic.Client.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
 using Renewtron.Modules;
+using Renewtron.Services.AsicRegistry;
 
 namespace Renewtron.Services;
 
@@ -35,6 +36,7 @@ public class AsicCheckService(
     ApplicationDbContext db,
     IAsicRenewalClient asic,
     IRenewalOrderService orders,
+    IAsicDueDateService dueDates,
     ILogger<AsicCheckService> logger) : IAsicCheckService
 {
     public const string RecurringJobId = "asic-check";
@@ -73,7 +75,7 @@ public class AsicCheckService(
             }
             if (finding is null) continue;
             if (finding.StillDue) stillDue++;
-            if (!dryRun) Apply(order, finding, registerDate, now);
+            if (!dryRun) await ApplyAsync(order, finding, registerDate, now, ct);
             items.Add(new(order.Id, order.BusinessName, finding.Outcome?.ToString(), finding.Evidence));
         }
 
@@ -103,7 +105,7 @@ public class AsicCheckService(
         var finding = await AskAsicAsync(order, due, today, registerDate is null ? null : names, ct)
             ?? (registerDate is { } rd ? AsicCheckRules.FromRegister(order.BusinessName, due, rd, names) : null);
         order.AsicCheckedAt = now;
-        if (finding is not null && CanSet(order)) Apply(order, finding, registerDate, now);
+        if (finding is not null && CanSet(order)) await ApplyAsync(order, finding, registerDate, now, ct);
         await db.SaveChangesAsync(ct);
         await orders.RefreshQuietlyAsync(ct);
         return new(order.Id, order.BusinessName, finding?.Outcome?.ToString(),
@@ -149,7 +151,7 @@ public class AsicCheckService(
         }
     }
 
-    private void Apply(RenewalOrder order, AsicCheckRules.Finding finding, DateOnly? registerDate, DateTime now)
+    private async Task ApplyAsync(RenewalOrder order, AsicCheckRules.Finding finding, DateOnly? registerDate, DateTime now, CancellationToken ct)
     {
         if (finding.StillDue)
         {
@@ -170,10 +172,18 @@ public class AsicCheckService(
         if (finding.Outcome == RenewalOrderReason.RenewedElsewhere && order.DueDate is { } due
             && (name.RenewalDueDate is null || name.RenewalDueDate <= due))
         {
-            // ASIC doesn't publish the new date; a renewal is at least a year, so this is the earliest it can be.
-            name.RenewalDueDate = due.AddYears(1);
-            name.DueDateSource = RenewalDueDateSource.Estimated;
-            name.UpdatedAt = now;
+            // The new date is on ASIC's register search: read it there (1 or 3 years on).
+            if (await dueDates.LookupAsync(order.Abn, ct) is { } found)
+                await dueDates.ApplyAsync(order.Abn, found, now, ct);
+
+            // ASIC couldn't be read, or hasn't caught up yet: a renewal is at least a year, so
+            // this is the earliest it can be. The nightly refresh replaces it with ASIC's date.
+            if (name.RenewalDueDate is null || name.RenewalDueDate <= due)
+            {
+                name.RenewalDueDate = due.AddYears(1);
+                name.DueDateSource = RenewalDueDateSource.Estimated;
+                name.UpdatedAt = now;
+            }
         }
         else if (finding.Outcome == RenewalOrderReason.Lapsed && finding.Source == OrderEvidenceSource.AsicRegister)
         {

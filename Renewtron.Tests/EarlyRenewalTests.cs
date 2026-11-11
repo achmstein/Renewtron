@@ -89,8 +89,24 @@ public class EarlyRenewalCheckTests
         return (db, renewal);
     }
 
-    private static Task<EarlyRenewalReport> Check(ApplicationDbContext db, FakeAsic asic, FakeJobs jobs) =>
-        new EarlyRenewalService(db, asic, jobs, Microsoft.Extensions.Logging.Abstractions.NullLogger<EarlyRenewalService>.Instance).CheckWaitingAsync();
+    private static Task<EarlyRenewalReport> Check(ApplicationDbContext db, FakeAsic asic, FakeJobs jobs,
+        Asic.Client.Models.AsicRegistrySearchResult? register = null) =>
+        new EarlyRenewalService(db, asic, jobs, AsicDueDateTests.Service(db, register ?? Asic.Client.Models.AsicRegistrySearchResult.Fail("offline")),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EarlyRenewalService>.Instance).CheckWaitingAsync();
+
+    [Fact]
+    public async Task Still_not_due_waits_for_the_window_of_asics_real_due_date()
+    {
+        var (db, renewal) = Seed(DateTime.UtcNow.AddMinutes(-1));
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time")));
+        var realDue = today.AddDays(90); // not the registration anniversary (08/10)
+        var asic = new FakeAsic(new() { Success = false, ErrorMessage = "This business name is not due for renewal yet. ASIC will send a renewal notice when it becomes due." });
+        var register = AsicDueDateTests.Register(("BEAUTIQUE HAIR LOUNGE & BEAUTY BAR", realDue.ToString("dd/MM/yyyy")));
+
+        await Check(db, asic, new FakeJobs(), register);
+
+        Assert.Equal(EarlyRenewalService.CheckAt(realDue.AddDays(-RenewalOrderProjection.WindowDays)), renewal.NextRetryAt);
+    }
 
     [Fact]
     public async Task Once_asic_lists_the_name_it_gets_the_account_number_and_is_lodged()
