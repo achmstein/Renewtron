@@ -1,9 +1,8 @@
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Renewtron.Data;
 using Renewtron.Settings;
+using Asic.Integrations.Registry;
 
 namespace Renewtron.Services.AsicRegistry;
 

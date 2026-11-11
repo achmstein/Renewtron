@@ -1,8 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using Asic.Integrations;
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.Models;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -11,6 +8,9 @@ using Renewtron.Data;
 using Renewtron.Services.AsicPortal;
 using Renewtron.Services.Email;
 using Renewtron.Settings;
+using Asic.Integrations.Payment;
+using Asic.Integrations.Payment.ThreeDS;
+using Asic.Integrations.Portal;
 
 namespace Renewtron.Services.Registration;
 

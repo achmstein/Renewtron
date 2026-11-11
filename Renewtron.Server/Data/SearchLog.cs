@@ -1,5 +1,3 @@
-using Asic.Integrations.Models;
-
 namespace Renewtron.Data;
 
 public class SearchLog

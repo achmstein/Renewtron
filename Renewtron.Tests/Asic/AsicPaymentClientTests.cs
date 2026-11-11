@@ -1,8 +1,8 @@
 using System.Net;
 using AngleSharp.Html.Parser;
-using Asic.Integrations;
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.Models;
+using Asic.Integrations.Payment;
+using Asic.Integrations.Payment.ThreeDS;
+using Asic.Integrations.Shared;
 
 namespace Renewtron.Tests.AsicClients;
 

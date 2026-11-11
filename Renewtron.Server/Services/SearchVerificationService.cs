@@ -1,7 +1,7 @@
-using Asic.Integrations.Models;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Data;
+using Asic.Integrations.Renewal;
 
 namespace Renewtron.Services;
 

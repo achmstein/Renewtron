@@ -1,5 +1,3 @@
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.Models;
 using Carter;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +6,7 @@ using Renewtron.Abstractions;
 using Renewtron.Data;
 using Renewtron.Services;
 using Renewtron.Settings;
+using Asic.Integrations.Renewal;
 
 namespace Renewtron.Modules;
 

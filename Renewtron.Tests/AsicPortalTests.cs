@@ -1,6 +1,6 @@
-using Asic.Integrations;
 using Renewtron.Services.AsicPortal;
 using Xunit.Abstractions;
+using Asic.Integrations.Portal;
 using static Renewtron.Services.AsicPortal.AsicPortalText;
 
 namespace Renewtron.Tests;
@@ -41,9 +41,9 @@ public class AsicPortalTextTests
     [Fact]
     public void Declare_as_picks_the_authority_radio()
     {
-        Assert.Equal("authority4", Asic.Integrations.AsicDeclare.AuthorityValue(Asic.Integrations.AsicDeclareAs.OnBehalfOfHolder));
-        Assert.Equal("authority3", Asic.Integrations.AsicDeclare.AuthorityValue(Asic.Integrations.AsicDeclareAs.Holder));
-        var fields = Asic.Integrations.AsicDeclare.Fields(Asic.Integrations.AsicDeclareAs.Holder);
+        Assert.Equal("authority4", Asic.Integrations.Portal.AsicDeclare.AuthorityValue(Asic.Integrations.Portal.AsicDeclareAs.OnBehalfOfHolder));
+        Assert.Equal("authority3", Asic.Integrations.Portal.AsicDeclare.AuthorityValue(Asic.Integrations.Portal.AsicDeclareAs.Holder));
+        var fields = Asic.Integrations.Portal.AsicDeclare.Fields(Asic.Integrations.Portal.AsicDeclareAs.Holder);
         Assert.Equal("t", fields["declaration1"]);
         Assert.Equal("t", fields["declaration2"]);
         Assert.Equal("authority3", fields["authorityOption"]);

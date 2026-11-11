@@ -1,4 +1,3 @@
-using Asic.Integrations.Abstractions;
 using Carter;
 using Hangfire;
 using Microsoft.AspNetCore.RateLimiting;
@@ -14,6 +13,7 @@ using Renewtron.Data;
 using Renewtron.Identity;
 using Renewtron.Services;
 using Renewtron.Settings;
+using Asic.Integrations.Payment.ThreeDS;
 
 var builder = WebApplication.CreateBuilder(args);
 

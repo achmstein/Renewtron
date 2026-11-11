@@ -1,7 +1,6 @@
 using System.Net;
-using Asic.Integrations;
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.Models;
+using Asic.Integrations.Payment;
+using Asic.Integrations.Renewal;
 
 namespace Renewtron.Tests.AsicClients;
 

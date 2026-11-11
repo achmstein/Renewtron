@@ -1,6 +1,6 @@
-using Asic.Integrations;
 using Renewtron.Data;
 using Renewtron.Services.Registration;
+using Asic.Integrations.Portal;
 
 namespace Renewtron.Tests;
 

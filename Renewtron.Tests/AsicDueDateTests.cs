@@ -1,5 +1,3 @@
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -7,6 +5,7 @@ using Renewtron.Data;
 using Renewtron.Services;
 using Renewtron.Services.AsicRegistry;
 using Renewtron.Settings;
+using Asic.Integrations.Registry;
 
 namespace Renewtron.Tests;
 

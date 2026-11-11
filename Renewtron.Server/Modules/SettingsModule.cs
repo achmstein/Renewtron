@@ -247,7 +247,7 @@ public sealed class SettingsModule : ICarterModule
                 Password = Unmask(body.Password, current.CurrentValue.Password) ?? "",
                 BusinessEmail = (body.BusinessEmail ?? "").Trim(),
                 KeepRepresentatives = (body.KeepRepresentatives ?? "").Trim(),
-                DeclareAs = Enum.TryParse<Asic.Integrations.AsicDeclareAs>(body.DeclareAs, true, out var d) ? d : Asic.Integrations.AsicDeclareAs.Holder,
+                DeclareAs = Enum.TryParse<Asic.Integrations.Portal.AsicDeclareAs>(body.DeclareAs, true, out var d) ? d : Asic.Integrations.Portal.AsicDeclareAs.Holder,
                 OntraportLinkFieldId = (body.OntraportLinkFieldId ?? "").Trim(),
                 WrongKeyCampaignId = (body.WrongKeyCampaignId ?? "").Trim(),
             };

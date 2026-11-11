@@ -28,7 +28,7 @@ public class AsicPortalLink
     /// How this run declares on ASIC's Declare pages (business email, holder, representatives):
     /// chosen when the run is started, defaulting to the setting.
     /// </summary>
-    public Asic.Integrations.AsicDeclareAs DeclareAs { get; set; } = Asic.Integrations.AsicDeclareAs.Holder;
+    public Asic.Integrations.Portal.AsicDeclareAs DeclareAs { get; set; } = Asic.Integrations.Portal.AsicDeclareAs.Holder;
 
     public AsicPortalLinkStatus Status { get; set; } = AsicPortalLinkStatus.Queued;
 

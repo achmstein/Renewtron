@@ -1,7 +1,8 @@
-using Asic.Integrations;
-using Asic.Integrations.Abstractions;
-using Asic.Integrations.ThreeDS;
 using Microsoft.Extensions.Configuration;
+using Asic.Integrations.Payment;
+using Asic.Integrations.Payment.ThreeDS;
+using Asic.Integrations.Registry;
+using Asic.Integrations.Renewal;
 
 namespace Microsoft.Extensions.DependencyInjection;
 

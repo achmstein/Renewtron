@@ -56,12 +56,12 @@ public class EarlyRenewalTests
 /// <summary>The morning check (EarlyRenewalService.CheckWaitingAsync) against an in-memory database and a fake ASIC.</summary>
 public class EarlyRenewalCheckTests
 {
-    private sealed class FakeAsic(Asic.Integrations.Models.BusinessNamesResult answer) : IAsicSearchCoordinator
+    private sealed class FakeAsic(Asic.Integrations.Renewal.BusinessNamesResult answer) : IAsicSearchCoordinator
     {
         public int Searches;
-        public Task<Asic.Integrations.Models.BusinessNamesResult> SearchAsync(string abn) { Searches++; return Task.FromResult(answer); }
+        public Task<Asic.Integrations.Renewal.BusinessNamesResult> SearchAsync(string abn) { Searches++; return Task.FromResult(answer); }
         public void Prefetch(string abn) { }
-        public bool TryGetRecent(string abn, out Asic.Integrations.Models.BusinessNamesResult result) { result = answer; return false; }
+        public bool TryGetRecent(string abn, out Asic.Integrations.Renewal.BusinessNamesResult result) { result = answer; return false; }
     }
 
     private sealed class FakeJobs : Hangfire.IBackgroundJobClient
@@ -90,8 +90,8 @@ public class EarlyRenewalCheckTests
     }
 
     private static Task<EarlyRenewalReport> Check(ApplicationDbContext db, FakeAsic asic, FakeJobs jobs,
-        Asic.Integrations.Models.AsicRegistrySearchResult? register = null) =>
-        new EarlyRenewalService(db, asic, jobs, AsicDueDateTests.Service(db, register ?? Asic.Integrations.Models.AsicRegistrySearchResult.Fail("offline")),
+        Asic.Integrations.Registry.AsicRegistrySearchResult? register = null) =>
+        new EarlyRenewalService(db, asic, jobs, AsicDueDateTests.Service(db, register ?? Asic.Integrations.Registry.AsicRegistrySearchResult.Fail("offline")),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<EarlyRenewalService>.Instance).CheckWaitingAsync();
 
     [Fact]

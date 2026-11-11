@@ -1,7 +1,7 @@
-using Asic.Integrations.Models;
 using Microsoft.EntityFrameworkCore;
 using Renewtron.Abstractions;
 using Renewtron.Data;
+using Asic.Integrations.Renewal;
 
 namespace Renewtron.Services;
 

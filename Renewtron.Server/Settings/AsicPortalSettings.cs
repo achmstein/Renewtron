@@ -31,7 +31,7 @@ public class AsicPortalSettings
     /// ("submitting on behalf of the holder and authorised to") or Holder ("I am the holder").
     /// The admin button lets you pick per run.
     /// </summary>
-    public Asic.Integrations.AsicDeclareAs DeclareAs { get; set; } = Asic.Integrations.AsicDeclareAs.Holder;
+    public Asic.Integrations.Portal.AsicDeclareAs DeclareAs { get; set; } = Asic.Integrations.Portal.AsicDeclareAs.Holder;
 
     /// <summary>Ontraport field set to "success" or "fail" after a link ("Did ASIC Key Link?").</summary>
     public string OntraportLinkFieldId { get; set; } = "f5479";
