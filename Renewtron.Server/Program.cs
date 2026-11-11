@@ -131,6 +131,7 @@ builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
 builder.Services.AddScoped<IAsicCheckService, AsicCheckService>();
 builder.Services.AddScoped<IPaymentFollowUpService, PaymentFollowUpService>();
+builder.Services.AddScoped<IBpayAutoPayService, BpayAutoPayService>();
 builder.Services.AddScoped<IRenewalOrderService, RenewalOrderService>();
 builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportService>(client =>
 {
@@ -350,6 +351,13 @@ RecurringJob.AddOrUpdate<IBpayPaymentService>(
     "airwallex-bpay-sync",
     service => service.SyncAsync(),
     "*/10 * * * *");
+
+// Pays ASIC's BPAY bills through Airwallex on its own (Settings → Airwallex: on/off and a daily
+// limit). Offset from the sync above so a payment's status is read back on the next tick.
+RecurringJob.AddOrUpdate<IBpayAutoPayService>(
+    BpayAutoPayService.RecurringJobId,
+    service => service.PayDueAsync(CancellationToken.None),
+    "5,20,35,50 * * * *");
 
 // Retries renewal-outcome write-backs to Ontraport that failed at completion time.
 RecurringJob.AddOrUpdate<IOntraportSalesService>(

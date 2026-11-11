@@ -59,7 +59,7 @@ export default function Settings() {
   const [stripe, setStripe] = useState({ secretKey: '', publishableKey: '', webhookSecret: '' })
   const [pricing, setPricing] = useState({ oneYearFee: 0, threeYearFee: 0 })
   const [asic, setAsic] = useState<{ forceFallback: boolean; allowPayEarly: boolean; email: string; cardNumber: string; cardholderName: string; expiryMonth: string; expiryYear: string; cvc: string; paymentMethod: 'Card' | 'Bpay'; bpayAfterCardFailures: number; oneYearFee: number; threeYearFee: number }>({ forceFallback: false, allowPayEarly: true, email: '', cardNumber: '', cardholderName: '', expiryMonth: '', expiryYear: '', cvc: '', paymentMethod: 'Card', bpayAfterCardFailures: 0, oneYearFee: 0, threeYearFee: 0 })
-  const [airwallex, setAirwallex] = useState<AirwallexSettings>({ clientId: '', apiKey: '', useSandbox: true })
+  const [airwallex, setAirwallex] = useState<AirwallexSettings>({ clientId: '', apiKey: '', useSandbox: true, autoPayBpay: true, autoPayDailyLimit: 3000 })
   // The CVC never comes back from the server; this flag says one is stored.
   const [asicHasCvc, setAsicHasCvc] = useState(false)
   const [ontraport, setOntraport] = useState<OntraportSettingsBody>({ apiAppId: '', apiKey: '', conversationId: '', pushWizardContacts: true, wizardLeadTagId: '', wizardPaidTagId: '' })
@@ -81,7 +81,7 @@ export default function Settings() {
     const { hasCvc, ...asicFields } = r.asic
     setAsic(asicFields)
     setAsicHasCvc(hasCvc)
-    setAirwallex(r.airwallex ?? { clientId: '', apiKey: '', useSandbox: true })
+    setAirwallex(r.airwallex ?? { clientId: '', apiKey: '', useSandbox: true, autoPayBpay: true, autoPayDailyLimit: 3000 })
     setOntraport(r.ontraport)
     setTracking(r.tracking ?? { gtmContainerId: '', ga4MeasurementId: '', metaPixelId: '', clarityProjectId: '' })
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
@@ -362,6 +362,13 @@ export default function Settings() {
               </Field>
               <Field label="API key">
                 <Input type="password" className="font-mono" value={airwallex.apiKey} onChange={(e) => setAirwallex({ ...airwallex, apiKey: e.target.value })} />
+              </Field>
+              <SwitchField id="aw-autopay" label="Pay BPAY bills automatically"
+                description="Every 15 minutes: renewals and new names lodged to pay by BPAY, at ASIC’s set fee. A bill that fails 3 times waits on BPAY to pay. Live only: never in sandbox. Off: only when someone presses pay."
+                checked={airwallex.autoPayBpay !== false} onCheckedChange={(v) => setAirwallex({ ...airwallex, autoPayBpay: v })} />
+              <Field label="Daily limit (A$)" hint="The most paid in one day, counting payments made by hand. Bills over it wait for the next day or a person.">
+                <Input type="number" min={0} step={50} className="font-mono tabular-nums" value={airwallex.autoPayDailyLimit ?? 3000}
+                  onChange={(e) => setAirwallex({ ...airwallex, autoPayDailyLimit: Number(e.target.value) })} />
               </Field>
             </SettingsCard>
           ) : null}

@@ -147,6 +147,8 @@ public sealed class SettingsModule : ICarterModule
                     clientId = airwallex.ClientId ?? "",
                     apiKey = Mask(airwallex.ApiKey),
                     useSandbox = airwallex.UseSandbox,
+                    autoPayBpay = airwallex.AutoPayBpay,
+                    autoPayDailyLimit = airwallex.AutoPayDailyLimit,
                 },
                 asicKeyRequest = new
                 {
@@ -283,6 +285,7 @@ public sealed class SettingsModule : ICarterModule
         group.MapPut("/airwallex", async (AirwallexSettings body, IOptionsMonitor<AirwallexSettings> current, ISettingsService settings) =>
         {
             body.ClientId = (body.ClientId ?? "").Trim();
+            body.AutoPayDailyLimit = Math.Max(0, body.AutoPayDailyLimit);
             body.ApiKey = Unmask(body.ApiKey, current.CurrentValue.ApiKey)?.Trim();
             await settings.UpdateAirwallexSettingsAsync(body);
             return Results.NoContent();

@@ -64,7 +64,15 @@ export interface TestModeSettings {
   stripePublishableKey: string
 }
 
-export interface AirwallexSettings { clientId: string; apiKey: string; useSandbox: boolean }
+export interface AirwallexSettings {
+  clientId: string
+  apiKey: string
+  useSandbox: boolean
+  /** Pay ASIC's BPAY bills on their own (renewals and new names). */
+  autoPayBpay?: boolean
+  /** The most sent in one day (AEST), counting manual payments. */
+  autoPayDailyLimit?: number
+}
 
 export interface BpayBill {
   id: string
