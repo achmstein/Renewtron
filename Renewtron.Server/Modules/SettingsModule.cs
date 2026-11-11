@@ -1,339 +1,123 @@
-﻿using System.Text.RegularExpressions;
-using Asic.Integrations.Registry;
+﻿using Asic.Integrations.Registry;
 using Carter;
 using Microsoft.Extensions.Options;
 using Renewtron.Abstractions;
+using Renewtron.Services;
+using Renewtron.Services.AsicPortal;
 using Renewtron.Settings;
 
 namespace Renewtron.Modules;
 
+/// <summary>
+/// Admin → Settings. Each section saves by: load what's stored, let <see cref="SettingsRules"/>
+/// un-mask, tidy and check the form, then write the override. The rules live there, not here.
+/// </summary>
 public sealed class SettingsModule : ICarterModule
 {
-    // Secrets are write-only: GET returns a masked placeholder (last 4 kept for
-    // recognition), and a PUT that round-trips the placeholder keeps the stored value.
-    // The ASIC CVC never leaves the server at all.
-    private const string MaskPrefix = "••••";
-
-    private static string Mask(string? value) =>
-        string.IsNullOrEmpty(value) ? "" : MaskPrefix + (value.Length > 4 ? value[^4..] : "");
-
-    private static string Unmask(string? incoming, string? current) =>
-        incoming != null && incoming.StartsWith(MaskPrefix) ? current ?? "" : incoming ?? "";
-
-    private static readonly (string Label, string Sample, string Expected)[] PatternSamples =
-    [
-        ("key letter", "Here is the ASIC Key for YUMOHZY TRITS: 1-67783322838.\nYou can use the ASIC Key to link", "1-67783322838"),
-        ("key letter, wrapped", "Here is the ASIC Key for BRM BUILDING REPAIRS & MAINTENANCE: 1-\n79565779188.\nYou can use", "1-79565779188"),
-        ("renewal notice", "Business name renewal notice for 'M.R.A. CONCRETING'\nAccount Number: 85 101951857\nASIC Key: 1-43002328008\nDue Date:", "1-43002328008"),
-        ("renewal confirmation", "Registration of business name renewed for 'BECKS BAKES'\nThe ASIC key for this business name is 1-56809537698.\nThank you", "1-56809537698"),
-    ];
-
-    // Shared by save and test so both see the same effective values.
-    private static void NormalizeAsicKeyInbox(AsicKeyInboxSettings body, AsicKeyInboxSettings current)
-    {
-        body.Password = Unmask(body.Password, current.Password);
-        body.ImapHost = string.IsNullOrWhiteSpace(body.ImapHost) ? "imap.gmail.com" : body.ImapHost.Trim();
-        body.Username = (body.Username ?? "").Trim();
-        if (body.ImapPort <= 0) body.ImapPort = 993;
-        if (body.LookbackDays <= 0) body.LookbackDays = 30;
-        if (string.IsNullOrWhiteSpace(body.Folder)) body.Folder = "INBOX";
-        if (string.IsNullOrWhiteSpace(body.SubjectFilter)) body.SubjectFilter = "Notification request";
-        if (string.IsNullOrWhiteSpace(body.AsicKeyPattern)) body.AsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern;
-    }
-
-    private static void NormalizeAsicKeyRequest(AsicKeyRequestSettings body)
-    {
-        body.RequestEmail = (body.RequestEmail ?? "").Trim();
-        body.DefaultPhonePrefix = (body.DefaultPhonePrefix ?? "").Trim();
-        body.DefaultPhoneNumber = (body.DefaultPhoneNumber ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(body.MessageTemplate)) body.MessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate;
-    }
-
     public record TwoCaptchaTestBody(string? TwoCaptchaApiKey);
 
-    public record AsicPortalBody(bool Enabled, string? Username, string? Password, string? BusinessEmail,
-        string? KeepRepresentatives, string? DeclareAs, string? OntraportLinkFieldId, string? WrongKeyCampaignId);
+    private static IResult Saved(string? error) =>
+        error is null ? Results.NoContent() : Results.BadRequest(new { error });
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/admin/settings").RequireAuthorization().WithTags("Admin.Settings");
 
-        group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions,
-            IOptionsMonitor<AirwallexSettings> airwallexOptions,
-            IOptionsMonitor<AsicPortalSettings> asicPortalOptions,
-            IOptionsMonitor<RegistrationSettings> registrationOptions,
-            IOptionsMonitor<AsicRegistrySettings> registrySettings,
-            IOptionsMonitor<AsicRegistryOptions> registryOptions) =>
-        {
-            var registry = registrySettings.CurrentValue;
-            var registryConnection = registryOptions.CurrentValue;
-            var registration = registrationOptions.CurrentValue;
-            var testMode = testModeOptions.CurrentValue;
-            var airwallex = airwallexOptions.CurrentValue;
-            var asicPortal = asicPortalOptions.CurrentValue;
-            var sendGrid = await settings.GetSendGridSettingsAsync();
-            var stripe = await settings.GetStripeSettingsAsync();
-            var asic = await settings.GetAsicSettingsAsync();
-            var ontraport = await settings.GetOntraportSettingsAsync();
-            var asicKeyInbox = await settings.GetAsicKeyInboxSettingsAsync();
-            var asicKeyRequest = await settings.GetAsicKeyRequestSettingsAsync();
-
-            return Results.Ok(new
-            {
-                sendGrid = new { apiKey = Mask(sendGrid.ApiKey), fromEmail = sendGrid.FromEmail, fromName = sendGrid.FromName, eventWebhookPublicKey = sendGrid.EventWebhookPublicKey ?? "" },
-                stripe = new { secretKey = Mask(stripe.SecretKey), publishableKey = stripe.PublishableKey, webhookSecret = Mask(stripe.WebhookSecret) },
-                pricing = await settings.GetPricingSettingsAsync(),
-                asic = new
-                {
-                    forceFallback = asic.ForceFallback,
-                    allowPayEarly = asic.AllowPayEarly,
-                    email = asic.Email,
-                    cardNumber = Mask(asic.CardNumber),
-                    cardholderName = asic.CardholderName,
-                    expiryMonth = asic.ExpiryMonth,
-                    expiryYear = asic.ExpiryYear,
-                    // Deliberately never returned. Saving with an empty value keeps the stored one;
-                    // hasCvc lets the UI show the section as complete without seeing the value.
-                    cvc = "",
-                    hasCvc = !string.IsNullOrEmpty(asic.Cvc),
-                    paymentMethod = AsicPaymentMethods.IsBpay(asic.PaymentMethod) ? AsicPaymentMethods.Bpay : AsicPaymentMethods.Card,
-                    bpayAfterCardFailures = asic.BpayAfterCardFailures,
-                    // In this section: the ASIC card loads and saves them. (They once sat under
-                    // asicKeyInbox, so the card showed them empty and every save wrote 0.)
-                    oneYearFee = asic.OneYearFee,
-                    threeYearFee = asic.ThreeYearFee,
-                },
-                ontraport = new
-                {
-                    apiAppId = Mask(ontraport.ApiAppId),
-                    apiKey = Mask(ontraport.ApiKey),
-                    conversationId = ontraport.ConversationId,
-                    pushWizardContacts = ontraport.PushWizardContacts,
-                    wizardLeadTagId = ontraport.WizardLeadTagId,
-                    wizardPaidTagId = ontraport.WizardPaidTagId,
-                    defaultPollingTimeoutSeconds = ontraport.DefaultPollingTimeoutSeconds,
-                },
-                winBack = await settings.GetWinBackSettingsAsync(),
-                tracking = await settings.GetTrackingSettingsAsync(),
-                asicKeyInbox = new
-                {
-                    enabled = asicKeyInbox.Enabled,
-                    imapHost = asicKeyInbox.ImapHost,
-                    imapPort = asicKeyInbox.ImapPort,
-                    username = asicKeyInbox.Username,
-                    password = Mask(asicKeyInbox.Password),
-                    folder = asicKeyInbox.Folder,
-                    subjectFilter = asicKeyInbox.SubjectFilter,
-                    lookbackDays = asicKeyInbox.LookbackDays,
-                    ontraportFieldId = asicKeyInbox.OntraportFieldId,
-                    asicKeyPattern = asicKeyInbox.AsicKeyPattern,
-                    // Saved overrides pin the pattern, so a newer code default needs a way back in.
-                    defaultAsicKeyPattern = AsicKeyInboxSettings.DefaultAsicKeyPattern,
-                },
-                asicPortal = new
-                {
-                    enabled = asicPortal.Enabled,
-                    username = asicPortal.Username,
-                    password = Mask(asicPortal.Password),
-                    businessEmail = asicPortal.BusinessEmail,
-                    keepRepresentatives = asicPortal.KeepRepresentatives,
-                    declareAs = asicPortal.DeclareAs.ToString(),
-                    ontraportLinkFieldId = asicPortal.OntraportLinkFieldId,
-                    wrongKeyCampaignId = asicPortal.WrongKeyCampaignId,
-                },
-                registration = new
-                {
-                    enabled = registration.Enabled,
-                    lodge = registration.Lodge,
-                    oneYearPrice = registration.OneYearPrice,
-                    threeYearPrice = registration.ThreeYearPrice,
-                    allowManualDecision = registration.AllowManualDecision,
-                },
-                airwallex = new
-                {
-                    clientId = airwallex.ClientId ?? "",
-                    apiKey = Mask(airwallex.ApiKey),
-                    useSandbox = airwallex.UseSandbox,
-                    autoPayBpay = airwallex.AutoPayBpay,
-                    autoPayDailyLimit = airwallex.AutoPayDailyLimit,
-                },
-                asicKeyRequest = new
-                {
-                    enabled = asicKeyRequest.Enabled,
-                    autoRequestOnSync = asicKeyRequest.AutoRequestOnSync,
-                    requestEmail = asicKeyRequest.RequestEmail,
-                    defaultPhonePrefix = asicKeyRequest.DefaultPhonePrefix,
-                    defaultPhoneNumber = asicKeyRequest.DefaultPhoneNumber,
-                    messageTemplate = asicKeyRequest.MessageTemplate,
-                    defaultMessageTemplate = AsicKeyRequestSettings.DefaultMessageTemplate,
-                },
-                asicRegistry = new
-                {
-                    enabled = registry.Enabled,
-                    maxLookupsPerRun = registry.MaxLookupsPerRun,
-                    recheckAfterDays = registry.RecheckAfterDays,
-                    recheckWhenDueWithinDays = registry.RecheckWhenDueWithinDays,
-                    consecutiveFailureLimit = registry.ConsecutiveFailureLimit,
-                    twoCaptchaApiKey = Mask(registryConnection.TwoCaptchaApiKey),
-                    proxyUrl = registryConnection.ProxyUrl ?? "",
-                    proxyUsername = registryConnection.ProxyUsername ?? "",
-                    proxyPassword = Mask(registryConnection.ProxyPassword),
-                },
-                testMode = new
-                {
-                    testEmails = testMode.TestEmails ?? "",
-                    stripeSecretKey = Mask(testMode.StripeSecretKey),
-                    stripePublishableKey = testMode.StripePublishableKey ?? "",
-                    stripeReady = testMode.StripeReady,
-                },
-            });
-        });
+        group.MapGet("/", async (AdminSettingsView view) => Results.Ok(await view.LoadAsync()));
 
         group.MapPut("/sendgrid", async (SendGridSettings body, ISettingsService settings) =>
         {
-            var current = await settings.GetSendGridSettingsAsync();
-            body.ApiKey = Unmask(body.ApiKey, current.ApiKey);
-            // A page that doesn't send the webhook key keeps the stored one.
-            body.EventWebhookPublicKey = body.EventWebhookPublicKey is null ? current.EventWebhookPublicKey : body.EventWebhookPublicKey.Trim();
+            if (SettingsRules.PrepareSendGrid(body, await settings.GetSendGridSettingsAsync()) is { } error) return Saved(error);
             await settings.UpdateSendGridSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         group.MapPut("/stripe", async (StripeSettings body, ISettingsService settings) =>
         {
-            var current = await settings.GetStripeSettingsAsync();
-            body.SecretKey = Unmask(body.SecretKey, current.SecretKey);
-            body.WebhookSecret = Unmask(body.WebhookSecret, current.WebhookSecret)?.Trim();
+            if (SettingsRules.PrepareStripe(body, await settings.GetStripeSettingsAsync()) is { } error) return Saved(error);
             await settings.UpdateStripeSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         group.MapPut("/pricing", async (PricingSettings body, ISettingsService settings) =>
         {
             await settings.UpdatePricingSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
+        // The card (or BPAY) Renewtron pays ASIC with, and ASIC's fees.
         group.MapPut("/asic", async (AsicSettings body, ISettingsService settings) =>
         {
-            var current = await settings.GetAsicSettingsAsync();
-            body.CardNumber = Unmask(body.CardNumber, current.CardNumber);
-            if (string.IsNullOrEmpty(body.Cvc)) body.Cvc = current.Cvc;
-            body.PaymentMethod = AsicPaymentMethods.IsBpay(body.PaymentMethod) ? AsicPaymentMethods.Bpay : AsicPaymentMethods.Card;
-            body.BpayAfterCardFailures = Math.Clamp(body.BpayAfterCardFailures, 0, AsicSettings.MaxBpayAfterCardFailures);
-            if (body.OneYearFee < 0 || body.ThreeYearFee < 0)
-                return Results.BadRequest(new { error = "ASIC fees can't be negative." });
+            if (SettingsRules.PrepareAsic(body, await settings.GetAsicSettingsAsync()) is { } error) return Saved(error);
             await settings.UpdateAsicSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         group.MapPut("/ontraport", async (OntraportSettings body, ISettingsService settings) =>
         {
-            var current = await settings.GetOntraportSettingsAsync();
-            body.ApiAppId = Unmask(body.ApiAppId, current.ApiAppId);
-            body.ApiKey = Unmask(body.ApiKey, current.ApiKey);
+            if (SettingsRules.PrepareOntraport(body, await settings.GetOntraportSettingsAsync()) is { } error) return Saved(error);
             await settings.UpdateOntraportSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         group.MapPut("/win-back", async (WinBackSettings body, ISettingsService settings) =>
         {
             await settings.UpdateWinBackSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         group.MapPut("/tracking", async (TrackingSettings body, ISettingsService settings) =>
         {
             await settings.UpdateTrackingSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         group.MapPut("/asic-key-inbox", async (AsicKeyInboxSettings body, ISettingsService settings) =>
         {
-            var current = await settings.GetAsicKeyInboxSettingsAsync();
-            NormalizeAsicKeyInbox(body, current);
+            if (SettingsRules.PrepareAsicKeyInbox(body, await settings.GetAsicKeyInboxSettingsAsync()) is { } error) return Saved(error);
             await settings.UpdateAsicKeyInboxSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
-        // The ASIC Connect login for "Link to our ASIC account" (not the renewals' card above).
-        group.MapPut("/asic-portal", async (AsicPortalBody body, IOptionsMonitor<AsicPortalSettings> current, ISettingsService settings) =>
+        group.MapPost("/asic-key-inbox/test", async (AsicKeyInboxSettings body, AsicKeyInboxTester tester, CancellationToken ct) =>
+            Results.Ok(await tester.TestAsync(body, ct)));
+
+        group.MapPut("/asic-key-request", async (AsicKeyRequestSettings body, ISettingsService settings) =>
         {
-            var saved = new AsicPortalSettings
-            {
-                Enabled = body.Enabled,
-                Username = (body.Username ?? "").Trim(),
-                Password = Unmask(body.Password, current.CurrentValue.Password) ?? "",
-                BusinessEmail = (body.BusinessEmail ?? "").Trim(),
-                KeepRepresentatives = (body.KeepRepresentatives ?? "").Trim(),
-                DeclareAs = Enum.TryParse<Asic.Integrations.Portal.AsicDeclareAs>(body.DeclareAs, true, out var d) ? d : Asic.Integrations.Portal.AsicDeclareAs.Holder,
-                OntraportLinkFieldId = (body.OntraportLinkFieldId ?? "").Trim(),
-                WrongKeyCampaignId = (body.WrongKeyCampaignId ?? "").Trim(),
-            };
-            if (string.IsNullOrWhiteSpace(saved.BusinessEmail))
-                return Results.BadRequest(new { error = "The business email can't be blank." });
+            if (SettingsRules.PrepareAsicKeyRequest(body) is { } error) return Saved(error);
+            await settings.UpdateAsicKeyRequestSettingsAsync(body);
+            return Saved(null);
+        });
+
+        // The ASIC Connect login for "Link to our ASIC account" (not the renewals' card).
+        group.MapPut("/asic-portal", async (SettingsRules.AsicPortalForm body, IOptionsMonitor<AsicPortalSettings> current, ISettingsService settings) =>
+        {
+            var (saved, error) = SettingsRules.PrepareAsicPortal(body, current.CurrentValue);
+            if (error is not null) return Saved(error);
             await settings.UpdateAsicPortalSettingsAsync(saved);
-            return Results.NoContent();
-        });
-
-        // Registering new business names from the public /register page.
-        group.MapPut("/registration", async (RegistrationSettings body, ISettingsService settings) =>
-        {
-            if (body.OneYearPrice < 0 || body.ThreeYearPrice < 0)
-                return Results.BadRequest(new { error = "Prices can't be negative." });
-            if (body.Enabled && (body.PriceFor(1) is null || body.PriceFor(3) is null))
-                return Results.BadRequest(new { error = "Set both prices before switching the register page on." });
-            await settings.UpdateRegistrationSettingsAsync(body);
-            return Results.NoContent();
+            return Saved(null);
         });
 
         // Logs in with the saved login and out again: run it first on a new server.
-        group.MapPost("/asic-portal/test", async (Renewtron.Services.AsicPortal.IAsicPortalLinkService service, CancellationToken ct) =>
+        group.MapPost("/asic-portal/test", async (IAsicPortalLinkService service, CancellationToken ct) =>
         {
             var problem = await service.TestLoginAsync(ct);
             return Results.Ok(new { ok = problem is null, message = problem ?? "Logged in to ASIC Connect and out again." });
         });
 
-        group.MapPut("/asic-key-request", async (AsicKeyRequestSettings body, ISettingsService settings) =>
+        // Registering new business names from the public /register page.
+        group.MapPut("/registration", async (RegistrationSettings body, ISettingsService settings) =>
         {
-            NormalizeAsicKeyRequest(body);
-            await settings.UpdateAsicKeyRequestSettingsAsync(body);
-            return Results.NoContent();
+            if (SettingsRules.PrepareRegistration(body) is { } error) return Saved(error);
+            await settings.UpdateRegistrationSettingsAsync(body);
+            return Saved(null);
         });
 
         group.MapPut("/airwallex", async (AirwallexSettings body, IOptionsMonitor<AirwallexSettings> current, ISettingsService settings) =>
         {
-            body.ClientId = (body.ClientId ?? "").Trim();
-            body.AutoPayDailyLimit = Math.Max(0, body.AutoPayDailyLimit);
-            body.ApiKey = Unmask(body.ApiKey, current.CurrentValue.ApiKey)?.Trim();
+            if (SettingsRules.PrepareAirwallex(body, current.CurrentValue) is { } error) return Saved(error);
             await settings.UpdateAirwallexSettingsAsync(body);
-            return Results.NoContent();
-        });
-
-        // ASIC's register search, which reads names' real renewal dates (behind reCAPTCHA).
-        group.MapPut("/asic-registry", async (AsicRegistrySection body, IOptionsMonitor<AsicRegistryOptions> current, ISettingsService settings) =>
-        {
-            if (body.MaxLookupsPerRun < 0 || body.RecheckAfterDays < 0 || body.RecheckWhenDueWithinDays < 0 || body.ConsecutiveFailureLimit < 0)
-                return Results.BadRequest(new { error = "Numbers can't be negative." });
-            var proxyUrl = (body.ProxyUrl ?? "").Trim();
-            if (proxyUrl.Length > 0 && !Uri.TryCreate(proxyUrl, UriKind.Absolute, out _))
-                return Results.BadRequest(new { error = "Proxy URL must look like http://host:port or socks5://host:port." });
-
-            body.TwoCaptchaApiKey = Unmask(body.TwoCaptchaApiKey, current.CurrentValue.TwoCaptchaApiKey).Trim();
-            body.ProxyPassword = Unmask(body.ProxyPassword, current.CurrentValue.ProxyPassword);
-            body.ProxyUrl = proxyUrl;
-            body.ProxyUsername = (body.ProxyUsername ?? "").Trim();
-            await settings.UpdateAsicRegistrySettingsAsync(body);
-            return Results.NoContent();
-        });
-
-        // Reads the 2Captcha balance for the key in the form (masked = the saved key), so a
-        // wrong or empty account shows up before the nightly due-date run hits a CAPTCHA.
-        group.MapPost("/asic-registry/test", async (TwoCaptchaTestBody body, IOptionsMonitor<AsicRegistryOptions> current) =>
-        {
-            var key = Unmask(body.TwoCaptchaApiKey, current.CurrentValue.TwoCaptchaApiKey);
-            var result = await TwoCaptchaSolver.GetBalanceAsync(key);
-            return Results.Ok(new { ok = result.Error is null, balance = result.Balance, error = result.Error });
+            return Saved(null);
         });
 
         // Logs in with the saved keys, so a wrong key shows up before anyone tries to pay.
@@ -343,114 +127,28 @@ public sealed class SettingsModule : ICarterModule
             return error is null ? Results.Ok(new { ok = true }) : Results.BadRequest(new { error });
         });
 
-        group.MapPut("/test-mode", async (TestModeSettings body, IOptionsMonitor<TestModeSettings> current, ISettingsService settings) =>
+        // ASIC's register search, which reads names' real renewal dates (behind reCAPTCHA).
+        group.MapPut("/asic-registry", async (AsicRegistrySection body, IOptionsMonitor<AsicRegistryOptions> current, ISettingsService settings) =>
         {
-            body.StripeSecretKey = Unmask(body.StripeSecretKey, current.CurrentValue.StripeSecretKey).Trim();
-            body.StripePublishableKey = (body.StripePublishableKey ?? "").Trim();
-            // A live key here would charge test customers for real — refuse anything but test keys.
-            if (body.StripeSecretKey.Length > 0 && !body.StripeSecretKey.StartsWith("sk_test_", StringComparison.Ordinal))
-                return Results.BadRequest(new { error = "The Stripe secret key must be a test key (sk_test_…)." });
-            if (body.StripePublishableKey.Length > 0 && !body.StripePublishableKey.StartsWith("pk_test_", StringComparison.Ordinal))
-                return Results.BadRequest(new { error = "The Stripe publishable key must be a test key (pk_test_…)." });
-            body.TestEmails = string.Join("\n", body.Emails());
-            await settings.UpdateTestModeSettingsAsync(body);
-            return Results.NoContent();
+            if (SettingsRules.PrepareAsicRegistry(body, current.CurrentValue) is { } error) return Saved(error);
+            await settings.UpdateAsicRegistrySettingsAsync(body);
+            return Saved(null);
         });
 
-        // Exercises the form's values without saving them: IMAP login + folder + subject search,
-        // the Ontraport field id against the Contact object's metadata, and the key regex.
-        // Each check reports independently so a bad app password doesn't hide a bad field id.
-        group.MapPost("/asic-key-inbox/test", async (
-            AsicKeyInboxSettings body,
-            ISettingsService settings,
-            IAsicNotificationMailbox mailbox,
-            IOntraportSalesService ontraport,
-            CancellationToken ct) =>
+        // Reads the 2Captcha balance for the key in the form (masked = the saved key), so a
+        // wrong or empty account shows up before the nightly due-date run hits a CAPTCHA.
+        group.MapPost("/asic-registry/test", async (TwoCaptchaTestBody body, IOptionsMonitor<AsicRegistryOptions> current) =>
         {
-            var current = await settings.GetAsicKeyInboxSettingsAsync();
-            NormalizeAsicKeyInbox(body, current);
+            var key = SettingsRules.Unmask(body.TwoCaptchaApiKey, current.CurrentValue.TwoCaptchaApiKey);
+            var result = await TwoCaptchaSolver.GetBalanceAsync(key);
+            return Results.Ok(new { ok = result.Error is null, balance = result.Balance, error = result.Error });
+        });
 
-            object mailboxCheck;
-            if (string.IsNullOrWhiteSpace(body.Username) || string.IsNullOrWhiteSpace(body.Password))
-            {
-                mailboxCheck = new { ok = false, error = "Enter the Gmail address and app password first." };
-            }
-            else
-            {
-                try
-                {
-                    var probe = await mailbox.ProbeAsync(body, ct);
-                    mailboxCheck = new
-                    {
-                        ok = true,
-                        host = body.ImapHost,
-                        username = body.Username,
-                        folder = probe.Folder,
-                        messagesInFolder = probe.MessagesInFolder,
-                        matchingInLookback = probe.MatchingInLookback,
-                        latestSubject = probe.LatestSubject,
-                        latestReceivedAt = probe.LatestReceivedAt,
-                    };
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    mailboxCheck = new { ok = false, error = ex.Message };
-                }
-            }
-
-            object ontraportCheck;
-            if (string.IsNullOrWhiteSpace(body.OntraportFieldId))
-            {
-                ontraportCheck = new { ok = false, error = "Ontraport field ID is empty — keys will be extracted but not written anywhere." };
-            }
-            else
-            {
-                try
-                {
-                    var alias = await ontraport.GetContactFieldAliasAsync(body.OntraportFieldId.Trim());
-                    ontraportCheck = alias == null
-                        ? new { ok = false, error = $"No field '{body.OntraportFieldId.Trim()}' exists on the Ontraport Contact object." }
-                        : new { ok = true, fieldId = body.OntraportFieldId.Trim(), alias };
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    ontraportCheck = new { ok = false, error = ex.Message };
-                }
-            }
-
-            object patternCheck;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(body.AsicKeyPattern))
-                    throw new ArgumentException("pattern is empty");
-                var regex = new System.Text.RegularExpressions.Regex(body.AsicKeyPattern,
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline,
-                    TimeSpan.FromSeconds(2));
-
-                // Wording lifted from the three ASIC letters seen in the inbox so far; the
-                // second one has the key wrapped across a line, as long names cause.
-                var failures = new List<string>();
-                foreach (var (label, sample, expected) in PatternSamples)
-                {
-                    var match = regex.Match(sample);
-                    var extracted = match.Success
-                        ? string.Concat((match.Groups.Count > 1 ? match.Groups[1].Value : match.Value).Where(c => !char.IsWhiteSpace(c)))
-                        : null;
-                    if (extracted != expected)
-                        failures.Add(extracted == null ? $"{label}: no match" : $"{label}: captured '{extracted}', expected '{expected}'");
-                }
-                patternCheck = failures.Count == 0
-                    ? new { ok = true, sampleKey = PatternSamples[0].Expected, samples = PatternSamples.Length }
-                    : new { ok = false, error = "Pattern fails on real letter wording — " + string.Join("; ", failures) + "." };
-            }
-            catch (ArgumentException ex)
-            {
-                patternCheck = new { ok = false, error = $"Invalid regex: {ex.Message}" };
-            }
-
-            return Results.Ok(new { mailbox = mailboxCheck, ontraportField = ontraportCheck, keyPattern = patternCheck });
+        group.MapPut("/test-mode", async (TestModeSettings body, IOptionsMonitor<TestModeSettings> current, ISettingsService settings) =>
+        {
+            if (SettingsRules.PrepareTestMode(body, current.CurrentValue) is { } error) return Saved(error);
+            await settings.UpdateTestModeSettingsAsync(body);
+            return Saved(null);
         });
     }
 }
