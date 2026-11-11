@@ -186,10 +186,14 @@ export default function RenewalDetails() {
               <span className="flex flex-wrap items-center gap-2">
                 {data.bpayPaidAt
                   ? <><StatusPill tone="emerald">BPAY paid</StatusPill><span className="text-caption text-muted-foreground"><When at={data.bpayPaidAt} /></span></>
-                  : <StatusPill tone="red">BPAY to pay</StatusPill>}
-                <Button size="sm" variant={data.bpayPaidAt ? 'ghost' : 'outline'} className="sm:h-6 sm:px-2 sm:text-xs" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}>
-                  {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
-                </Button>
+                  : data.bpayTransferUnderWay
+                    ? <StatusPill tone="indigo">Airwallex paying</StatusPill>
+                    : <StatusPill tone="red">BPAY to pay</StatusPill>}
+                {data.bpayTransferUnderWay ? null : (
+                  <Button size="sm" variant={data.bpayPaidAt ? 'ghost' : 'outline'} className="sm:h-6 sm:px-2 sm:text-xs" disabled={bpayMutation.isPending} onClick={() => markBpay(!data.bpayPaidAt)}>
+                    {data.bpayPaidAt ? 'Undo' : 'Mark paid'}
+                  </Button>
+                )}
               </span>
             } />
           ) : data.status === 'Completed' ? (
@@ -238,7 +242,9 @@ function headline(d: Detail): string {
   const years = `${d.renewalYears} year${d.renewalYears === 1 ? '' : 's'}`
   if (d.stuck) return 'Renewal stuck: nothing has moved for over 2 hours'
   switch (d.status) {
-    case 'Completed': return d.bpayReference && !d.bpayPaidAt ? `Renewed for ${years}; ASIC’s BPAY bill still to pay` : `Renewed for ${years}`
+    case 'Completed': return d.bpayReference && !d.bpayPaidAt
+      ? d.bpayTransferUnderWay ? `Renewed for ${years}; Airwallex is paying ASIC’s BPAY bill` : `Renewed for ${years}; ASIC’s BPAY bill still to pay`
+      : `Renewed for ${years}`
     case 'Processing': return 'Lodging with ASIC now'
     case 'Pending': return 'Queued to lodge with ASIC'
   }
@@ -265,6 +271,14 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
   }
   switch (d.status) {
     case 'Completed':
+      if (d.bpayReference && !d.bpayPaidAt && d.bpayTransferUnderWay) {
+        return (
+          <NextStep meaning="working" title="Nothing to do: Airwallex is paying ASIC’s BPAY bill.">
+            Lodged <When at={d.completedAt ?? d.initiatedAt} />{d.transactionReference ? `, ASIC reference ${d.transactionReference}` : ''}.
+            {' '}It shows as paid once Airwallex confirms; there’s no need to mark it paid.
+          </NextStep>
+        )
+      }
       if (d.bpayReference && !d.bpayPaidAt) {
         return (
           <NextStep meaning="action" title="ASIC holds the renewal until its BPAY bill is paid."

@@ -188,6 +188,24 @@ public class JourneyTests
     }
 
     [Fact]
+    public async Task A_bpay_bill_airwallex_is_paying_reads_as_in_hand_and_cant_be_marked_paid()
+    {
+        var (db, ids) = Seed();
+        var run = db.RenewalRequests.Single(r => r.Id == ids.RetryRun);
+        run.BpayPaidAt = null;
+        run.AirwallexTransferId = "tr_1";
+        run.AirwallexTransferStatus = "PROCESSING";
+        db.SaveChanges();
+
+        var journey = (await Journey(db, JourneyRecord.Run, ids.RetryRun))!;
+        var line = Assert.Single(journey.Events, e => e.Text.StartsWith("ASIC took"));
+        Assert.Equal(("ASIC took the renewal of SMITH PLUMBING; Airwallex is paying its BPAY bill now ($54.00)", "working"), (line.Text, line.Meaning));
+        var card = Assert.Single(journey.Records, c => c.Id == ids.RetryRun);
+        Assert.Empty(card.Actions);
+        Assert.Contains(card.Facts, f => f.Label == "BPAY" && f.Value.EndsWith("Airwallex paying now"));
+    }
+
+    [Fact]
     public async Task A_run_that_may_hold_asics_money_offers_no_retry()
     {
         var (db, ids) = Seed();

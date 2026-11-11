@@ -43,6 +43,13 @@ public class BpayPaymentService : IBpayPaymentService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Airwallex has a transfer for this bill that hasn't finished (or whose outcome isn't known
+    /// yet): the money may already be on its way, so nobody should pay it or mark it paid.
+    /// </summary>
+    public static bool IsTransferUnderWay(string? transferStatus, DateTime? bpayPaidAt) =>
+        bpayPaidAt is null && transferStatus is not null && !Ended.Contains(transferStatus) && transferStatus != Paid;
+
     /// <summary>Can be paid now: lodged to pay by BPAY, not yet paid, and no transfer under way.</summary>
     public static bool IsPayable(RenewalRequest r) =>
         !r.IsTest

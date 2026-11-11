@@ -187,8 +187,9 @@ public sealed class ClientLinkService(
             s.ClientBusinessNameId = name.Id;
             if (s.RenewalDueDate is { } due)
             {
+                // Ontraport's field may already have been moved on by the renewal: don't add the term twice.
                 if (s.Status == OntraportSaleStatus.RenewalCompleted && s.RenewalYears > 0)
-                    SetDue(name, DateOnly.FromDateTime(due).AddYears(s.RenewalYears), RenewalDueDateSource.Renewal);
+                    SetDue(name, SaleDueDates.NextAfterRenewal(s.Status, DateOnly.FromDateTime(due), s.SyncedAt, s.RenewalYears), RenewalDueDateSource.Renewal);
                 else
                     SetDue(name, DateOnly.FromDateTime(due), RenewalDueDateSource.Ontraport);
             }

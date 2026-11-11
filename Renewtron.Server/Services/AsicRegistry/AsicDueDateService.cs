@@ -101,7 +101,7 @@ public class AsicDueDateService(
         {
             name.DueDateCheckedAt = now;
             if (!found.TryGetValue(BusinessNameText.MatchKey(name.Name), out var asic) || asic.RenewalDate is not { } due) continue;
-            if (!ShouldTake(name.RenewalDueDate, name.DueDateSource, due)) continue;
+            if (!ShouldTake(name.RenewalDueDate, name.DueDateSource, due, name.LastRenewedAt, now)) continue;
             name.RenewalDueDate = due;
             name.DueDateSource = RenewalDueDateSource.AsicRegister;
             name.UpdatedAt = now;
@@ -110,14 +110,19 @@ public class AsicDueDateService(
         return updated;
     }
 
+    /// <summary>How long after a renewal we lodged ASIC's register may still show the old date.</summary>
+    public const int RegisterLagDays = 30;
+
     /// <summary>
     /// ASIC's date is the truth, except straight after a renewal we lodged: the register can lag a
     /// few days, so a later date worked out from our own renewal stands until ASIC catches up.
+    /// After that, ASIC wins even over our own date: a date we worked out can be wrong.
     /// </summary>
-    public static bool ShouldTake(DateOnly? current, RenewalDueDateSource? source, DateOnly asic)
+    public static bool ShouldTake(DateOnly? current, RenewalDueDateSource? source, DateOnly asic, DateTime? lastRenewedAt, DateTime now)
     {
         if (current == asic && source == RenewalDueDateSource.AsicRegister) return false;
-        if (source == RenewalDueDateSource.Renewal && current > asic) return false;
+        if (source == RenewalDueDateSource.Renewal && current > asic
+            && lastRenewedAt is { } renewed && (now - renewed).TotalDays < RegisterLagDays) return false;
         return true;
     }
 

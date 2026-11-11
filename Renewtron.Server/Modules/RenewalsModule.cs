@@ -220,6 +220,10 @@ public sealed class RenewalsModule : ICarterModule
                 bpayBillerCode = r.BpayBillerCode,
                 bpayReference = r.BpayReference,
                 bpayPaidAt = r.BpayPaidAt,
+                // Airwallex is paying the bill now (or its outcome isn't known yet): don't pay or mark it paid.
+                bpayTransferUnderWay = BpayPaymentService.IsTransferUnderWay(r.AirwallexTransferStatus, r.BpayPaidAt),
+                bpayTransferStatus = r.AirwallexTransferStatus,
+                bpayPaymentError = r.BpayPaymentError,
                 errorMessage = r.ErrorMessage,
                 failedAtStep = r.FailedAtStep,
                 errorCategory = r.ErrorCategory,
@@ -257,6 +261,8 @@ public sealed class RenewalsModule : ICarterModule
             if (renewal is null) return Results.NotFound(new { error = "Renewal request not found" });
             if (string.IsNullOrEmpty(renewal.BpayReference))
                 return Results.BadRequest(new { error = "This renewal wasn't lodged to pay by BPAY." });
+            if (paid != false && BpayPaymentService.IsTransferUnderWay(renewal.AirwallexTransferStatus, renewal.BpayPaidAt))
+                return Results.Conflict(new { error = "Airwallex is paying this bill now. Wait for it to finish rather than marking it paid." });
             renewal.BpayPaidAt = paid == false ? null : DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.Ok(new { bpayPaidAt = renewal.BpayPaidAt });

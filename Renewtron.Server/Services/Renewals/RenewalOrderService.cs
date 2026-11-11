@@ -104,8 +104,9 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
         foreach (var s in sales)
         {
             var due = s.RenewalDueDate is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
-            // A completed sale's due date was rolled forward by the term it bought: the order is for the one before.
-            if (s.Status == OntraportSaleStatus.RenewalCompleted && due is { } rolled) due = rolled.AddYears(-Math.Max(1, s.RenewalYears));
+            // A completed sale's due date is usually rolled forward by the term it bought (not always):
+            // the order is for the date that was renewed.
+            if (due is { } saleDue) due = SaleDueDates.Renewed(s.Status, saleDue, s.SyncedAt, s.RenewalYears);
             var state = new RenewalOrderProjection.Source(RenewalOrderProjection.FromSale(s.Status), due, s.ErrorMessage,
                 s.HandledAt, s.HandledNote, s.Status == OntraportSaleStatus.AsicNotYetDue, s.RenewalRequestId, s.NextSearchAt);
             shells.Add(new Shell(RenewalOrderSource.Ontraport, s.Id, s.ClientId, s.ClientBusinessNameId, Helpers.NormalizeAbn(s.Abn),

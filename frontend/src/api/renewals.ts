@@ -131,6 +131,10 @@ export const renewalsAdminApi = {
     bpayBillerCode?: string | null
     bpayReference?: string | null
     bpayPaidAt?: string | null
+    /** Airwallex is paying the bill now (or its outcome isn't known yet): don't pay or mark it paid. */
+    bpayTransferUnderWay?: boolean
+    bpayTransferStatus?: string | null
+    bpayPaymentError?: string | null
     errorMessage?: string | null
     failedAtStep?: string | null
     errorCategory?: string | null

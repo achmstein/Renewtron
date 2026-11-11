@@ -67,13 +67,20 @@ public class AsicDueDateTests
     [InlineData("n/a")]
     public void Unreadable_dates_are_null(string? text) => Assert.Null(AsicDates.Parse(text));
 
+    private static readonly DateTime Now = new(2026, 11, 12, 0, 0, 0, DateTimeKind.Utc);
+
     [Fact]
     public void Asics_date_replaces_an_estimate_even_when_earlier() =>
-        Assert.True(AsicDueDateService.ShouldTake(new DateOnly(2027, 6, 1), RenewalDueDateSource.Estimated, new DateOnly(2027, 3, 1)));
+        Assert.True(AsicDueDateService.ShouldTake(new DateOnly(2027, 6, 1), RenewalDueDateSource.Estimated, new DateOnly(2027, 3, 1), null, Now));
 
     [Fact]
     public void Our_own_later_renewal_date_stands_while_asic_catches_up() =>
-        Assert.False(AsicDueDateService.ShouldTake(new DateOnly(2028, 3, 1), RenewalDueDateSource.Renewal, new DateOnly(2027, 3, 1)));
+        Assert.False(AsicDueDateService.ShouldTake(new DateOnly(2028, 3, 1), RenewalDueDateSource.Renewal, new DateOnly(2027, 3, 1), Now.AddDays(-5), Now));
+
+    [Fact]
+    public void Once_asic_has_had_time_its_date_replaces_ours() =>
+        // Renewed in August for 3 years; we worked out 2032 by mistake, ASIC says 2029.
+        Assert.True(AsicDueDateService.ShouldTake(new DateOnly(2032, 9, 19), RenewalDueDateSource.Renewal, new DateOnly(2029, 9, 19), Now.AddDays(-83), Now));
 
     [Fact]
     public void A_known_due_date_drives_the_next_check_over_the_anniversary()

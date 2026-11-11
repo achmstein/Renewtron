@@ -247,9 +247,19 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
 
             Add(r.InitiatedAt, $"Renewtron started renewing {name} at ASIC{(r.IsTest ? " (test: not sent to ASIC)" : "")}", "working", JourneyRecord.Run, r.Id);
 
+            // Airwallex may already be paying the bill: then it's in hand, not waiting on anyone.
+            var paying = BpayPaymentService.IsTransferUnderWay(r.AirwallexTransferStatus, r.BpayPaidAt);
             if (r.BpayReference is { Length: > 0 })
-                Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}, to be paid by BPAY", "waiting", JourneyRecord.Run, r.Id,
-                    $"Biller {r.BpayBillerCode}, reference {r.BpayReference}{(r.TransactionReference is { Length: > 0 } t ? $", transaction {t}" : "")}");
+            {
+                var billText = $"Biller {r.BpayBillerCode}, reference {r.BpayReference}{(r.TransactionReference is { Length: > 0 } t ? $", transaction {t}" : "")}";
+                if (!paying)
+                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}, to be paid by BPAY", "waiting", JourneyRecord.Run, r.Id, billText);
+                else if (r.AirwallexTransferStatus == BpayPaymentService.Unknown)
+                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}; Renewtron sent its BPAY bill to Airwallex and is checking it went through", "working", JourneyRecord.Run, r.Id, billText);
+                else
+                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}; Airwallex is paying its BPAY bill now{(r.BpayAmount is { } sent ? $" (${sent:0.00})" : "")}", "working", JourneyRecord.Run, r.Id,
+                        $"{billText}. Airwallex transfer {r.AirwallexTransferId} is {Words(r.AirwallexTransferStatus!)}");
+            }
             else if (r.Status == RenewalStatus.Completed)
                 Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC renewed {name}", "done", JourneyRecord.Run, r.Id,
                     r.TransactionReference is { Length: > 0 } t ? $"Transaction {t}" : null);
@@ -257,7 +267,7 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             if (r.BpayPaidAt is { } bpayPaid)
                 Add(bpayPaid, $"Paid ASIC's BPAY bill for {name}{(r.BpayAmount is { } a ? $": ${a:0.00}" : "")}", "done", JourneyRecord.Run, r.Id,
                     r.AirwallexTransferId is { Length: > 0 } transfer ? $"Airwallex transfer {transfer}" : null);
-            else if (r.BpayPaymentError is { Length: > 0 } bpayError)
+            else if (!paying && r.BpayPaymentError is { Length: > 0 } bpayError)
                 Add(r.LastAttemptAt ?? r.InitiatedAt, $"Paying ASIC's BPAY bill for {name} failed{(r.BpayPaymentAttempts > 1 ? $" ({Plural(r.BpayPaymentAttempts, "try", "tries")})" : "")}", "action", JourneyRecord.Run, r.Id, bpayError);
 
             if (r.Status == RenewalStatus.Failed)
@@ -275,17 +285,17 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
 
             Add(r.HandledAt, "Staff marked the ASIC run handled", "quiet", JourneyRecord.Run, r.Id, r.HandledNote);
 
-            var bpayOwed = r.BpayReference is { Length: > 0 } && r.BpayPaidAt == null;
+            var bpayOwed = r.BpayReference is { Length: > 0 } && r.BpayPaidAt == null && !paying;
             Card(JourneyRecord.Run, r.Id, $"ASIC run: {name}",
             [
-                Fact("Status", RunStatus(r)),
+                Fact("Status", paying ? "Lodged; Airwallex is paying ASIC's BPAY bill" : RunStatus(r)),
                 Fact("For", $"{Plural(r.RenewalYears, "year")}, client paid ${r.Amount:0.00}"),
                 Fact("Tries", r.AttemptCount > 0 ? $"{r.AttemptCount}{(r.LastAttemptAt is { } last ? $", last {When(last)}" : "")}" : null),
                 Fact("Failed at", r.Status == RenewalStatus.Failed ? r.FailedAtStep : null),
                 Fact("Next try", r.Status == RenewalStatus.Failed && r.HandledAt == null && r.NextRetryAt is { } nextTry ? When(nextTry) : null),
                 Fact("ASIC reference", r.TransactionReference, mono: true),
                 Fact("BPAY", r.BpayReference is { Length: > 0 } bref
-                    ? $"Biller {r.BpayBillerCode}, ref {bref}{(r.BpayAmount is { } bill ? $", ${bill:0.00}" : "")}: {(r.BpayPaidAt is { } bp ? $"paid {When(bp)}" : "not paid yet")}"
+                    ? $"Biller {r.BpayBillerCode}, ref {bref}{(r.BpayAmount is { } bill ? $", ${bill:0.00}" : "")}: {(r.BpayPaidAt is { } bp ? $"paid {When(bp)}" : paying ? "Airwallex paying now" : "not paid yet")}"
                     : null, mono: true),
                 Fact("BPAY problem", bpayOwed ? r.BpayPaymentError : null),
                 Fact("Handled", r.HandledAt is { } h ? $"{When(h)}{(r.HandledNote is { Length: > 0 } n ? $": {n}" : "")}" : null),
