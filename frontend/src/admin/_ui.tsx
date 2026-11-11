@@ -231,7 +231,7 @@ export function searchFunnelStages(f: SearchFunnel): Array<{ label: string; tone
   const third = f.anyPaid
     ? { label: 'Paid', tone: 'emerald' as Tone, active: true }
     : f.anyInflight
-      ? { label: 'Paying', tone: 'amber' as Tone, active: true }
+      ? { label: 'Renewing', tone: 'amber' as Tone, active: true }
       : f.anyFailed
         ? { label: 'Failed', tone: 'red' as Tone, active: true }
         : { label: 'Paid', tone: 'zinc' as Tone, active: false }

@@ -117,6 +117,7 @@ builder.Services.AddOptions<AsicKeyRequestSettings>().BindConfiguration("AsicKey
 builder.Services.AddOptions<TestModeSettings>().BindConfiguration("TestMode");
 builder.Services.AddOptions<AirwallexSettings>().BindConfiguration("Airwallex");
 builder.Services.AddOptions<AsicPortalSettings>().BindConfiguration("AsicPortal");
+builder.Services.AddOptions<RegistrationSettings>().BindConfiguration("Registration");
 
 builder.Services.AddScoped<IStripePaymentService, StripePaymentService>();
 builder.Services.AddScoped<IDisputeEvidenceService, DisputeEvidenceService>();
@@ -143,6 +144,7 @@ builder.Services.AddScoped<IRenewalProcessingService, RenewalProcessingService>(
 builder.Services.AddScoped<IRenewalReconciliationService, RenewalReconciliationService>();
 builder.Services.AddScoped<IEarlyRenewalService, EarlyRenewalService>();
 builder.Services.AddScoped<Renewtron.Services.AsicPortal.IAsicPortalLinkService, Renewtron.Services.AsicPortal.AsicPortalLinkService>();
+builder.Services.AddScoped<Renewtron.Services.Registration.IBusinessNameRegistrationService, Renewtron.Services.Registration.BusinessNameRegistrationService>();
 builder.Services.AddHttpClient<IOntraportSalesService, OntraportSalesService>();
 builder.Services.AddHttpClient<IOntraportContactPushService, OntraportContactPushService>();
 builder.Services.AddScoped<IBulkRenewalService, BulkRenewalService>();
@@ -386,6 +388,14 @@ RecurringJob.AddOrUpdate<EmailMaintenance>(
     job => job.PurgeOldBodiesAsync(),
     "30 3 * * *",
     new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
+
+// New business name applications lodged to pay by BPAY: reads back Airwallex transfers and ASIC's
+// myTransactions until the fee shows as paid. Logs in to ASIC Connect only when something is open,
+// on the asic-portal queue so it never shares the session with another portal job.
+RecurringJob.AddOrUpdate<Renewtron.Services.Registration.IBusinessNameRegistrationService>(
+    "registration-asic-check",
+    service => service.CheckAsicAsync(),
+    "20 */2 * * *");
 
 // Keeps the paid-renewal records (RenewalOrders) in step with the pipeline.
 RecurringJob.AddOrUpdate<IRenewalOrderService>(

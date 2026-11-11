@@ -59,7 +59,7 @@ export default function SearchDetails() {
 
   const status: StatusEntry = data.success
     ? { label: data.resultsCount ? 'Found names' : 'No names', meaning: data.resultsCount ? 'done' : 'quiet' }
-    : { label: 'Search failed', meaning: 'quiet', hint: 'ASIC didn’t answer; the visitor saw an error.' }
+    : { label: 'Search failed', meaning: 'quiet', hint: data.lead ? 'ASIC didn’t answer this lookup; the wizard carried on (see the wizard visit).' : 'ASIC didn’t answer; the visitor saw an error.' }
   const by = BY[data.initiatedBy] ?? data.initiatedBy
 
   return (
@@ -140,6 +140,13 @@ function nextStep(d: Detail): ReactNode {
     )
   }
   const openClient = d.client ? <Button asChild size="sm" variant="outline"><Link to={`/admin/clients/${d.client.id}`}>Open client</Link></Button> : null
+  if (!d.success && d.lead) {
+    return (
+      <NextStep meaning="quiet" title="This lookup failed; the wizard visit carried on." actions={<Button asChild size="sm" variant="outline"><Link to={`/admin/leads/${d.lead.id}`}>Open wizard visit</Link></Button>}>
+        ASIC didn’t answer this search, so the wizard used our copy of the register and checked with ASIC again. {d.lead.fullName}: {statusOf('lead', d.lead.outcome).label.toLowerCase()}.
+      </NextStep>
+    )
+  }
   if (!d.success) return <NextStep meaning="quiet" title="Nothing to do." actions={openClient}>Searches fail when ASIC is slow or down; the visitor can try again.</NextStep>
   if (renewals.some((r) => r.status === 'Completed')) return <NextStep meaning="done" title="Nothing to do." actions={openClient}>A name from this search was renewed.</NextStep>
   if (d.lead) {
@@ -155,7 +162,7 @@ function nextStep(d: Detail): ReactNode {
 /** Search → wizard visit → renewal(s). */
 function story(d: Detail): StoryStep[] {
   const steps: StoryStep[] = [
-    { label: 'ASIC search', meaning: d.success ? 'done' : 'quiet', at: d.searchedAt, note: d.success ? undefined : 'failed', current: true },
+    { label: 'ASIC search', meaning: d.success ? 'done' : 'quiet', at: d.searchedAt, note: d.success ? undefined : 'no answer', current: true },
   ]
   steps.push(d.lead
     ? { label: 'Wizard visit', meaning: 'done', note: statusOf('lead', d.lead.outcome).label.toLowerCase(), to: `/admin/leads/${d.lead.id}` }

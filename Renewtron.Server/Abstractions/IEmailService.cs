@@ -21,6 +21,9 @@ public interface IEmailService
     /// </summary>
     Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid);
 
+    /// <summary>One of the registration emails (received, lodged, refused) for a new business name application.</summary>
+    Task SendRegistrationEmailAsync(string templateKey, Guid registrationId, string? reason = null);
+
     /// <summary>The same, recorded against the lead (and so the client) it's for.</summary>
     Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid, Guid? leadId);
 }

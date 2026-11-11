@@ -63,6 +63,21 @@ public class EmailService : IEmailService
             TemplateKey: email.Key, TemplateVersion: email.Version));
     }
 
+    public async Task SendRegistrationEmailAsync(string templateKey, Guid registrationId, string? reason = null)
+    {
+        var reg = await _db.BusinessNameRegistrations.AsNoTracking().FirstOrDefaultAsync(r => r.Id == registrationId);
+        if (reg is null || string.IsNullOrWhiteSpace(reg.Email)) return;
+        var model = EmailModels.Registration(reg, reason, DateTime.UtcNow);
+        var email = await _templates.RenderAsync(templateKey, model);
+        if (!email.Enabled)
+        {
+            _logger.LogInformation("Registration email {Key} not sent: the template is switched off", templateKey);
+            return;
+        }
+        await _sender.SendAsync(new EmailToSend(templateKey, reg.Email, email.Subject, email.Text, email.Html,
+            TemplateKey: email.Key, TemplateVersion: email.Version));
+    }
+
     public Task SendPaidEarlyAsync(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid) =>
         SendPaidEarlyAsync(toEmail, abn, businessNames, renewalYears, amountPaid, null);
 

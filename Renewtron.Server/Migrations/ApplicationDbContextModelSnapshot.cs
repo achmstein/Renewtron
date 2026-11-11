@@ -713,6 +713,178 @@ namespace Renewtron.Migrations
                     b.ToTable("BusinessNameImports");
                 });
 
+            modelBuilder.Entity("Renewtron.Data.BusinessNameRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Abn")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(11)");
+
+                    b.Property<string>("AbrEntityName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("AbrEntityType")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("AirwallexTransferId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("AirwallexTransferStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("AsicCheckedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("AsicFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("AsicPaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AsicPayBy")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("AsicPaymentStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("AsicTransactionReference")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("AsicTransactionStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BpayBillerCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("BpayPaymentAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BpayPaymentError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("BpayReference")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("BusinessName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("FailedAtStep")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsTest")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("LodgedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("NameTakenLocally")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameVerdict")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("NameVerdictText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("PageText")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<string>("StripePaymentIntentId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("VisitorId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Years")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("StripePaymentIntentId");
+
+                    b.ToTable("BusinessNameRegistrations");
+                });
+
             modelBuilder.Entity("Renewtron.Data.Client", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1504,6 +1676,8 @@ namespace Renewtron.Migrations
 
                     SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("Abn", "ImportId"), new[] { "Name", "RegistrationDate" });
 
+                    b.HasIndex("Name", "ImportId");
+
                     b.ToTable("RegisteredBusinessNames");
                 });
 
@@ -2003,6 +2177,111 @@ namespace Renewtron.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("RenewalRequest");
+                });
+
+            modelBuilder.Entity("Renewtron.Data.BusinessNameRegistration", b =>
+                {
+                    b.OwnsOne("Renewtron.Data.RegistrationAddress", "PrincipalAddress", b1 =>
+                        {
+                            b1.Property<Guid>("BusinessNameRegistrationId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Postcode")
+                                .IsRequired()
+                                .HasMaxLength(4)
+                                .HasColumnType("nvarchar(4)");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("nvarchar(3)");
+
+                            b1.Property<string>("StreetName")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("StreetNumber")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<string>("StreetType")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<string>("Suburb")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("Unit")
+                                .IsRequired()
+                                .HasMaxLength(30)
+                                .HasColumnType("nvarchar(30)");
+
+                            b1.HasKey("BusinessNameRegistrationId");
+
+                            b1.ToTable("BusinessNameRegistrations");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BusinessNameRegistrationId");
+                        });
+
+                    b.OwnsOne("Renewtron.Data.RegistrationAddress", "ServiceAddress", b1 =>
+                        {
+                            b1.Property<Guid>("BusinessNameRegistrationId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Postcode")
+                                .IsRequired()
+                                .HasMaxLength(4)
+                                .HasColumnType("nvarchar(4)");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("nvarchar(3)");
+
+                            b1.Property<string>("StreetName")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("StreetNumber")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<string>("StreetType")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("nvarchar(20)");
+
+                            b1.Property<string>("Suburb")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("nvarchar(100)");
+
+                            b1.Property<string>("Unit")
+                                .IsRequired()
+                                .HasMaxLength(30)
+                                .HasColumnType("nvarchar(30)");
+
+                            b1.HasKey("BusinessNameRegistrationId");
+
+                            b1.ToTable("BusinessNameRegistrations");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BusinessNameRegistrationId");
+                        });
+
+                    b.Navigation("PrincipalAddress")
+                        .IsRequired();
+
+                    b.Navigation("ServiceAddress")
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Renewtron.Data.Client", b =>

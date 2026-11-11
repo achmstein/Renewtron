@@ -22,7 +22,12 @@ public class ApplicationDbContextInitialiser
     {
         try
         {
+            // Some migrations index the register copy (millions of rows): give them longer than
+            // the default 30 seconds, then put the normal timeout back.
+            var timeout = _context.Database.GetCommandTimeout();
+            _context.Database.SetCommandTimeout(TimeSpan.FromMinutes(15));
             await _context.Database.MigrateAsync();
+            _context.Database.SetCommandTimeout(timeout);
         }
         catch (Exception ex)
         {

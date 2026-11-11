@@ -33,6 +33,9 @@ public static class EmailTemplateCatalog
     public const string NoBusinessNames = "no business names";
     public const string RenewalInProgress = "renewal in progress";
     public const string WinBack = "win-back";
+    public const string RegistrationReceived = "registration received";
+    public const string RegistrationLodged = "registration lodged";
+    public const string RegistrationRefused = "registration refused";
 
     /// <summary>The shared layout every email goes inside. Not a template of its own; see <see cref="EmailLayout"/>.</summary>
     public const string Layout = "layout";
@@ -40,6 +43,20 @@ public static class EmailTemplateCatalog
     private static readonly TemplateVariable FullName = new("full_name", "Customer's name", "The name they gave on the renewal site.", TemplateVariableKind.Text, "Jane Citizen");
     private static readonly TemplateVariable Abn = new("abn", "ABN", "Spaced like 12 345 678 901.", TemplateVariableKind.Text, "51 824 753 556");
     private static readonly TemplateVariable Email = new("email", "Customer's email", "The address it's sent to.", TemplateVariableKind.Text, "jane@example.com");
+
+
+    private static readonly TemplateVariable[] RegistrationVariables =
+    [
+        FullName,
+        new("business_name", "Business name", "The name they asked to register.", TemplateVariableKind.Text, "Citizen Plumbing"),
+        Abn,
+        new("registration_period", "Registration period", "\"1 Year\" or \"3 Years\".", TemplateVariableKind.Text, "1 Year"),
+        new("amount_paid", "Amount paid", "With the dollar sign, e.g. $147.00.", TemplateVariableKind.Text, "$147.00"),
+        new("transaction_reference", "ASIC reference", "ASIC's transaction reference, once lodged.", TemplateVariableKind.Text, "1-11AQR319"),
+        new("reason", "Why ASIC refused", "ASIC's words, when it refused the name or ABN.", TemplateVariableKind.Text, "ASIC says the name isn't available."),
+        new("date", "Date", "When it happened (UTC).", TemplateVariableKind.Text, "November 12, 2026"),
+        Email,
+    ];
 
     public static readonly IReadOnlyList<EmailTemplateDefinition> All =
     [
@@ -204,6 +221,55 @@ public static class EmailTemplateCatalog
             "lead",
             [FullName, Abn, Email, new("business_name", "Business name", "Their first business name, or \"your business name\".", TemplateVariableKind.Text, "Citizen Plumbing")],
             "", "", ""),
+
+        new(RegistrationReceived, "Registration received",
+            "Sent when a customer pays to register a new business name, before it goes to ASIC.",
+            "registration",
+            RegistrationVariables,
+            "We've received your business name application - {{ business_name }}",
+            "✓ Application Received",
+            """
+            <p>Hi {{ full_name }},</p>
+            <p>Thank you, we've received your payment of <strong>{{ amount_paid }}</strong> to register <strong>{{ business_name }}</strong> for {{ registration_period }}.</p>
+            <table class="details"><tbody>
+            <tr><th>Business Name</th><td>{{ business_name }}</td></tr>
+            <tr><th>ABN</th><td>{{ abn }}</td></tr>
+            <tr><th>Registration Period</th><td>{{ registration_period }}</td></tr>
+            <tr><th>Amount Paid</th><td>{{ amount_paid }}</td></tr>
+            </tbody></table>
+            <p><strong>What happens next?</strong><br>We're lodging your application with ASIC now. We'll email you again with ASIC's reference once it's lodged.</p>
+            """),
+
+        new(RegistrationLodged, "Registration lodged",
+            "Sent when we've lodged a new business name application with ASIC.",
+            "registration",
+            RegistrationVariables,
+            "Your business name application is lodged - {{ business_name }}",
+            "✓ Lodged with ASIC",
+            """
+            <p>Hi {{ full_name }},</p>
+            <p>We've lodged your application to register <strong>{{ business_name }}</strong> with ASIC.</p>
+            <table class="details"><tbody>
+            <tr><th>Business Name</th><td>{{ business_name }}</td></tr>
+            <tr><th>ABN</th><td>{{ abn }}</td></tr>
+            <tr><th>Registration Period</th><td>{{ registration_period }}</td></tr>
+            <tr><th>ASIC Reference</th><td>{{ transaction_reference }}</td></tr>
+            </tbody></table>
+            <p><strong>What happens next?</strong><br>ASIC will email the business name's record of registration and its ASIC key. Please keep this email for your records.</p>
+            """),
+
+        new(RegistrationRefused, "Registration refused",
+            "Sent when ASIC won't take a new business name application (name taken, ABN refused). Refund the customer.",
+            "registration",
+            RegistrationVariables,
+            "We couldn't register {{ business_name }}",
+            "We couldn't register your business name",
+            """
+            <p>Hi {{ full_name }},</p>
+            <p>We tried to lodge your application to register <strong>{{ business_name }}</strong> (ABN {{ abn }}), but ASIC wouldn't accept it:</p>
+            <div class="callout callout-note"><p>{{ reason }}</p></div>
+            <p>Nothing was lodged with ASIC. We'll refund your payment of <strong>{{ amount_paid }}</strong> in full. If you'd like to try a different name, reply to this email and we'll help.</p>
+            """),
     ];
 
     public static EmailTemplateDefinition? Find(string key) =>

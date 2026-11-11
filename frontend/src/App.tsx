@@ -11,6 +11,9 @@ import SelectNamesPage from './wizard/SelectNamesPage'
 import PaymentPage from './wizard/PaymentPage'
 import ConfirmationPage from './wizard/ConfirmationPage'
 import NotAvailablePage from './wizard/NotAvailablePage'
+import RegisterPage from './register/RegisterPage'
+import RegisterPayPage from './register/RegisterPayPage'
+import RegisterDonePage from './register/RegisterDonePage'
 import RequireAuth from './auth/RequireAuth'
 import { AppLoading } from './components/AppLoading'
 import { isPrivatePath, syncClarityWithPath } from './lib/siteConfig'
@@ -42,6 +45,11 @@ export default function App() {
           <Route path="/payment/:leadId" element={<PaymentPage />} />
           <Route path="/confirmation/:leadId" element={<ConfirmationPage />} />
           <Route path="/not-available/:leadId" element={<NotAvailablePage />} />
+
+          {/* Registering a new business name (applyforanabn.au/register links here). */}
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register/:id/pay" element={<RegisterPayPage />} />
+          <Route path="/register/:id/done" element={<RegisterDonePage />} />
 
           {/* Same path as the old Ontraport page (idealbusiness.au/updateasickey) so links carry over. */}
           <Route path="/updateasickey" element={<UpdateAsicKeyPage />} />

@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Info } from 'lucide-react'
 import { sileo } from 'sileo'
-import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicPortalSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
+import { api, type AirwallexSettings, type AsicKeyInboxSettings, type AsicPortalSettings, type RegistrationSettings, type AsicKeyInboxTestResult, type AsicKeyRequestSettings, type OntraportSettingsBody, type TestModeData, type TestModeSettings } from '../api/client'
 import { PageHeader } from './_ui'
 import { relativeTime } from './_utils'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'asicportal' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
+type SectionKey = 'sendgrid' | 'winback' | 'stripe' | 'airwallex' | 'pricing' | 'asic' | 'asicportal' | 'registration' | 'ontraport' | 'asickeys' | 'asickeyrequests' | 'tracking' | 'testmode'
 
 type Settings = Awaited<ReturnType<typeof api.admin.settings>>
 
@@ -38,6 +38,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'pricing',   group: 'Payments', title: 'Pricing', description: 'What clients pay for a renewal.' },
   { key: 'asic',      group: 'Integrations', title: 'ASIC credentials', description: 'How Renewtron pays ASIC for each renewal.' },
   { key: 'asicportal', group: 'Integrations', title: 'ASIC Connect login', description: 'Our ASIC Connect account, for linking clients’ business names to it.', tip: 'Used by “Link to our ASIC account” on a business name: links it with the client’s ASIC key, then lodges our business email, the holder’s email and removes every representative but ours.' },
+  { key: 'registration', group: 'Integrations', title: 'New business names', description: 'The public register page: prices, and whether it lodges with ASIC.', tip: 'Uses the ASIC Connect login above. ASIC’s fee is paid like a renewal’s: by card (ASIC credentials), or by BPAY when Settings say BPAY, the card is being declined or the OTP can’t be read; a card ASIC declines is switched to BPAY. Pay BPAY bills from Admin → New names (through Airwallex). With lodging off, every paid application is filled in at ASIC up to the Review page and then cancelled.' },
   { key: 'ontraport', group: 'Integrations', title: 'Ontraport', description: 'Sales sync, contacts and the OTP conversation.' },
   { key: 'asickeys',  group: 'Integrations', title: 'ASIC key inbox', description: 'Reads ASIC key letters from a Gmail inbox.' },
   { key: 'asickeyrequests', group: 'Integrations', title: 'ASIC key requests', description: 'Asks ASIC to email a client’s key.' },
@@ -66,6 +67,7 @@ export default function Settings() {
   const [asicKeys, setAsicKeys] = useState<AsicKeyInboxSettings>(defaultAsicKeyInbox())
   const [asicKeysTest, setAsicKeysTest] = useState<AsicKeyInboxTestResult | null>(null)
   const [keyRequests, setKeyRequests] = useState<AsicKeyRequestSettings>(defaultAsicKeyRequest())
+  const [registration, setRegistration] = useState<RegistrationSettings>({ enabled: false, lodge: false, oneYearPrice: 0, threeYearPrice: 0, allowManualDecision: false })
   const [asicPortal, setAsicPortal] = useState<AsicPortalSettings>({ enabled: false, username: '', password: '', businessEmail: '', keepRepresentatives: '', declareAs: 'Holder', ontraportLinkFieldId: '', wrongKeyCampaignId: '' })
   const [testMode, setTestMode] = useState<TestModeSettings>({ testEmails: '', stripeSecretKey: '', stripePublishableKey: '' })
   const [testData, setTestData] = useState<TestModeData | null>(null)
@@ -85,6 +87,7 @@ export default function Settings() {
     setAsicKeys(r.asicKeyInbox ?? defaultAsicKeyInbox())
     setKeyRequests(r.asicKeyRequest ?? defaultAsicKeyRequest())
     if (r.asicPortal) setAsicPortal(r.asicPortal)
+    if (r.registration) setRegistration(r.registration)
     if (r.testMode) setTestMode({ testEmails: r.testMode.testEmails, stripeSecretKey: r.testMode.stripeSecretKey, stripePublishableKey: r.testMode.stripePublishableKey })
     void api.admin.testModeData().then(setTestData).catch(() => {})
   }
@@ -128,6 +131,7 @@ export default function Settings() {
   const onKeyRequests = save('ASIC key requests', () => api.admin.updateAsicKeyRequest(keyRequests))
   const onTestMode  = save('Test mode', () => api.admin.updateTestMode(testMode))
   const onAsicPortal = save('ASIC Connect login', () => api.admin.updateAsicPortalSettings(asicPortal))
+  const onRegistration = save('New business names', () => api.admin.updateRegistrationSettings(registration))
   // Tests the saved login (save first): logs in to ASIC Connect and out again.
   const testAsicPortal = () => {
     void sileo.promise(api.admin.testAsicPortalLogin().then((r) => { if (!r.ok) throw new Error(r.message); return r }), {
@@ -200,6 +204,7 @@ export default function Settings() {
     })(),
     airwallex: isFilled(airwallex.clientId) && isFilled(airwallex.apiKey) ? 'configured' : isFilled(airwallex.clientId) || isFilled(airwallex.apiKey) ? 'partial' : 'empty',
     asicportal: asicPortal.enabled && isFilled(asicPortal.username) && isFilled(asicPortal.password) ? 'configured' : isFilled(asicPortal.username) || isFilled(asicPortal.password) ? 'partial' : 'empty',
+    registration: registration.enabled && registration.oneYearPrice > 0 && registration.threeYearPrice > 0 ? 'configured' : registration.oneYearPrice > 0 || registration.threeYearPrice > 0 ? 'partial' : 'empty',
     asickeyrequests: keyRequests.enabled && isFilled(keyRequests.requestEmail) ? 'configured' : isFilled(keyRequests.requestEmail) ? 'partial' : 'empty',
   }
 
@@ -408,6 +413,47 @@ export default function Settings() {
                   <Input className="font-mono" value={asicPortal.wrongKeyCampaignId} onChange={(e) => setAsicPortal({ ...asicPortal, wrongKeyCampaignId: e.target.value })} />
                 </Field>
               </div>
+            </SettingsCard>
+          ) : null}
+
+          {data && activeKey === 'registration' ? (
+            <SettingsCard {...card} onSubmit={onRegistration}>
+              <Field label="Register page" hint={registration.enabled ? 'Open: /register takes applications and payments.' : 'Closed: /register says the service isn’t open yet.'}>
+                <Select value={registration.enabled ? 'on' : 'off'} onValueChange={(v) => setRegistration({ ...registration, enabled: v === 'on' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">Open</SelectItem>
+                    <SelectItem value="off">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Lodge with ASIC" hint={registration.lodge ? 'Paid applications are lodged with ASIC.' : 'Dry run: filled in at ASIC up to Review, then cancelled. Nothing is lodged.'}>
+                <Select value={registration.lodge ? 'on' : 'off'} onValueChange={(v) => setRegistration({ ...registration, lodge: v === 'on' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="on">Lodge</SelectItem>
+                    <SelectItem value="off">Dry run only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="1-year price" hint="What the customer pays, ASIC’s fee included.">
+                  <MoneyInput value={registration.oneYearPrice} onChange={(n) => setRegistration({ ...registration, oneYearPrice: n })} />
+                </Field>
+                <Field label="3-year price">
+                  <MoneyInput value={registration.threeYearPrice} onChange={(n) => setRegistration({ ...registration, threeYearPrice: n })} />
+                </Field>
+              </div>
+              <Field label="Names ASIC refers for a decision" hint={registration.allowManualDecision ? 'Lodged anyway; ASIC decides later and may refuse.' : 'Stopped before lodging, and the customer is refunded.'}
+                tip="ASIC refers names it doesn’t know (made-up words, restricted words) for a manual decision. It lodges them without asking for payment and may refuse them weeks later.">
+                <Select value={registration.allowManualDecision ? 'on' : 'off'} onValueChange={(v) => setRegistration({ ...registration, allowManualDecision: v === 'on' })}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">Stop and refund</SelectItem>
+                    <SelectItem value="on">Lodge anyway</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
             </SettingsCard>
           ) : null}
 

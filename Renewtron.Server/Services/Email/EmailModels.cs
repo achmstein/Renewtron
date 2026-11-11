@@ -34,6 +34,19 @@ public static class EmailModels
         };
     }
 
+    public static Dictionary<string, object?> Registration(Data.BusinessNameRegistration r, string? reason, DateTime atUtc) => new()
+    {
+        ["full_name"] = $"{r.FirstName} {r.LastName}".Trim(),
+        ["business_name"] = r.BusinessName,
+        ["abn"] = r.Abn.Length == 11 ? $"{r.Abn[..2]} {r.Abn[2..5]} {r.Abn[5..8]} {r.Abn[8..]}" : r.Abn,
+        ["registration_period"] = $"{r.Years} {(r.Years == 1 ? "Year" : "Years")}",
+        ["amount_paid"] = Money(r.Amount),
+        ["transaction_reference"] = r.AsicTransactionReference ?? "",
+        ["reason"] = reason ?? "",
+        ["date"] = $"{atUtc:MMMM dd, yyyy}",
+        ["email"] = r.Email,
+    };
+
     public static Dictionary<string, object?> PaidEarly(string toEmail, string abn, string[] businessNames, int renewalYears, decimal amountPaid)
     {
         var one = businessNames.Length == 1;

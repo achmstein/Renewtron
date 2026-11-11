@@ -278,11 +278,8 @@ public class OntraportSalesService : IOntraportSalesService
                     continue;
                 }
 
-                var matched = asicSearch.BusinessNames.FirstOrDefault(b =>
-                    string.Equals(
-                        (b.Name ?? "").Trim(),
-                        (sale.BusinessName ?? "").Trim(),
-                        StringComparison.OrdinalIgnoreCase));
+                // Spacing, "&", quotes and suffixes differ between Ontraport, uploads and ASIC: match loosely, never ambiguously.
+                var matched = BusinessNameText.FindName(asicSearch.BusinessNames, b => b.Name, sale.BusinessName);
 
                 if (matched == null)
                 {
@@ -712,7 +709,7 @@ public class OntraportSalesService : IOntraportSalesService
         // Underpayment guard — customers paying only the $39/$49 cancellation fee fall below the one-year renewal price
         var minimumFee = _pricingSettings.Value.OneYearFee;
         if (minimumFee > 0 && amountPaid < minimumFee)
-            return $"Amount paid ({amountPaid:C}) is below the minimum renewal fee ({minimumFee:C})";
+            return $"Amount paid (${amountPaid:F2}) is below the minimum renewal fee (${minimumFee:F2})";
 
         return null;
     }

@@ -274,4 +274,29 @@ public static class BusinessNameText
             if (char.IsLetterOrDigit(ch)) sb.Append(char.ToUpperInvariant(ch));
         return sb.ToString();
     }
+
+    /// <summary>Shortest key a containment match may rest on, so "A1" can't match half of ASIC's list.</summary>
+    private const int MinContainedKey = 5;
+
+    /// <summary>
+    /// The one name among <paramref name="items"/> that is <paramref name="wanted"/>: the same
+    /// <see cref="MatchKey"/> ("L &amp; P ANTIQUES" = "L &amp;P ANTIQUES"), or failing that the only
+    /// name whose key contains ours or sits inside it ("Supersweet Pastry" = "SUPERSWEET pastry
+    /// 1-56315256229", "DAYBREAK ELECTRICAL Pty ltd" = "DAY BREAK ELECTRICAL"). Null when nothing
+    /// fits or more than one could: a wrong name would renew someone else's.
+    /// </summary>
+    public static T? FindName<T>(IEnumerable<T> items, Func<T, string?> nameOf, string? wanted) where T : class
+    {
+        var key = MatchKey(wanted);
+        if (key.Length == 0) return null;
+        var keyed = items.Select(i => (Item: i, Key: MatchKey(nameOf(i)))).Where(x => x.Key.Length > 0).ToList();
+
+        var same = keyed.Where(x => x.Key == key).ToList();
+        if (same.Count > 0) return same[0].Item;
+
+        var near = keyed.Where(x => Math.Min(x.Key.Length, key.Length) >= MinContainedKey
+                                    && (x.Key.Contains(key, StringComparison.Ordinal) || key.Contains(x.Key, StringComparison.Ordinal)))
+            .ToList();
+        return near.Count == 1 ? near[0].Item : null;
+    }
 }

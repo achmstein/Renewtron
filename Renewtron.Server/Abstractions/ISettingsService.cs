@@ -26,4 +26,5 @@ public interface ISettingsService
     Task UpdateTestModeSettingsAsync(TestModeSettings settings);
     Task UpdateAirwallexSettingsAsync(AirwallexSettings settings);
     Task UpdateAsicPortalSettingsAsync(AsicPortalSettings settings);
+    Task UpdateRegistrationSettingsAsync(RegistrationSettings settings);
 }

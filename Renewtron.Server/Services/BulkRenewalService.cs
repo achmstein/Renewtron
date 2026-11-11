@@ -141,11 +141,8 @@ public class BulkRenewalService : IBulkRenewalService
                     continue;
                 }
 
-                var matched = asicSearch.BusinessNames.FirstOrDefault(b =>
-                    string.Equals(
-                        (b.Name ?? "").Trim(),
-                        (upload.BusinessName ?? "").Trim(),
-                        StringComparison.OrdinalIgnoreCase));
+                // Spacing, "&", quotes and suffixes differ between Ontraport, uploads and ASIC: match loosely, never ambiguously.
+                var matched = BusinessNameText.FindName(asicSearch.BusinessNames, b => b.Name, upload.BusinessName);
 
                 if (matched == null)
                 {

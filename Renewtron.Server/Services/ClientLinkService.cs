@@ -649,7 +649,7 @@ public sealed class ClientLinkService(
     }
 
     private static int Rank(RenewalDueDateSource? source) =>
-        source switch { RenewalDueDateSource.Renewal => 2, null => 0, _ => 1 };
+        source switch { RenewalDueDateSource.Renewal or RenewalDueDateSource.AsicRegister => 2, null => 0, _ => 1 };
 
     /// <summary>Our own renewals outrank Ontraport's field and bulk uploads; within a rank the later date wins.</summary>
     private void SetDue(ClientBusinessName name, DateOnly due, RenewalDueDateSource source)

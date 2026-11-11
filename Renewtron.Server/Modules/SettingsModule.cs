@@ -57,8 +57,10 @@ public sealed class SettingsModule : ICarterModule
 
         group.MapGet("/", async (ISettingsService settings, IOptionsMonitor<TestModeSettings> testModeOptions,
             IOptionsMonitor<AirwallexSettings> airwallexOptions,
-            IOptionsMonitor<AsicPortalSettings> asicPortalOptions) =>
+            IOptionsMonitor<AsicPortalSettings> asicPortalOptions,
+            IOptionsMonitor<RegistrationSettings> registrationOptions) =>
         {
+            var registration = registrationOptions.CurrentValue;
             var testMode = testModeOptions.CurrentValue;
             var airwallex = airwallexOptions.CurrentValue;
             var asicPortal = asicPortalOptions.CurrentValue;
@@ -131,6 +133,14 @@ public sealed class SettingsModule : ICarterModule
                     declareAs = asicPortal.DeclareAs.ToString(),
                     ontraportLinkFieldId = asicPortal.OntraportLinkFieldId,
                     wrongKeyCampaignId = asicPortal.WrongKeyCampaignId,
+                },
+                registration = new
+                {
+                    enabled = registration.Enabled,
+                    lodge = registration.Lodge,
+                    oneYearPrice = registration.OneYearPrice,
+                    threeYearPrice = registration.ThreeYearPrice,
+                    allowManualDecision = registration.AllowManualDecision,
                 },
                 airwallex = new
                 {
@@ -242,6 +252,17 @@ public sealed class SettingsModule : ICarterModule
             if (string.IsNullOrWhiteSpace(saved.BusinessEmail))
                 return Results.BadRequest(new { error = "The business email can't be blank." });
             await settings.UpdateAsicPortalSettingsAsync(saved);
+            return Results.NoContent();
+        });
+
+        // Registering new business names from the public /register page.
+        group.MapPut("/registration", async (RegistrationSettings body, ISettingsService settings) =>
+        {
+            if (body.OneYearPrice < 0 || body.ThreeYearPrice < 0)
+                return Results.BadRequest(new { error = "Prices can't be negative." });
+            if (body.Enabled && (body.PriceFor(1) is null || body.PriceFor(3) is null))
+                return Results.BadRequest(new { error = "Set both prices before switching the register page on." });
+            await settings.UpdateRegistrationSettingsAsync(body);
             return Results.NoContent();
         });
 

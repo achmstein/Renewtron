@@ -143,7 +143,7 @@ function headline(d: Detail, latest: Renewal | undefined): string {
   switch (d.outcome) {
     case 'RenewalAvailable': return `${who} found a name due and didn’t pay`
     case 'NotDueForRenewal': return `${who} looked up their names; nothing was due`
-    case 'RenewalInProgress': return `${who} is paying`
+    case 'RenewalInProgress': return `${who} couldn’t pay: ASIC already has a renewal open for this ABN`
     case 'NoBusinessNames': return `${who}’s ABN has no business names`
     default: return `${who} started the wizard; the ASIC check didn’t finish`
   }

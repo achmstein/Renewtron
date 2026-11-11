@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Archive, ChartColumn, Contact, Copy, CreditCard, FileWarning, Filter, House, Inbox, KeyRound, LogOut,
-  Landmark, Mail, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench,
+  Landmark, Mail, RefreshCw, Search, Settings, ShoppingCart, SquarePen, Users, Wrench, FilePlus2,
 } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { api, type SidebarCounts } from '../api/client'
@@ -39,6 +39,7 @@ const Icon = {
   KeyAlert: <FileWarning />,
   Inbox: <Inbox />,
   Mail: <Mail />,
+  NewName: <FilePlus2 />,
   Funnel: <Filter />,
   Cog: <Settings />,
   Logout: <LogOut />,
@@ -53,6 +54,7 @@ const navSections: NavSection[] = [
       { to: '/admin', label: 'Today', icon: Icon.Today, badge: 'today' },
       { to: '/admin/renewal-orders?view=to-fix', label: 'Renewals to fix', icon: Icon.Wrench, badge: 'renewalsToFix' },
       { to: '/admin/bpay', label: 'BPAY to pay', icon: Icon.Bank, badge: 'bpayToPay' },
+      { to: '/admin/registrations', label: 'New names', icon: Icon.NewName, badge: 'registrations' },
       { to: '/admin/asic-key-requests', label: 'Key requests', icon: Icon.Inbox, badge: 'asicKeyRequests' },
       { to: '/admin/asic-keys?view=to-sort', label: 'Keys to sort', icon: Icon.KeyAlert, badge: 'keysToSort' },
       { to: '/admin/manual-renewal', label: 'Manual renewal', icon: Icon.Pencil },

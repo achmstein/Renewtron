@@ -430,7 +430,7 @@ function leadFunnelStages(l: Lead): Array<{ label: string; tone: Tone; active: b
     { label: 'Search', tone: 'emerald', active: !!l.searchLog },
     failed
       ? { label: 'Failed', tone: 'red', active: true }
-      : { label: paid ? 'Paid' : inflight ? 'Paying' : 'Paid', tone: paid ? 'emerald' : inflight ? 'amber' : 'zinc', active: paid || inflight },
+      : { label: paid ? 'Paid' : inflight ? 'Renewing' : 'Paid', tone: paid ? 'emerald' : inflight ? 'amber' : 'zinc', active: paid || inflight },
   ]
 }
 

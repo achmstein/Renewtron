@@ -115,6 +115,10 @@ public class AsicPortalLinkService(
     {
         var s = settings.CurrentValue;
         if (!s.HasLogin) return "No username or password saved.";
+        IDisposable session;
+        try { session = AsicConnectSession.Acquire(TimeSpan.FromSeconds(30)); }
+        catch (Hangfire.Storage.DistributedLockTimeoutException) { return "ASIC Connect is busy with another job. Try again in a minute."; }
+        using var held = session;
         using var client = new AsicPortalClient();
         var login = await client.LoginAsync(s.Username, s.Password, ct);
         if (login.Ok) await client.LogoutAsync(ct);
@@ -135,6 +139,8 @@ public class AsicPortalLinkService(
         run.FailedAtStep = null;
         await db.SaveChangesAsync();
 
+        // One ASIC Connect session per account: wait for any registration or check using it.
+        using var session = AsicConnectSession.Acquire();
         using var client = new AsicPortalClient();
         try
         {

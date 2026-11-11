@@ -159,6 +159,15 @@ public sealed class EmailTemplatesModule : ICarterModule
         {
             if (!Known(key)) return Results.NotFound();
             var term = search?.Trim().ToLower();
+            if (Source(key) == "registration")
+            {
+                var regs = db.BusinessNameRegistrations.AsNoTracking().Where(r => !r.IsTest);
+                if (!string.IsNullOrEmpty(term))
+                    regs = regs.Where(r => r.Email.ToLower().Contains(term) || r.BusinessName.ToLower().Contains(term) || r.Abn.Contains(term));
+                return Results.Ok(await regs.OrderByDescending(r => r.CreatedAt).Take(20)
+                    .Select(r => new { id = r.Id, title = r.BusinessName, detail = r.Email, at = r.CreatedAt })
+                    .ToListAsync());
+            }
             if (Source(key) == "renewal")
             {
                 var q = db.RenewalRequests.AsNoTracking().Where(r => !r.IsTest && r.Email != null);
@@ -252,6 +261,11 @@ public sealed class EmailTemplatesModule : ICarterModule
         var d = EmailTemplateCatalog.Find(key) ?? EmailTemplateCatalog.Find(EmailTemplateCatalog.RenewalConfirmation)!;
         if (sampleId is not { } id) return EmailTemplateCatalog.SampleModel(d);
 
+        if (d.PreviewSource == "registration")
+        {
+            var reg = await db.BusinessNameRegistrations.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            return reg is null ? null : EmailModels.Registration(reg, reg.Error, reg.LodgedAt ?? reg.CreatedAt);
+        }
         if (d.PreviewSource == "renewal")
         {
             var r = await db.RenewalRequests.AsNoTracking().Where(x => x.Id == id)

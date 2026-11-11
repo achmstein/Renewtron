@@ -28,6 +28,8 @@ import AsicKeys from './AsicKeys'
 import AsicKeyRequests from './AsicKeyRequests'
 import { KeyLetterDetails, KeyRequestDetails } from './KeyDetails'
 import AsicPortalLinkDetails from './AsicPortalLinkDetails'
+import Registrations from './Registrations'
+import RegistrationDetails from './RegistrationDetails'
 import Emails from './Emails'
 import EmailTemplates from './EmailTemplates'
 // The editor brings Monaco and TipTap: loaded only when a template is opened.
@@ -70,6 +72,8 @@ export default function AdminRoutes() {
           <Route path="asic-key-requests/:id" element={<KeyRequestDetails />} />
           <Route path="asic-keys/:id" element={<KeyLetterDetails />} />
           <Route path="asic-portal/:id" element={<AsicPortalLinkDetails />} />
+          <Route path="registrations" element={<Registrations />} />
+          <Route path="registrations/:id" element={<RegistrationDetails />} />
           {/* One route, so opening an email keeps the list (and its scroll) in place. */}
           <Route path="emails/templates" element={<EmailTemplates />} />
           <Route path="emails/templates/:key" element={<Suspense fallback={null}><EmailTemplateEditor /></Suspense>} />

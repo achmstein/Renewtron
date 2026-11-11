@@ -89,6 +89,9 @@ public sealed partial class AsicPortalClient : IDisposable
         _http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "en-AU,en;q=0.9");
     }
 
+    /// <summary>Optional: called with each ADF event's component id and ASIC's answer (for diagnostics).</summary>
+    public Action<string, string>? Trace { get; set; }
+
     /// <summary>The page we're on, after the last request.</summary>
     public AsicPortalPage? Current { get; private set; }
 
@@ -273,6 +276,7 @@ public sealed partial class AsicPortalClient : IDisposable
         request.Headers.Add("Adf-Ads-Page-Id", "2");
         request.Headers.Referrer = new Uri(page.Url);
         var (_, body) = await SendAsync(request, ct);
+        Trace?.Invoke(componentId, body);
         var viewState = ParsePartialViewState(body);
         return (viewState is null ? page : page with { ViewState = viewState }, body);
     }

@@ -35,7 +35,7 @@ export type StatusEntry = { label: string; meaning: Meaning; hint?: string }
 
 export type StatusKind =
   | 'renewal' | 'sale' | 'bulk' | 'keyRequest' | 'keyLetter' | 'bpay'
-  | 'lead' | 'email' | 'payment' | 'businessName' | 'asicPortal'
+  | 'lead' | 'email' | 'payment' | 'businessName' | 'asicPortal' | 'registration'
 
 const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
   // RenewalStatus. A failed renewal is refined by renewalStatus() below.
@@ -107,7 +107,7 @@ const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
     Pending:           { label: 'Not checked',  meaning: 'quiet' },
     RenewalAvailable:  { label: 'Due, not paid', meaning: 'waiting', hint: 'A name is due; the client hasn’t paid yet.' },
     NotDueForRenewal:  { label: 'Not due',      meaning: 'quiet' },
-    RenewalInProgress: { label: 'Paying',       meaning: 'working' },
+    RenewalInProgress: { label: 'Open at ASIC', meaning: 'waiting', hint: 'ASIC said a renewal for this ABN is already open (started and not finished, by us or someone else), so the visitor couldn’t pay. ASIC drops an unfinished renewal within about 48 hours; we emailed them.' },
     NoBusinessNames:   { label: 'No names',     meaning: 'quiet' },
     RenewalCompleted:  { label: 'Renewed',      meaning: 'done' },
   },
@@ -146,6 +146,18 @@ const VOCABULARY: Record<StatusKind, Record<string, StatusEntry>> = {
     WrongKey:  { label: 'Wrong key',    meaning: 'action', hint: 'ASIC didn’t accept the key and date of birth: ask the client for the right key.' },
     NeedsLook: { label: 'Needs a look', meaning: 'action', hint: 'Linked, but a later step needs a person: see the run.' },
     Failed:    { label: 'Failed',       meaning: 'action', hint: 'Couldn’t get through ASIC Connect: see the run, then retry.' },
+  },
+  // BusinessNameRegistrationStatus: new business names from the public /register page.
+  registration: {
+    AwaitingPayment:     { label: 'Not paid',        meaning: 'quiet', hint: 'Started on the page; the customer hasn’t paid.' },
+    Queued:              { label: 'Queued',          meaning: 'working', hint: 'Paid; waiting for the ASIC Connect worker.' },
+    Running:             { label: 'Lodging',         meaning: 'working', hint: 'Going through ASIC Connect now.' },
+    AwaitingAsicPayment: { label: 'Pay ASIC',        meaning: 'action', hint: 'Lodged to pay later by BPAY: pay ASIC’s fee within 10 business days.' },
+    Lodged:              { label: 'Lodged',          meaning: 'done', hint: 'Lodged with ASIC and its fee paid (or referred for ASIC’s decision).' },
+    Refused:             { label: 'Refused: refund', meaning: 'action', hint: 'ASIC wouldn’t take the name or the ABN. Nothing was lodged: refund the customer in Stripe.' },
+    NeedsLook:           { label: 'Needs a look',    meaning: 'action', hint: 'Something we couldn’t read or finish: see the application.' },
+    Failed:              { label: 'Failed',          meaning: 'action' },
+    Refunded:            { label: 'Refunded',        meaning: 'quiet' },
   },
 }
 

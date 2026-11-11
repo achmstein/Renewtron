@@ -68,6 +68,8 @@ public enum RenewalDueDateSource
     BulkUpload = 2,
     /// <summary>Worked out from a renewal we lodged: the most reliable.</summary>
     Renewal = 3,
+    /// <summary>ASIC's own renewal date for the name, read from its register (e.g. a Businesstron run).</summary>
+    AsicRegister = 4,
 }
 
 /// <summary>An address the client has used. Ontraport keys contacts on email, so the contact id lives here.</summary>

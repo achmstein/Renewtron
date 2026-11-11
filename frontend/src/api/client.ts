@@ -140,7 +140,7 @@ export interface RenewalOrderAttempt {
 }
 export interface TodayResponse { generatedAt: string; total: number; otpProblem: string | null; cardProblem?: string | null; emailProblem?: string | null; groups: TodayGroup[] }
 
-export interface SidebarCounts { today: number; renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number }
+export interface SidebarCounts { today: number; renewalsToFix: number; bpayToPay: number; asicKeyRequests: number; keysToSort: number; clientDuplicates: number; registrations: number }
 
 export interface ClientListItem {
   id: string
@@ -262,6 +262,14 @@ export interface AsicPortalLinkDto {
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
+}
+
+export interface RegistrationSettings {
+  enabled: boolean
+  lodge: boolean
+  oneYearPrice: number
+  threeYearPrice: number
+  allowManualDecision: boolean
 }
 
 export interface AsicPortalSettings {
@@ -596,6 +604,7 @@ export const api = {
       asicKeyInbox: AsicKeyInboxSettings
       asicKeyRequest: AsicKeyRequestSettings
       asicPortal: AsicPortalSettings
+      registration: RegistrationSettings
       testMode: TestModeSettings & { stripeReady: boolean }
     }>('/api/admin/settings'),
     searches: (params: { abn?: string; success?: string; initiatedBy?: string; dateFrom?: string; dateTo?: string; includeSystem?: boolean; page?: number; pageSize?: number } = {}) => {
@@ -1148,6 +1157,7 @@ export const api = {
     asicPortalLinks: (params: { status?: string; clientId?: string } = {}) => apiFetch<AsicPortalLinkDto[]>(`/api/admin/asic-portal/?${new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][])}`),
     retryAsicPortalLink: (id: string) => apiFetch<{ message: string }>(`/api/admin/asic-portal/${id}/retry`, { method: 'POST' }),
     updateAsicPortalSettings: (body: AsicPortalSettings) => apiFetch<void>('/api/admin/settings/asic-portal', { method: 'PUT', body: JSON.stringify(body) }),
+    updateRegistrationSettings: (body: RegistrationSettings) => apiFetch<void>('/api/admin/settings/registration', { method: 'PUT', body: JSON.stringify(body) }),
     testAsicPortalLogin: () => apiFetch<{ ok: boolean; message: string }>('/api/admin/settings/asic-portal/test', { method: 'POST' }),
     requestAsicKeyForSale: (saleId: string) =>
       apiFetch<{ request: AsicKeyRequestDto }>(`/api/admin/asic-key-requests/for-sale/${saleId}`, { method: 'POST' }),

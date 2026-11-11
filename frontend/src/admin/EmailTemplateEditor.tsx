@@ -457,7 +457,7 @@ function SamplePicker({ templateKey, source, label, onPick }: {
     enabled: open,
     placeholderData: keepPreviousData,
   })
-  const what = source === 'lead' ? 'lead' : 'renewal'
+  const what = source === 'lead' ? 'lead' : source === 'registration' ? 'registration' : 'renewal'
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

@@ -28,6 +28,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ClientAbn> ClientAbns { get; set; }
     public DbSet<ClientBusinessName> ClientBusinessNames { get; set; }
     public DbSet<AsicPortalLink> AsicPortalLinks { get; set; }
+    public DbSet<BusinessNameRegistration> BusinessNameRegistrations { get; set; }
     public DbSet<EmailTemplate> EmailTemplates { get; set; }
     public DbSet<EmailTemplateVersion> EmailTemplateVersions { get; set; }
 
@@ -80,6 +81,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => new { e.Abn, e.ImportId }).IncludeProperties(e => new { e.Name, e.RegistrationDate });
             // Old imports are cleared in batches by ImportId.
             entity.HasIndex(e => e.ImportId);
+            // "Is this name already registered?" for the public register page.
+            entity.HasIndex(e => new { e.Name, e.ImportId });
         });
 
         modelBuilder.Entity<BusinessNameImport>(entity =>
@@ -459,6 +462,51 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.Status);
             entity.HasOne<ClientBusinessName>().WithMany().HasForeignKey(e => e.ClientBusinessNameId).OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
+        });
+        modelBuilder.Entity<BusinessNameRegistration>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status).IsRequired().HasMaxLength(24).HasConversion<string>();
+            entity.Property(e => e.BusinessName).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Abn).IsRequired().HasMaxLength(11).IsUnicode(false);
+            entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(256);
+            entity.Property(e => e.Phone).IsRequired().HasMaxLength(30);
+            foreach (var nav in new[] { nameof(BusinessNameRegistration.ServiceAddress), nameof(BusinessNameRegistration.PrincipalAddress) })
+                entity.OwnsOne(typeof(RegistrationAddress), nav, a =>
+                {
+                    a.Property(nameof(RegistrationAddress.Unit)).HasMaxLength(30);
+                    a.Property(nameof(RegistrationAddress.StreetNumber)).HasMaxLength(20);
+                    a.Property(nameof(RegistrationAddress.StreetName)).HasMaxLength(100);
+                    a.Property(nameof(RegistrationAddress.StreetType)).HasMaxLength(20);
+                    a.Property(nameof(RegistrationAddress.Suburb)).HasMaxLength(100);
+                    a.Property(nameof(RegistrationAddress.State)).HasMaxLength(3);
+                    a.Property(nameof(RegistrationAddress.Postcode)).HasMaxLength(4);
+                });
+            entity.Property(e => e.Amount).HasPrecision(18, 2);
+            entity.Property(e => e.AsicFee).HasPrecision(18, 2);
+            entity.Property(e => e.StripePaymentIntentId).HasMaxLength(100);
+            entity.Property(e => e.AsicTransactionReference).HasMaxLength(30);
+            entity.Property(e => e.AbrEntityName).HasMaxLength(200);
+            entity.Property(e => e.AbrEntityType).HasMaxLength(60);
+            entity.Property(e => e.NameVerdict).HasMaxLength(20);
+            entity.Property(e => e.NameVerdictText).HasMaxLength(1000);
+            entity.Property(e => e.AsicPayBy).HasMaxLength(10);
+            entity.Property(e => e.BpayBillerCode).HasMaxLength(20);
+            entity.Property(e => e.BpayReference).HasMaxLength(30);
+            entity.Property(e => e.AirwallexTransferId).HasMaxLength(64);
+            entity.Property(e => e.AirwallexTransferStatus).HasMaxLength(32);
+            entity.Property(e => e.BpayPaymentError).HasMaxLength(1000);
+            entity.Property(e => e.AsicTransactionStatus).HasMaxLength(40);
+            entity.Property(e => e.AsicPaymentStatus).HasMaxLength(40);
+            entity.Property(e => e.FailedAtStep).HasMaxLength(40);
+            entity.Property(e => e.Error).HasMaxLength(2000);
+            entity.Property(e => e.VisitorId).HasMaxLength(64);
+            entity.Property(e => e.Source).HasMaxLength(100);
+            entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.StripePaymentIntentId);
         });
         modelBuilder.Entity<OutboundMessage>().HasOne<Client>().WithMany().HasForeignKey(e => e.ClientId).OnDelete(DeleteBehavior.NoAction);
         modelBuilder.Entity<OutboundMessage>().HasIndex(e => e.ClientId);

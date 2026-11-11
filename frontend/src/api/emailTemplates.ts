@@ -34,7 +34,7 @@ export interface TemplateDetail {
   name: string
   description: string
   isLayout: boolean
-  previewSource: 'renewal' | 'lead' | null
+  previewSource: 'renewal' | 'lead' | 'registration' | null
   enabled: boolean
   variables: TemplateVariable[]
   current: TemplateContent
