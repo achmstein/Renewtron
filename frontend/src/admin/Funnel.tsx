@@ -183,7 +183,7 @@ export default function Funnel() {
 
         {/* The journey */}
         <Card className="gap-0 py-0">
-          <CardHeader className="border-b py-4 [.border-b]:pb-4">
+          <CardHeader className="border-b py-4">
             <CardTitle>Where people stop</CardTitle>
             <CardAction className={LEGEND_SLOT}><Legend items={[{ cls: 'bg-muted-foreground/20', label: 'Reached the step' }, { cls: 'bg-link', label: 'Completed it' }]} /></CardAction>
           </CardHeader>
@@ -217,7 +217,7 @@ export default function Funnel() {
           </Card>
 
           <Card className="gap-0 py-0 lg:col-span-2">
-            <CardHeader className="border-b py-4 [.border-b]:pb-4">
+            <CardHeader className="border-b py-4">
               <CardTitle>Which traffic renews</CardTitle>
             </CardHeader>
             <SourceList rows={data?.bySource ?? []} active={source} onPick={(s) => setSource(source === s ? '' : s)} />

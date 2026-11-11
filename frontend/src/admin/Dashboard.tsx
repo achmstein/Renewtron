@@ -88,7 +88,7 @@ function Body({ data }: { data: DashboardResponse }) {
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <Card className="gap-0 py-0">
-          <CardHeader className="border-b py-4 [.border-b]:pb-4">
+          <CardHeader className="border-b py-4">
             <CardTitle>Activity</CardTitle>
             <CardAction className="text-sm text-muted-foreground">Last 48 hours</CardAction>
           </CardHeader>
@@ -96,7 +96,7 @@ function Body({ data }: { data: DashboardResponse }) {
         </Card>
 
         <Card className="gap-0 py-0">
-          <CardHeader className="border-b py-4 [.border-b]:pb-4">
+          <CardHeader className="border-b py-4">
             <CardTitle>Recent renewals</CardTitle>
             <CardAction>
               <Button asChild size="sm" variant="ghost" className="-my-1 text-muted-foreground"><Link to="/admin/renewal-orders">View all</Link></Button>
