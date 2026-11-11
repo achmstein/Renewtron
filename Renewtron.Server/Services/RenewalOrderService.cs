@@ -157,14 +157,17 @@ public class RenewalOrderService(ApplicationDbContext db, ILogger<RenewalOrderSe
             orphansAttached++;
         }
 
-        // Compute and write.
+        // Compute and write. A stored outcome (a person's or the ASIC check's) goes into the projection.
         var existing = await db.RenewalOrders.ToDictionaryAsync(o => (o.Source, o.SourceId), ct);
         int created = 0, changed = 0;
         var computed = new List<RenewalOrder>(shells.Count);
         foreach (var s in shells)
         {
             var attempts = attemptsOf[(s.Source, s.SourceId)];
-            var result = RenewalOrderProjection.Compute(s.State, attempts, today);
+            var state = existing.TryGetValue((s.Source, s.SourceId), out var stored) && stored.Outcome != null
+                ? s.State with { Outcome = stored.Outcome, OutcomeAt = stored.OutcomeAt, Evidence = stored.Evidence }
+                : s.State;
+            var result = RenewalOrderProjection.Compute(state, attempts, today);
             if (!existing.TryGetValue((s.Source, s.SourceId), out var order))
             {
                 order = new RenewalOrder { Id = Guid.NewGuid(), Source = s.Source, SourceId = s.SourceId, CreatedAt = now, StageChangedAt = now };

@@ -39,8 +39,39 @@ public class RenewalOrder
     public int AttemptCount { get; set; }
     public DateTime? RenewedAt { get; set; }
 
+    /// <summary>
+    /// How the order ended, or why it stopped, when a person or Renewtron's ASIC check decided it
+    /// (renewed elsewhere, lapsed, refunded…). Stored, unlike <see cref="Stage"/>: the projection
+    /// reads it and only a renewal we actually lodged overrides it. Null while the pipeline decides.
+    /// </summary>
+    public RenewalOrderReason? Outcome { get; set; }
+    public DateTime? OutcomeAt { get; set; }
+    /// <summary>Who decided: the admin's email, or "ASIC check".</summary>
+    public string? OutcomeBy { get; set; }
+    /// <summary>What it rests on, in words (what ASIC showed, and when).</summary>
+    public string? Evidence { get; set; }
+    public OrderEvidenceSource? EvidenceSource { get; set; }
+    /// <summary>When the evidence was seen (the register file's date, or when ASIC was asked).</summary>
+    public DateTime? EvidenceAt { get; set; }
+    /// <summary>A refund, dispute or ASIC reference that goes with the outcome.</summary>
+    public string? OutcomeReference { get; set; }
+    /// <summary>When Renewtron last asked ASIC's renewal page about this name.</summary>
+    public DateTime? AsicCheckedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>Where an order's outcome evidence came from.</summary>
+public enum OrderEvidenceSource
+{
+    /// <summary>ASIC's public register file (data.gov.au), imported nightly.</summary>
+    AsicRegister = 0,
+    /// <summary>ASIC's renewal page: what it offers for renewal under the ABN.</summary>
+    AsicRenewalPage = 1,
+    /// <summary>A person, with their note.</summary>
+    Staff = 2,
+    Ontraport = 3,
 }
 
 public enum RenewalOrderSource
@@ -89,6 +120,14 @@ public enum RenewalOrderReason
     CardDeclined = 7,
     /// <summary>Not renewable for another reason given by Ontraport.</summary>
     Ineligible = 8,
+    /// <summary>ASIC cancelled the name (gone from the register after its due date). Refund, or offer to register it again.</summary>
+    Lapsed = 9,
+    /// <summary>ASIC lists names under the ABN but not this spelling: fix the name, then try again.</summary>
+    NameMismatch = 10,
+
+    // Waiting
+    /// <summary>Still registered, but ASIC isn't offering it for renewal now. Checked again on its own.</summary>
+    NotOfferedNow = 11,
 
     // Closed
     /// <summary>Renewed outside Renewtron (by hand at ASIC, or by the client).</summary>
@@ -97,4 +136,6 @@ public enum RenewalOrderReason
     ClientCancelling = 22,
     Disputed = 23,
     Duplicate = 24,
+    /// <summary>Lapsed at ASIC; the client is offered a new registration instead, and the payment kept for it.</summary>
+    RegisterAgain = 25,
 }

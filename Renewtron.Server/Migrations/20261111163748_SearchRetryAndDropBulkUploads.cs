@@ -15,8 +15,8 @@ namespace Renewtron.Migrations
             // started stay as history, no longer attached to an order.
             migrationBuilder.Sql("""
                 UPDATE RenewalRequests SET RenewalOrderId = NULL
-                WHERE RenewalOrderId IN (SELECT Id FROM RenewalOrders WHERE Source = 2);
-                DELETE FROM RenewalOrders WHERE Source = 2;
+                WHERE RenewalOrderId IN (SELECT Id FROM RenewalOrders WHERE Source = 'Bulk');
+                DELETE FROM RenewalOrders WHERE Source = 'Bulk';
                 """);
 
             migrationBuilder.DropTable(

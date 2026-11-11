@@ -64,6 +64,8 @@ public enum RecordSource
 /// <summary>Where a business name's due date came from, weakest first: a stronger source replaces a weaker one.</summary>
 public enum RenewalDueDateSource
 {
+    /// <summary>Worked out by Renewtron's ASIC check (renewed elsewhere: the old due date plus a year). The weakest.</summary>
+    Estimated = 0,
     Ontraport = 1,
     BulkUpload = 2,
     /// <summary>Worked out from a renewal we lodged: the most reliable.</summary>

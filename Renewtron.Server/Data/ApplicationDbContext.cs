@@ -391,6 +391,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Source).HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.Stage).HasConversion<string>().HasMaxLength(20);
             entity.Property(e => e.Reason).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.Outcome).HasConversion<string>().HasMaxLength(30);
+            entity.Property(e => e.OutcomeBy).HasMaxLength(200);
+            entity.Property(e => e.Evidence).HasMaxLength(1000);
+            entity.Property(e => e.EvidenceSource).HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.OutcomeReference).HasMaxLength(200);
             entity.HasIndex(e => new { e.Source, e.SourceId }).IsUnique();
             entity.HasIndex(e => e.Stage);
             entity.HasIndex(e => new { e.Abn, e.NameKey });

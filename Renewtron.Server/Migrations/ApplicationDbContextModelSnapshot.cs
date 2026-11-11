@@ -1629,6 +1629,9 @@ namespace Renewtron.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("AsicCheckedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("AttemptCount")
                         .HasColumnType("int");
 
@@ -1652,6 +1655,17 @@ namespace Renewtron.Migrations
                     b.Property<DateOnly?>("DueDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("EvidenceAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EvidenceSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("NameKey")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1663,6 +1677,21 @@ namespace Renewtron.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("OutcomeAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OutcomeBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OutcomeReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime>("PaidAt")
                         .HasColumnType("datetime2");

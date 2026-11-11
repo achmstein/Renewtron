@@ -41,7 +41,22 @@ public static class RenewalOrderProjection
         /// </summary>
         Guid? LinkedAttemptId = null,
         /// <summary>ASIC's name search didn't get an answer and is tried again on its own at this time.</summary>
-        DateTime? NextSearchAt = null);
+        DateTime? NextSearchAt = null,
+        /// <summary>The order's stored outcome (<see cref="RenewalOrder.Outcome"/>), set by a person or the ASIC check.</summary>
+        RenewalOrderReason? Outcome = null,
+        DateTime? OutcomeAt = null,
+        string? Evidence = null);
+
+    /// <summary>How often a name ASIC isn't offering now is looked at again.</summary>
+    public static readonly TimeSpan RecheckNotOffered = TimeSpan.FromDays(7);
+
+    /// <summary>The stage a stored outcome puts an order in.</summary>
+    public static RenewalOrderStage StageOf(RenewalOrderReason outcome) => outcome switch
+    {
+        RenewalOrderReason.NotOfferedNow => RenewalOrderStage.Waiting,
+        < RenewalOrderReason.RenewedElsewhere => RenewalOrderStage.NeedsPerson,
+        _ => RenewalOrderStage.Closed,
+    };
 
     public sealed record Attempt(
         Guid Id,
@@ -71,6 +86,18 @@ public static class RenewalOrderProjection
             return new(RenewalOrderStage.Renewed, CurrentAttemptId: Latest(attempts)?.Id);
 
         var current = source.LinkedAttemptId is { } linked ? attempts.FirstOrDefault(a => a.Id == linked) : null;
+
+        // A stored outcome: closed stays closed; a stop for a person (lapsed, wrong name, not
+        // offered now) holds until a newer ASIC run starts.
+        if (source.Outcome is { } outcome)
+        {
+            var stage = StageOf(outcome);
+            var newerRun = Latest(attempts) is { } last && source.OutcomeAt is { } decided && last.InitiatedAt > decided;
+            if (stage == RenewalOrderStage.Closed || !newerRun)
+                return new(stage, outcome,
+                    NextActionAt: stage == RenewalOrderStage.Waiting ? source.OutcomeAt + RecheckNotOffered : null,
+                    Note: source.Evidence, CurrentAttemptId: current?.Id ?? Latest(attempts)?.Id);
+        }
 
         // Settled outside Renewtron (the old "handled"), on the paying record or its last run.
         var handledAt = source.HandledAt ?? current?.HandledAt;

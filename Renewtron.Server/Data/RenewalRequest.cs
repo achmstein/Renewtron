@@ -39,7 +39,7 @@ public class RenewalRequest
 
     /// <summary>
     /// Settled outside Renewtron (renewed by hand at ASIC, refunded, not renewing): off every work
-    /// queue. HandledNote says why when Renewtron marked it itself (see RenewedElsewhereService).
+    /// queue. HandledNote says why when Renewtron marked it itself (the old renewed-elsewhere cleanup; now the order's Outcome).
     /// </summary>
     public DateTime? HandledAt { get; set; }
     public string? HandledNote { get; set; }

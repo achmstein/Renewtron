@@ -261,11 +261,6 @@ public sealed class OntraportSalesModule : ICarterModule
             });
         });
 
-        // One-off cleanup of old records: marks handled the failed sales and renewals whose name ASIC
-        // still lists as registered well after it was due (renewed by hand). dryRun (the default) only counts.
-        group.MapPost("/renewed-elsewhere", async (IRenewedElsewhereService service, bool dryRun = true, CancellationToken ct = default) =>
-            Results.Ok(await service.MarkAsync(dryRun, ct)));
-
         // Puts back on the work queues a sale the old-records cleanup marked handled (and its renewal).
         group.MapDelete("/{id:guid}/handled", async (Guid id, ApplicationDbContext db) =>
         {

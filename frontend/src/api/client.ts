@@ -133,6 +133,19 @@ export interface RenewalOrderRow {
   renewedAt: string | null
   canRetry: boolean
 }
+/** How a paid renewal ended (or why it stopped), when a person or Renewtron's ASIC check decided it. */
+export interface RenewalOrderDecision {
+  outcome: string | null
+  at: string | null
+  /** The admin's email, or "ASIC check". */
+  by: string | null
+  evidence: string | null
+  evidenceSource: 'AsicRegister' | 'AsicRenewalPage' | 'Staff' | 'Ontraport' | null
+  evidenceAt: string | null
+  reference: string | null
+  asicCheckedAt: string | null
+}
+
 export interface RenewalOrderAttempt {
   id: string; status: string; errorCategory: string | null; failedAtStep: string | null; errorMessage: string | null
   initiatedAt: string; lastAttemptAt: string | null; completedAt: string | null; nextRetryAt: string | null
@@ -1190,8 +1203,20 @@ export const api = {
       client: { id: string; fullName: string } | null
       source: { label: string; to: string }
       attempts: RenewalOrderAttempt[]
+      decision: RenewalOrderDecision
+      visit: { id: string; at: string } | null
+      canFixName: boolean
     }>(`/api/admin/renewal-orders/${id}`),
     retryRenewalOrder: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/retry`, { method: 'POST' }),
+    /** Asks ASIC about one paid renewal now (Renewtron's own check) and records what it says. */
+    checkRenewalOrderAtAsic: (id: string) =>
+      apiFetch<{ orderId: string; businessName: string; outcome: string | null; evidence: string }>(`/api/admin/renewal-orders/${id}/check-asic`, { method: 'POST' }),
+    /** A person's decision on how a paid renewal ends, with what it rests on. */
+    setRenewalOrderOutcome: (id: string, body: { outcome: string; note?: string; reference?: string }) =>
+      apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/outcome`, { method: 'POST', body: JSON.stringify(body) }),
+    reopenRenewalOrder: (id: string) => apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/reopen`, { method: 'POST' }),
+    fixRenewalOrderName: (id: string, businessName: string) =>
+      apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/fix-name`, { method: 'POST', body: JSON.stringify({ businessName }) }),
     /** The client a record belongs to; 404 (thrown) when it isn't on one yet. */
     clientLookup: (kind: 'lead' | 'renewal' | 'sale' | 'keyRequest' | 'keyLetter', id: string) =>
       apiFetch<{ id: string; fullName: string; possibleDuplicate: boolean }>(`/api/admin/clients/lookup?kind=${kind}&id=${encodeURIComponent(id)}`),

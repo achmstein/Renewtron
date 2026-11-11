@@ -129,7 +129,7 @@ builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddScoped<EmailMaintenance>();
 builder.Services.AddScoped<ILeadEmailService, LeadEmailService>();
 builder.Services.AddScoped<IBusinessNameFallbackService, LocalBusinessNameService>();
-builder.Services.AddScoped<IRenewedElsewhereService, RenewedElsewhereService>();
+builder.Services.AddScoped<IAsicCheckService, AsicCheckService>();
 builder.Services.AddScoped<IRenewalOrderService, RenewalOrderService>();
 builder.Services.AddHttpClient<IBusinessNameImportService, BusinessNameImportService>(client =>
 {
@@ -399,6 +399,15 @@ RecurringJob.AddOrUpdate<Renewtron.Services.Registration.IBusinessNameRegistrati
     "registration-asic-check",
     service => service.CheckAsicAsync(),
     "20 */2 * * *");
+
+// Renewtron's own ASIC check of unfinished paid renewals: the register file (imported at 03:00)
+// settles renewed-elsewhere and lapsed names; stuck or overdue ones are also asked about on ASIC's
+// renewal page, at most weekly each.
+RecurringJob.AddOrUpdate<IAsicCheckService>(
+    AsicCheckService.RecurringJobId,
+    service => service.CheckAllAsync(false, CancellationToken.None),
+    "0 4 * * *",
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time") });
 
 // Keeps the paid-renewal records (RenewalOrders) in step with the pipeline.
 RecurringJob.AddOrUpdate<IRenewalOrderService>(

@@ -16,11 +16,11 @@ public static class WorkQueues
 
     /// <summary>Paid renewals to look up at ASIC before anything else: ASIC may hold our money, or doesn't list the name.</summary>
     public static readonly RenewalOrderReason[] OrderCheckFirst =
-        [RenewalOrderReason.VerifyPaymentAtAsic, RenewalOrderReason.NameNotFound, RenewalOrderReason.AsicRefused];
+        [RenewalOrderReason.VerifyPaymentAtAsic, RenewalOrderReason.NameNotFound, RenewalOrderReason.NameMismatch, RenewalOrderReason.AsicRefused];
 
-    /// <summary>Paid renewals waiting on a decision: renew anyway, or refund.</summary>
+    /// <summary>Paid renewals waiting on a decision: renew anyway, refund, or (lapsed) offer to register it again.</summary>
     public static readonly RenewalOrderReason[] OrderDecide =
-        [RenewalOrderReason.BelowMinimumFee, RenewalOrderReason.Ineligible, RenewalOrderReason.TooLate];
+        [RenewalOrderReason.BelowMinimumFee, RenewalOrderReason.Ineligible, RenewalOrderReason.TooLate, RenewalOrderReason.Lapsed];
 
     /// <summary>A paid renewal stopped for a person (<see cref="RenewalOrderStage.NeedsPerson"/>) in one of the groups above.</summary>
     public static IQueryable<RenewalOrder> OrdersIn(this IQueryable<RenewalOrder> q, RenewalOrderReason[] reasons) =>
