@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, RefreshCw, Undo2 } from 'lucide-react'
+import { Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { pageClass, StatusPill } from './_ui'
@@ -122,6 +122,9 @@ export default function RenewalDetails() {
     )
   }
 
+  // A run is one try at ASIC for a paid renewal: it's shown, open, on the renewal's own page.
+  if (loaded?.order) return <Navigate to={`/admin/renewal-orders/${loaded.order.id}?run=${loaded.id}`} replace />
+
   const status = statusFor(data)
   const retryButton = (
     <Button size="sm" onClick={retry} disabled={retryMutation.isPending}>
@@ -153,17 +156,6 @@ export default function RenewalDetails() {
         here={`ASIC run of ${new Date(data.initiatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`}
       />
 
-      {data.order ? (
-        // A run is one try at ASIC for a paid renewal: the renewal is where it's worked.
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-          <span className="min-w-0">
-            One ASIC run for the paid renewal of <span className="font-medium">{data.businessName}</span>.{' '}
-            <span className="text-muted-foreground">Its story, its other runs and every action are on the paid renewal.</span>
-          </span>
-          <Button asChild size="sm"><Link to={`/admin/renewal-orders/${data.order.id}`}><ArrowLeft />Open the paid renewal</Link></Button>
-        </div>
-      ) : null}
-
       <RecordHeader
         title={`ASIC run: ${headline(data)}`}
         sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.dueDate ? <> · due <DueIn at={data.dueDate} /></> : null} · started <When at={data.initiatedAt} /></>}
@@ -175,8 +167,8 @@ export default function RenewalDetails() {
       {/* What ASIC did on this run: the step, the error, the references. */}
       <AsicDid d={data} />
 
-      {/* A run with no paid renewal (a test, an old manual run) tells its own story. */}
-      {data.order ? null : <JourneyTimeline kind="run" id={id} className="mt-6" />}
+      {/* Only runs with no paid renewal (a test, an old manual run) get this page: it tells their story. */}
+      <JourneyTimeline kind="run" id={id} className="mt-6" />
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who it’s for">
@@ -361,6 +353,69 @@ function AsicDid({ d }: { d: Detail }) {
         ) : null}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * One ASIC run, opened in place on its paid renewal's page: what ASIC did, who it was for, how it
+ * was paid, and the run's own button (BPAY paid at the bank).
+ */
+export function RunDetail({ id }: { id: string }) {
+  const queryClient = useQueryClient()
+  const { data, isPending } = useQuery({
+    queryKey: ['admin-renewal', id],
+    queryFn: () => api.admin.renewal(id),
+    refetchInterval: (q) => (q.state.data?.status === 'Processing' || q.state.data?.status === 'Pending' ? 3000 : false),
+  })
+  const invalidate = () => void queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && q.queryKey[0].startsWith('admin-') })
+  const bpay = useMutation({ mutationFn: (paid: boolean) => api.admin.markBpayPaid(id, paid), onSettled: invalidate })
+  const markBpay = (paid: boolean) => void sileo.promise(bpay.mutateAsync(paid), {
+    loading: { title: paid ? 'Marking BPAY paid…' : 'Undoing…' },
+    success: () => ({ title: paid ? 'Marked BPAY paid.' : 'Marked BPAY unpaid.' }),
+    error: (e) => ({ title: 'Couldn’t update it', description: e instanceof Error ? e.message : undefined }),
+  }).catch(() => {})
+
+  if (isPending) return <p className="border-t px-4 py-3 text-sm text-muted-foreground sm:px-6"><Loader2 className="mr-2 inline size-4 animate-spin" />Loading the run…</p>
+  if (!data) return <p className="border-t px-4 py-3 text-sm text-destructive sm:px-6">The run couldn’t be loaded.</p>
+  const failed = data.status === 'Failed'
+  return (
+    <div className="space-y-4 border-t bg-muted/20 px-4 py-4 sm:px-6">
+      <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+        <DetailRow label="Tries" value={`${data.attemptCount || 1}${data.lastAttemptAt ? `, last ${fmtDateTime(data.lastAttemptAt)}` : ''}${data.cardFailureCount ? ` · card declined ${data.cardFailureCount}×` : ''}`} />
+        {data.completedAt ? <DetailRow label="Lodged" value={fmtDateTime(data.completedAt)} /> : null}
+        {failed && data.failedAtStep ? <DetailRow label="Stopped at" value={data.failedAtStep} /> : null}
+        {failed && data.nextRetryAt ? <DetailRow label="Tries again" value={fmtDateTime(data.nextRetryAt)} /> : null}
+        {data.transactionReference ? <DetailRow label="ASIC reference" value={data.transactionReference} mono /> : null}
+        {data.bpayReference ? (
+          <DetailRow label="BPAY bill" value={
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-caption">{data.bpayBillerCode ?? '—'} · {data.bpayReference}</span>
+              {data.bpayPaidAt
+                ? <><StatusPill tone="emerald">Paid</StatusPill><span className="text-caption text-muted-foreground"><When at={data.bpayPaidAt} /></span></>
+                : data.bpayTransferUnderWay ? <StatusPill tone="indigo">Airwallex paying</StatusPill> : <StatusPill tone="red">To pay</StatusPill>}
+              {data.bpayTransferUnderWay ? null : (
+                <Button size="sm" variant={data.bpayPaidAt ? 'ghost' : 'outline'} className="h-6 px-2 text-xs" disabled={bpay.isPending} onClick={() => markBpay(!data.bpayPaidAt)}>
+                  {data.bpayPaidAt ? 'Undo' : 'Paid at the bank'}
+                </Button>
+              )}
+            </span>
+          } />
+        ) : null}
+        <DetailRow label="Client paid" value={data.paymentType === 'External'
+          ? <>{fmtMoney2(data.amount)} in {data.sale ? 'Ontraport' : 'another system'}</>
+          : <>{fmtMoney2(data.amount)} by card{data.stripePayment?.cardLast4 ? ` (${data.stripePayment.cardBrand ?? ''} ending ${data.stripePayment.cardLast4})` : ''}</>} />
+        <DetailRow label="Email" value={data.email ? <a href={`mailto:${data.email}`} className="break-all text-link hover:underline">{data.email}</a> : '—'} />
+        <DetailRow label="Mobile" value={data.mobileNumber ? <a href={`tel:${data.mobileNumber}`} className="text-link hover:underline">{data.mobileNumber}</a> : '—'} />
+        <DetailRow label="Date of birth" value={data.dateOfBirth ? fmtDob(data.dateOfBirth) : '—'} />
+        <DetailRow label="ASIC account no." value={data.accountNumber} mono />
+      </dl>
+      {data.errorMessage ? (
+        <div>
+          <div className="text-caption text-muted-foreground">{failed ? 'What ASIC said' : 'Last error'}</div>
+          <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-background p-3 text-caption">{data.errorMessage}</pre>
+        </div>
+      ) : null}
+    </div>
   )
 }
 

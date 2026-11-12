@@ -1,5 +1,6 @@
-import { type ReactNode } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api, type RenewalOrderAttempt, type RenewalOrderDecision, type RenewalOrderRow } from '../api/client'
 import { Status, inSentence, orderStatus, renewalStatus } from './_status'
@@ -8,6 +9,8 @@ import { actionsFor, OrderActionButtons, OrderActionsProvider } from './_orderAc
 import { DueIn, When } from './_rows'
 import { NextStep, RecordCrumbs, RecordHeader, TechnicalDetail, DetailRow } from './_record'
 import { JourneyTimeline } from './_journey'
+import { RunDetail } from './RenewalDetails'
+import { cn } from '@/lib/utils'
 import { fmtDateTime, fmtMoney2, formatAbn } from './_utils'
 import { Skeletonizer } from '@/components/skeletonizer'
 import { sample } from '@/components/skeleton-samples'
@@ -51,6 +54,9 @@ const EVIDENCE_FROM: Record<NonNullable<RenewalOrderDecision['evidenceSource']>,
 
 export default function RenewalOrderDetails() {
   const { id } = useParams()
+  // ?run=… opens that ASIC run in place: links to a run land here.
+  const [searchParams] = useSearchParams()
+  const openRun = searchParams.get('run')
   const { data: loaded, isPending, isError } = useQuery({
     queryKey: ['admin-renewal-order', id],
     queryFn: () => api.admin.renewalOrder(id!),
@@ -103,7 +109,7 @@ export default function RenewalOrderDetails() {
         <CardContent className="p-0">
           {data.attempts.length === 0
             ? <p className="px-4 py-4 text-sm text-muted-foreground sm:px-6">No renewal started at ASIC yet.</p>
-            : data.attempts.map((a) => <AttemptRow key={a.id} a={a} />)}
+            : data.attempts.map((a) => <AttemptRow key={a.id} a={a} startOpen={!isPending && (openRun ? openRun === a.id : a.current)} focus={!isPending && openRun === a.id} />)}
         </CardContent>
       </Card>
 
@@ -205,17 +211,36 @@ function AsicSaid({ d }: { d: RenewalOrderDecision }) {
 
 
 
-function AttemptRow({ a }: { a: RenewalOrderAttempt }) {
+/**
+ * One ASIC run, as a line that opens in place: what ASIC did, who it was for, how it was paid, and
+ * the BPAY button. The latest run (or the one a link asked for, ?run=…) starts open.
+ */
+function AttemptRow({ a, startOpen, focus }: { a: RenewalOrderAttempt; startOpen: boolean; focus: boolean }) {
+  const [open, setOpen] = useState(startOpen)
+  const [wasAsked, setWasAsked] = useState(startOpen)
+  // A link to this run opens it and brings it into view.
+  if (startOpen !== wasAsked) {
+    setWasAsked(startOpen)
+    if (startOpen) setOpen(true)
+  }
+  useEffect(() => {
+    if (focus) requestAnimationFrame(() => document.getElementById(`run-${a.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [focus, a.id])
   return (
-    <Link to={`/admin/renewals/${a.id}`} className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 first:border-t-0 hover:bg-muted/50 sm:px-6">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-          <Status className="shrink-0" entry={renewalStatus(a)} />
-          <span className="text-muted-foreground">started <When at={a.initiatedAt} /> · {a.attemptCount || 1} run{a.attemptCount === 1 ? '' : 's'} · pays by {a.paysBy}</span>
-          {a.current ? <span className="text-caption text-muted-foreground">(current)</span> : null}
+    <div id={`run-${a.id}`} className="border-t first:border-t-0">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50 sm:px-6">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <Status className="shrink-0" entry={renewalStatus(a)} />
+            <span className="text-muted-foreground">started <When at={a.initiatedAt} /> · {a.attemptCount || 1} {a.attemptCount === 1 ? 'try' : 'tries'} · pays by {a.paysBy}</span>
+            {a.current ? <span className="text-caption text-muted-foreground">(latest)</span> : null}
+          </div>
+          {a.errorMessage && !open ? <div className="mt-0.5 truncate text-caption text-muted-foreground" title={a.errorMessage}>{a.failedAtStep ? `${a.failedAtStep}: ` : ''}{a.errorMessage}</div> : null}
         </div>
-        {a.errorMessage ? <div className="mt-0.5 truncate text-caption text-muted-foreground" title={a.errorMessage}>{a.failedAtStep ? `${a.failedAtStep}: ` : ''}{a.errorMessage}</div> : null}
-      </div>
-    </Link>
+        <ChevronRight aria-hidden className={cn('size-4 shrink-0 text-muted-foreground transition-transform group-hover:text-foreground', open && 'rotate-90')} />
+      </button>
+      {open ? <RunDetail id={a.id} /> : null}
+    </div>
   )
 }

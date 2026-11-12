@@ -71,6 +71,8 @@ export default function LeadDetails() {
 
   const latest = [...data.renewalRequests].sort((a, b) => b.initiatedAt.localeCompare(a.initiatedAt))[0]
   const names = data.searchLog?.results ?? []
+  // What they paid for: each paid renewal is worked on its own page, which tells this visit too.
+  const paid = [...new Map(data.renewalRequests.filter((r) => r.orderId).map((r) => [r.orderId!, r])).values()]
 
   return (
     <Skeletonizer loading={isPending}>
@@ -85,7 +87,22 @@ export default function LeadDetails() {
         {nextStep(data, latest)}
       </RecordHeader>
 
-      <JourneyTimeline kind="lead" id={id} className="mt-6" />
+      {paid.length > 0 ? (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          <span className="min-w-0">
+            {data.fullName || 'They'} paid for {paid.length === 1 ? <span className="font-medium">{paid[0].businessName ?? 'a name'}</span> : `${paid.length} names`}.{' '}
+            <span className="text-muted-foreground">The renewal, its story and its actions are on the paid renewal{paid.length === 1 ? '' : 's'}.</span>
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {paid.map((r) => (
+              <Button key={r.orderId} asChild size="sm"><Link to={`/admin/renewal-orders/${r.orderId}`}>{paid.length === 1 ? 'Open the paid renewal' : `Open ${r.businessName ?? 'renewal'}`}</Link></Button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        // A visit that didn't pay has no other page: its story is told here.
+        <JourneyTimeline kind="lead" id={id} className="mt-6" />
+      )}
 
 
       <Card className="mt-6 gap-0 py-0">
