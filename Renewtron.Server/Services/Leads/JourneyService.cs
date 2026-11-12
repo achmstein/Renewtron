@@ -9,7 +9,11 @@ public enum JourneyRecord { Lead, Search, Run, Order, Sale, Email }
 
 /// <summary>One thing that happened, in a sentence, on the record it happened to.</summary>
 /// <param name="Meaning">How it reads: action (a person must act), waiting, working, done, quiet (the admin's status colours).</param>
-public sealed record JourneyEvent(DateTime At, string Text, string? Detail, string Meaning, JourneyRecord Record, Guid RecordId);
+/// <param name="Group">Steps that tell one thing together (a visitor going through the renewal page): the admin folds a
+/// run of them under this heading, each step still there when opened.</param>
+/// <param name="Next">For a line that needs a person: what to do about it, in a sentence.</param>
+public sealed record JourneyEvent(DateTime At, string Text, string? Detail, string Meaning, JourneyRecord Record, Guid RecordId,
+    string? Group = null, string? Next = null);
 
 /// <summary>One fact about a record, shown when a line about it is opened.</summary>
 public sealed record JourneyFact(string Label, string Value, bool Mono = false);
@@ -131,9 +135,9 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
     private async Task<(List<JourneyEvent> Events, List<JourneyCard> Cards)> DescribeAsync(Gathered g, CancellationToken ct)
     {
         var events = new List<JourneyEvent>();
-        void Add(DateTime? at, string text, string meaning, JourneyRecord record, Guid id, string? detail = null)
+        void Add(DateTime? at, string text, string meaning, JourneyRecord record, Guid id, string? detail = null, string? group = null, string? next = null)
         {
-            if (at is { } t) events.Add(new(DateTime.SpecifyKind(t, DateTimeKind.Utc), text, string.IsNullOrWhiteSpace(detail) ? null : detail.Trim(), meaning, record, id));
+            if (at is { } t) events.Add(new(DateTime.SpecifyKind(t, DateTimeKind.Utc), text, string.IsNullOrWhiteSpace(detail) ? null : detail.Trim(), meaning, record, id, group, next));
         }
         var cards = new List<JourneyCard>();
         void Card(JourneyRecord record, Guid id, string title, IEnumerable<JourneyFact?> facts, params string?[] actions) =>
@@ -142,21 +146,33 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 actions.OfType<string>().ToList()));
         static JourneyFact? Fact(string label, string? value, bool mono = false) => value is null ? null : new(label, value.Trim(), mono);
 
+        var leadIds = g.Leads.ToList();
+        var leads = await db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id)).ToListAsync(ct);
+
         var searchIds = g.Searches.ToList();
         var searches = await db.SearchLogs.AsNoTracking().Include(s => s.Results).Where(s => searchIds.Contains(s.Id)).ToListAsync(ct);
         foreach (var s in searches)
         {
-            var who = s.InitiatedBy switch { SearchInitiator.Admin => "Staff looked up", SearchInitiator.System => "Renewtron looked up", _ => "The visitor looked up" };
+            // A visitor's lookup is the first step of their visit: told under their name, with the visit's other steps.
+            var lead = leads.FirstOrDefault(l => l.SearchLogId == s.Id);
+            var visitor = s.InitiatedBy == SearchInitiator.Customer;
+            var who = s.InitiatedBy switch
+            {
+                SearchInitiator.Admin => "Staff looked up",
+                SearchInitiator.System => "Renewtron looked up",
+                _ => lead is null || string.IsNullOrWhiteSpace(lead.FullName) ? "The visitor looked up" : $"{FirstName(lead.FullName)} looked up",
+            };
+            var group = visitor ? Visit(lead) : null;
             if (s.Success)
             {
                 var names = s.Results.Select(r => r.BusinessName).ToList();
                 var found = names.Count == 0 ? "no business names" : $"{Plural(names.Count, "name")}: {Join(names)}";
-                Add(s.SearchedAt, $"{who} ABN {s.Abn} at ASIC: {found}", "done", JourneyRecord.Search, s.Id);
+                Add(s.SearchedAt, $"{who} ABN {s.Abn} at ASIC: {found}", "done", JourneyRecord.Search, s.Id, group: group);
             }
             else
-                Add(s.SearchedAt, $"{who} ABN {s.Abn}, but ASIC didn't answer", "quiet", JourneyRecord.Search, s.Id, s.ErrorMessage);
+                Add(s.SearchedAt, $"{who} ABN {s.Abn}, but ASIC didn't answer", "quiet", JourneyRecord.Search, s.Id, s.ErrorMessage, group);
             if (s.VerifiedAt is { } v)
-                Add(v, "Renewtron checked the lookup with ASIC again", string.IsNullOrEmpty(s.VerificationError) ? "done" : "quiet", JourneyRecord.Search, s.Id, s.VerificationError);
+                Add(v, "Renewtron checked the lookup with ASIC again", string.IsNullOrEmpty(s.VerificationError) ? "done" : "quiet", JourneyRecord.Search, s.Id, s.VerificationError, group);
 
             Card(JourneyRecord.Search, s.Id, $"Lookup of ABN {s.Abn}",
             [
@@ -167,14 +183,14 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             ]);
         }
 
-        var leadIds = g.Leads.ToList();
-        foreach (var l in await db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id)).ToListAsync(ct))
+        foreach (var l in leads)
         {
-            Add(l.CreatedAt, $"{(string.IsNullOrWhiteSpace(l.FullName) ? "The visitor" : l.FullName)} gave their details for ABN {l.Abn} ({l.Email})", "done", JourneyRecord.Lead, l.Id);
-            Add(l.NamesShownAt, $"{FirstName(l.FullName)} saw the names to renew", "done", JourneyRecord.Lead, l.Id);
-            Add(l.ReachedPaymentAt, $"{FirstName(l.FullName)} opened the payment page", "done", JourneyRecord.Lead, l.Id);
+            var group = Visit(l);
+            Add(l.CreatedAt, $"{(string.IsNullOrWhiteSpace(l.FullName) ? "The visitor" : PersonName(l.FullName))} gave their details for ABN {l.Abn} ({l.Email})", "done", JourneyRecord.Lead, l.Id, group: group);
+            Add(l.NamesShownAt, $"{FirstName(l.FullName)} saw the names to renew", "done", JourneyRecord.Lead, l.Id, group: group);
+            Add(l.ReachedPaymentAt, $"{FirstName(l.FullName)} opened the payment page", "done", JourneyRecord.Lead, l.Id, group: group);
 
-            Card(JourneyRecord.Lead, l.Id, string.IsNullOrWhiteSpace(l.FullName) ? "Lead" : $"Lead: {l.FullName}",
+            Card(JourneyRecord.Lead, l.Id, string.IsNullOrWhiteSpace(l.FullName) ? "Lead" : $"Lead: {PersonName(l.FullName)}",
             [
                 Fact("Email", l.Email),
                 Fact("Mobile", l.MobileNumber, mono: true),
@@ -188,7 +204,8 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
         {
             Add(s.SyncedAt, $"{s.ContactName} paid ${s.AmountPaid:0.00} in Ontraport to renew {s.BusinessName} for {Plural(s.RenewalYears, "year")}", "done", JourneyRecord.Sale, s.Id);
             if (!string.IsNullOrEmpty(s.ErrorMessage))
-                Add(s.ProcessedAt ?? s.SyncedAt, "The Ontraport sale couldn't be renewed as it stood", "action", JourneyRecord.Sale, s.Id, s.ErrorMessage);
+                Add(s.ProcessedAt ?? s.SyncedAt, "The Ontraport sale couldn't be renewed as it stood", "action", JourneyRecord.Sale, s.Id, s.ErrorMessage,
+                    next: "Open the paid renewal to decide: renew it by hand, or refund.");
             Add(s.HandledAt, "Staff marked the Ontraport sale handled", "quiet", JourneyRecord.Sale, s.Id, s.HandledNote);
 
             Card(JourneyRecord.Sale, s.Id, $"Ontraport sale: {s.BusinessName}",
@@ -239,13 +256,17 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
         foreach (var r in runs)
         {
             var name = r.SearchResult.BusinessName;
+            // A website renewal is set up when the visitor opens the payment page, but nothing goes to ASIC until
+            // the card is paid: the renewal starts after the payment, never before it.
+            var started = r.InitiatedAt;
             if (r.StripePayment?.PaidAt is { } paid)
             {
                 var card = r.StripePayment.CardLast4 is { Length: > 0 } last4 ? $" ({r.StripePayment.CardBrand} ending {last4})" : "";
                 Add(paid, $"Paid ${r.Amount:0.00} by card{card} to renew {name} for {Plural(r.RenewalYears, "year")}", "done", JourneyRecord.Run, r.Id);
+                if (paid > started) started = paid;
             }
 
-            Add(r.InitiatedAt, $"Renewtron started renewing {name} at ASIC{(r.IsTest ? " (test: not sent to ASIC)" : "")}", "working", JourneyRecord.Run, r.Id);
+            Add(started, $"Renewtron started renewing {name} at ASIC{(r.IsTest ? " (test: not sent to ASIC)" : "")}", "working", JourneyRecord.Run, r.Id);
 
             // Airwallex may already be paying the bill: then it's in hand, not waiting on anyone.
             var paying = BpayPaymentService.IsTransferUnderWay(r.AirwallexTransferStatus, r.BpayPaidAt);
@@ -268,7 +289,8 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 Add(bpayPaid, $"Paid ASIC's BPAY bill for {name}{(r.BpayAmount is { } a ? $": ${a:0.00}" : "")}", "done", JourneyRecord.Run, r.Id,
                     r.AirwallexTransferId is { Length: > 0 } transfer ? $"Airwallex transfer {transfer}" : null);
             else if (!paying && r.BpayPaymentError is { Length: > 0 } bpayError)
-                Add(r.LastAttemptAt ?? r.InitiatedAt, $"Paying ASIC's BPAY bill for {name} failed{(r.BpayPaymentAttempts > 1 ? $" ({Plural(r.BpayPaymentAttempts, "try", "tries")})" : "")}", "action", JourneyRecord.Run, r.Id, bpayError);
+                Add(r.LastAttemptAt ?? r.InitiatedAt, $"Paying ASIC's BPAY bill for {name} failed{(r.BpayPaymentAttempts > 1 ? $" ({Plural(r.BpayPaymentAttempts, "try", "tries")})" : "")}", "action", JourneyRecord.Run, r.Id, bpayError,
+                    next: "Pay the bill at the bank, then mark it paid here.");
 
             if (r.Status == RenewalStatus.Failed)
             {
@@ -278,7 +300,10 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 if (r.NextRetryAt is { } next && r.HandledAt == null)
                     Add(at, $"Not renewed yet{tries}; Renewtron tries again {Sydney(next):d MMM}", "waiting", JourneyRecord.Run, r.Id, r.ErrorMessage);
                 else
-                    Add(at, $"Renewing {name} at ASIC failed{where}{tries}", r.HandledAt == null ? "action" : "quiet", JourneyRecord.Run, r.Id, r.ErrorMessage);
+                    Add(at, $"Renewing {name} at ASIC failed{where}{tries}", r.HandledAt == null ? "action" : "quiet", JourneyRecord.Run, r.Id, r.ErrorMessage,
+                        next: RenewalRetry.Check(r) == null
+                            ? "Retry it, or renew it by hand at ASIC and close the paid renewal."
+                            : "Renew it by hand at ASIC, or refund, and close the paid renewal.");
             }
             else if (r.Status == RenewalStatus.Processing)
                 Add(r.LastAttemptAt ?? r.InitiatedAt, $"Renewing {name} at ASIC now", "working", JourneyRecord.Run, r.Id);
@@ -314,7 +339,8 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             var channel = m.Channel == OutboundChannel.Sms ? "Texted" : "Emailed";
             var what = m.Channel == OutboundChannel.Sms ? m.Template : $"\"{m.Subject}\"";
             if (m.Status == OutboundStatus.Failed)
-                Add(m.LastAttemptAt ?? m.CreatedAt, $"{channel} {m.Recipient} {what}, but it wasn't sent", "action", JourneyRecord.Email, m.Id, m.ErrorMessage);
+                Add(m.LastAttemptAt ?? m.CreatedAt, $"{channel} {m.Recipient} {what}, but it wasn't sent", "action", JourneyRecord.Email, m.Id, m.ErrorMessage,
+                    next: WhyNotSent(m.Channel, m.ErrorMessage));
             else
             {
                 var opened = m.OpenedAt != null ? " (opened)" : m.DeliveryStatus is { Length: > 0 } d ? $" ({Words(d).ToLowerInvariant()})" : "";
@@ -362,7 +388,32 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
     private static string Plural(int n, string one, string? many = null) => $"{n} {(n == 1 ? one : many ?? one + "s")}";
 
     private static string FirstName(string fullName) =>
-        fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "The visitor";
+        PersonName(fullName).Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "The visitor";
+
+    /// <summary>"DEBORAH ROWLAND" or "deborah rowland" → "Deborah Rowland"; a name typed in mixed case is kept as typed.</summary>
+    public static string PersonName(string fullName)
+    {
+        var name = Regex.Replace(fullName.Trim(), @"\s+", " ");
+        if (name.Any(char.IsUpper) && name.Any(char.IsLower)) return name;
+        return Regex.Replace(name.ToLowerInvariant(), @"(^|[\s\-'])\p{Ll}", m => m.Value.ToUpperInvariant());
+    }
+
+    /// <summary>The heading a visitor's steps fold under.</summary>
+    private static string Visit(Lead? lead) =>
+        lead is null || string.IsNullOrWhiteSpace(lead.FullName)
+            ? "The visitor went through the renewal page"
+            : $"{PersonName(lead.FullName)} went through the renewal page";
+
+    /// <summary>What to do about a message that wasn't sent. A refused key stops every email, not just this one.</summary>
+    public static string WhyNotSent(OutboundChannel channel, string? error)
+    {
+        var e = error ?? "";
+        if (channel == OutboundChannel.Email && (e.Contains("401") || e.Contains("403") || e.Contains("authorization grant", StringComparison.OrdinalIgnoreCase)))
+            return "SendGrid refused Renewtron's key, so no emails are going out. Put a working SendGrid key in Settings, then send it again.";
+        if (channel == OutboundChannel.Sms)
+            return "Check the mobile number; the text didn't reach them.";
+        return "Send it again; if it fails again, check the address.";
+    }
 
     private static readonly TimeZoneInfo SydneyZone = TimeZoneInfo.FindSystemTimeZoneById("AUS Eastern Standard Time");
     private static DateTime Sydney(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), SydneyZone);

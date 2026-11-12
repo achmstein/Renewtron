@@ -11,6 +11,10 @@ export interface JourneyEvent {
   meaning: 'action' | 'waiting' | 'working' | 'done' | 'quiet'
   record: JourneyRecord
   recordId: string
+  /** Steps told together (a visitor going through the renewal page): a run of them folds under this heading. */
+  group?: string | null
+  /** For a line that needs a person: what to do about it. */
+  next?: string | null
 }
 
 /** What staff can do to a record from the story, as the server allows it right now. */

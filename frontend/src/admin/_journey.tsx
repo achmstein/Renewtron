@@ -79,7 +79,7 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
     <Card className={cn('gap-0 py-0', className)}>
       <CardHeader className="gap-2 border-b py-4">
         <CardTitle>What happened</CardTitle>
-        {shown ? <Standing items={items} onReveal={reveal} /> : null}
+        {shown ? <Standing items={items} cards={cards} onReveal={reveal} /> : null}
       </CardHeader>
       <CardContent className="px-0 py-2">
         {!shown || isError ? (
@@ -91,6 +91,13 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
                 <li className="px-4 pt-3 pb-1 text-caption font-medium text-muted-foreground sm:px-6">{day}</li>
                 {segments(dayItems).map((seg) => seg.length > 1 && !unfolded[seg[0].key]
                   ? <Fold key={seg[0].key} items={seg} onOpen={() => setUnfolded((u) => ({ ...u, [seg[0].key]: true }))} />
+                  : seg.length > 1 && seg[0].e.group
+                    // An opened visit: its heading stays, to fold it again.
+                    ? [<FoldHeading key={`${seg[0].key}-h`} items={seg} onClose={() => setUnfolded((u) => ({ ...u, [seg[0].key]: false }))} />,
+                      ...seg.map((it) => (
+                        <Line key={it.key} it={it} open={isOpen(it)} onToggle={() => toggle(it)} indent
+                          card={cards.get(`${it.e.record}:${it.e.recordId}`)} here={it.e.record === kind && it.e.recordId === id} />
+                      ))]
                   : seg.map((it) => (
                     <Line key={it.key} it={it} open={isOpen(it)} onToggle={() => toggle(it)}
                       card={cards.get(`${it.e.record}:${it.e.recordId}`)} here={it.e.record === kind && it.e.recordId === id} />
@@ -104,21 +111,32 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
   )
 }
 
-/** Where things stand: what needs someone, or else the latest line that isn't just a note. */
-function Standing({ items, onReveal }: { items: Item[]; onReveal: (it: Item) => void }) {
+/**
+ * Where things stand: what needs someone (with what to do and the button to do it), or else the
+ * latest line that isn't just a note.
+ */
+function Standing({ items, cards, onReveal }: { items: Item[]; cards: Map<string, JourneyCard>; onReveal: (it: Item) => void }) {
   const needs = items.filter((it) => it.e.meaning === 'action')
   if (needs.length > 0) {
     return (
       <div className="space-y-1">
         <p className="text-sm font-medium text-destructive">{needs.length === 1 ? 'Needs you' : `${needs.length} things need you`}</p>
-        <ul className="space-y-0.5">
-          {needs.map((it) => (
-            <li key={it.key}>
-              <button type="button" onClick={() => onReveal(it)} className="flex items-start gap-2 text-left text-sm hover:underline">
-                <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', DOT.action)} />{it.e.text}
-              </button>
-            </li>
-          ))}
+        <ul className="space-y-3">
+          {needs.map((it) => {
+            const card = cards.get(`${it.e.record}:${it.e.recordId}`)
+            return (
+              <li key={it.key} className="flex items-start gap-2 text-sm">
+                <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', DOT.action)} />
+                <div className="min-w-0 space-y-1.5">
+                  <button type="button" onClick={() => onReveal(it)} className="text-left hover:underline">{it.e.text}</button>
+                  {it.e.next ? <p className="text-muted-foreground">{it.e.next}</p> : null}
+                  {card && card.actions.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">{card.actions.map((a) => <ActionButton key={a} action={a} card={card} />)}</div>
+                  ) : null}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       </div>
     )
@@ -142,12 +160,13 @@ function standing(items: Item[]): Item | undefined {
 
 const ROW = 'flex w-full items-start gap-3 px-4 py-2 text-left sm:px-6'
 
-function Line({ it, open, onToggle, card, here }: { it: Item; open: boolean; onToggle: () => void; card: JourneyCard | undefined; here: boolean }) {
+function Line({ it, open, onToggle, card, here, indent }: { it: Item; open: boolean; onToggle: () => void; card: JourneyCard | undefined; here: boolean; indent?: boolean }) {
   const { e } = it
   return (
     <li id={`journey-${it.key}`} className={cn(open && 'bg-muted/30')}>
       <button type="button" onClick={onToggle} aria-expanded={open} className={cn(ROW, 'group transition-colors hover:bg-muted/50')}>
         <span className="w-16 shrink-0 pt-px text-caption text-muted-foreground tabular-nums">{TIME.format(new Date(e.at))}</span>
+        {indent ? <span aria-hidden className="-my-2 w-px shrink-0 self-stretch bg-border" /> : null}
         <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', DOT[e.meaning])} />
         <span className={cn('min-w-0 flex-1 text-sm', e.meaning === 'quiet' && 'text-muted-foreground')}>{e.text}</span>
         <ChevronRight aria-hidden className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:text-foreground', open && 'rotate-90')} />
@@ -228,30 +247,58 @@ function ActionButton({ action, card }: { action: JourneyAction; card: JourneyCa
   )
 }
 
-/** Quiet lines in a row, folded to one: they're the story's small print. */
+/**
+ * Lines folded to one. A visitor's steps fold under "Deborah Rowland went through the renewal page
+ * (4 steps)"; other runs of quiet lines are the story's small print. Every step is still there when
+ * it's shown.
+ */
 function Fold({ items, onOpen }: { items: Item[]; onOpen: () => void }) {
+  const group = items[0].e.group
   const messages = items.every((it) => it.e.record === 'email')
+  // A visit reads as what it reached; small print stays grey.
+  const meaning: Meaning = group ? items[items.length - 1].e.meaning : 'quiet'
   return (
     <li>
-      <button type="button" onClick={onOpen} className={cn(ROW, 'group text-muted-foreground transition-colors hover:bg-muted/50')}>
-        <span className="w-16 shrink-0 pt-px text-caption tabular-nums">{TIME.format(new Date(items[0].e.at))}</span>
-        <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', DOT.quiet)} />
+      <button type="button" onClick={onOpen} aria-expanded={false} className={cn(ROW, 'group transition-colors hover:bg-muted/50', !group && 'text-muted-foreground')}>
+        <span className="w-16 shrink-0 pt-px text-caption text-muted-foreground tabular-nums">{TIME.format(new Date(items[0].e.at))}</span>
+        <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', DOT[meaning])} />
         <span className="min-w-0 flex-1 text-sm">
-          {items.length} {messages ? 'messages sent' : 'smaller updates'}
-          <span className="hidden sm:inline"> · {items.map((it) => it.e.text).join(' · ')}</span>
+          {group
+            ? <>{group} <span className="text-muted-foreground">({items.length} steps)</span></>
+            : <>{items.length} {messages ? 'messages sent' : 'smaller updates'}<span className="hidden sm:inline"> · {items.map((it) => it.e.text).join(' · ')}</span></>}
         </span>
-        <span className="shrink-0 text-caption group-hover:text-foreground">Show</span>
+        <span className="shrink-0 text-caption text-muted-foreground group-hover:text-foreground">Show</span>
       </button>
     </li>
   )
 }
 
-/** A day's lines, with each run of two or more quiet ones kept together. */
+/** An opened visit's heading, to fold it again. */
+function FoldHeading({ items, onClose }: { items: Item[]; onClose: () => void }) {
+  return (
+    <li>
+      <button type="button" onClick={onClose} aria-expanded className={cn(ROW, 'group transition-colors hover:bg-muted/50')}>
+        <span className="w-16 shrink-0 pt-px text-caption text-muted-foreground tabular-nums">{TIME.format(new Date(items[0].e.at))}</span>
+        <span aria-hidden className={cn('mt-1.5 size-2 shrink-0 rounded-full', DOT[items[items.length - 1].e.meaning])} />
+        <span className="min-w-0 flex-1 text-sm">{items[0].e.group} <span className="text-muted-foreground">({items.length} steps)</span></span>
+        <span className="shrink-0 text-caption text-muted-foreground group-hover:text-foreground">Hide</span>
+      </button>
+    </li>
+  )
+}
+
+/**
+ * A day's lines, with runs kept together: a visitor's steps (the same group, none needing a person),
+ * and runs of two or more quiet ones.
+ */
 function segments(items: Item[]): Item[][] {
   const out: Item[][] = []
   for (const it of items) {
     const last = out[out.length - 1]
-    if (it.e.meaning === 'quiet' && last && last[0].e.meaning === 'quiet') last.push(it)
+    const head = last?.[0].e
+    const sameVisit = !!it.e.group && head?.group === it.e.group && it.e.meaning !== 'action'
+    const bothQuiet = !it.e.group && !head?.group && it.e.meaning === 'quiet' && head?.meaning === 'quiet'
+    if (last && (sameVisit || bothQuiet)) last.push(it)
     else out.push([it])
   }
   return out

@@ -77,7 +77,7 @@ public class JourneyTests
 
         Assert.Equal(
         [
-            "The visitor looked up ABN 49642383462 at ASIC: 2 names: SMITH PLUMBING, SMITH GAS",
+            "Jane looked up ABN 49642383462 at ASIC: 2 names: SMITH PLUMBING, SMITH GAS",
             "Jane Citizen gave their details for ABN 49642383462 (jane@example.com)",
             "Jane saw the names to renew",
             "Jane opened the payment page",
@@ -105,6 +105,54 @@ public class JourneyTests
         Assert.Equal((ids.RetryRun, "waiting", "Biller 17301, reference 8596799759492"), (bpay.RecordId, bpay.Meaning, bpay.Detail));
         Assert.All(events, e => Assert.Equal(DateTimeKind.Utc, e.At.Kind));
     }
+
+    [Fact]
+    public async Task A_visitors_steps_are_told_together_under_their_name()
+    {
+        var (db, ids) = Seed();
+        var events = (await Journey(db, JourneyRecord.Lead, ids.Lead))!.Events;
+
+        var visit = events.Where(e => e.Group != null).ToList();
+        Assert.Equal(4, visit.Count); // looked up, gave details, saw names, opened payment
+        Assert.All(visit, e => Assert.Equal("Jane Citizen went through the renewal page", e.Group));
+        Assert.DoesNotContain(events, e => e.Text.StartsWith("Paid") && e.Group != null);
+    }
+
+    [Fact]
+    public async Task A_website_renewal_starts_after_its_payment_even_when_set_up_before_it()
+    {
+        var (db, ids) = Seed();
+        var run = db.RenewalRequests.Single(r => r.Id == ids.FirstRun);
+        run.InitiatedAt = T0.AddMinutes(3); // set up when the payment page opened; paid at +4
+        db.SaveChanges();
+
+        var texts = (await Journey(db, JourneyRecord.Lead, ids.Lead))!.Events.Select(e => e.Text).ToList();
+        Assert.True(texts.IndexOf(texts.First(t => t.StartsWith("Paid $99.00 by card"))) < texts.IndexOf("Renewtron started renewing SMITH PLUMBING at ASIC"));
+    }
+
+    [Fact]
+    public async Task An_email_refused_for_a_bad_key_says_no_emails_are_going_out()
+    {
+        var (db, ids) = Seed();
+        db.OutboundMessages.Add(new OutboundMessage
+        {
+            Id = Guid.NewGuid(), LeadId = ids.Lead, Channel = OutboundChannel.Email, Template = "renewal_confirmation", Subject = "Confirmation", Recipient = "jane@example.com",
+            Status = OutboundStatus.Failed, CreatedAt = T0.AddMinutes(6), BodyHtml = "<p>hi</p>",
+            ErrorMessage = "SendGrid returned 401: The provided authorization grant is invalid, expired, or revoked",
+        });
+        db.SaveChanges();
+
+        var failed = Assert.Single((await Journey(db, JourneyRecord.Lead, ids.Lead))!.Events, e => e.Meaning == "action");
+        Assert.Contains("no emails are going out", failed.Next);
+        Assert.Contains("Settings", failed.Next);
+    }
+
+    [Theory]
+    [InlineData("DEBORAH ROWLAND", "Deborah Rowland")]
+    [InlineData("deborah  rowland", "Deborah Rowland")]
+    [InlineData("MARY-JANE O'BRIEN", "Mary-Jane O'Brien")]
+    [InlineData("Ian McDonald", "Ian McDonald")]
+    public void Names_typed_in_one_case_read_properly(string typed, string shown) => Assert.Equal(shown, JourneyService.PersonName(typed));
 
     [Fact]
     public async Task Someone_elses_lookup_is_another_story()

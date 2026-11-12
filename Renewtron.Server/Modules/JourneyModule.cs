@@ -28,6 +28,8 @@ public sealed class JourneyModule : ICarterModule
                         meaning = e.Meaning,
                         record = e.Record.ToString().ToLowerInvariant(),
                         recordId = e.RecordId,
+                        group = e.Group,
+                        next = e.Next,
                     }),
                     // What a line shows when it's opened: its record's key facts and what staff can do now.
                     records = journey.Records.Select(c => new
