@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { ClipboardCheck, Copy, ExternalLink, RotateCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type AsicKeyRequestDto } from '../api/client'
-import { ClientLink, Pagination, useDebouncedValue } from './_components'
+import { ClientLink, Pagination, usePageParam, useDebouncedValue } from './_components'
 import { Cell, EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status, statusLabel as vocabLabel } from './_status'
 import { fmtDateTime, relativeTime } from './_utils'
@@ -71,7 +71,7 @@ const SKELETON_STATS: Stats = {
 export default function AsicKeyRequests() {
   const [statuses, setStatusesRaw] = useState<string[]>([])
   const [searchInput, setSearchInputRaw] = useState('')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = usePageParam()
   const setStatuses = (v: string[]) => { setPage(1); setStatusesRaw(v) }
   const setSearchInput = (v: string) => { setPage(1); setSearchInputRaw(v) }
   const search = useDebouncedValue(searchInput, 300)

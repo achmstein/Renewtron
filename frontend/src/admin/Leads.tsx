@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { Check, Mail, PlusCircle, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
-import { DateRangeFilter, Pagination, useDebouncedValue } from './_components'
+import { DateRangeFilter, Pagination, usePageParam, useDebouncedValue } from './_components'
 import { Cell, EmptyState, FunnelPills, PageHeader, pageClass, RefreshButton, Stat, StatStrip, ViewSwitch, ViewToggle, type Tone } from './_ui'
 import { Lookups } from './Searches'
 import { LeadSentence, SentenceList } from './_sentences'
@@ -90,7 +90,7 @@ export default function Leads() {
 function LeadsList({ tabs }: { tabs: ReactNode }) {
   // Deep link from the dashboard ("?outcome=RenewalAvailable") seeds the facet on first render.
   const [searchParams] = useSearchParams()
-  const [page, setPage] = useState(1)
+  const [page, setPage] = usePageParam()
   // Every filter change goes back to page 1.
   const paged = <T,>(set: (v: T) => void) => (v: T) => { setPage(1); set(v) }
   const [outcomes, setOutcomesRaw] = useState<string[]>(() => searchParams.get('outcome')?.split(',').filter(Boolean) ?? [])

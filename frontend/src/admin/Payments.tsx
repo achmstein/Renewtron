@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { CalendarRange, CircleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
-import { ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { ErrorModal, Pagination, usePageParam, useDebouncedValue } from './_components'
 import { EmptyState, Field, pageClass, PageHeader, RefreshButton, Stat, StatStrip } from './_ui'
 import { Status } from './_status'
 import { fmtDate, fmtMoney0, fmtMoney2, fmtTime } from './_utils'
@@ -41,7 +41,7 @@ const SKELETON_ROWS = sampleRows<Payment>(8, (i) => ({
 const SKELETON_STATS: Stats = { succeededCount: 1240, succeededValue: 312400, failedCount: 86, succeeded30d: 112, succeededValue30d: 28400, failed30d: 9 }
 
 export default function Payments() {
-  const [page, setPage] = useState(1)
+  const [page, setPage] = usePageParam()
   const [searchInput, setSearchInput] = useState('')
   const search = useDebouncedValue(searchInput, 300)
   const [results, setResults] = useState<string[]>([])

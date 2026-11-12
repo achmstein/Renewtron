@@ -2,22 +2,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, type RenewalOrderRow } from '../api/client'
-import { Pagination, useDebouncedValue } from './_components'
+import { Pagination, usePageParam } from './_components'
 import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch, ViewToggle } from './_ui'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
 import { inSentence, orderStatus, Status } from './_status'
 import { fmtMoney0, fmtMoney2 } from './_utils'
 import { rememberQueue } from './_queue'
-import { BulkBar, OrderActionButtons, OrderActionsProvider, TabGuide } from './_orderActions'
+import { OrderActionButtons, OrderActionsProvider, TabGuide } from './_orderActions'
 import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { sample } from '@/components/skeleton-samples'
 import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Card } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { FacetedFilter } from '@/components/faceted-filter'
 import { X } from 'lucide-react'
-import { Input } from '@/components/ui/input'
 
 const PAGE_SIZE = 50
 
@@ -59,16 +57,8 @@ const VIEWS = [
   { value: 'Closed', label: 'Closed' },
 ]
 
-/** The table view's columns: a tick box, the same facts as a sentence, and the row's actions. */
-function columns(picked: Set<string>, toggle: (o: RenewalOrderRow) => void): DataTableColumn<RenewalOrderRow>[] {
-  return [
-    {
-      id: 'pick',
-      header: () => <span className="sr-only">Select</span>,
-      enableSorting: false,
-      meta: { className: 'w-8 pr-0' },
-      cell: ({ row }) => <Pick o={row.original} picked={picked.has(row.original.id)} onToggle={toggle} />,
-    },
+/** The table view's columns: the same facts as a sentence, and the row's actions. */
+const COLUMNS: DataTableColumn<RenewalOrderRow>[] = [
     {
       id: 'business',
       accessorKey: 'businessName',
@@ -130,24 +120,14 @@ function columns(picked: Set<string>, toggle: (o: RenewalOrderRow) => void): Dat
       meta: { className: 'text-right' },
       cell: ({ row }) => <div className="flex justify-end"><OrderActionButtons order={row.original} /></div>,
     },
-  ]
-}
-
-/** A row's tick box: pick it to act on it with others. */
-function Pick({ o, picked, onToggle }: { o: RenewalOrderRow; picked: boolean; onToggle: (o: RenewalOrderRow) => void }) {
-  return (
-    <Checkbox checked={picked} onCheckedChange={() => onToggle(o)} onClick={(e) => e.stopPropagation()}
-      aria-label={`Select ${o.businessName}`} className="mt-0.5 shrink-0 self-start" />
-  )
-}
+]
 
 type Layout = 'Sentences' | 'Table'
 const LAYOUT_KEY = 'renewtron.renewalOrders.layout'
 
 /**
  * Paid renewals: one row per name a client paid us to renew, with the one status that matters.
- * Each row carries its next action; tick several to do one thing to all of them. A problem tab
- * opens with what it means and how to clear it.
+ * Each row carries its next actions. A problem tab opens with what it means and how to clear it.
  */
 export default function RenewalOrders() {
   const navigate = useNavigate()
@@ -161,18 +141,13 @@ export default function RenewalOrders() {
     setLayoutState(l)
     try { localStorage.setItem(LAYOUT_KEY, l) } catch { /* private window */ }
   }
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const debounced = useDebouncedValue(search, 300)
+  const [page, setPage] = usePageParam()
   // Where they paid: none picked means all.
   const [sources, setSources] = useState<string[]>([])
-  // Ticked rows, kept across pages of the same view until acted on or cleared.
-  const [picked, setPicked] = useState<Map<string, RenewalOrderRow>>(() => new Map())
-  const clear = () => setPicked(new Map())
 
   const { data: realData, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
-    queryKey: ['admin-renewal-orders', view, debounced, sources, page],
-    queryFn: () => api.admin.renewalOrders({ view: view === 'all' ? undefined : view, search: debounced, source: sources.join(',') || undefined, page, pageSize: PAGE_SIZE }),
+    queryKey: ['admin-renewal-orders', view, sources, page],
+    queryFn: () => api.admin.renewalOrders({ view: view === 'all' ? undefined : view, source: sources.join(',') || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   })
   // Sample counts and rows drawn as a skeleton until the first answer arrives.
@@ -186,29 +161,12 @@ export default function RenewalOrders() {
   useEffect(() => {
     if (items.length > 0) rememberQueue({ label: view === 'all' ? 'Renewals' : tabLabel, list: listUrl, ids: items.map((o) => o.id) })
   }, [items, listUrl, tabLabel, view])
-  const toggle = (o: RenewalOrderRow) => setPicked((m) => {
-    const next = new Map(m)
-    if (next.has(o.id)) next.delete(o.id)
-    else next.set(o.id, o)
-    return next
-  })
-  const allOnPage = items.length > 0 && items.every((o) => picked.has(o.id))
-  const toggleAll = () => setPicked((m) => {
-    const next = new Map(m)
-    for (const o of items) {
-      if (allOnPage) next.delete(o.id)
-      else next.set(o.id, o)
-    }
-    return next
-  })
-  const ids = useMemo(() => new Set(picked.keys()), [picked])
-  const cols = useMemo(() => columns(ids, toggle), [ids])
   // The reason tabs show how many are waiting.
   const views = VIEWS.map((v) => ({ ...v, count: realData?.byReason.find((b) => b.reason === v.value)?.count }))
   const empty = <EmptyState title={view === 'to-fix' ? 'Nothing to fix' : 'Nothing here'} message={view === 'to-fix' ? 'Every paid renewal is on track.' : undefined} />
 
   return (
-    <OrderActionsProvider onDone={clear}>
+    <OrderActionsProvider>
     <div className={pageClass()}>
       <PageHeader
         title={view === 'to-fix' ? 'Renewals to fix' : 'Renewals'}
@@ -225,32 +183,25 @@ export default function RenewalOrders() {
       </StatStrip>
       </Skeletonizer>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <ViewSwitch label="Show" className="min-w-0" value={view} options={views} onChange={(v) => { setPage(1); clear(); setSearchParams(v === 'all' ? {} : { view: v }) }} />
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
-          <Input className="h-8 w-full sm:w-56" placeholder="Business name or ABN" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} />
-          <FacetedFilter title="From" selected={sources} onChange={(v) => { setPage(1); clear(); setSources(v) }}
+      {/* The tabs, then how the rows are drawn; where they paid on the right. */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <ViewSwitch label="Show" className="min-w-0" value={view} options={views} onChange={(v) => { setPage(1); setSearchParams(v === 'all' ? {} : { view: v }) }} />
+        <ViewToggle<Layout> value={layout} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setLayout} />
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <FacetedFilter title="From" selected={sources} onChange={(v) => { setPage(1); setSources(v) }}
             options={(['Wizard', 'Ontraport', 'Manual'] as const).map((v) => ({ value: v, label: SOURCE_LABEL[v], count: realData?.bySource.find((b) => b.value === v)?.count ?? 0 }))} />
-          {sources.length > 0 || search ? (
-            <Button variant="ghost" size="sm" onClick={() => { setPage(1); clear(); setSources([]); setSearch('') }}>Reset<X /></Button>
+          {sources.length > 0 ? (
+            <Button variant="ghost" size="sm" onClick={() => { setPage(1); setSources([]) }}>Reset<X /></Button>
           ) : null}
-          <ViewToggle<Layout> value={layout} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setLayout} />
         </div>
       </div>
 
       <TabGuide view={view} byReason={realData?.byReason} />
 
-      {items.length > 0 ? (
-        <label className="mb-2 inline-flex cursor-pointer items-center gap-2 px-4 text-caption text-muted-foreground">
-          <Checkbox checked={allOnPage} onCheckedChange={toggleAll} aria-label="Select all on this page" />
-          {allOnPage ? 'All on this page selected' : 'Select all on this page'}
-        </label>
-      ) : null}
-
       {layout === 'Table' ? (
         <>
           <DataTable
-            columns={cols}
+            columns={COLUMNS}
             data={items}
             loading={isPending || (isFetching && isPlaceholderData)}
             skeleton={SKELETON.items}
@@ -264,7 +215,7 @@ export default function RenewalOrders() {
       ) : data && data.items.length === 0 ? empty : (
         <Skeletonizer loading={isPending}>
         <Card className="gap-0 py-0">
-          {data?.items.map((o) => <OrderSentence key={o.id} o={o} picked={ids.has(o.id)} onToggle={toggle} />)}
+          {data?.items.map((o) => <OrderSentence key={o.id} o={o} withActions />)}
           {realData ? (
             <div className="border-t px-4 py-2">
               <Pagination page={page} pageSize={PAGE_SIZE} total={realData.total} onPage={setPage} />
@@ -273,29 +224,25 @@ export default function RenewalOrders() {
         </Card>
         </Skeletonizer>
       )}
-
-      <BulkBar orders={[...picked.values()]} onClear={clear} />
     </div>
     </OrderActionsProvider>
   )
 }
 
 /**
- * A paid renewal as a sentence. With `onToggle` it has a tick box and its next action (inside an
+ * A paid renewal as a sentence. `withActions` adds its next actions (inside an
  * OrderActionsProvider); without, it's just the sentence.
  */
-export function OrderSentence({ o, picked, onToggle }: { o: RenewalOrderRow; picked?: boolean; onToggle?: (o: RenewalOrderRow) => void }) {
+export function OrderSentence({ o, withActions }: { o: RenewalOrderRow; withActions?: boolean }) {
   const status = orderStatus(o.stage, o.reason)
   return (
     <SentenceRow
       meaning={status.meaning}
       to={`/admin/renewal-orders/${o.id}`}
       hint={status.hint}
-      selected={picked}
-      lead={onToggle ? <Pick o={o} picked={!!picked} onToggle={onToggle} /> : undefined}
       what={<span><ClientName id={o.clientId} name={o.clientName || o.payerName} /> paid for <span className="font-medium">{o.businessName}</span>: {inSentence(status.label)}</span>}
       why={<>paid {o.source === 'Ontraport' ? 'in Ontraport' : o.source === 'Wizard' ? 'direct' : 'by hand'} <When at={o.paidAt} /> · {fmtMoney2(o.amountPaid)} · {o.years} year{o.years === 1 ? '' : 's'}{o.dueDate ? <> · due <DueIn at={o.dueDate} /></> : ' · no due date'}</>}
-      actions={onToggle ? <OrderActionButtons order={o} /> : undefined}
+      actions={withActions ? <OrderActionButtons order={o} /> : undefined}
     />
   )
 }

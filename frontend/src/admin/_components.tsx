@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarRange, ChevronLeft, ChevronRight, Contact, TriangleAlert } from 'lucide-react'
 import { api } from '../api/client'
@@ -30,6 +30,22 @@ export function ErrorModal({ open, message, onClose, title = 'Error details' }: 
       </DialogContent>
     </Dialog>
   )
+}
+
+/**
+ * A list's page number, kept in the address (?page=2) so Back, a refresh or a shared link land on
+ * the same page. Page 1 leaves the address clean; other parameters are kept.
+ */
+export function usePageParam(): [number, (page: number) => void] {
+  const [params, setParams] = useSearchParams()
+  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1)
+  const setPage = useCallback((p: number) => setParams((prev) => {
+    const next = new URLSearchParams(prev)
+    if (p <= 1) next.delete('page')
+    else next.set('page', String(p))
+    return next
+  }), [setParams])
+  return [page, setPage]
 }
 
 export function Pagination({ page, pageSize, total, onPage }: { page: number; pageSize: number; total: number; onPage: (p: number) => void }) {

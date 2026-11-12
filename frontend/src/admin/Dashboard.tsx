@@ -1,16 +1,14 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
-import { api, type ActivityItem, type ActivityKind, type DashboardResponse } from '../api/client'
-import { Status } from './_status'
-import { EmptyState, pageClass, PageHeader, Stat, StatStrip, StatusPill, type Tone } from './_ui'
-import { fmtMoney0, fmtMoney2, relativeTime } from './_utils'
+import { api, type DashboardResponse, type OverviewCharts } from '../api/client'
+import { AheadChart, AsicChart, ChannelChart, OutcomeChart } from './_overviewCharts'
+import { pageClass, PageHeader, Stat, StatStrip } from './_ui'
+import { fmtMoney0, relativeTime } from './_utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { Card, CardAction, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { sample } from '@/components/skeleton-samples'
-import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Skeletonizer } from '@/components/skeletonizer'
 import { cn } from '@/lib/utils'
 
 /*
@@ -28,13 +26,21 @@ const SKELETON: DashboardResponse = {
     ontraportPipelineCount: 54, ontraportPipelineValue: 16_146, failedRenewalCount: 6, failedRenewalValue: 1_794,
     pastCustomersDueSoonCount: 210, pastCustomersDueSoonValue: 62_790,
   },
-  activity: sampleRows(8, (i) => ({
-    kind: i % 3 === 0 ? 'lead-warm' as const : 'paid' as const, at: sample.daysAgo(i / 8), label: sample.business(i),
-    detail: sample.name(i), amount: i % 3 === 0 ? null : sample.money(i), source: i % 2 ? 'Ontraport' : 'Wizard',
-  })),
+  activity: [],
   recentSearches: [],
-  recentRenewals: sampleRows(6, (i) => ({ id: sample.id(i), businessName: sample.business(i), initiatedAt: sample.daysAgo(i / 4), status: 'Completed' })),
+  recentRenewals: [],
   health: { otpProblem: null, otpHeldCount: 0, stuckCount: 0, oldestStuckAt: null, outboxPending: 2, outboxDead: 0, queueDepth: 3, recurringJobs: null },
+}
+
+/** Sample series drawn as a skeleton while the charts load. */
+const SKELETON_CHARTS: OverviewCharts = {
+  weeks: Array.from({ length: 26 }, (_, i) => ({
+    week: sample.daysAgo((25 - i) * 7).slice(0, 10), direct: 3000 + (i % 5) * 400, ontraport: 2000 + (i % 4) * 300, manual: 0,
+    renewed: 4000 + (i % 3) * 300, underWay: i > 20 ? 800 : 0, needsPerson: i % 6 === 0 ? 300 : 0, closed: 150, refunded: 0,
+  })),
+  asic: Array.from({ length: 60 }, (_, i) => ({ date: sample.daysAgo(59 - i).slice(0, 10), card: 6 + (i % 4), bpay: i > 40 ? 5 : 0, failed: i % 7 === 0 ? 2 : 0 })),
+  ahead: Array.from({ length: 12 }, (_, i) => ({ week: sample.daysAhead(i * 7).slice(0, 10), paid: 4 + (i % 3), notPaid: 20 + (i % 5) * 3 })),
+  headline: { paidThisMonth: 18_400, paidLastMonthToDate: 16_900, waitingCount: 14, waitingAmount: 4_186 },
 }
 
 export default function Dashboard() {
@@ -42,6 +48,11 @@ export default function Dashboard() {
     queryKey: ['admin-dashboard'],
     queryFn: () => api.admin.dashboard(),
     refetchInterval: 30_000,
+  })
+  const charts = useQuery({
+    queryKey: ['admin-overview-charts'],
+    queryFn: () => api.admin.overviewCharts(),
+    refetchInterval: 5 * 60_000,
   })
 
   return (
@@ -52,82 +63,43 @@ export default function Dashboard() {
         <Alert variant="destructive"><TriangleAlert /><AlertTitle>Couldn’t load the overview</AlertTitle><AlertDescription>{error instanceof Error ? error.message : 'Load failed.'}</AlertDescription></Alert>
       ) : (
         <Skeletonizer loading={!data && isPending}>
-          <Body data={data ?? SKELETON} />
+          <Body data={data ?? SKELETON} charts={charts.data ?? SKELETON_CHARTS} chartsLoading={charts.isPending} />
         </Skeletonizer>
       )}
     </div>
   )
 }
 
-function Body({ data }: { data: DashboardResponse }) {
+function Body({ data, charts, chartsLoading }: { data: DashboardResponse; charts: OverviewCharts; chartsLoading: boolean }) {
   const stats = withDefaults(data.stats)
-  const activity = data.activity ?? []
-  const recentRenewals = data.recentRenewals ?? []
   const health = data.health
-  const conv = stats.totalLeads > 0 ? (stats.convertedLeads * 100) / stats.totalLeads : 0
-  const mtdRevenue = stats.renewtronDirectRevenue + stats.ontraportRevenue
-  const mtdSales = stats.renewtronDirectCount + stats.ontraportCount
+  const h = charts.headline
+  const sameTime = h.paidLastMonthToDate > 0 ? Math.round(((h.paidThisMonth - h.paidLastMonthToDate) / h.paidLastMonthToDate) * 100) : null
 
   return (
     <div className="space-y-6">
+      <Skeletonizer loading={chartsLoading}>
+        <StatStrip cols="grid-cols-1 sm:grid-cols-3">
+          <Stat label="Paid this month" value={fmtMoney0(h.paidThisMonth)}
+            sub={sameTime == null ? 'Nothing last month to compare' : `${sameTime >= 0 ? 'Up' : 'Down'} ${Math.abs(sameTime)}% on last month at this point`} />
+          <Stat label="Waiting on a person" value={fmtMoney0(h.waitingAmount)} dot={h.waitingCount > 0 ? 'action' : null}
+            sub={h.waitingCount === 0 ? 'Nothing waiting' : `${h.waitingCount.toLocaleString()} paid renewals`} to="/admin/renewal-orders?view=to-fix" />
+          <Stat label="Average basket" value={fmtMoney0(stats.avgBasket)} sub={`${stats.renewalsCompleted.toLocaleString()} renewals so far`} />
+        </StatStrip>
+      </Skeletonizer>
+
+      <Skeletonizer loading={chartsLoading}>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <OutcomeChart weeks={charts.weeks} waitingAmount={h.waitingAmount} waitingCount={h.waitingCount} />
+          <ChannelChart weeks={charts.weeks} />
+          <AsicChart days={charts.asic} />
+          <AheadChart weeks={charts.ahead} avgBasket={stats.avgBasket} />
+        </div>
+      </Skeletonizer>
+
       <Recoverable stats={stats} />
 
       {health ? <HealthCard health={health} /> : null}
-
-      <section className="space-y-3">
-        <h2 className="text-heading">This month</h2>
-        <StatStrip cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-          <Stat label="Revenue" value={fmtMoney2(mtdRevenue)} />
-          <Stat label="Sales" value={mtdSales.toLocaleString()} />
-          <Stat label="Direct" value={fmtMoney2(stats.renewtronDirectRevenue)} sub={`${stats.renewtronDirectCount} sales`} />
-          <Stat label="Ontraport" value={fmtMoney2(stats.ontraportRevenue)} sub={`${stats.ontraportCount} sales`} />
-          <Stat label="Lead conversion" value={`${conv.toFixed(1)}%`} sub={`${stats.convertedLeads} of ${stats.totalLeads}`} />
-          <Stat label="Average basket" value={fmtMoney0(stats.avgBasket)} sub={`${stats.renewalsCompleted.toLocaleString()} renewals`} />
-        </StatStrip>
-      </section>
-
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-        <Card className="gap-0 py-0">
-          <CardHeader className="border-b py-4">
-            <CardTitle>Activity</CardTitle>
-            <CardAction className="text-sm text-muted-foreground">Last 48 hours</CardAction>
-          </CardHeader>
-          <ActivityFeed items={activity} />
-        </Card>
-
-        <Card className="gap-0 py-0">
-          <CardHeader className="border-b py-4">
-            <CardTitle>Recent renewals</CardTitle>
-            <CardAction>
-              <Button asChild size="sm" variant="ghost" className="-my-1 text-muted-foreground"><Link to="/admin/renewal-orders">View all</Link></Button>
-            </CardAction>
-          </CardHeader>
-          {recentRenewals.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-muted-foreground">No renewals yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4 sm:pl-6">Business</TableHead>
-                  <TableHead className="hidden sm:table-cell">Started</TableHead>
-                  <TableHead className="pr-4 sm:pr-6">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentRenewals.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="max-w-[55vw] truncate pl-4 font-medium sm:max-w-none sm:pl-6">{r.businessName ?? '—'}</TableCell>
-                    <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
-                      {new Date(r.initiatedAt).toLocaleString(undefined, { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </TableCell>
-                    <TableCell className="pr-4 sm:pr-6"><Status kind="renewal" status={r.status} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </Card>
-      </div>
     </div>
   )
 }
@@ -270,44 +242,6 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
       </Card>
     </section>
   )
-}
-
-/* ─────────────────── Activity ─────────────────── */
-
-function ActivityFeed({ items }: { items: ActivityItem[] }) {
-  if (items.length === 0) {
-    return <div className="p-6"><EmptyState title="Nothing in the last 48 hours" /></div>
-  }
-  return (
-    <div className="divide-y">
-      {items.map((item, i) => <ActivityRow key={i} item={item} />)}
-    </div>
-  )
-}
-
-function ActivityRow({ item }: { item: ActivityItem }) {
-  const tag = activityTag(item.kind)
-  return (
-    <div className="flex items-start gap-3 px-4 py-3 sm:px-6">
-      <div className="mt-0.5 w-12 shrink-0 text-caption text-muted-foreground tabular-nums">{relativeTime(item.at)}</div>
-      <StatusPill tone={tag.tone} className="shrink-0">{tag.label}</StatusPill>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{item.label ?? '—'}</div>
-        <div className="truncate text-caption text-muted-foreground">
-          {item.detail ?? ''}
-          {item.amount != null ? <span className="tabular-nums"> · {fmtMoney2(item.amount)}</span> : null}
-          {item.source ? <span> · {item.source}</span> : null}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function activityTag(kind: ActivityKind): { label: string; tone: Tone } {
-  switch (kind) {
-    case 'paid':      return { label: 'Paid', tone: 'emerald' }
-    case 'lead-warm': return { label: 'Lead', tone: 'amber' }
-  }
 }
 
 function withDefaults(s: Partial<DashboardResponse['stats']>): DashboardResponse['stats'] {

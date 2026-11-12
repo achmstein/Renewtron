@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Eye, EyeOff, TriangleAlert, X } from 'lucide-react'
 import { api } from '../api/client'
-import { DateRangeFilter, ErrorModal, Pagination, useDebouncedValue } from './_components'
+import { DateRangeFilter, ErrorModal, Pagination, usePageParam, useDebouncedValue } from './_components'
 import { SearchSentence, SentenceList } from './_sentences'
 import { Cell, EmptyState, FunnelPills, RefreshButton, searchFunnelStages, Stat, StatStrip, ViewToggle } from './_ui'
 import { Status } from './_status'
@@ -45,7 +45,7 @@ const PAGE_SIZE = 10
 export function Lookups() {
   // Cards are the usable default on phones; the wide table needs a desktop viewport.
   const [viewMode, setViewMode] = useState<ViewMode>('Sentences')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = usePageParam()
 
   const [abnInput, setAbnInput] = useState('')
   const abn = useDebouncedValue(abnInput, 300)

@@ -74,8 +74,23 @@ export interface DashboardResponse {
   }
 }
 
+/** The Overview's charts (Sydney weeks starting Monday; test customers left out). */
+export interface OverviewCharts {
+  /** The last 26 weeks, by the week the client paid: by channel, and what became of that money. */
+  weeks: Array<{
+    week: string; direct: number; ontraport: number; manual: number
+    renewed: number; underWay: number; needsPerson: number; closed: number; refunded: number
+  }>
+  /** The last 60 days at ASIC: lodged by card, lodged by BPAY, runs that ended failed. */
+  asic: Array<{ date: string; card: number; bpay: number; failed: number }>
+  /** Clients' names due in the next 12 weeks: already paid, or not yet. */
+  ahead: Array<{ week: string; paid: number; notPaid: number }>
+  headline: { paidThisMonth: number; paidLastMonthToDate: number; waitingCount: number; waitingAmount: number }
+}
+
 export const dashboardAdminApi = {
   dashboard: () => apiFetch<DashboardResponse>('/api/admin/dashboard'),
+  overviewCharts: () => apiFetch<OverviewCharts>('/api/admin/overview/charts'),
   funnel: (params: { dateFrom?: string; dateTo?: string; source?: string } = {}) => {
     const qs = new URLSearchParams()
     if (params.dateFrom) qs.set('dateFrom', params.dateFrom)

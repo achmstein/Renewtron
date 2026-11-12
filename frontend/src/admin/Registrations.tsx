@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { registrationsApi, type AdminRegistration } from '../api/registrations'
-import { Pagination, useDebouncedValue } from './_components'
+import { Pagination, usePageParam, useDebouncedValue } from './_components'
 import { EmptyState, pageClass, PageHeader, RefreshButton, ViewSwitch } from './_ui'
 import { Status } from './_status'
 import { When } from './_rows'
@@ -40,7 +40,7 @@ const SKELETON_ROWS = sampleRows<AdminRegistration>(6, (i) => ({
 
 export default function Registrations() {
   const [view, setView] = useState<View>('todo')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = usePageParam()
   const [search, setSearch] = useState('')
   const debounced = useDebouncedValue(search)
 

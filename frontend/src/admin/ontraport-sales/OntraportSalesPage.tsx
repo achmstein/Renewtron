@@ -4,7 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { KeyRound, ListRestart, Loader2, RefreshCw, X } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../../api/client'
-import { ErrorModal, Pagination, useDebouncedValue } from '../_components'
+import { ErrorModal, Pagination, usePageParam, useDebouncedValue } from '../_components'
 import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch, ViewToggle } from '../_ui'
 import { SaleSentence, SentenceList } from '../_sentences'
 import { fmtMoney0, fmtMoney2, relativeTime } from '../_utils'
@@ -23,7 +23,7 @@ export default function OntraportSales() {
   // due date, not just the next 30 days.
   const [searchParams] = useSearchParams()
   const linked = searchParams.has('search') || searchParams.has('status')
-  const [page, setPage] = useState(1)
+  const [page, setPage] = usePageParam()
   const [dueFilter, setDueFilterRaw] = useState<DueFilter>(linked ? 'all' : '30d')
   const [searchInput, setSearchInputRaw] = useState(() => searchParams.get('search') ?? '')
   const search = useDebouncedValue(searchInput, 300)

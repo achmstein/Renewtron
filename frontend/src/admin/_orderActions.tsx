@@ -1,6 +1,6 @@
 import { createContext, Fragment, useContext, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Ban, Banknote, CalendarDays, CheckCheck, Copy, ExternalLink, Loader2, MoreHorizontal, PenLine, RefreshCw, RotateCcw, SearchCheck, Stamp, X } from 'lucide-react'
+import { Ban, Banknote, CalendarDays, CheckCheck, Copy, ExternalLink, Loader2, MoreHorizontal, PenLine, RefreshCw, RotateCcw, SearchCheck, Stamp } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api, type RenewalOrderRow } from '../api/client'
 import { inSentence, orderStatus } from './_status'
@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 /*
- * What staff can do to paid renewals, in one place, for the list (one row, or many ticked) and the
+ * What staff can do to paid renewals, in one place, for a list row and the
  * renewal's own page. Each reason a renewal stopped has its actions, the first being the one that
  * usually clears it; every place shows the same ones in the same order, with the same dialogs.
  */
@@ -28,8 +28,6 @@ const VISIBLE = { row: 2, page: 3 } as const
 type ActionSpec = {
   label: string
   icon: ReactNode
-  /** Can be done to many renewals at once (the list's bulk bar). */
-  bulk: boolean
   /** On a list row, where room is short. */
   short?: string
   /** Shown in a menu, after a line. */
@@ -37,16 +35,16 @@ type ActionSpec = {
 }
 
 export const ORDER_ACTIONS: Record<OrderActionKey, ActionSpec> = {
-  retry: { label: 'Try again', icon: <RefreshCw />, bulk: true },
-  check: { label: 'Check ASIC now', short: 'Check ASIC', icon: <SearchCheck />, bulk: true },
-  findDue: { label: 'Find due date at ASIC', short: 'Find due date', icon: <SearchCheck />, bulk: true },
-  fixName: { label: 'Correct the name', icon: <PenLine />, bulk: false },
-  setDue: { label: 'Set due date', icon: <CalendarDays />, bulk: false },
-  elsewhere: { label: 'Renewed elsewhere', icon: <CheckCheck />, bulk: true },
-  registerAgain: { label: 'Register it again', short: 'Register again', icon: <Stamp />, bulk: true },
-  cancelled: { label: 'Client cancelled', icon: <Ban />, bulk: true },
-  reopen: { label: 'Undo decision', icon: <RotateCcw />, bulk: true },
-  refund: { label: 'Refund…', short: 'Refund', icon: <Banknote />, bulk: false, destructive: true },
+  retry: { label: 'Try again', icon: <RefreshCw /> },
+  check: { label: 'Check ASIC now', short: 'Check ASIC', icon: <SearchCheck /> },
+  findDue: { label: 'Find due date at ASIC', short: 'Find due date', icon: <SearchCheck /> },
+  fixName: { label: 'Correct the name', icon: <PenLine /> },
+  setDue: { label: 'Set due date', icon: <CalendarDays /> },
+  elsewhere: { label: 'Renewed elsewhere', icon: <CheckCheck /> },
+  registerAgain: { label: 'Register it again', short: 'Register again', icon: <Stamp /> },
+  cancelled: { label: 'Client cancelled', icon: <Ban /> },
+  reopen: { label: 'Undo decision', icon: <RotateCcw /> },
+  refund: { label: 'Refund…', short: 'Refund', icon: <Banknote />, destructive: true },
 }
 
 /** The person outcomes an action records. */
@@ -96,7 +94,7 @@ export const TAB_GUIDE: Record<string, { title: string; reasons: string[]; steps
     title: 'Paid, not renewed: stopped for a person',
     reasons: ['CardDeclined', 'AttemptsExhausted', 'InProgressAtAsic', 'VerifyPaymentAtAsic', 'NameNotFound', 'NameMismatch', 'AsicRefused', 'NoDueDate'],
     steps: [
-      <><b>Card declined or ASIC didn’t answer:</b> tick them and <b>Try again</b>.</>,
+      <><b>Card declined or ASIC didn’t answer:</b> <b>Try again</b>.</>,
       <><b>Check payment at ASIC:</b> ASIC may already hold the money. Look first, then mark it renewed elsewhere, or try again.</>,
       <><b>Name not found:</b> correct the name as ASIC shows it, and it goes back in the queue.</>,
     ],
@@ -114,8 +112,8 @@ export const TAB_GUIDE: Record<string, { title: string; reasons: string[]; steps
     title: 'More than 30 days past due: ASIC won’t renew these online',
     reasons: ['TooLate'],
     steps: [
-      <><b>Check ASIC now</b> (tick up to 25): if ASIC shows a later due date, someone renewed it, and it closes as renewed elsewhere.</>,
-      <>Renewed by hand? Tick them and mark <b>renewed elsewhere</b>.</>,
+      <><b>Check ASIC</b>: if ASIC shows a later due date, someone renewed it, and it closes as renewed elsewhere.</>,
+      <>Renewed by hand? Mark it <b>renewed elsewhere</b>.</>,
       <>Still overdue or cancelled: offer to <b>register it again</b> (the payment goes towards it), or <b>refund</b>.</>,
     ],
   },
@@ -123,7 +121,7 @@ export const TAB_GUIDE: Record<string, { title: string; reasons: string[]; steps
     title: 'No due date: neither Ontraport nor our records had one',
     reasons: ['NoDueDate'],
     steps: [
-      <>Each morning’s run reads these from ASIC’s register on its own. To do it now, tick them (up to 25) and <b>Find due date</b>.</>,
+      <>Each morning’s run reads these from ASIC’s register on its own. To do one now: <b>Find due date</b>.</>,
       <>Once found, each renews, waits for the window, or moves to Too late on its own.</>,
       <>ASIC doesn’t list the name under the ABN? Correct the name, <b>Refund</b>, or <b>Set due date</b> by hand (<a className="text-link hover:underline" href={ASIC_SEARCH} target="_blank" rel="noreferrer">ASIC search</a>).</>,
     ],
@@ -225,9 +223,13 @@ export function OrderActionsProvider({ children, onDone }: { children: ReactNode
 
 /* ─────────────────── Buttons ─────────────────── */
 
+/** Reasons where refunding is one of the usual answers, so it earns a visible button. */
+const REFUND_IS_COMMON = ['TooLate', 'Lapsed', 'Ineligible', 'BelowMinimumFee']
+
 /**
- * A renewal's actions as buttons. `row`: the main one as a small button and the rest in a menu.
- * `page`: the first two as buttons (the first filled), the rest in a "More" menu.
+ * A renewal's actions as buttons. A list row shows buttons only when the renewal waits on a person
+ * (two, short); the renewal's page shows three. Refund and undo are rare: they stay in the menu
+ * unless refunding is one of the usual answers for why it stopped.
  */
 export function OrderActionButtons({ order, actions, layout = 'row', extra }: {
   order: RenewalOrderRow
@@ -238,10 +240,12 @@ export function OrderActionButtons({ order, actions, layout = 'row', extra }: {
 }) {
   const start = useStart()
   const list = actions ?? actionsFor(order)
+  const needsPerson = order.stage === 'NeedsPerson'
+  if (layout === 'row' && !needsPerson) return null
   if (list.length === 0 && !extra) return null
-  const shown = VISIBLE[layout]
-  const main = list.slice(0, shown)
-  const rest = list.slice(shown)
+  const rare = (a: OrderActionKey) => a === 'reopen' || (a === 'refund' && !(needsPerson && REFUND_IS_COMMON.includes(order.reason ?? '')))
+  const main = list.filter((a) => !rare(a)).slice(0, VISIBLE[layout])
+  const rest = list.filter((a) => !main.includes(a))
   return (
     <div className="flex flex-wrap items-center gap-2">
       {main.map((a, i) => (
@@ -270,35 +274,6 @@ export function OrderActionButtons({ order, actions, layout = 'row', extra }: {
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-    </div>
-  )
-}
-
-/**
- * The bar for ticked rows: how many, how much, and only the actions every one of them offers and
- * that work on many at once.
- */
-export function BulkBar({ orders, onClear }: { orders: RenewalOrderRow[]; onClear: () => void }) {
-  const start = useStart()
-  if (orders.length === 0) return null
-  const lists = orders.map((o) => actionsFor(o))
-  const shared = lists[0].filter((a) => ORDER_ACTIONS[a].bulk && lists.every((l) => l.includes(a)))
-    .filter((a) => (a !== 'check' && a !== 'findDue') || orders.length <= 25)
-  const amount = orders.reduce((n, o) => n + o.amountPaid, 0)
-  return (
-    <div className="sticky bottom-4 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-lg border bg-popover px-3 py-2 shadow-lg">
-      <span className="text-sm font-medium tabular-nums">{orders.length} selected</span>
-      <span className="text-caption text-muted-foreground tabular-nums">· {fmtMoney0(amount)}</span>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        {shared.length === 0
-          ? <span className="text-caption text-muted-foreground">These don’t share an action that can be done together. Open each one.</span>
-          : shared.map((a) => (
-            <Button key={a} size="sm" variant="outline" onClick={() => start(a, orders)}>{ORDER_ACTIONS[a].icon}{ORDER_ACTIONS[a].label}</Button>
-          ))}
-        {lists.some((l) => l.includes('check') || l.includes('findDue')) && orders.length > 25
-          ? <span className="text-caption text-muted-foreground">Asking ASIC: up to 25 at once</span> : null}
-        <Button size="sm" variant="ghost" onClick={onClear} aria-label="Clear selection"><X />Clear</Button>
-      </div>
     </div>
   )
 }
