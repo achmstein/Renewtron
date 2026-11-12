@@ -20,7 +20,8 @@ public sealed class RenewalOrdersModule : ICarterModule
         group.MapPost("/rebuild", async (IRenewalOrderService service, bool dryRun = true, CancellationToken ct = default) =>
             Results.Ok(await service.RebuildAsync(dryRun, ct)));
 
-        // A list of paid renewals. view: to-fix (try again, check first, stuck), decide, or a stage name.
+        // A list of paid renewals. view: to-fix (try again, check first, stuck), decide, a stage name,
+        // or a reason name (TooLate, NoDueDate, BelowMinimumFee…: the renewals stopped for that reason).
         group.MapGet("/", async (ApplicationDbContext db, string? view = null, string? search = null, int page = 1, int pageSize = 50) =>
         {
             page = Math.Max(1, page);
@@ -32,7 +33,8 @@ public sealed class RenewalOrdersModule : ICarterModule
                 "to-fix" => q.OrdersIn([.. WorkQueues.OrderTryAgain, .. WorkQueues.OrderCheckFirst])
                     .Concat(db.RenewalOrders.AsNoTracking().OrdersStuck(db, now)),
                 "decide" => q.OrdersIn(WorkQueues.OrderDecide),
-                _ when Enum.TryParse<RenewalOrderStage>(view, true, out var stage) => q.Where(o => o.Stage == stage),
+                _ when Enum.TryParse<RenewalOrderStage>(view, true, out var stage) && !int.TryParse(view, out _) => q.Where(o => o.Stage == stage),
+                _ when Enum.TryParse<RenewalOrderReason>(view, true, out var reason) && !int.TryParse(view, out _) => q.Where(o => o.Reason == reason),
                 _ => q,
             };
             if (!string.IsNullOrWhiteSpace(search))

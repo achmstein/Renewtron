@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api, type RenewalOrderRow } from '../api/client'
 import { Pagination, useDebouncedValue } from './_components'
-import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch } from './_ui'
+import { EmptyState, pageClass, PageHeader, RefreshButton, Stat, StatStrip, ViewSwitch, ViewToggle } from './_ui'
 import { ClientName, DueIn, SentenceRow, When } from './_rows'
-import { inSentence, orderStatus } from './_status'
+import { inSentence, orderStatus, Status } from './_status'
 import { fmtMoney0, fmtMoney2 } from './_utils'
+import { DataTable, type DataTableColumn } from '@/components/data-table'
 import { sample } from '@/components/skeleton-samples'
 import { sampleRows, Skeletonizer } from '@/components/skeletonizer'
 import { Card } from '@/components/ui/card'
@@ -38,6 +39,8 @@ const VIEWS = [
   { value: 'all', label: 'All' },
   { value: 'to-fix', label: 'To fix' },
   { value: 'decide', label: 'Renew or refund' },
+  { value: 'TooLate', label: 'Too late' },
+  { value: 'NoDueDate', label: 'No due date' },
   { value: 'Due', label: 'Due' },
   { value: 'Renewing', label: 'Renewing' },
   { value: 'Waiting', label: 'Waiting' },
@@ -45,15 +48,92 @@ const VIEWS = [
   { value: 'Closed', label: 'Closed' },
 ]
 
+/** The table view's columns: the same facts as a sentence, one per column. */
+const COLUMNS: DataTableColumn<RenewalOrderRow>[] = [
+  {
+    id: 'business',
+    accessorKey: 'businessName',
+    header: 'Business name',
+    enableSorting: false,
+    meta: { sticky: true, className: 'min-w-28 max-w-[38vw] sm:min-w-60 sm:max-w-76' },
+    cell: ({ row }) => {
+      const o = row.original
+      return (
+        <div>
+          <Link to={`/admin/renewal-orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="block truncate font-medium hover:underline">{o.businessName}</Link>
+          <div className="hidden truncate text-caption text-muted-foreground sm:block">
+            <span className="font-mono tabular-nums">{o.abn}</span>
+            {' · '}
+            <span onClick={(e) => e.stopPropagation()}><ClientName id={o.clientId} name={o.clientName || o.payerName} /></span>
+          </div>
+        </div>
+      )
+    },
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    enableSorting: false,
+    cell: ({ row }) => <Status entry={orderStatus(row.original.stage, row.original.reason)} />,
+  },
+  {
+    id: 'due',
+    header: 'Due',
+    enableSorting: false,
+    meta: { className: 'whitespace-nowrap tabular-nums' },
+    cell: ({ row }) => row.original.dueDate ? <DueIn at={row.original.dueDate} /> : <span className="text-muted-foreground">No due date</span>,
+  },
+  {
+    id: 'paid',
+    header: 'Paid',
+    enableSorting: false,
+    meta: { className: 'whitespace-nowrap tabular-nums', hideBelow: 'md' },
+    cell: ({ row }) => <When at={row.original.paidAt} />,
+  },
+  {
+    id: 'amount',
+    header: 'Amount',
+    enableSorting: false,
+    meta: { className: 'text-right font-mono tabular-nums', headerClassName: 'text-right' },
+    cell: ({ row }) => fmtMoney2(row.original.amountPaid),
+  },
+  {
+    id: 'years',
+    header: 'Years',
+    enableSorting: false,
+    meta: { className: 'text-right tabular-nums', headerClassName: 'text-right', hideBelow: 'md' },
+    cell: ({ row }) => row.original.years,
+  },
+  {
+    id: 'source',
+    header: 'From',
+    enableSorting: false,
+    meta: { hideBelow: 'lg' },
+    cell: ({ row }) => <span className="text-muted-foreground">{row.original.source}</span>,
+  },
+]
+
+type Layout = 'Sentences' | 'Table'
+const LAYOUT_KEY = 'renewtron.renewalOrders.layout'
+
 /** Paid renewals: one row per name a client paid us to renew, with the one status that matters. */
 export default function RenewalOrders() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const view = searchParams.get('view') ?? 'all'
+  // Sentences or a table; remembered on this browser.
+  const [layout, setLayoutState] = useState<Layout>(() => {
+    try { return localStorage.getItem(LAYOUT_KEY) === 'Table' ? 'Table' : 'Sentences' } catch { return 'Sentences' }
+  })
+  const setLayout = (l: Layout) => {
+    setLayoutState(l)
+    try { localStorage.setItem(LAYOUT_KEY, l) } catch { /* private window */ }
+  }
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const debounced = useDebouncedValue(search, 300)
 
-  const { data: realData, isFetching, isPending, refetch } = useQuery({
+  const { data: realData, isFetching, isPending, isPlaceholderData, refetch } = useQuery({
     queryKey: ['admin-renewal-orders', view, debounced, page],
     queryFn: () => api.admin.renewalOrders({ view: view === 'all' ? undefined : view, search: debounced, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -81,10 +161,27 @@ export default function RenewalOrders() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <ViewSwitch label="Show" className="min-w-0" value={view} options={VIEWS} onChange={(v) => { setPage(1); setSearchParams(v === 'all' ? {} : { view: v }) }} />
-        <Input className="h-8 w-full sm:w-56" placeholder="Business name or ABN" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Input className="h-8 w-full sm:w-56" placeholder="Business name or ABN" value={search} onChange={(e) => { setPage(1); setSearch(e.target.value) }} />
+          <ViewToggle<Layout> value={layout} options={[{ value: 'Sentences', label: 'Sentence view' }, { value: 'Table', label: 'Table view' }]} onChange={setLayout} />
+        </div>
       </div>
 
-      {data && data.items.length === 0 ? (
+      {layout === 'Table' ? (
+        <>
+          <DataTable
+            columns={COLUMNS}
+            data={realData?.items ?? []}
+            loading={isPending || (isFetching && isPlaceholderData)}
+            skeleton={SKELETON.items}
+            onRowClick={(row) => navigate(`/admin/renewal-orders/${row.original.id}`)}
+            empty={<EmptyState title={view === 'to-fix' ? 'Nothing to fix' : 'Nothing here'} message={view === 'to-fix' ? 'Every paid renewal is on track.' : undefined} />}
+          />
+          {realData && realData.total > PAGE_SIZE ? (
+            <div className="mt-3"><Pagination page={page} pageSize={PAGE_SIZE} total={realData.total} onPage={setPage} /></div>
+          ) : null}
+        </>
+      ) : data && data.items.length === 0 ? (
         <EmptyState title={view === 'to-fix' ? 'Nothing to fix' : 'Nothing here'} message={view === 'to-fix' ? 'Every paid renewal is on track.' : undefined} />
       ) : (
         <Skeletonizer loading={isPending}>
