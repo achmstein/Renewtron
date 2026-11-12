@@ -69,6 +69,17 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
   const items: Item[] = (shown?.events ?? []).map((e, i) => ({ e, key: `${e.recordId}-${e.at}-${i}` }))
   const cards = new Map((shown?.records ?? []).map((c) => [`${c.record}:${c.id}`, c]))
   const isOpen = (it: Item) => open[it.key] ?? it.e.meaning === 'action'
+  // A record's facts and buttons show once: under the first of its lines that's open. Two open
+  // lines about one ASIC run (lodged, then its bill paid) read as one run, not two.
+  const factsAt = new Map<string, string>()
+  for (const it of items) {
+    const rec = `${it.e.record}:${it.e.recordId}`
+    if (isOpen(it) && !factsAt.has(rec)) factsAt.set(rec, it.key)
+  }
+  const cardFor = (it: Item) => {
+    const rec = `${it.e.record}:${it.e.recordId}`
+    return factsAt.get(rec) === it.key ? cards.get(rec) : undefined
+  }
   const toggle = (it: Item) => setOpen((o) => ({ ...o, [it.key]: !isOpen(it) }))
   const reveal = (it: Item) => {
     setOpen((o) => ({ ...o, [it.key]: true }))
@@ -99,11 +110,11 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
                     ? [<FoldHeading key={`${seg[0].key}-h`} items={seg} onClose={() => setUnfolded((u) => ({ ...u, [seg[0].key]: false }))} />,
                       ...seg.map((it) => (
                         <Line key={it.key} it={it} open={isOpen(it)} onToggle={() => toggle(it)} indent
-                          card={cards.get(`${it.e.record}:${it.e.recordId}`)} here={it.e.record === kind && it.e.recordId === id} />
+                          card={cardFor(it)} here={it.e.record === kind && it.e.recordId === id} />
                       ))]
                   : seg.map((it) => (
                     <Line key={it.key} it={it} open={isOpen(it)} onToggle={() => toggle(it)}
-                      card={cards.get(`${it.e.record}:${it.e.recordId}`)} here={it.e.record === kind && it.e.recordId === id} />
+                      card={cardFor(it)} here={it.e.record === kind && it.e.recordId === id} />
                   )))}
               </Fragment>
             ))}</ol>
