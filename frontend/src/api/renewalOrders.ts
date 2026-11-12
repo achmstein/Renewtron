@@ -45,10 +45,25 @@ export interface RenewalOrderAttempt {
 }
 
 export const renewalOrdersAdminApi = {
-  renewalOrders: (params: { view?: string; search?: string; page?: number; pageSize?: number } = {}) => {
+  /** source: comma-separated Ontraport, Wizard, Manual. */
+  renewalOrders: (params: { view?: string; search?: string; source?: string; page?: number; pageSize?: number } = {}) => {
     const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => [k, String(v)]))
-    return apiFetch<{ total: number; page: number; pageSize: number; items: RenewalOrderRow[]; byStage: Array<{ stage: string; count: number; amount: number }> }>(`/api/admin/renewal-orders?${qs}`)
+    return apiFetch<{
+      total: number; page: number; pageSize: number; items: RenewalOrderRow[]
+      byStage: Array<{ stage: string; count: number; amount: number }>
+      /** Stopped for a person, by why. */
+      byReason: Array<{ reason: string; count: number; amount: number }>
+      /** Where they paid, counted for this view and search. */
+      bySource: Array<{ value: RenewalOrderRow['source']; count: number }>
+    }>(`/api/admin/renewal-orders?${qs}`)
   },
+  /** A due date a person found, for a sale that came without one: it goes back in the queue. */
+  setRenewalOrderDueDate: (id: string, dueDate: string) =>
+    apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/due-date`, { method: 'POST', body: JSON.stringify({ dueDate }) }),
+  /** One action on many renewals; the ones it can't apply to come back with why. */
+  bulkRenewalOrders: (body: { ids: string[]; action: 'retry' | 'check' | 'outcome' | 'reopen'; outcome?: string; note?: string; reference?: string }) =>
+    apiFetch<{ message: string; done: number; skipped: Array<{ id: string; businessName: string; why: string }> }>(
+      '/api/admin/renewal-orders/bulk', { method: 'POST', body: JSON.stringify(body) }),
   renewalOrder: (id: string) => apiFetch<{
     order: RenewalOrderRow
     client: { id: string; fullName: string } | null

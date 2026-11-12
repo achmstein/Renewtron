@@ -22,7 +22,8 @@ public sealed class RenewalOrdersModule : ICarterModule
 
         // A list of paid renewals. view: to-fix (try again, check first, stuck), decide, a stage name,
         // or a reason name (TooLate, NoDueDate, BelowMinimumFee…: the renewals stopped for that reason).
-        group.MapGet("/", async (ApplicationDbContext db, string? view = null, string? search = null, int page = 1, int pageSize = 50) =>
+        // source: Ontraport, Wizard (paid on the website: "Direct") or Manual, comma-separated, on top of any view.
+        group.MapGet("/", async (ApplicationDbContext db, string? view = null, string? search = null, string? source = null, int page = 1, int pageSize = 50) =>
         {
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 200);
@@ -43,6 +44,13 @@ public sealed class RenewalOrdersModule : ICarterModule
                 var digits = new string(term.Where(char.IsDigit).ToArray());
                 q = q.Where(o => o.BusinessName.Contains(term) || (digits.Length >= 3 && o.Abn.Contains(digits)));
             }
+            // Where they paid, as facets: the counts are for this view and search, before the source is picked.
+            var bySource = (await q.GroupBy(o => o.Source).Select(g => new { g.Key, Count = g.Count() }).ToListAsync())
+                .Select(s => new { value = s.Key.ToString(), count = s.Count });
+            var sources = (source ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => Enum.TryParse<RenewalOrderSource>(s, true, out var v) && !int.TryParse(s, out _) ? v : (RenewalOrderSource?)null)
+                .OfType<RenewalOrderSource>().ToList();
+            if (sources.Count > 0) q = q.Where(o => sources.Contains(o.Source));
             var total = await q.CountAsync();
             // All renewals: the latest paid first. A queue or stage: the soonest due first, as it's worked.
             var ordered = string.IsNullOrEmpty(view)
@@ -51,7 +59,15 @@ public sealed class RenewalOrdersModule : ICarterModule
             var items = await Rows(db, ordered.Skip((page - 1) * pageSize).Take(pageSize)).ToListAsync();
             var byStage = await db.RenewalOrders.AsNoTracking().GroupBy(o => o.Stage)
                 .Select(g => new { stage = g.Key.ToString(), count = g.Count(), amount = g.Sum(o => o.AmountPaid) }).ToListAsync();
-            return Results.Ok(new { total, page, pageSize, items, byStage });
+            // What's stopped for a person, by why: the tabs' counts and their guides' totals.
+            var byReason = await db.RenewalOrders.AsNoTracking().Where(o => o.Stage == RenewalOrderStage.NeedsPerson && o.Reason != null)
+                .GroupBy(o => o.Reason!.Value)
+                .Select(g => new { g.Key, Count = g.Count(), Amount = g.Sum(o => o.AmountPaid) }).ToListAsync();
+            return Results.Ok(new
+            {
+                total, page, pageSize, items, byStage, bySource,
+                byReason = byReason.Select(r => new { reason = r.Key.ToString(), count = r.Count, amount = r.Amount }),
+            });
         });
 
         // One paid renewal: where it is, what paid for it, and every ASIC run for it.
@@ -132,147 +148,105 @@ public sealed class RenewalOrdersModule : ICarterModule
         {
             var order = await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct);
             if (order is null) return Results.NotFound();
-            if (!Enum.TryParse<RenewalOrderReason>(body.Outcome, out var outcome) || !PersonOutcomes.Contains(outcome))
-                return Results.BadRequest(new { error = "Choose renewed elsewhere, refunded, register again, client cancelled, disputed or duplicate." });
-            if (order.Stage == RenewalOrderStage.Renewed)
-                return Results.BadRequest(new { error = "Renewtron renewed this one; it can't be closed another way." });
-            if (order.Stage == RenewalOrderStage.Renewing)
-                return Results.BadRequest(new { error = "It's renewing at ASIC right now. Wait for the run to finish." });
-            var note = body.Note?.Trim();
-            var agreeing = order.Outcome == outcome && order.Evidence != null;
-            if (string.IsNullOrEmpty(note) && !agreeing)
-                return Results.BadRequest(new { error = "Say what this rests on (what ASIC showed, or what the client said)." });
-
-            // A person confirming the ASIC check's finding keeps its evidence and adds their note.
-            if (agreeing)
-            {
-                if (!string.IsNullOrEmpty(note)) order.Evidence = Trim($"{order.Evidence} {user.Identity?.Name}: {note}", 1000);
-            }
-            else
-            {
-                order.Evidence = Trim(note, 1000);
-                order.EvidenceSource = OrderEvidenceSource.Staff;
-                order.EvidenceAt = DateTime.UtcNow;
-            }
-            order.Outcome = outcome;
-            order.OutcomeAt = DateTime.UtcNow;
-            order.OutcomeBy = user.Identity?.Name ?? "admin";
-            order.OutcomeReference = Trim(body.Reference?.Trim(), 200) is { Length: > 0 } r ? r : null;
-            await db.SaveChangesAsync(ct);
-            await orders.RefreshQuietlyAsync(ct);
-            return Results.Ok(new { message = "Saved." });
+            var result = Enum.TryParse<RenewalOrderReason>(body.Outcome, out var outcome)
+                ? RenewalOrderActions.Decide(order, outcome, body.Note, body.Reference, By(user))
+                : OrderActionResult.No("Choose renewed elsewhere, refunded, register again, client cancelled, disputed or duplicate.");
+            return await Finish(result, db, orders, ct);
         });
 
         // Undoes a decision: the pipeline decides the status again.
         group.MapPost("/{id:guid}/reopen", async (Guid id, ApplicationDbContext db, IRenewalOrderService orders, CancellationToken ct) =>
-        {
-            var order = await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct);
-            if (order is null) return Results.NotFound();
-            if (order.Outcome is null) return Results.BadRequest(new { error = "Nothing to undo." });
-            AsicCheckService.ClearOutcome(order);
-            await db.SaveChangesAsync(ct);
-            await orders.RefreshQuietlyAsync(ct);
-            return Results.Ok(new { message = "Reopened." });
-        });
+            await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct) is { } order
+                ? await Finish(RenewalOrderActions.Reopen(order), db, orders, ct)
+                : Results.NotFound());
 
         // The name we hold doesn't match ASIC's: corrects it on the sale and puts it back in the queue.
         group.MapPost("/{id:guid}/fix-name", async (Guid id, FixNameRequest body, ApplicationDbContext db, IRenewalOrderService orders, CancellationToken ct) =>
-        {
-            var order = await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct);
-            if (order is null) return Results.NotFound();
-            var name = BusinessNameText.Clean(body.BusinessName);
-            if (name.Length is 0 or > 200) return Results.BadRequest(new { error = "Enter the name exactly as ASIC shows it." });
-            if (order.Source != RenewalOrderSource.Ontraport
-                || await db.OntraportSales.FirstOrDefaultAsync(s => s.Id == order.SourceId, ct) is not { } sale)
-                return Results.BadRequest(new { error = "Only an Ontraport sale's name can be corrected here." });
-            if (sale.RenewalRequestId is { } rid && await db.RenewalRequests.AnyAsync(r => r.Id == rid && (r.Status == RenewalStatus.Pending || r.Status == RenewalStatus.Processing), ct))
-                return Results.BadRequest(new { error = "It's renewing at ASIC right now." });
+            await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct) is { } order
+                ? await Finish(await RenewalOrderActions.FixNameAsync(db, order, body.BusinessName, ct), db, orders, ct)
+                : Results.NotFound());
 
-            sale.BusinessName = name;
-            sale.Status = OntraportSaleStatus.Synced;
-            sale.RenewalRequestId = null;
-            sale.ProcessedAt = null;
-            sale.ErrorMessage = null;
-            sale.SearchAttempts = 0;
-            sale.NextSearchAt = null;
-            sale.HandledAt = null;
-            sale.HandledNote = null;
-            AsicCheckService.ClearOutcome(order);
+        // A due date a person found (at ASIC, or from the client) for a sale that came without one.
+        group.MapPost("/{id:guid}/due-date", async (Guid id, DueDateRequest body, ApplicationDbContext db, IRenewalOrderService orders, CancellationToken ct) =>
+            await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct) is { } order
+                ? await Finish(await RenewalOrderActions.SetDueDateAsync(db, order, body.DueDate, DateOnly.FromDateTime(DateTime.UtcNow), ct), db, orders, ct)
+                : Results.NotFound());
+
+        // Try again: retries the current ASIC run, or puts the sale back for the next processing run.
+        group.MapPost("/{id:guid}/retry", async (Guid id, ApplicationDbContext db, IBackgroundJobClient jobs, IRenewalOrderService orders, CancellationToken ct) =>
+            await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct) is { } order
+                ? await Finish(await RenewalOrderActions.RetryAsync(db, jobs, order, ct), db, orders, ct)
+                : Results.NotFound());
+
+        // One action on many renewals at once (the list's bulk bar): each gets the same checks as on
+        // its own; the ones it can't apply to are listed with why. The orders refresh once, after all.
+        // Refunds are not here: each is a payment a person picks.
+        group.MapPost("/bulk", async (BulkRequest body, ClaimsPrincipal user, ApplicationDbContext db, IBackgroundJobClient jobs,
+            IAsicCheckService check, IRenewalOrderService orders, CancellationToken ct) =>
+        {
+            var ids = (body.Ids ?? []).Distinct().ToList();
+            if (ids.Count == 0) return Results.BadRequest(new { error = "Pick the renewals first." });
+            if (ids.Count > MaxBulk) return Results.BadRequest(new { error = $"Up to {MaxBulk} at a time." });
+            if (body.Action == "check" && ids.Count > MaxBulkCheck)
+                return Results.BadRequest(new { error = $"ASIC is asked one name at a time: up to {MaxBulkCheck} at once." });
+
+            var list = await db.RenewalOrders.Where(o => ids.Contains(o.Id)).ToListAsync(ct);
+            var done = 0;
+            var skipped = new List<object>();
+            foreach (var order in list)
+            {
+                OrderActionResult result;
+                switch (body.Action)
+                {
+                    case "retry":
+                        result = await RenewalOrderActions.RetryAsync(db, jobs, order, ct);
+                        break;
+                    case "reopen":
+                        result = RenewalOrderActions.Reopen(order);
+                        break;
+                    case "check":
+                        await db.SaveChangesAsync(ct);
+                        var item = await check.CheckOneAsync(order.Id, ct, refresh: false);
+                        result = item is null ? OrderActionResult.No("No due date or ABN to check.") : OrderActionResult.Done(item.Evidence);
+                        break;
+                    case "outcome" when Enum.TryParse<RenewalOrderReason>(body.Outcome, out var outcome):
+                        result = RenewalOrderActions.Decide(order, outcome, body.Note, body.Reference, By(user));
+                        break;
+                    default:
+                        return Results.BadRequest(new { error = "Unknown action." });
+                }
+                if (result.Ok) done++;
+                else skipped.Add(new { id = order.Id, businessName = order.BusinessName, why = result.Message });
+            }
             await db.SaveChangesAsync(ct);
             await orders.RefreshQuietlyAsync(ct);
-            return Results.Ok(new { message = "Name corrected. The next processing run (07:00) renews it." });
-        });
-
-        // Try again: retries the current ASIC run, or (when the sale never got that far) puts the
-        // sale back for the next processing run. Only for reasons where no money can be at risk.
-        group.MapPost("/{id:guid}/retry", async (Guid id, ApplicationDbContext db, IBackgroundJobClient jobs, IRenewalOrderService orders, CancellationToken ct) =>
-        {
-            var order = await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == id, ct);
-            if (order is null) return Results.NotFound();
-            if (order.Stage != RenewalOrderStage.NeedsPerson || order.Reason is not { } reason || !WorkQueues.OrderTryAgain.Contains(reason))
-                return Results.BadRequest(new { error = "This renewal can't simply be tried again: check it first." });
-            // Never renew a name ASIC already shows renewed: ASIC says "not due", and the order would
-            // wait and renew it a second time next year.
-            if (order.ClientBusinessNameId is { } nid && order.DueDate is { } orderDue
-                && await db.ClientBusinessNames.AnyAsync(n => n.Id == nid && n.RenewalDueDate > orderDue
-                    && (n.DueDateSource == RenewalDueDateSource.AsicRegister || n.DueDateSource == RenewalDueDateSource.Estimated), ct))
-                return Results.BadRequest(new { error = "ASIC shows this name renewed since. Close it as renewed elsewhere instead." });
-
-            string message;
-            var attempt = order.CurrentAttemptId is { } aid ? await db.RenewalRequests.FirstOrDefaultAsync(r => r.Id == aid, ct) : null;
-            if (attempt is not null && attempt.Status == RenewalStatus.Failed)
-            {
-                if (attempt.NextRetryAt != null)
-                    return Results.BadRequest(new { error = "It is already scheduled to try again." });
-                if (RenewalErrorClassifier.MayHoldPayment(attempt.FailedAtStep, attempt.HostedTokenizationId, attempt.ErrorCategory))
-                    return Results.BadRequest(new { error = "ASIC may already hold money for it. Check at ASIC first." });
-                attempt.Status = RenewalStatus.Pending;
-                attempt.HandledAt = null;
-                attempt.HandledNote = null;
-                if (order.Source == RenewalOrderSource.Ontraport
-                    && await db.OntraportSales.FirstOrDefaultAsync(s => s.Id == order.SourceId, ct) is { } sale)
-                {
-                    sale.Status = OntraportSaleStatus.RenewalQueued;
-                    sale.RenewalRequestId = attempt.Id;
-                }
-                await db.SaveChangesAsync(ct);
-                var attemptId = attempt.Id;
-                jobs.Enqueue<IRenewalProcessingService>(s => s.ProcessRenewalAsync(attemptId));
-                message = "Trying again now.";
-            }
-            else if (order.Source == RenewalOrderSource.Ontraport
-                && await db.OntraportSales.FirstOrDefaultAsync(s => s.Id == order.SourceId, ct) is { } sale)
-            {
-                sale.Status = OntraportSaleStatus.Synced;
-                sale.RenewalRequestId = null;
-                sale.ProcessedAt = null;
-                sale.SearchAttempts = 0;
-                sale.NextSearchAt = null;
-                await db.SaveChangesAsync(ct);
-                message = "Back in the queue: the next processing run (07:00) renews it.";
-            }
-            else
-            {
-                return Results.BadRequest(new { error = "Nothing to try again for this renewal." });
-            }
-
-            await orders.RefreshQuietlyAsync(ct);
-            return Results.Ok(new { message });
+            var message = skipped.Count == 0 ? $"Done for {Plural(done)}." : $"Done for {Plural(done)}; {skipped.Count} skipped.";
+            return Results.Ok(new { message, done, skipped });
         });
     }
 
-    /// <summary>The outcomes a person can record.</summary>
-    private static readonly RenewalOrderReason[] PersonOutcomes =
-    [
-        RenewalOrderReason.RenewedElsewhere, RenewalOrderReason.Refunded, RenewalOrderReason.RegisterAgain,
-        RenewalOrderReason.ClientCancelling, RenewalOrderReason.Disputed, RenewalOrderReason.Duplicate,
-    ];
+    public const int MaxBulk = 200;
+    public const int MaxBulkCheck = 25;
+
+    private static string By(ClaimsPrincipal user) => user.Identity?.Name ?? "admin";
+    private static string Plural(int n) => n == 1 ? "1 renewal" : $"{n} renewals";
+
+    /// <summary>Saves and refreshes after an action that went through; says why when it didn't.</summary>
+    private static async Task<IResult> Finish(OrderActionResult result, ApplicationDbContext db, IRenewalOrderService orders, CancellationToken ct)
+    {
+        if (!result.Ok) return Results.BadRequest(new { error = result.Message });
+        await db.SaveChangesAsync(ct);
+        await orders.RefreshQuietlyAsync(ct);
+        return Results.Ok(new { message = result.Message });
+    }
 
     public sealed record OutcomeRequest(string Outcome, string? Note, string? Reference);
     public sealed record FixNameRequest(string BusinessName);
     public sealed record RefundRequest(string Payment, string? Note);
+    public sealed record DueDateRequest(DateOnly DueDate);
+    /// <param name="Action">retry, check (ask ASIC), outcome (with Outcome and Note), or reopen.</param>
+    public sealed record BulkRequest(List<Guid>? Ids, string Action, string? Outcome, string? Note, string? Reference);
 
-    private static string? Trim(string? s, int max) => s is { Length: > 0 } && s.Length > max ? s[..max] : s;
 
     /// <summary>The fields lists and pages show for a paid renewal, with the payer's name.</summary>
     private static IQueryable<OrderRow> Rows(ApplicationDbContext db, IQueryable<RenewalOrder> q) => q.Select(o => new OrderRow(

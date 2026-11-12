@@ -78,7 +78,10 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
   return (
     <Card className={cn('gap-0 py-0', className)}>
       <CardHeader className="gap-2 border-b py-4">
-        <CardTitle>What happened</CardTitle>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <CardTitle>What happened</CardTitle>
+          {data ? <Linked records={data.records} kind={kind} id={id} /> : null}
+        </div>
         {shown ? <Standing items={items} cards={cards} onReveal={reveal} /> : null}
       </CardHeader>
       <CardContent className="px-0 py-2">
@@ -108,6 +111,33 @@ export function JourneyTimeline({ kind, id, className }: { kind: Kind; id: strin
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** The order the linked records read in: how a renewal goes. */
+const LINKED: Array<{ record: JourneyRecord; one: string }> = [
+  { record: 'lead', one: 'Visit' },
+  { record: 'sale', one: 'Ontraport sale' },
+  { record: 'order', one: 'Paid renewal' },
+  { record: 'run', one: 'ASIC run' },
+]
+
+/**
+ * The other records of this story, as plain links: one hop to the sale, the paid renewal or an
+ * ASIC run from any of them. The page you're on is named, not linked.
+ */
+function Linked({ records, kind, id }: { records: JourneyCard[]; kind: JourneyRecord; id: string | undefined }) {
+  const parts = LINKED.flatMap(({ record, one }) => {
+    const of = records.filter((c) => c.record === record)
+    return of.map((c, i) => ({ key: `${record}:${c.id}`, label: of.length > 1 ? `${one} ${i + 1}` : one, to: RECORD_PAGE[record](c.id), here: record === kind && c.id === id }))
+  })
+  if (parts.length < 2) return null
+  return (
+    <nav aria-label="Linked records" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption">
+      {parts.map((p) => p.here
+        ? <span key={p.key} className="font-medium text-foreground">{p.label}</span>
+        : <Link key={p.key} to={p.to} className="text-link hover:underline">{p.label}</Link>)}
+    </nav>
   )
 }
 

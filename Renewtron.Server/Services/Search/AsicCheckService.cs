@@ -17,7 +17,7 @@ public interface IAsicCheckService
     Task<AsicCheckReport> CheckAllAsync(bool dryRun, CancellationToken ct);
 
     /// <summary>Checks one order now, asking ASIC's renewal page whatever the register says.</summary>
-    Task<AsicCheckReport.Item?> CheckOneAsync(Guid orderId, CancellationToken ct);
+    Task<AsicCheckReport.Item?> CheckOneAsync(Guid orderId, CancellationToken ct, bool refresh = true);
 }
 
 public sealed record AsicCheckReport(
@@ -95,7 +95,7 @@ public class AsicCheckService(
         return report;
     }
 
-    public async Task<AsicCheckReport.Item?> CheckOneAsync(Guid orderId, CancellationToken ct)
+    public async Task<AsicCheckReport.Item?> CheckOneAsync(Guid orderId, CancellationToken ct, bool refresh = true)
     {
         var order = await db.RenewalOrders.FirstOrDefaultAsync(o => o.Id == orderId, ct);
         if (order?.DueDate is not { } due) return null;
@@ -111,7 +111,7 @@ public class AsicCheckService(
         order.AsicCheckedAt = now;
         if (finding is not null && CanSet(order)) await ApplyAsync(order, finding, registerDate, now, ct);
         await db.SaveChangesAsync(ct);
-        await orders.RefreshQuietlyAsync(ct);
+        if (refresh) await orders.RefreshQuietlyAsync(ct);
         return new(order.Id, order.BusinessName, finding?.Outcome?.ToString(),
             finding?.Evidence ?? "ASIC didn't answer. Try again later.");
     }

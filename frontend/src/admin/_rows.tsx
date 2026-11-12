@@ -40,8 +40,11 @@ function fromControl(e: { target: EventTarget | null; currentTarget: EventTarget
   return !!hit && hit !== e.currentTarget
 }
 
-export function SentenceRow({ meaning, what, why, hint, actions, to, doneKey }: {
+export function SentenceRow({ meaning, what, why, hint, actions, to, doneKey, lead, selected }: {
   meaning: Meaning
+  /** Before the dot: a checkbox, for picking rows to act on together. */
+  lead?: ReactNode
+  selected?: boolean
   /** The sentence: what happened, naming the client. One short line. */
   what: ReactNode
   /** A few facts: when, how much, when it's due. One short line. */
@@ -80,8 +83,10 @@ export function SentenceRow({ meaning, what, why, hint, actions, to, doneKey }: 
       className={cn(
         'flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3 last:border-b-0 outline-none focus-visible:bg-accent sm:flex-nowrap',
         to && 'cursor-pointer hover:bg-muted/50',
+        selected && 'bg-accent/60 hover:bg-accent/80',
       )}
     >
+      {lead}
       <span aria-hidden className={cn('size-2 shrink-0 self-start mt-1.5 rounded-full', DOT[meaning])} />
       <div className="min-w-0 flex-1">
         <div title={hint ?? undefined} className="line-clamp-2 text-sm [overflow-wrap:anywhere] sm:line-clamp-none sm:truncate">{what}</div>
