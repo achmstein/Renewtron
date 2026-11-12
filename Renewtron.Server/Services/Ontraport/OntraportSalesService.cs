@@ -206,6 +206,20 @@ public class OntraportSalesService : IOntraportSalesService
 
     public Task ProcessEligibleRenewalsAsync() => ProcessAsync(onlySearchRetries: false);
 
+    /// <summary>
+    /// A sale's due date read live from ASIC's register search, for a sale nothing else gave one.
+    /// Null when the lookup is switched off (it needs the CAPTCHA solver key), ASIC didn't answer,
+    /// or ASIC doesn't list the name under the ABN.
+    /// </summary>
+    private async Task<DateOnly?> AskAsicForDueDateAsync(OntraportSale sale)
+    {
+        if (_services.GetService(typeof(AsicRegistry.IAsicDueDateService)) is not AsicRegistry.IAsicDueDateService asic || !asic.IsEnabled) return null;
+        var found = await asic.LookupAsync(sale.Abn, CancellationToken.None);
+        if (found is null) return null;
+        await asic.ApplyAsync(sale.Abn, found, DateTime.UtcNow, CancellationToken.None);
+        return found.TryGetValue(BusinessNameText.MatchKey(sale.BusinessName), out var name) ? name.RenewalDate : null;
+    }
+
     /// <summary>Hourly: only the sales whose ASIC name search is due to be tried again.</summary>
     public Task RetryNameSearchesAsync() => ProcessAsync(onlySearchRetries: true);
 
@@ -236,6 +250,9 @@ public class OntraportSalesService : IOntraportSalesService
                     ? await _dbContext.ClientBusinessNames.Where(n => n.Id == nameId).Select(n => n.RenewalDueDate).FirstOrDefaultAsync()
                     : null;
                 known ??= await AsicRegistry.AsicDueDateService.KnownDueDateAsync(_dbContext, sale.Abn, sale.BusinessName);
+                // Nothing on file: ask ASIC's register itself (when it's switched on), and keep what
+                // it says on the client's names too.
+                known ??= await AskAsicForDueDateAsync(sale);
                 if (known is not { } due)
                 {
                     sale.ErrorMessage = NoDueDateMessage;

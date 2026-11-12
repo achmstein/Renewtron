@@ -20,59 +20,71 @@ import { cn } from '@/lib/utils'
  * usually clears it; every place shows the same ones in the same order, with the same dialogs.
  */
 
-export type OrderActionKey = 'retry' | 'check' | 'fixName' | 'setDue' | 'elsewhere' | 'registerAgain' | 'cancelled' | 'refund' | 'reopen'
+export type OrderActionKey = 'retry' | 'check' | 'findDue' | 'fixName' | 'setDue' | 'elsewhere' | 'registerAgain' | 'cancelled' | 'refund' | 'reopen'
+
+/** How many of a renewal's actions show as buttons; the rest go in the "⋯" menu. */
+const VISIBLE = { row: 2, page: 3 } as const
 
 type ActionSpec = {
   label: string
   icon: ReactNode
   /** Can be done to many renewals at once (the list's bulk bar). */
   bulk: boolean
+  /** On a list row, where room is short. */
+  short?: string
   /** Shown in a menu, after a line. */
   destructive?: boolean
 }
 
 export const ORDER_ACTIONS: Record<OrderActionKey, ActionSpec> = {
   retry: { label: 'Try again', icon: <RefreshCw />, bulk: true },
-  check: { label: 'Check ASIC now', icon: <SearchCheck />, bulk: true },
+  check: { label: 'Check ASIC now', short: 'Check ASIC', icon: <SearchCheck />, bulk: true },
+  findDue: { label: 'Find due date at ASIC', short: 'Find due date', icon: <SearchCheck />, bulk: true },
   fixName: { label: 'Correct the name', icon: <PenLine />, bulk: false },
   setDue: { label: 'Set due date', icon: <CalendarDays />, bulk: false },
   elsewhere: { label: 'Renewed elsewhere', icon: <CheckCheck />, bulk: true },
-  registerAgain: { label: 'Register it again', icon: <Stamp />, bulk: true },
+  registerAgain: { label: 'Register it again', short: 'Register again', icon: <Stamp />, bulk: true },
   cancelled: { label: 'Client cancelled', icon: <Ban />, bulk: true },
   reopen: { label: 'Undo decision', icon: <RotateCcw />, bulk: true },
-  refund: { label: 'Refund…', icon: <Banknote />, bulk: false, destructive: true },
+  refund: { label: 'Refund…', short: 'Refund', icon: <Banknote />, bulk: false, destructive: true },
 }
 
 /** The person outcomes an action records. */
 const OUTCOME_OF: Partial<Record<OrderActionKey, string>> = { elsewhere: 'RenewedElsewhere', registerAgain: 'RegisterAgain', cancelled: 'ClientCancelling' }
 
 /**
- * What a renewal offers now, the usual fix first. `decided`: a person or the ASIC check recorded an
- * outcome (only then can it be undone); on a list row, a closed renewal counts as decided.
+ * What a renewal offers now, in the order operators reach for them: the first two show on a list
+ * row, the first three on the renewal's page, the rest in the "⋯" menu. `decided`: a person or the
+ * ASIC check recorded an outcome (only then can it be undone); on a list row, a closed renewal
+ * counts as decided.
  */
 export function actionsFor(o: RenewalOrderRow, decided = o.stage === 'Closed'): OrderActionKey[] {
   const refund: OrderActionKey[] = o.source !== 'Manual' && o.stage !== 'Renewing' ? ['refund'] : []
   const undo: OrderActionKey[] = decided ? ['reopen'] : []
+  const ontraport = o.source === 'Ontraport'
+  const only = <T,>(yes: boolean, a: T): T[] => (yes ? [a] : [])
   switch (o.stage) {
     case 'Renewing': return []
     case 'Renewed': return refund
     case 'Closed': return [...undo, ...refund]
     case 'Due': return ['check', ...refund]
-    case 'Waiting': return ['check', 'elsewhere', ...undo, ...refund]
+    case 'Waiting': return ['check', 'elsewhere', ...refund, ...undo]
   }
-  const ontraport = o.source === 'Ontraport'
   switch (o.reason) {
-    case 'NoDueDate': return [...(ontraport ? ['setDue' as const] : []), 'elsewhere', ...refund]
-    case 'TooLate': return ['check', 'elsewhere', 'registerAgain', ...refund]
-    case 'Lapsed': return ['registerAgain', 'check', ...undo, ...refund]
+    // ASIC's register knows the date; typing it in is the fallback.
+    case 'NoDueDate': return [...only(ontraport, 'findDue' as const), ...only(ontraport, 'setDue' as const), ...refund, 'elsewhere']
+    // Most were renewed by hand, or get their money back.
+    case 'TooLate': return ['check', 'elsewhere', ...refund, 'registerAgain']
+    case 'Lapsed': return ['registerAgain', ...refund, 'check', ...undo]
     case 'BelowMinimumFee': return ['elsewhere', ...refund, 'cancelled']
     case 'Ineligible': return [...refund, 'cancelled', 'elsewhere']
     case 'NameNotFound':
-    case 'NameMismatch': return [...(ontraport ? ['fixName' as const] : []), 'check', 'elsewhere', ...undo, ...refund]
+    case 'NameMismatch': return [...only(ontraport, 'fixName' as const), 'check', 'elsewhere', ...refund, ...undo]
     case 'CardDeclined':
     case 'AttemptsExhausted':
-    case 'InProgressAtAsic': return [...(o.canRetry ? ['retry' as const] : []), 'check', 'elsewhere', ...refund]
-    default: return ['check', 'elsewhere', ...undo, ...refund]
+    case 'InProgressAtAsic': return [...only(o.canRetry, 'retry' as const), 'check', 'elsewhere', ...refund]
+    // ASIC may hold the money: look first.
+    default: return ['check', 'elsewhere', ...refund, ...undo]
   }
 }
 
@@ -108,12 +120,12 @@ export const TAB_GUIDE: Record<string, { title: string; reasons: string[]; steps
     ],
   },
   NoDueDate: {
-    title: 'No due date: no way to tell when to renew these',
+    title: 'No due date: neither Ontraport nor our records had one',
     reasons: ['NoDueDate'],
     steps: [
-      <>Look the name up at ASIC (<a className="text-link hover:underline" href={ASIC_SEARCH} target="_blank" rel="noreferrer">ASIC search</a>) and find its renewal date.</>,
-      <><b>Set due date</b>: it then renews, waits for the window, or moves to Too late on its own.</>,
-      <>Not at ASIC under that ABN? <b>Refund</b>, or ask the client.</>,
+      <>Each morning’s run reads these from ASIC’s register on its own. To do it now, tick them (up to 25) and <b>Find due date</b>.</>,
+      <>Once found, each renews, waits for the window, or moves to Too late on its own.</>,
+      <>ASIC doesn’t list the name under the ABN? Correct the name, <b>Refund</b>, or <b>Set due date</b> by hand (<a className="text-link hover:underline" href={ASIC_SEARCH} target="_blank" rel="noreferrer">ASIC search</a>).</>,
     ],
   },
 }
@@ -166,11 +178,16 @@ export function OrderActionsProvider({ children, onDone }: { children: ReactNode
     onDone?.()
   }
 
-  const runNow = (action: 'retry' | 'check' | 'reopen', orders: RenewalOrderRow[]) => {
+  const runNow = (action: 'retry' | 'check' | 'findDue' | 'reopen', orders: RenewalOrderRow[]) => {
     const one = orders.length === 1 ? orders[0] : null
-    const doing = { retry: 'Trying again…', check: 'Asking ASIC…', reopen: 'Undoing…' }[action]
+    const doing = { retry: 'Trying again…', check: 'Asking ASIC…', findDue: 'Reading the due date at ASIC…', reopen: 'Undoing…' }[action]
     setBusy(true)
-    const call: Promise<{ title: string; description?: string; skipped?: Skipped }> = one
+    const call: Promise<{ title: string; description?: string; skipped?: Skipped }> = action === 'findDue'
+      // One or many: the bulk endpoint asks ASIC once per ABN. For one, a miss is said, not listed.
+      ? api.admin.bulkRenewalOrders({ ids: orders.map((o) => o.id), action: 'find-due' }).then((r) => one && r.skipped.length
+        ? Promise.reject(new Error(r.skipped[0].why))
+        : { title: one ? 'Due date found at ASIC' : r.message, skipped: one ? undefined : r.skipped })
+      : one
       ? action === 'retry' ? api.admin.retryRenewalOrder(one.id).then((r) => ({ title: r.message }))
         : action === 'reopen' ? api.admin.reopenRenewalOrder(one.id).then((r) => ({ title: r.message }))
         : api.admin.checkRenewalOrderAtAsic(one.id).then((r) => ({
@@ -186,7 +203,7 @@ export function OrderActionsProvider({ children, onDone }: { children: ReactNode
 
   const start: Start = (action, orders) => {
     if (orders.length === 0 || busy) return
-    if (action === 'retry' || action === 'check' || action === 'reopen') runNow(action, orders)
+    if (action === 'retry' || action === 'check' || action === 'findDue' || action === 'reopen') runNow(action, orders)
     else setDialog({ action, orders })
   }
 
@@ -222,7 +239,7 @@ export function OrderActionButtons({ order, actions, layout = 'row', extra }: {
   const start = useStart()
   const list = actions ?? actionsFor(order)
   if (list.length === 0 && !extra) return null
-  const shown = layout === 'page' ? 2 : 1
+  const shown = VISIBLE[layout]
   const main = list.slice(0, shown)
   const rest = list.slice(shown)
   return (
@@ -230,7 +247,7 @@ export function OrderActionButtons({ order, actions, layout = 'row', extra }: {
       {main.map((a, i) => (
         <Button key={a} size="sm" variant={i === 0 ? (layout === 'row' ? 'outline' : 'default') : 'outline'}
           className={cn(layout === 'row' && 'h-7 px-2.5 text-xs')} onClick={() => start(a, [order])}>
-          {ORDER_ACTIONS[a].icon}{ORDER_ACTIONS[a].label}
+          {ORDER_ACTIONS[a].icon}{layout === 'row' ? ORDER_ACTIONS[a].short ?? ORDER_ACTIONS[a].label : ORDER_ACTIONS[a].label}
         </Button>
       ))}
       {extra}
@@ -266,7 +283,7 @@ export function BulkBar({ orders, onClear }: { orders: RenewalOrderRow[]; onClea
   if (orders.length === 0) return null
   const lists = orders.map((o) => actionsFor(o))
   const shared = lists[0].filter((a) => ORDER_ACTIONS[a].bulk && lists.every((l) => l.includes(a)))
-    .filter((a) => a !== 'check' || orders.length <= 25)
+    .filter((a) => (a !== 'check' && a !== 'findDue') || orders.length <= 25)
   const amount = orders.reduce((n, o) => n + o.amountPaid, 0)
   return (
     <div className="sticky bottom-4 z-30 mt-4 flex flex-wrap items-center gap-2 rounded-lg border bg-popover px-3 py-2 shadow-lg">
@@ -278,8 +295,8 @@ export function BulkBar({ orders, onClear }: { orders: RenewalOrderRow[]; onClea
           : shared.map((a) => (
             <Button key={a} size="sm" variant="outline" onClick={() => start(a, orders)}>{ORDER_ACTIONS[a].icon}{ORDER_ACTIONS[a].label}</Button>
           ))}
-        {lists.some((l) => l.includes('check')) && orders.length > 25
-          ? <span className="text-caption text-muted-foreground">Check ASIC: up to 25 at once</span> : null}
+        {lists.some((l) => l.includes('check') || l.includes('findDue')) && orders.length > 25
+          ? <span className="text-caption text-muted-foreground">Asking ASIC: up to 25 at once</span> : null}
         <Button size="sm" variant="ghost" onClick={onClear} aria-label="Clear selection"><X />Clear</Button>
       </div>
     </div>

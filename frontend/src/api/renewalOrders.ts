@@ -61,7 +61,7 @@ export const renewalOrdersAdminApi = {
   setRenewalOrderDueDate: (id: string, dueDate: string) =>
     apiFetch<{ message: string }>(`/api/admin/renewal-orders/${id}/due-date`, { method: 'POST', body: JSON.stringify({ dueDate }) }),
   /** One action on many renewals; the ones it can't apply to come back with why. */
-  bulkRenewalOrders: (body: { ids: string[]; action: 'retry' | 'check' | 'outcome' | 'reopen'; outcome?: string; note?: string; reference?: string }) =>
+  bulkRenewalOrders: (body: { ids: string[]; action: 'retry' | 'check' | 'find-due' | 'outcome' | 'reopen'; outcome?: string; note?: string; reference?: string }) =>
     apiFetch<{ message: string; done: number; skipped: Array<{ id: string; businessName: string; why: string }> }>(
       '/api/admin/renewal-orders/bulk', { method: 'POST', body: JSON.stringify(body) }),
   renewalOrder: (id: string) => apiFetch<{

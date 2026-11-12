@@ -182,13 +182,18 @@ public sealed class RenewalOrdersModule : ICarterModule
         // its own; the ones it can't apply to are listed with why. The orders refresh once, after all.
         // Refunds are not here: each is a payment a person picks.
         group.MapPost("/bulk", async (BulkRequest body, ClaimsPrincipal user, ApplicationDbContext db, IBackgroundJobClient jobs,
-            IAsicCheckService check, IRenewalOrderService orders, CancellationToken ct) =>
+            IAsicCheckService check, Renewtron.Services.AsicRegistry.IAsicDueDateService dueDates, IRenewalOrderService orders, CancellationToken ct) =>
         {
             var ids = (body.Ids ?? []).Distinct().ToList();
             if (ids.Count == 0) return Results.BadRequest(new { error = "Pick the renewals first." });
             if (ids.Count > MaxBulk) return Results.BadRequest(new { error = $"Up to {MaxBulk} at a time." });
-            if (body.Action == "check" && ids.Count > MaxBulkCheck)
+            if (body.Action is "check" or "find-due" && ids.Count > MaxBulkCheck)
                 return Results.BadRequest(new { error = $"ASIC is asked one name at a time: up to {MaxBulkCheck} at once." });
+            if (body.Action == "find-due" && !dueDates.IsEnabled)
+                return Results.BadRequest(new { error = "ASIC due-date lookups are switched off in Settings." });
+            // One ASIC register search per ABN, however many of its names were ticked.
+            var asicByAbn = new Dictionary<string, IReadOnlyDictionary<string, Renewtron.Services.AsicRegistry.AsicNameDue>?>();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
             var list = await db.RenewalOrders.Where(o => ids.Contains(o.Id)).ToListAsync(ct);
             var done = 0;
@@ -208,6 +213,21 @@ public sealed class RenewalOrdersModule : ICarterModule
                         await db.SaveChangesAsync(ct);
                         var item = await check.CheckOneAsync(order.Id, ct, refresh: false);
                         result = item is null ? OrderActionResult.No("No due date or ABN to check.") : OrderActionResult.Done(item.Evidence);
+                        break;
+                    case "find-due":
+                        if (!asicByAbn.TryGetValue(order.Abn, out var found))
+                        {
+                            found = await dueDates.LookupAsync(order.Abn, ct);
+                            if (found is not null) await dueDates.ApplyAsync(order.Abn, found, DateTime.UtcNow, ct);
+                            asicByAbn[order.Abn] = found;
+                        }
+                        result = found is null
+                            ? OrderActionResult.No("ASIC didn't answer. Try again later.")
+                            : !found.TryGetValue(BusinessNameText.MatchKey(order.BusinessName), out var name)
+                                ? OrderActionResult.No("ASIC doesn't list this name under the ABN: correct the name, or refund.")
+                                : name.RenewalDate is not { } asicDue
+                                    ? OrderActionResult.No($"ASIC lists it ({name.Status ?? "no status"}) but shows no renewal date.")
+                                    : await RenewalOrderActions.SetDueDateAsync(db, order, asicDue, today, ct);
                         break;
                     case "outcome" when Enum.TryParse<RenewalOrderReason>(body.Outcome, out var outcome):
                         result = RenewalOrderActions.Decide(order, outcome, body.Note, body.Reference, By(user));
@@ -244,7 +264,7 @@ public sealed class RenewalOrdersModule : ICarterModule
     public sealed record FixNameRequest(string BusinessName);
     public sealed record RefundRequest(string Payment, string? Note);
     public sealed record DueDateRequest(DateOnly DueDate);
-    /// <param name="Action">retry, check (ask ASIC), outcome (with Outcome and Note), or reopen.</param>
+    /// <param name="Action">retry, check (ask ASIC), find-due (read the due date from ASIC's register), outcome (with Outcome and Note), or reopen.</param>
     public sealed record BulkRequest(List<Guid>? Ids, string Action, string? Outcome, string? Note, string? Reference);
 
 
