@@ -36,7 +36,7 @@ const DOT: Record<Meaning, string> = {
 /** What the latest line means for whoever is reading. */
 const STANDING: Record<Exclude<Meaning, 'action' | 'quiet'>, string> = {
   done: 'Nothing to do.',
-  working: 'Renewtron is on it; this updates by itself.',
+  working: 'In hand; this updates by itself.',
   waiting: 'Waiting; nothing to do yet.',
 }
 

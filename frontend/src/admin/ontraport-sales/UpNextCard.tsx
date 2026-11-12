@@ -23,7 +23,7 @@ export function UpNextCard({ s }: { s: SaleRow }) {
   return (
     <Card className={cn('relative gap-0.5 p-4', s.renewalRequestId && 'transition-colors hover:bg-muted/50')}>
       {s.renewalRequestId ? (
-        <Link to={`/admin/renewals/${s.renewalRequestId}`} className="absolute inset-0 rounded-xl" aria-label={`Open the renewal for ${s.businessName}`} />
+        <Link to={s.orderId ? `/admin/renewal-orders/${s.orderId}` : `/admin/renewals/${s.renewalRequestId}`} className="absolute inset-0 rounded-xl" aria-label={`Open the renewal for ${s.businessName}`} />
       ) : null}
       {body}
     </Card>

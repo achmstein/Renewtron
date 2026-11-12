@@ -81,7 +81,7 @@ const ASIC_SEARCH = 'https://connectonline.asic.gov.au/RegistrySearch/faces/land
 /** What each problem tab means and how to clear it, for the box above its list. */
 export const TAB_GUIDE: Record<string, { title: string; reasons: string[]; steps: ReactNode[] }> = {
   'to-fix': {
-    title: 'Paid, not renewed: Renewtron stopped',
+    title: 'Paid, not renewed: stopped for a person',
     reasons: ['CardDeclined', 'AttemptsExhausted', 'InProgressAtAsic', 'VerifyPaymentAtAsic', 'NameNotFound', 'NameMismatch', 'AsicRefused', 'NoDueDate'],
     steps: [
       <><b>Card declined or ASIC didn’t answer:</b> tick them and <b>Try again</b>.</>,
@@ -108,11 +108,11 @@ export const TAB_GUIDE: Record<string, { title: string; reasons: string[]; steps
     ],
   },
   NoDueDate: {
-    title: 'No due date: Renewtron can’t tell when to renew these',
+    title: 'No due date: no way to tell when to renew these',
     reasons: ['NoDueDate'],
     steps: [
       <>Look the name up at ASIC (<a className="text-link hover:underline" href={ASIC_SEARCH} target="_blank" rel="noreferrer">ASIC search</a>) and find its renewal date.</>,
-      <><b>Set due date</b>: Renewtron then renews it, waits for the window, or moves it to Too late.</>,
+      <><b>Set due date</b>: it then renews, waits for the window, or moves to Too late on its own.</>,
       <>Not at ASIC under that ABN? <b>Refund</b>, or ask the client.</>,
     ],
   },
@@ -361,7 +361,7 @@ function SetDueDialog({ order, onClose, onDone }: { order: RenewalOrderRow; onCl
         <DialogHeader>
           <DialogTitle>Set the due date: {order.businessName}</DialogTitle>
           <DialogDescription>
-            Find the name’s renewal date at ASIC. Renewtron then renews it, waits for ASIC’s window, or moves it to Too late.
+            Find the name’s renewal date at ASIC. Once saved, it renews, waits for ASIC’s window, or moves to Too late on its own.
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
@@ -453,7 +453,7 @@ function RefundDialog({ order, onClose, onDone }: { order: RenewalOrderRow; onCl
           <DialogTitle>Refund {who}: {order.businessName}</DialogTitle>
           <DialogDescription>
             The money goes back to their card through where they paid. This can’t be undone.
-            {order.stage === 'Renewed' ? ' Renewtron renewed this name: refund only a payment made twice or by mistake.' : ''}
+            {order.stage === 'Renewed' ? ' This name was renewed: refund only a payment made twice or by mistake.' : ''}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">

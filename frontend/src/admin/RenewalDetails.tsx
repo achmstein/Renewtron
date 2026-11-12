@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, RefreshCw, Undo2 } from 'lucide-react'
+import { ArrowLeft, Loader2, RefreshCw, Undo2 } from 'lucide-react'
 import { sileo } from 'sileo'
 import { api } from '../api/client'
 import { pageClass, StatusPill } from './_ui'
@@ -135,7 +135,7 @@ export default function RenewalDetails() {
   )
   const next = data.handledAt && data.status !== 'Completed'
     ? (
-      <NextStep meaning="done" title="Nothing to do; it was handled outside Renewtron." actions={undoButton}>
+      <NextStep meaning="done" title="Nothing to do; it was handled by hand." actions={undoButton}>
         {data.handledNote ?? <>Marked handled <When at={data.handledAt} />.</>}
       </NextStep>
     )
@@ -153,15 +153,30 @@ export default function RenewalDetails() {
         here={`ASIC run of ${new Date(data.initiatedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`}
       />
 
+      {data.order ? (
+        // A run is one try at ASIC for a paid renewal: the renewal is where it's worked.
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+          <span className="min-w-0">
+            One ASIC run for the paid renewal of <span className="font-medium">{data.businessName}</span>.{' '}
+            <span className="text-muted-foreground">Its story, its other runs and every action are on the paid renewal.</span>
+          </span>
+          <Button asChild size="sm"><Link to={`/admin/renewal-orders/${data.order.id}`}><ArrowLeft />Open the paid renewal</Link></Button>
+        </div>
+      ) : null}
+
       <RecordHeader
-        title={headline(data)}
+        title={`ASIC run: ${headline(data)}`}
         sub={<>{data.businessName} · ABN {formatAbn(data.abn)}{data.dueDate ? <> · due <DueIn at={data.dueDate} /></> : null} · started <When at={data.initiatedAt} /></>}
         status={status}
       >
         {next}
       </RecordHeader>
 
-      <JourneyTimeline kind="run" id={id} className="mt-6" />
+      {/* What ASIC did on this run: the step, the error, the references. */}
+      <AsicDid d={data} />
+
+      {/* A run with no paid renewal (a test, an old manual run) tells its own story. */}
+      {data.order ? null : <JourneyTimeline kind="run" id={id} className="mt-6" />}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title="Who it’s for">
@@ -179,7 +194,7 @@ export default function RenewalDetails() {
         <Section title="How it was paid">
           <DetailRow label="Client paid" value={<span className="tabular-nums">{fmtMoney2(data.amount)}</span>} />
           <DetailRow label="Through" value={data.paymentType === 'External'
-            ? (data.sale ? <>Ontraport, <When at={data.sale.syncedAt} /></> : 'Outside Renewtron')
+            ? (data.sale ? <>Ontraport, <When at={data.sale.syncedAt} /></> : 'Outside this app')
             : <>Card via Stripe · {statusOf('payment', data.stripePayment?.paymentStatus).label.toLowerCase()}{data.stripePayment?.paidAt ? <>, <When at={data.stripePayment.paidAt} /></> : null}</>} />
           {data.bpayReference ? (
             <DetailRow label="ASIC fee" value={
@@ -224,12 +239,6 @@ export default function RenewalDetails() {
             <DetailRow label="Client’s card" value={`${data.stripePayment.cardBrand?.toUpperCase() ?? ''} •••• ${data.stripePayment.cardLast4} · ${data.stripePayment.cardExpMonth ?? '--'}/${data.stripePayment.cardExpYear ?? '----'} · ${data.stripePayment.cardholderName ?? ''}`} />
           ) : null}
         </dl>
-        {data.errorMessage ? (
-          <div className="mt-4">
-            <div className="text-caption text-muted-foreground">Last error</div>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{data.errorMessage}</pre>
-          </div>
-        ) : null}
       </TechnicalDetail>
     </div>
     </Skeletonizer>
@@ -238,7 +247,7 @@ export default function RenewalDetails() {
 
 /** The page title: what happened to this renewal, in words. */
 function headline(d: Detail): string {
-  if (d.handledAt && d.status !== 'Completed') return 'Handled outside Renewtron'
+  if (d.handledAt && d.status !== 'Completed') return 'Handled by hand'
   const years = `${d.renewalYears} year${d.renewalYears === 1 ? '' : 's'}`
   if (d.stuck) return 'Renewal stuck: nothing has moved for over 2 hours'
   switch (d.status) {
@@ -249,7 +258,7 @@ function headline(d: Detail): string {
     case 'Pending': return 'Queued to lodge with ASIC'
   }
   if (!paidByClient(d)) return 'Not renewed: the client’s card payment didn’t go through'
-  if (d.nextRetryAt) return `Failed; Renewtron retries ${dueWords(d.nextRetryAt)}`
+  if (d.nextRetryAt) return `Failed; trying again ${dueWords(d.nextRetryAt)}`
   if (d.errorCategory === 'NotDueYet') return 'Not renewed yet: ASIC says it isn’t due'
   if (paymentAtRisk(d)) return 'Failed at the payment step: check ASIC before retrying'
   if (d.errorCategory === 'AlreadyInProgress') return 'Blocked: ASIC has a renewal open for this ABN'
@@ -305,7 +314,7 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
   }
   if (d.nextRetryAt) {
     return (
-      <NextStep meaning="waiting" title={`Renewtron tries again ${dueWords(d.nextRetryAt)}.`} actions={retryButton}>
+      <NextStep meaning="waiting" title={`Tries again on its own ${dueWords(d.nextRetryAt)}.`} actions={retryButton}>
         <span title={d.errorMessage ?? undefined}>You can retry now instead.</span>
       </NextStep>
     )
@@ -327,6 +336,33 @@ function nextStep(d: Detail, retryButton: ReactNode, markBpay: (paid: boolean) =
   )
 }
 
+
+/** What happened at ASIC on this run, plainly: the part a paid renewal's page doesn't show. */
+function AsicDid({ d }: { d: Detail }) {
+  const failed = d.status === 'Failed'
+  return (
+    <Card className="mt-6 gap-0 py-0">
+      <CardHeader className="border-b py-4"><CardTitle>What ASIC did</CardTitle></CardHeader>
+      <CardContent className="px-4 py-4 sm:px-6">
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+          <DetailRow label="Started" value={fmtDateTime(d.initiatedAt)} />
+          <DetailRow label="Tries" value={`${d.attemptCount || 1}${d.lastAttemptAt ? `, last ${fmtDateTime(d.lastAttemptAt)}` : ''}${d.cardFailureCount ? ` · card declined ${d.cardFailureCount}×` : ''}`} />
+          {d.completedAt ? <DetailRow label="Lodged" value={fmtDateTime(d.completedAt)} /> : null}
+          {failed && d.failedAtStep ? <DetailRow label="Stopped at" value={d.failedAtStep} /> : null}
+          {failed && d.nextRetryAt ? <DetailRow label="Tries again" value={fmtDateTime(d.nextRetryAt)} /> : null}
+          {d.transactionReference ? <DetailRow label="ASIC reference" value={d.transactionReference} mono /> : null}
+          {d.bpayReference ? <DetailRow label="BPAY bill" value={`Biller ${d.bpayBillerCode ?? '—'} · ref ${d.bpayReference}`} mono /> : null}
+        </dl>
+        {d.errorMessage ? (
+          <div className="mt-4">
+            <div className="text-caption text-muted-foreground">{failed ? 'What ASIC said' : 'Last error'}</div>
+            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border bg-muted/50 p-3 text-caption">{d.errorMessage}</pre>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
 
 function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s

@@ -24,7 +24,7 @@ export const ontraportSalesAdminApi = {
     if (params.page) qs.set('page', String(params.page))
     if (params.pageSize) qs.set('pageSize', String(params.pageSize))
     const suffix = qs.toString() ? `?${qs}` : ''
-    type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null; clientId?: string | null; handledAt?: string | null }
+    type SaleItem = { id: string; contactName: string; email: string; abn: string; businessName: string; renewalYears: number; amountPaid: number; status: string; syncedAt: string; renewalDueDate?: string | null; errorMessage?: string | null; renewalRequestId?: string | null; renewalStatus?: string | null; renewalFailedAtStep?: string | null; renewalErrorMessage?: string | null; clientId?: string | null; handledAt?: string | null; orderId?: string | null }
     return apiFetch<{
       filteredCount: number
       page: number
@@ -84,6 +84,8 @@ export const ontraportSalesAdminApi = {
     } | null
     keyRequests: Array<{ id: string; status: string; createdAt: string; referenceNumber: string | null; keyReceivedAt: string | null }>
     keyLetters: Array<{ id: string; status: string; receivedAt: string; hasKey: boolean }>
+    /** The paid renewal this sale became: where it's worked. */
+    orderId: string | null
   }>(`/api/admin/ontraport-sales/${id}`),
   /** Puts back on the work queues a sale the old-records cleanup marked handled. */
   unmarkSaleHandled: (id: string) =>

@@ -155,7 +155,7 @@ public static class RenewalOrderActions
         var days = due.DayNumber - today.DayNumber;
         return OrderActionResult.Done(days switch
         {
-            > 29 => $"Due {due:d MMM yyyy}. Renewtron renews it when ASIC opens the window, {due.AddDays(-29):d MMM}.",
+            > 29 => $"Due {due:d MMM yyyy}. It renews on its own when ASIC opens the window, {due.AddDays(-29):d MMM}.",
             < -RenewalOrderProjection.TooLateDays => $"Due {due:d MMM yyyy}: too late to renew online. Refund, or register it again.",
             _ => $"Due {due:d MMM yyyy}. The next processing run (07:00) renews it.",
         });

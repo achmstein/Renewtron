@@ -83,12 +83,12 @@ public class JourneyTests
             "Jane opened the payment page",
             "Paid $99.00 by card (visa ending 4242) to renew SMITH PLUMBING for 1 year",
             "Emailed jane@example.com \"Your renewal receipt\"",
-            "Renewtron started renewing SMITH PLUMBING at ASIC",
+            "Started renewing SMITH PLUMBING at ASIC",
             "Renewing SMITH PLUMBING at ASIC failed at \"Complete Payment Action\"",
             "Staff marked the ASIC run handled",
-            "Renewtron looked up ABN 49642383462 at ASIC: 1 name: SMITH PLUMBING",
-            "Renewtron started renewing SMITH PLUMBING at ASIC",
-            "ASIC took the renewal of SMITH PLUMBING, to be paid by BPAY",
+            "Looked up ABN 49642383462 at ASIC: 1 name: SMITH PLUMBING",
+            "Started renewing SMITH PLUMBING at ASIC",
+            "ASIC took the renewal of SMITH PLUMBING, paid by BPAY",
             "Paid ASIC's BPAY bill for SMITH PLUMBING: $54.00",
         ], texts);
     }
@@ -102,7 +102,7 @@ public class JourneyTests
         var declined = Assert.Single(events, e => e.Text.Contains("failed"));
         Assert.Equal((JourneyRecord.Run, ids.FirstRun, "quiet", "Card declined at ASIC"), (declined.Record, declined.RecordId, declined.Meaning, declined.Detail)); // handled since
         var bpay = Assert.Single(events, e => e.Text.StartsWith("ASIC took"));
-        Assert.Equal((ids.RetryRun, "waiting", "Biller 17301, reference 8596799759492"), (bpay.RecordId, bpay.Meaning, bpay.Detail));
+        Assert.Equal((ids.RetryRun, "done", "Biller 17301, reference 8596799759492"), (bpay.RecordId, bpay.Meaning, bpay.Detail));
         Assert.All(events, e => Assert.Equal(DateTimeKind.Utc, e.At.Kind));
     }
 
@@ -127,7 +127,7 @@ public class JourneyTests
         db.SaveChanges();
 
         var texts = (await Journey(db, JourneyRecord.Lead, ids.Lead))!.Events.Select(e => e.Text).ToList();
-        Assert.True(texts.IndexOf(texts.First(t => t.StartsWith("Paid $99.00 by card"))) < texts.IndexOf("Renewtron started renewing SMITH PLUMBING at ASIC"));
+        Assert.True(texts.IndexOf(texts.First(t => t.StartsWith("Paid $99.00 by card"))) < texts.IndexOf("Started renewing SMITH PLUMBING at ASIC"));
     }
 
     [Fact]
@@ -186,8 +186,8 @@ public class JourneyTests
         Assert.Equal(
         [
             "Bob Builder paid $199.00 in Ontraport to renew BOB BUILDS for 3 years",
-            "Renewtron looked up ABN 22222222222 at ASIC: 1 name: BOB BUILDS",
-            "Renewtron started renewing BOB BUILDS at ASIC",
+            "Looked up ABN 22222222222 at ASIC: 1 name: BOB BUILDS",
+            "Started renewing BOB BUILDS at ASIC",
             "ASIC renewed BOB BUILDS",
         ], fromSale.Select(e => e.Text));
         Assert.Equal(fromSale, (await Journey(db, JourneyRecord.Order, order.Id))!.Events);
@@ -203,7 +203,7 @@ public class JourneyTests
         db.SaveChanges();
 
         var waiting = Assert.Single((await Journey(db, JourneyRecord.Run, ids.FirstRun))!.Events, e => e.Text.StartsWith("Not renewed yet"));
-        Assert.Equal(("Not renewed yet; Renewtron tries again 21 Nov", "waiting"), (waiting.Text, waiting.Meaning));
+        Assert.Equal(("Not renewed yet; trying again 21 Nov", "waiting"), (waiting.Text, waiting.Meaning));
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class JourneyTests
         // The declined run was handled: it can be put back, not retried. The BPAY run is paid: nothing to do.
         var first = Assert.Single(records, c => c.Id == ids.FirstRun);
         Assert.Equal(["put-back"], first.Actions);
-        Assert.Contains(first.Facts, f => f.Label == "Status" && f.Value == "Handled outside Renewtron");
+        Assert.Contains(first.Facts, f => f.Label == "Status" && f.Value == "Handled by hand");
         var retry = Assert.Single(records, c => c.Id == ids.RetryRun);
         Assert.Empty(retry.Actions);
         Assert.Contains(retry.Facts, f => f.Label == "BPAY" && f.Value.StartsWith("Biller 17301, ref 8596799759492, $54.00: paid"));

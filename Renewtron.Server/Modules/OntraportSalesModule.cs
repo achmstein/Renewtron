@@ -20,15 +20,18 @@ public sealed class OntraportSalesModule : ICarterModule
     public sealed record SaleRow(
         Guid Id, string ContactName, string Email, string Abn, string BusinessName, int RenewalYears, decimal AmountPaid,
         string Status, DateTime SyncedAt, DateTime? RenewalDueDate, string? ErrorMessage, Guid? RenewalRequestId,
-        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage, Guid? ClientId, DateTime? HandledAt);
+        string? RenewalStatus, string? RenewalFailedAtStep, string? RenewalErrorMessage, Guid? ClientId, DateTime? HandledAt,
+        Guid? OrderId);
 
-    private static IQueryable<SaleRow> Project(IQueryable<OntraportSale> q) => q.Select(s => new SaleRow(
+    /// <summary>A sale as lists show it, with the paid renewal it became (where it's worked).</summary>
+    private static IQueryable<SaleRow> Project(ApplicationDbContext db, IQueryable<OntraportSale> q) => q.Select(s => new SaleRow(
         s.Id, s.ContactName, s.Email, s.Abn, s.BusinessName, s.RenewalYears, s.AmountPaid,
         s.Status.ToString(), s.SyncedAt, s.RenewalDueDate, s.ErrorMessage, s.RenewalRequestId,
         s.RenewalRequest != null ? s.RenewalRequest.Status.ToString() : null,
         s.RenewalRequest != null ? s.RenewalRequest.FailedAtStep : null,
         s.RenewalRequest != null ? s.RenewalRequest.ErrorMessage : null,
-        s.ClientId, s.HandledAt));
+        s.ClientId, s.HandledAt,
+        db.RenewalOrders.Where(o => o.Source == RenewalOrderSource.Ontraport && o.SourceId == s.Id).Select(o => (Guid?)o.Id).FirstOrDefault()));
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -87,12 +90,12 @@ public sealed class OntraportSalesModule : ICarterModule
             var filteredCount = view switch { "overdue" => buckets.overdue, "7d" => buckets.soon7, "30d" => buckets.soon30, _ => buckets.all };
 
             // Most urgent first; sales with no due date last.
-            var items = await Project(Bucket(view)
+            var items = await Project(db, Bucket(view)
                     .OrderBy(s => s.RenewalDueDate == null).ThenBy(s => s.RenewalDueDate).ThenByDescending(s => s.SyncedAt)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize))
                 .ToListAsync();
-            var upNext = await Project(Pipeline().OrderBy(s => s.RenewalDueDate).Take(5)).ToListAsync();
+            var upNext = await Project(db, Pipeline().OrderBy(s => s.RenewalDueDate).Take(5)).ToListAsync();
 
             var statusFacet = await Filtered(applyStatus: false)
                 .GroupBy(s => s.Status).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
@@ -258,6 +261,8 @@ public sealed class OntraportSalesModule : ICarterModule
                 renewal,
                 keyRequests,
                 keyLetters,
+                // The paid renewal this sale became: where it's worked.
+                orderId = await db.RenewalOrders.AsNoTracking().Where(o => o.Source == RenewalOrderSource.Ontraport && o.SourceId == s.Id).Select(o => (Guid?)o.Id).FirstOrDefaultAsync(),
             });
         });
 

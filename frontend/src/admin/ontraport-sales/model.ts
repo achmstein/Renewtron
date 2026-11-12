@@ -15,7 +15,7 @@ const sampleSale = (i: number): Sale => ({
   id: sample.id(i), contactName: sample.name(i), email: sample.email(i), abn: sample.abn(i), businessName: sample.business(i),
   renewalYears: i % 3 === 0 ? 3 : 1, amountPaid: sample.money(i), status: SAMPLE_STATUSES[i % SAMPLE_STATUSES.length],
   syncedAt: sample.daysAgo(i), renewalDueDate: sample.daysAhead(3 + i * 4), errorMessage: null, renewalRequestId: null,
-  renewalStatus: null, renewalFailedAtStep: null, renewalErrorMessage: null, clientId: null, handledAt: null,
+  renewalStatus: null, renewalFailedAtStep: null, renewalErrorMessage: null, clientId: null, handledAt: null, orderId: null,
 })
 // withDaysUntil is a function declaration further down, so it's hoisted and callable here.
 export const SKELETON_ROWS = sampleRows<SaleRow>(8, (i) => withDaysUntil(sampleSale(i)))

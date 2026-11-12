@@ -181,7 +181,7 @@ export default function OntraportSales() {
             </Button>
             {s.renewalRequestId ? (
               <Button asChild size="sm" variant="outline">
-                <Link to={`/admin/renewals/${s.renewalRequestId}`}>{isFailed ? 'Investigate' : 'Open renewal'}</Link>
+                <Link to={s.orderId ? `/admin/renewal-orders/${s.orderId}` : `/admin/renewals/${s.renewalRequestId}`}>{isFailed ? 'Investigate' : 'Open renewal'}</Link>
               </Button>
             ) : null}
           </div>

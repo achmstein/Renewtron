@@ -48,6 +48,7 @@ const SAMPLE_SALE: Detail = {
   },
   keyRequests: [],
   keyLetters: [{ id: sample.id(3), status: 'Completed', receivedAt: sample.daysAgo(1), hasKey: true }],
+  orderId: null,
 }
 
 export default function SaleDetails() {
@@ -228,7 +229,7 @@ function nextStep(d: Detail, tryAgain: ReactNode, keyButton: ReactNode, undoButt
     }
     return (
       <NextStep meaning={s.meaning} title={s.meaning === 'action' ? 'The renewal needs a person.' : 'Nothing to do here; follow the renewal.'}
-        actions={<Button asChild size="sm"><Link to={`/admin/renewals/${r.id}`}>Open renewal</Link></Button>}>
+        actions={<Button asChild size="sm"><Link to={d.orderId ? `/admin/renewal-orders/${d.orderId}` : `/admin/renewals/${r.id}`}>Open renewal</Link></Button>}>
         Renewal: {s.label.toLowerCase()}, started <When at={r.initiatedAt} />.
       </NextStep>
     )

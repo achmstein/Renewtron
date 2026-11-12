@@ -154,11 +154,11 @@ function nextStep(o: RenewalOrderRow, d: RenewalOrderDecision, hint: string | un
     case 'NeedsPerson':
       return <NextStep meaning="action" title={NEEDS[o.reason ?? ''] ?? hint ?? 'This renewal needs you.'} actions={actions}>{note}</NextStep>
     case 'Renewing':
-      return <NextStep meaning="working" title="Nothing to do; Renewtron is renewing it." actions={actions}>{o.nextActionAt ? <>Next try <When at={o.nextActionAt} />.{o.note ? ` ${o.note}` : ''}</> : 'This page updates by itself.'}</NextStep>
+      return <NextStep meaning="working" title="Nothing to do; it’s renewing now." actions={actions}>{o.nextActionAt ? <>Next try <When at={o.nextActionAt} />.{o.note ? ` ${o.note}` : ''}</> : 'This page updates by itself.'}</NextStep>
     case 'Due':
       return <NextStep meaning="working" title="Nothing to do yet." actions={actions}>The next processing run (07:00) renews it.</NextStep>
     case 'Waiting':
-      return <NextStep meaning="waiting" title="Nothing to do; Renewtron looks after it." actions={actions}>
+      return <NextStep meaning="waiting" title="Nothing to do; it renews on its own." actions={actions}>
         {o.reason === 'NotOfferedNow' ? note : o.nextActionAt ? <>ASIC opens the window <When at={o.nextActionAt} />.</> : null}
       </NextStep>
     case 'Renewed':
@@ -172,7 +172,7 @@ function nextStep(o: RenewalOrderRow, d: RenewalOrderDecision, hint: string | un
 
 /** For a renewal that needs a person: what to do, in the order of its buttons. */
 const NEEDS: Record<string, string> = {
-  NoDueDate: 'Find the due date at ASIC and set it; Renewtron takes it from there.',
+  NoDueDate: 'Find the due date at ASIC and set it; it’s taken from there.',
   TooLate: 'Too late to renew online. Check ASIC: renewed elsewhere, register it again, or refund.',
   Lapsed: 'ASIC cancelled the name. Offer to register it again, or refund.',
   BelowMinimumFee: 'Paid under the fee. Renew it by hand and mark it renewed elsewhere, or refund.',
@@ -180,7 +180,7 @@ const NEEDS: Record<string, string> = {
   NameNotFound: 'ASIC doesn’t list this name under the ABN. Correct the name, or check ASIC.',
   NameMismatch: 'ASIC spells the name differently. Correct it and it goes back in the queue.',
   CardDeclined: 'ASIC declined the card. Try again.',
-  AttemptsExhausted: 'Renewtron couldn’t get through to ASIC. Try again.',
+  AttemptsExhausted: 'ASIC didn’t answer, and the automatic retries ran out. Try again.',
   InProgressAtAsic: 'ASIC has another renewal open for this ABN. Try again once it clears.',
   VerifyPaymentAtAsic: 'ASIC may already hold the money. Check ASIC before anything else.',
   AsicRefused: 'ASIC refused the details. Check ASIC, then decide.',
@@ -196,7 +196,7 @@ function AsicSaid({ d }: { d: RenewalOrderDecision }) {
         {d.evidence ? <p>{d.evidence}</p> : <p className="text-muted-foreground">Nothing recorded yet.</p>}
         <p className="text-caption text-muted-foreground">
           {d.evidenceSource ? <>From {EVIDENCE_FROM[d.evidenceSource]}{d.evidenceAt ? <>, <When at={d.evidenceAt} /></> : null}. </> : null}
-          {d.asicCheckedAt ? <>Renewtron last asked ASIC <When at={d.asicCheckedAt} />.</> : null}
+          {d.asicCheckedAt ? <>Last asked ASIC <When at={d.asicCheckedAt} />.</> : null}
         </p>
       </CardContent>
     </Card>

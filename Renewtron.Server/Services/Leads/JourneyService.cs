@@ -159,7 +159,7 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             var who = s.InitiatedBy switch
             {
                 SearchInitiator.Admin => "Staff looked up",
-                SearchInitiator.System => "Renewtron looked up",
+                SearchInitiator.System => "Looked up",
                 _ => lead is null || string.IsNullOrWhiteSpace(lead.FullName) ? "The visitor looked up" : $"{FirstName(lead.FullName)} looked up",
             };
             var group = visitor ? Visit(lead) : null;
@@ -172,12 +172,12 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
             else
                 Add(s.SearchedAt, $"{who} ABN {s.Abn}, but ASIC didn't answer", "quiet", JourneyRecord.Search, s.Id, s.ErrorMessage, group);
             if (s.VerifiedAt is { } v)
-                Add(v, "Renewtron checked the lookup with ASIC again", string.IsNullOrEmpty(s.VerificationError) ? "done" : "quiet", JourneyRecord.Search, s.Id, s.VerificationError, group);
+                Add(v, "Checked the lookup with ASIC again", string.IsNullOrEmpty(s.VerificationError) ? "done" : "quiet", JourneyRecord.Search, s.Id, s.VerificationError, group);
 
             Card(JourneyRecord.Search, s.Id, $"Lookup of ABN {s.Abn}",
             [
                 Fact("ABN", s.Abn, mono: true),
-                Fact("Looked up", $"{When(s.SearchedAt)} by {s.InitiatedBy switch { SearchInitiator.Admin => "staff", SearchInitiator.System => "Renewtron", _ => "the visitor" }}"),
+                Fact("Looked up", $"{When(s.SearchedAt)} by {s.InitiatedBy switch { SearchInitiator.Admin => "staff", SearchInitiator.System => "us, automatically", _ => "the visitor" }}"),
                 Fact("Found", s.Success ? (s.Results.Count == 0 ? "No business names" : string.Join(", ", s.Results.Select(r => r.BusinessName))) : null),
                 Fact("Error", s.Success ? null : s.ErrorMessage ?? "ASIC didn't answer"),
             ]);
@@ -266,17 +266,20 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 if (paid > started) started = paid;
             }
 
-            Add(started, $"Renewtron started renewing {name} at ASIC{(r.IsTest ? " (test: not sent to ASIC)" : "")}", "working", JourneyRecord.Run, r.Id);
+            Add(started, $"Started renewing {name} at ASIC{(r.IsTest ? " (test: not sent to ASIC)" : "")}", "working", JourneyRecord.Run, r.Id);
 
             // Airwallex may already be paying the bill: then it's in hand, not waiting on anyone.
             var paying = BpayPaymentService.IsTransferUnderWay(r.AirwallexTransferStatus, r.BpayPaidAt);
             if (r.BpayReference is { Length: > 0 })
             {
                 var billText = $"Biller {r.BpayBillerCode}, reference {r.BpayReference}{(r.TransactionReference is { Length: > 0 } t ? $", transaction {t}" : "")}";
-                if (!paying)
-                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}, to be paid by BPAY", "waiting", JourneyRecord.Run, r.Id, billText);
+                // Once the bill is paid, the lodgement reads as done: the paid line says when.
+                if (r.BpayPaidAt != null)
+                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}, paid by BPAY", "done", JourneyRecord.Run, r.Id, billText);
+                else if (!paying)
+                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}; its BPAY bill is still to pay", "waiting", JourneyRecord.Run, r.Id, billText);
                 else if (r.AirwallexTransferStatus == BpayPaymentService.Unknown)
-                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}; Renewtron sent its BPAY bill to Airwallex and is checking it went through", "working", JourneyRecord.Run, r.Id, billText);
+                    Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}; its BPAY bill went to Airwallex, checking it went through", "working", JourneyRecord.Run, r.Id, billText);
                 else
                     Add(r.CompletedAt ?? r.LastAttemptAt ?? r.InitiatedAt, $"ASIC took the renewal of {name}; Airwallex is paying its BPAY bill now{(r.BpayAmount is { } sent ? $" (${sent:0.00})" : "")}", "working", JourneyRecord.Run, r.Id,
                         $"{billText}. Airwallex transfer {r.AirwallexTransferId} is {Words(r.AirwallexTransferStatus!)}");
@@ -298,7 +301,7 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
                 var at = r.LastAttemptAt ?? r.InitiatedAt;
                 var where = r.FailedAtStep is { Length: > 0 } step ? $" at \"{step}\"" : "";
                 if (r.NextRetryAt is { } next && r.HandledAt == null)
-                    Add(at, $"Not renewed yet{tries}; Renewtron tries again {Sydney(next):d MMM}", "waiting", JourneyRecord.Run, r.Id, r.ErrorMessage);
+                    Add(at, $"Not renewed yet{tries}; trying again {Sydney(next):d MMM}", "waiting", JourneyRecord.Run, r.Id, r.ErrorMessage);
                 else
                     Add(at, $"Renewing {name} at ASIC failed{where}{tries}", r.HandledAt == null ? "action" : "quiet", JourneyRecord.Run, r.Id, r.ErrorMessage,
                         next: RenewalRetry.Check(r) == null
@@ -368,14 +371,14 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
     /// <summary>A run's state in a few words.</summary>
     private static string RunStatus(RenewalRequest r)
     {
-        if (r.HandledAt != null && r.Status != RenewalStatus.Completed) return "Handled outside Renewtron";
+        if (r.HandledAt != null && r.Status != RenewalStatus.Completed) return "Handled by hand";
         return r.Status switch
         {
             RenewalStatus.Completed when r.BpayReference is { Length: > 0 } && r.BpayPaidAt == null => "Lodged; ASIC's BPAY bill still to pay",
             RenewalStatus.Completed => "Renewed",
             RenewalStatus.Processing => "Lodging with ASIC now",
             RenewalStatus.Pending => "Queued to lodge with ASIC",
-            _ when r.NextRetryAt != null => $"Failed; Renewtron tries again {When(r.NextRetryAt.Value)}",
+            _ when r.NextRetryAt != null => $"Failed; trying again {When(r.NextRetryAt.Value)}",
             _ => r.ErrorCategory is { Length: > 0 } c ? $"Failed ({Words(c)})" : "Failed",
         };
     }
@@ -409,7 +412,7 @@ public class JourneyService(ApplicationDbContext db) : IJourneyService
     {
         var e = error ?? "";
         if (channel == OutboundChannel.Email && (e.Contains("401") || e.Contains("403") || e.Contains("authorization grant", StringComparison.OrdinalIgnoreCase)))
-            return "SendGrid refused Renewtron's key, so no emails are going out. Put a working SendGrid key in Settings, then send it again.";
+            return "SendGrid refused our key, so no emails are going out. Put a working SendGrid key in Settings, then send it again.";
         if (channel == OutboundChannel.Sms)
             return "Check the mobile number; the text didn't reach them.";
         return "Send it again; if it fails again, check the address.";
