@@ -505,6 +505,7 @@ public class BusinessNameRegistrationService(
         }
 
         reg.AsicFee = fee;
+        reg.BpaySentAt = DateTime.UtcNow;
         reg.AirwallexTransferStatus = BpayPaymentService.Unknown; // on record before sending
         reg.BpayPaymentError = null;
         await db.SaveChangesAsync();

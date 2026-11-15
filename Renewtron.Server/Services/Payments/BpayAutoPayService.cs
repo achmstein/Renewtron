@@ -91,8 +91,9 @@ public class BpayAutoPayService(
     }
 
     /// <summary>
-    /// What has gone out today (AEST) or is still on its way: paid today, or a transfer not yet
-    /// finished. Counts manual payments too, so the cap covers everything.
+    /// What was sent to Airwallex today (AEST), by hand or by this job, and didn't fail. Counted by
+    /// when it was sent, not by whether it has finished: a transfer Airwallex holds in PROCESSING for
+    /// days used to count against every day's limit and stopped auto-pay altogether (Nov 2026).
     /// </summary>
     private async Task<decimal> SpentTodayAsync(CancellationToken ct)
     {
@@ -102,12 +103,12 @@ public class BpayAutoPayService(
         var ended = BpayPaymentService.Ended.ToList();
 
         var renewalsSpent = await db.RenewalRequests
-            .Where(r => r.BpayAmount != null && r.AirwallexTransferStatus != null
-                && (r.BpayPaidAt >= since || (r.BpayPaidAt == null && !ended.Contains(r.AirwallexTransferStatus))))
+            .Where(r => r.BpayAmount != null && r.BpaySentAt >= since
+                && r.AirwallexTransferStatus != null && !ended.Contains(r.AirwallexTransferStatus))
             .SumAsync(r => r.BpayAmount ?? 0, ct);
-        var regsInFlight = await db.BusinessNameRegistrations
-            .Where(r => r.AirwallexTransferStatus != null && (r.AsicPaidAt >= since || (r.AsicPaidAt == null && !ended.Contains(r.AirwallexTransferStatus))))
+        var regsSent = await db.BusinessNameRegistrations
+            .Where(r => r.BpaySentAt >= since && r.AirwallexTransferStatus != null && !ended.Contains(r.AirwallexTransferStatus))
             .Select(r => r.Years).ToListAsync(ct);
-        return renewalsSpent + regsInFlight.Sum(y => asic.CurrentValue.FeeFor(y) ?? 0);
+        return renewalsSpent + regsSent.Sum(y => asic.CurrentValue.FeeFor(y) ?? 0);
     }
 }

@@ -60,6 +60,8 @@ public class RenewalRequest
     public string? AirwallexTransferStatus { get; set; }
     public string? BpayPaymentError { get; set; }
     public int BpayPaymentAttempts { get; set; }
+    /// <summary>When the latest transfer was sent to Airwallex. The auto-pay daily limit counts by this.</summary>
+    public DateTime? BpaySentAt { get; set; }
 
     // Card attempts at ASIC that failed without taking money (declined, or the payment
     // didn't go through). Once it reaches AsicSettings.BpayAfterCardFailures, runs pay by BPAY.

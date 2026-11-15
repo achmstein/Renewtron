@@ -111,6 +111,7 @@ public class BpayPaymentService : IBpayPaymentService
 
         // Saved before sending: if the process dies mid-call, the attempt is still on record.
         renewal.BpayAmount = amount;
+        renewal.BpaySentAt = DateTime.UtcNow;
         renewal.AirwallexTransferStatus = Unknown;
         renewal.BpayPaymentError = null;
         await _db.SaveChangesAsync();

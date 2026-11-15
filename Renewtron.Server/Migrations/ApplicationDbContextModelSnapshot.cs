@@ -716,6 +716,9 @@ namespace Renewtron.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<DateTime?>("BpaySentAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("BusinessName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1794,6 +1797,9 @@ namespace Renewtron.Migrations
 
                     b.Property<string>("BpayReference")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("BpaySentAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int>("CardFailureCount")
                         .HasColumnType("int");

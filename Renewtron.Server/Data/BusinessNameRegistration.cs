@@ -52,6 +52,8 @@ public class BusinessNameRegistration
     public string? AirwallexTransferId { get; set; }
     public string? AirwallexTransferStatus { get; set; }
     public int BpayPaymentAttempts { get; set; }
+    /// <summary>When the latest transfer was sent to Airwallex. The auto-pay daily limit counts by this.</summary>
+    public DateTime? BpaySentAt { get; set; }
     public string? BpayPaymentError { get; set; }
     public DateTime? AsicPaidAt { get; set; }
     /// <summary>The last myTransactions row we read for it: transaction and payment status.</summary>
