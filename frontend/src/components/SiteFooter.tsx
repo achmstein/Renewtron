@@ -1,3 +1,43 @@
+import { Link } from 'react-router-dom'
+import { siteLinks } from './siteLinks'
+
+type FooterLink = { label: string; to?: string; href?: string }
+
+const columns: Array<{ title: string; links: FooterLink[] }> = [
+  {
+    title: 'Services',
+    links: [
+      { label: 'Renew Business Name', to: '/' },
+      { label: 'Register Business Name', to: '/register' },
+      { label: 'Update ASIC Key', to: '/updateasickey' },
+      { label: 'Cancel Registration', href: siteLinks.cancel },
+    ],
+  },
+  {
+    title: 'Help & Support',
+    links: [
+      { label: 'About Us', href: siteLinks.about },
+      { label: 'Contact Us', href: siteLinks.contact },
+      { label: 'News & Guides', href: siteLinks.news },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { label: 'Privacy Policy', href: siteLinks.privacy },
+      { label: 'Terms of Use', href: siteLinks.terms },
+    ],
+  },
+]
+
+const linkClass = 'text-[14px] text-gray-500 hover:text-gray-900 hover:underline'
+
+function FooterItem({ link }: { link: FooterLink }) {
+  return link.to
+    ? <Link to={link.to} className={linkClass}>{link.label}</Link>
+    : <a href={link.href} className={linkClass}>{link.label}</a>
+}
+
 export default function SiteFooter() {
   const year = new Date().getFullYear()
   return (
@@ -11,44 +51,19 @@ export default function SiteFooter() {
             </p>
           </div>
 
-          <div>
-            <h4 className="font-semibold text-[13px] text-gray-900 mb-4 uppercase tracking-wide">Services</h4>
-            <ul className="space-y-2.5">
-              <li><span className="text-[14px] text-gray-500">Renew Business Name</span></li>
-              <li><span className="text-[14px] text-gray-500">Register an ABN</span></li>
-              <li><span className="text-[14px] text-gray-500">Register a Company</span></li>
-              <li><span className="text-[14px] text-gray-500">Register a Trust</span></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-[13px] text-gray-900 mb-4 uppercase tracking-wide">Resources</h4>
-            <ul className="space-y-2.5">
-              <li><span className="text-[14px] text-gray-500">ABN Lookup</span></li>
-              <li><span className="text-[14px] text-gray-500">Fee Schedule</span></li>
-              <li><span className="text-[14px] text-gray-500">FAQs</span></li>
-              <li><span className="text-[14px] text-gray-500">Blog</span></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-[13px] text-gray-900 mb-4 uppercase tracking-wide">Contact</h4>
-            <ul className="space-y-2.5">
-              <li><span className="text-[14px] text-gray-500">Help Centre</span></li>
-              <li><span className="text-[14px] text-gray-500">Email Support</span></li>
-              <li><span className="text-[14px] text-gray-500">Phone Support</span></li>
-              <li><span className="text-[14px] text-gray-500">Live Chat</span></li>
-            </ul>
-          </div>
+          {columns.map((col) => (
+            <div key={col.title}>
+              <h4 className="font-semibold text-[13px] text-gray-900 mb-4 uppercase tracking-wide">{col.title}</h4>
+              <ul className="space-y-2.5">
+                {col.links.map((link) => <li key={link.label}><FooterItem link={link} /></li>)}
+              </ul>
+            </div>
+          ))}
         </div>
 
         <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4 text-[13px] text-gray-500">
           <span>© {year} Business Name Services. All rights reserved.</span>
-          <div className="flex gap-6">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-            <span>Disclaimer</span>
-          </div>
+          <span className="text-center md:text-right">This is NOT an official ASIC page. We are a separate third party service.</span>
         </div>
       </div>
     </footer>

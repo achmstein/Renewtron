@@ -1,8 +1,37 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { siteLinks } from './siteLinks'
+
+// Our own pages, then the main site's (cancel, news, contact) so the menu matches applyforanabn.au.
+const navItems = [
+  { label: 'Renew Business Name', to: '/', end: true },
+  { label: 'Register Business Name', to: '/register' },
+  { label: 'Cancel', href: siteLinks.cancel },
+  { label: 'News & Guides', href: siteLinks.news },
+  { label: 'Contact Us', href: siteLinks.contact },
+]
 
 export default function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const renderItems = (base: string, onClick?: () => void) =>
+    navItems.map((item) =>
+      item.to ? (
+        <NavLink
+          key={item.label}
+          to={item.to}
+          end={item.end}
+          onClick={onClick}
+          className={({ isActive }) => `${isActive ? 'nav-link-active' : 'nav-link-inactive'} ${base}`}
+        >
+          {item.label}
+        </NavLink>
+      ) : (
+        <a key={item.label} href={item.href} className={`nav-link-inactive ${base}`}>
+          {item.label}
+        </a>
+      ),
+    )
 
   return (
     <>
@@ -19,32 +48,7 @@ export default function SiteHeader() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-2 pl-6">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                `${isActive ? 'nav-link-active' : 'nav-link-inactive'} rounded-md px-4 py-2.5 text-sm font-medium transition-all`
-              }
-            >
-              Renew Business Name
-            </NavLink>
-            <NavLink
-              to="/register"
-              className={({ isActive }) =>
-                `${isActive ? 'nav-link-active' : 'nav-link-inactive'} rounded-md px-4 py-2.5 text-sm font-medium transition-all`
-              }
-            >
-              Register Business Name
-            </NavLink>
-            <a href="https://applyforanabn.com.au/abnapplication/" className="nav-link-inactive rounded-md px-4 py-2.5 text-sm font-medium transition-all">
-              Register an ABN
-            </a>
-            <a href="https://applyforanabn.com.au/register-a-new-company/" className="nav-link-inactive rounded-md px-4 py-2.5 text-sm font-medium transition-all">
-              Register a Company
-            </a>
-            <a href="https://applyforanabn.com.au/contact-us/" className="nav-link-inactive rounded-md px-4 py-2.5 text-sm font-medium transition-all">
-              Contact Us
-            </a>
+            {renderItems('rounded-md px-4 py-2.5 text-sm font-medium transition-all')}
           </nav>
 
           <div className="md:hidden">
@@ -71,21 +75,7 @@ export default function SiteHeader() {
         {mobileOpen ? (
           <div className="md:hidden border-t border-gray-200">
             <div className="space-y-1 px-4 pb-3 pt-2">
-              <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({ isActive }) => `${isActive ? 'nav-link-active' : 'nav-link-inactive'} block rounded-md px-3 py-2 text-base font-medium`}>
-                Renew Business Name
-              </NavLink>
-              <NavLink to="/register" onClick={() => setMobileOpen(false)} className={({ isActive }) => `${isActive ? 'nav-link-active' : 'nav-link-inactive'} block rounded-md px-3 py-2 text-base font-medium`}>
-                Register Business Name
-              </NavLink>
-              <a href="https://applyforanabn.com.au/abnapplication/" className="nav-link-inactive block rounded-md px-3 py-2 text-base font-medium">
-                Register an ABN
-              </a>
-              <a href="https://applyforanabn.com.au/register-a-new-company/" className="nav-link-inactive block rounded-md px-3 py-2 text-base font-medium">
-                Register a Company
-              </a>
-              <a href="https://applyforanabn.com.au/contact-us/" className="nav-link-inactive block rounded-md px-3 py-2 text-base font-medium">
-                Contact Us
-              </a>
+              {renderItems('block rounded-md px-3 py-2 text-base font-medium', () => setMobileOpen(false))}
             </div>
           </div>
         ) : null}
