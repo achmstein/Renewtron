@@ -61,9 +61,8 @@ export default function SiteFooter() {
           ))}
         </div>
 
-        <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4 text-[13px] text-gray-500">
-          <span>© {year} Business Name Services. All rights reserved.</span>
-          <span className="text-center md:text-right">This is NOT an official ASIC page. We are a separate third party service.</span>
+        <div className="mt-8 pt-6 border-t border-gray-200 text-center md:text-left text-[13px] text-gray-500">
+          © {year} Business Name Services. All rights reserved.
         </div>
       </div>
     </footer>
