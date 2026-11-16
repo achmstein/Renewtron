@@ -99,6 +99,14 @@ function collect(root: HTMLElement): Bone[] {
       const el = child as HTMLElement
       const mode = el.getAttribute('data-skeleton')
       if (mode === 'ignore' || mode === 'keep') continue
+      // Not on screen (display: none, or the inside of a closed <details>, which the browser hides
+      // with content-visibility): its text still reports boxes, at odd places, so draw nothing.
+      if (el.checkVisibility && !el.checkVisibility({ contentVisibilityAuto: true })) continue
+      if (el instanceof HTMLDetailsElement && !el.open) {
+        const summary = el.querySelector(':scope > summary')
+        if (summary) walk(summary, clip)
+        continue
+      }
       const style = getComputedStyle(el)
       const radius = style.borderRadius && style.borderRadius !== '0px' ? style.borderRadius : '4px'
       const tag = el.tagName.toLowerCase()
@@ -156,7 +164,8 @@ export function Skeletonizer({ loading, children, className }: {
         {children}
       </div>
       {loading ? (
-        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        // An outer Skeletonizer skips these: a nested one's bones are already in place.
+        <div aria-hidden data-skeleton="ignore" className="pointer-events-none absolute inset-0 overflow-hidden">
           {bones.map((b, i) => (
             <div key={i} className="shimmer absolute" style={{ left: b.x, top: b.y, width: b.w, height: b.h, borderRadius: b.r }} />
           ))}
