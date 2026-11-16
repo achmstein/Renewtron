@@ -22,6 +22,15 @@ export async function createLead(details: LeadDetails, prefill: Prefill): Promis
     ontraportContactId: prefill.contactId || undefined,
     visitorId: getVisitorId(),
   })
-  rememberDetails({ fullName: details.fullName.trim() })
+  // Kept for this tab so "Edit" and Back show the form filled in: the lead endpoint only returns
+  // masked values, so the details page can't refill itself from the server.
+  // The ABN isn't kept: the details page takes it from its link, and a stored one would show on the
+  // start page as "filled in from your renewal notice".
+  rememberDetails({
+    fullName: details.fullName.trim(),
+    email: details.email.trim().toLowerCase(),
+    mobile: details.mobileNumber.replace(/[\s-]/g, ''),
+    dob: details.dateOfBirth,
+  })
   return result.leadId
 }
