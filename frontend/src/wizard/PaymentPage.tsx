@@ -9,6 +9,8 @@ import { getPrefill } from '../lib/prefill'
 import { loadSiteConfig } from '../lib/siteConfig'
 import { FunnelStep, trackStep } from '../lib/tracking'
 import { useLead } from '../lib/useLead'
+import WalletButtons from '../components/WalletButtons'
+import { walletElementsOptions } from '../lib/walletOptions'
 import { orderSummary, parseSelection, payForRenewals, stripeKeyFor } from './payment'
 
 
@@ -152,8 +154,8 @@ export default function PaymentPage() {
 
             <div className="lg:col-span-3 order-1 lg:order-2">
               <div className="rounded-lg bg-white shadow ring-1 ring-gray-200 p-6">
-                {stripePromise ? (
-                  <Elements stripe={stripePromise} options={{ fonts: [{ cssSrc: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap' }] }}>
+                {stripePromise && total > 0 ? (
+                  <Elements stripe={stripePromise} options={walletElementsOptions(total)}>
                     <PaymentForm
                       leadId={leadId}
                       abn={lead.abn}
@@ -166,7 +168,7 @@ export default function PaymentPage() {
                         navigate(`/confirmation/${leadId}?ids=${renewalIds.join(',')}`, { state: { portalSignInUrl } })}
                     />
                   </Elements>
-                ) : (
+                ) : stripePromise ? null : (
                   <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
                     Stripe publishable key isn't configured. Set it under Admin → Settings → Stripe.
                   </div>
@@ -210,26 +212,15 @@ function PaymentForm({ leadId, abn, ids, years, total, waitUntilVerified, cardho
   const [processing, setProcessing] = useState(false)
   const [processingStatus, setProcessingStatus] = useState('Processing payment...')
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!stripe || !elements) return
+  /** The same payment for card and wallet; only where the payment method comes from differs. */
+  const pay = async (createPaymentMethod: () => Promise<string>, holder: string, method: string) => {
+    if (!stripe) return
     setError('')
     setSubmitting(true)
 
     try {
-      const card = elements.getElement(CardElement)
-      if (!card) throw new Error('Card element not ready.')
-
-      const done = await payForRenewals({ leadId, ids, years, cardholderName: cardHolder }, {
-        createPaymentMethod: async () => {
-          const pmResult = await stripe.createPaymentMethod({
-            type: 'card',
-            card,
-            billing_details: { name: cardHolder },
-          })
-          if (pmResult.error) throw new Error(pmResult.error.message ?? 'Card error.')
-          return pmResult.paymentMethod.id
-        },
+      const done = await payForRenewals({ leadId, ids, years, cardholderName: holder }, {
+        createPaymentMethod,
         waitUntilVerified,
         createBatchRenewal: api.createBatchRenewal,
         handleNextAction: (clientSecret) => stripe.handleNextAction({ clientSecret }),
@@ -238,18 +229,30 @@ function PaymentForm({ leadId, abn, ids, years, total, waitUntilVerified, cardho
         onCharging: () => trackStep(FunnelStep.PaymentSubmitted, {
           leadId,
           abn,
-          detail: `${ids.length} name(s), ${years}yr`,
+          detail: `${ids.length} name(s), ${years}yr, ${method}`,
           value: total,
         }),
       })
       onComplete(done.renewalIds, done.portalSignInUrl)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred.'
-      trackStep(FunnelStep.PaymentFailed, { leadId, abn, detail: message, value: total })
+      trackStep(FunnelStep.PaymentFailed, { leadId, abn, detail: `${method}: ${message}`, value: total })
       setError(message)
       setProcessing(false)
       setSubmitting(false)
     }
+  }
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!stripe || !elements) return
+    const card = elements.getElement(CardElement)
+    if (!card) { setError('Card element not ready.'); return }
+    void pay(async () => {
+      const pmResult = await stripe.createPaymentMethod({ type: 'card', card, billing_details: { name: cardHolder } })
+      if (pmResult.error) throw new Error(pmResult.error.message ?? 'Card error.')
+      return pmResult.paymentMethod.id
+    }, cardHolder, 'Card')
   }
 
   if (processing) {
@@ -271,6 +274,12 @@ function PaymentForm({ leadId, abn, ids, years, total, waitUntilVerified, cardho
 
   return (
     <form onSubmit={submit}>
+      <WalletButtons
+        disabled={submitting}
+        onPayment={(w) => void pay(async () => w.paymentMethodId, w.name || cardHolder, w.method)}
+        onError={setError}
+      />
+
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
         <div className="mt-1 block w-full rounded-md border-0 py-3 px-3 shadow-sm ring-1 ring-inset ring-gray-300 bg-white">

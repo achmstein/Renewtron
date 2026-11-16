@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import { CardElement, Elements, useElements, useStripe } from '@stripe/react-stripe-js'
 import { registrationsApi, type PublicRegistration } from '../api/registrations'
+import WalletButtons from '../components/WalletButtons'
+import { walletElementsOptions } from '../lib/walletOptions'
 import { Shell } from './fields'
 import { FORM_STEPS } from './registerForm'
 
@@ -56,7 +58,7 @@ export default function RegisterPayPage() {
 
         {reg && stripePromise ? (
           <div className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-200">
-            <Elements stripe={stripePromise}>
+            <Elements stripe={stripePromise} options={walletElementsOptions(reg.amount)}>
               <PayForm reg={reg} onPaid={() => navigate(`/register/${reg.id}/done`)} />
             </Elements>
           </div>
@@ -87,19 +89,16 @@ function PayForm({ reg, onPaid }: { reg: PublicRegistration; onPaid: () => void 
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!stripe || !elements) return
+  /** The same payment for card and wallet; only where the payment method comes from differs. */
+  const pay = async (createPaymentMethod: () => Promise<string>) => {
+    if (!stripe) return
     setError('')
     setBusy(true)
     try {
-      const card = elements.getElement(CardElement)
-      if (!card) throw new Error('Card element not ready.')
-      const pm = await stripe.createPaymentMethod({ type: 'card', card, billing_details: { name } })
-      if (pm.error) throw new Error(pm.error.message ?? 'Card error.')
+      const paymentMethodId = await createPaymentMethod()
 
       setStatus('Processing payment…')
-      const result = await registrationsApi.pay(reg.id, pm.paymentMethod.id)
+      const result = await registrationsApi.pay(reg.id, paymentMethodId)
       if (result.requiresAction && result.clientSecret) {
         setStatus('Verifying your card with your bank…')
         const next = await stripe.handleNextAction({ clientSecret: result.clientSecret })
@@ -132,8 +131,28 @@ function PayForm({ reg, onPaid }: { reg: PublicRegistration; onPaid: () => void 
     }
   }
 
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!stripe || !elements) return
+    const card = elements.getElement(CardElement)
+    if (!card) { setError('Card element not ready.'); return }
+    void pay(async () => {
+      const pm = await stripe.createPaymentMethod({ type: 'card', card, billing_details: { name } })
+      if (pm.error) throw new Error(pm.error.message ?? 'Card error.')
+      return pm.paymentMethod.id
+    })
+  }
+
   return (
     <form onSubmit={submit}>
+      {busy && status ? (
+        <p className="mb-4 rounded-md bg-blue-50 p-3 text-center text-sm text-blue-900">{status} Please don’t close this page.</p>
+      ) : null}
+      <WalletButtons
+        disabled={busy}
+        onPayment={(w) => void pay(async () => w.paymentMethodId)}
+        onError={setError}
+      />
       <label className="mb-1 block text-sm font-medium text-gray-700">Card</label>
       <div className="mb-4 rounded-md bg-white px-3 py-3 shadow-sm ring-1 ring-inset ring-gray-300">
         <CardElement options={{ hidePostalCode: true, style: { base: { fontSize: '16px', color: '#1f2937', fontFamily: 'Geist, system-ui, sans-serif' } } }} />
