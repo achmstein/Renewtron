@@ -2,14 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import GridBackground from '../components/GridBackground'
-import WizardProgress from '../components/WizardProgress'
 import { createLead } from '../lib/leads'
 import { capturePrefill, isAdult, parsePrefill } from '../lib/prefill'
 import { FunnelStep, trackStep } from '../lib/tracking'
-
-const steps = [
-  { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
-]
 
 function formatAbn(abn: string) {
   return abn.length === 11 ? `${abn.slice(0, 2)} ${abn.slice(2, 5)} ${abn.slice(5, 8)} ${abn.slice(8)}` : abn
@@ -76,8 +71,6 @@ export default function StartPage() {
     <div className="relative isolate overflow-auto flex-1">
       <GridBackground />
       <div className="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
-        <WizardProgress currentStep={1} steps={steps} allowNavigation={false} />
-
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Renew your business name</h1>
           <p className="mt-4 text-lg leading-8 text-gray-600">
