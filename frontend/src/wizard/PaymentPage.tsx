@@ -5,16 +5,12 @@ import { Elements, CardElement, useElements, useStripe } from '@stripe/react-str
 import { api, type LeadDto, type PricingResponse } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
-import WizardProgress from '../components/WizardProgress'
 import { getPrefill } from '../lib/prefill'
 import { loadSiteConfig } from '../lib/siteConfig'
 import { FunnelStep, trackStep } from '../lib/tracking'
 import { useLead } from '../lib/useLead'
 import { orderSummary, parseSelection, payForRenewals, stripeKeyFor } from './payment'
 
-const steps = [
-  { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
-]
 
 export default function PaymentPage() {
   const { leadId } = useParams<{ leadId: string }>()
@@ -102,16 +98,6 @@ export default function PaymentPage() {
     <div className="relative isolate overflow-auto flex-1">
       <GridBackground />
       <div className="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
-        <WizardProgress
-          currentStep={5}
-          steps={steps}
-          onStepClick={(s) => {
-            if (s === 1) navigate('/')
-            else if (s === 2) navigate(`/details?abn=${lead.abn}`)
-            else if (s === 4) navigate(`/select-names/${leadId}`)
-          }}
-        />
-
         <div className="mx-auto max-w-2xl">
           <UserDetailsSummary abn={lead.abn} fullName={lead.fullName} email={lead.email} mobileNumber={lead.mobileNumber} dateOfBirth={lead.dateOfBirth} />
         </div>

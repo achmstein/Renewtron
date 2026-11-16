@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { registrationsApi, type PublicRegistration } from '../api/registrations'
 import { Shell } from './fields'
-import { clearDraft, DONE_STEP } from './registerForm'
+import { clearDraft } from './registerForm'
 
 /** After payment: follows the application while it's lodged (the ASIC job takes a minute or two). */
 export default function RegisterDonePage() {
@@ -32,7 +32,7 @@ export default function RegisterDonePage() {
   }, [id])
 
   return (
-    <Shell step={DONE_STEP}>
+    <Shell>
       <div className="mx-auto max-w-md">
         {error ? <p className="rounded-md bg-red-50 p-4 text-sm text-red-800">{error}</p> : null}
         {reg ? <Status reg={reg} /> : null}

@@ -109,7 +109,7 @@ export default function RegisterPage() {
 
   if (configError || (config && !config.enabled)) {
     return (
-      <Shell step={1}>
+      <Shell>
         <div className="mx-auto max-w-md rounded-lg bg-white p-6 text-center shadow-sm ring-1 ring-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">Registering a new business name</h2>
           <p className="mt-2 text-sm text-gray-600">
@@ -126,7 +126,7 @@ export default function RegisterPage() {
   const back = step > 1 ? () => goTo(step - 1) : undefined
 
   return (
-    <Shell step={step} onStepClick={goTo}>
+    <Shell>
       <Skeletonizer loading={loading}>
         <form onSubmit={next} className="mx-auto max-w-xl" data-clarity-mask="true" noValidate>
           {step === 1 ? (

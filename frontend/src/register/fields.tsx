@@ -1,20 +1,14 @@
 import GridBackground from '../components/GridBackground'
-import WizardProgress from '../components/WizardProgress'
 import { STATES, STREET_TYPES, type RegistrationAddress } from '../api/registrations'
-import { registerSteps } from './registerForm'
 
 import { inputClass } from './styles'
 
-export function Shell({ step, onStepClick, children }: {
-  step: number
-  onStepClick?: (step: number) => void
-  children: React.ReactNode
-}) {
+/** The page around each step. No step bar: a visible count of steps makes the job look longer. */
+export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative isolate flex-1 overflow-auto">
       <GridBackground />
       <div className="mx-auto max-w-7xl px-4 pb-24 pt-10 sm:px-6 sm:pb-32 lg:px-8 lg:py-12">
-        <WizardProgress currentStep={step} steps={registerSteps} onStepClick={onStepClick} />
         {children}
       </div>
     </div>

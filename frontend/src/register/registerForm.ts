@@ -1,13 +1,8 @@
 import { emptyAddress, type RegistrationAddress, type RegistrationInput } from '../api/registrations'
 import { normalizeAbn } from '../lib/prefill'
 
-/** The steps on /register, then the pay and done pages. Numbers are 1-based, as WizardProgress counts. */
-export const registerSteps = [
-  { label: 'Name' }, { label: 'Holder' }, { label: 'Details' }, { label: 'Address' }, { label: 'Pay' }, { label: 'Done' },
-]
+/** The form steps on /register (name, holder, details, address), 1-based; pay and done pages follow. */
 export const FORM_STEPS = 4
-export const PAY_STEP = 5
-export const DONE_STEP = 6
 
 /** Everything the customer types, kept for the tab so going back from payment loses nothing. */
 export interface RegisterDraft {

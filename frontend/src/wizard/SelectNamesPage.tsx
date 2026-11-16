@@ -3,13 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api, type BusinessNameDto, type PricingResponse } from '../api/client'
 import GridBackground from '../components/GridBackground'
 import UserDetailsSummary from '../components/UserDetailsSummary'
-import WizardProgress from '../components/WizardProgress'
 import { FunnelStep, trackStep } from '../lib/tracking'
 import { useLead } from '../lib/useLead'
 
-const steps = [
-  { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
-]
 
 export default function SelectNamesPage() {
   const navigate = useNavigate()
@@ -78,15 +74,6 @@ export default function SelectNamesPage() {
     <div className="relative isolate overflow-auto flex-1">
       <GridBackground />
       <div className="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
-        <WizardProgress
-          currentStep={4}
-          steps={steps}
-          onStepClick={(s) => {
-            if (s === 1) navigate('/')
-            else if (s === 2 && lead) navigate(`/details?abn=${lead.abn}`)
-          }}
-        />
-
         {lead ? (
           <>
             <div className="mx-auto max-w-2xl">

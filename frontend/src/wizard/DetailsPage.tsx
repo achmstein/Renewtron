@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import GridBackground from '../components/GridBackground'
-import WizardProgress from '../components/WizardProgress'
 import { createLead } from '../lib/leads'
 import { capturePrefill, isAdult, normalizeAbn } from '../lib/prefill'
 import { FunnelStep, trackStep } from '../lib/tracking'
 
-const steps = [
-  { label: 'ABN' }, { label: 'Details' }, { label: 'Check' }, { label: 'Select' }, { label: 'Pay' },
-]
 
 function formatAbn(abn: string) {
   const clean = (abn ?? '').replace(/\s+/g, '')
@@ -83,8 +79,6 @@ export default function DetailsPage() {
     <div className="relative isolate overflow-auto flex-1">
       <GridBackground />
       <div className="mx-auto max-w-7xl px-6 pb-24 pt-10 sm:pb-32 lg:px-8 lg:py-12">
-        <WizardProgress currentStep={2} steps={steps} onStepClick={(s) => s === 1 && navigate('/')} />
-
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Confirm your details</h1>
           <p className="mt-3 text-base leading-7 text-gray-600">
