@@ -11,6 +11,14 @@ export function walletElementsOptions(totalDollars: number): StripeElementsOptio
     amount: Math.round(totalDollars * 100),
     currency: 'aud',
     paymentMethodCreation: 'manual',
-    fonts: [{ cssSrc: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap' }],
+    // Stripe's card box is an iframe on Stripe's site: it loads our Geist file by full address
+    // (nginx allows that with a CORS header on /fonts/).
+    fonts: [{
+      family: 'Geist',
+      src: `url(${window.location.origin}/fonts/geist-latin-wght-normal.woff2)`,
+      weight: '400',
+      style: 'normal',
+      display: 'swap',
+    }],
   }
 }
