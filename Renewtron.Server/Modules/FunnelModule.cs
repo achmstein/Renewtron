@@ -23,6 +23,27 @@ public sealed class FunnelModule : ICarterModule
         string? Path,
         string? Referrer);
 
+    /// <summary>
+    /// The source shown for visitors who came with no source tag. It isn't stored on any event,
+    /// so filtering by it means "visitors with no other source in the window".
+    /// </summary>
+    public const string Direct = "direct";
+
+    /// <summary>
+    /// Events of one source's visitors in [from, to). A tagged source matches its events; "direct"
+    /// matches every event of a visitor who has no tagged event in the window, which is how the
+    /// source list counts them (an event literally tagged "direct" counts as direct too).
+    /// </summary>
+    private static IQueryable<FunnelEvent> OfSource(IQueryable<FunnelEvent> query, ApplicationDbContext db,
+        string? source, DateTime from, DateTime to)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return query;
+        if (!string.Equals(source, Direct, StringComparison.OrdinalIgnoreCase))
+            return query.Where(e => e.Source == source);
+        return query.Where(e => !db.FunnelEvents.Any(o => o.VisitorId == e.VisitorId
+            && o.CreatedAt >= from && o.CreatedAt < to && o.Source != null && o.Source != Direct));
+    }
+
     private static string? Trim(string? value, int max)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -94,10 +115,8 @@ public sealed class FunnelModule : ICarterModule
             var from = dateFrom?.ToUniversalTime() ?? now.AddDays(-30);
             var to = dateTo?.Date.AddDays(1).ToUniversalTime() ?? now.AddDays(1);
 
-            IQueryable<FunnelEvent> query = db.FunnelEvents.AsNoTracking()
-                .Where(e => e.CreatedAt >= from && e.CreatedAt < to);
-            if (!string.IsNullOrWhiteSpace(source))
-                query = query.Where(e => e.Source == source);
+            var query = OfSource(db.FunnelEvents.AsNoTracking().Where(e => e.CreatedAt >= from && e.CreatedAt < to),
+                db, source, from, to);
 
             // One row per visitor per step — everything below is counted off people, not hits.
             var reached = await query
@@ -159,7 +178,7 @@ public sealed class FunnelModule : ICarterModule
             // Source breakdown — how well Ontraport links convert against everything else.
             // A visitor who arrives twice from different campaigns counts under each.
             var visitorSources = await query
-                .Where(e => e.Source != null)
+                .Where(e => e.Source != null && e.Source != Direct)
                 .Select(e => new { e.VisitorId, Source = e.Source! })
                 .Distinct()
                 .ToListAsync();
@@ -181,7 +200,7 @@ public sealed class FunnelModule : ICarterModule
                 .Where(id => !taggedVisitorIds.Contains(id))
                 .ToList();
             if (directVisitors.Count > 0)
-                sourceGroups.Add(new { Source = "direct", Visitors = directVisitors });
+                sourceGroups.Add(new { Source = Direct, Visitors = directVisitors });
 
             var bySource = sourceGroups
                 .Select(g => new
@@ -217,10 +236,8 @@ public sealed class FunnelModule : ICarterModule
 
             // The same headline numbers for the window just before this one, for "vs previous period".
             var span = (to > now ? now : to) - from;
-            IQueryable<FunnelEvent> previousQuery = db.FunnelEvents.AsNoTracking()
-                .Where(e => e.CreatedAt >= from - span && e.CreatedAt < from);
-            if (!string.IsNullOrWhiteSpace(source))
-                previousQuery = previousQuery.Where(e => e.Source == source);
+            var previousQuery = OfSource(db.FunnelEvents.AsNoTracking().Where(e => e.CreatedAt >= from - span && e.CreatedAt < from),
+                db, source, from - span, from);
             var previousVisitors = await previousQuery.Select(e => e.VisitorId).Distinct().CountAsync();
             var previousCompleted = await previousQuery.Where(e => e.Step == FunnelSteps.RenewalComplete).Select(e => e.VisitorId).Distinct().CountAsync();
 
