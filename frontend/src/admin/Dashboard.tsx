@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { TriangleAlert } from 'lucide-react'
 import { api, type DashboardResponse, type OverviewCharts } from '../api/client'
 import { AheadChart, AsicChart, ChannelChart, OutcomeChart } from './_overviewCharts'
-import { pageClass, PageHeader, Stat, StatStrip } from './_ui'
+import { Hint, pageClass, PageHeader, Stat, StatStrip } from './_ui'
 import { fmtMoney0, relativeTime } from './_utils'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card } from '@/components/ui/card'
@@ -152,12 +152,55 @@ function Recoverable({ stats }: { stats: DashboardResponse['stats'] }) {
 
 /* ─────────────────── System health ─────────────────── */
 
-/** Display names and staleness thresholds for the Hangfire recurring jobs. */
-const jobDisplay: Record<string, { label: string; staleAfterHours: number }> = {
-  'renewal-reconciliation':     { label: 'Reconciliation',   staleAfterHours: 26 },
-  'ontraport-sales-sync':       { label: 'Ontraport sync',   staleAfterHours: 26 },
-  'ontraport-process-renewals': { label: 'Process renewals', staleAfterHours: 26 },
-  'ontraport-outbox-retry':     { label: 'Outbox retry',     staleAfterHours: 2 },
+/**
+ * The Hangfire recurring jobs (registered in Renewtron.Server/Program.cs), in words: a name, what
+ * the job does, when it runs, and how long without a run means something's wrong (a little over
+ * its schedule). Keep in step with Program.cs when a job is added.
+ */
+type JobInfo = { label: string; what: string; when: string; staleAfterHours: number }
+const jobDisplay: Record<string, JobInfo> = {
+  'airwallex-bpay-autopay':     { label: 'BPAY auto-pay', when: 'Every 15 minutes', staleAfterHours: 1,
+    what: 'Pays ASIC’s BPAY bills through Airwallex, up to the daily limit set in Settings › Airwallex.' },
+  'airwallex-bpay-sync':        { label: 'BPAY payment status', when: 'Every 10 minutes', staleAfterHours: 1,
+    what: 'Asks Airwallex about BPAY payments on their way, and marks each bill paid once Airwallex says it is.' },
+  'asic-check':                 { label: 'ASIC check of paid renewals', when: 'Daily, 4:00 am', staleAfterHours: 26,
+    what: 'Checks paid renewals that aren’t finished against ASIC: renewed elsewhere, lapsed, or still to do.' },
+  'asic-due-dates':             { label: 'ASIC due dates', when: 'Daily, 2:00 am', staleAfterHours: 26,
+    what: 'Reads each name’s real renewal date from ASIC’s register search, replacing estimated dates.' },
+  'asic-key-inbox-scan':        { label: 'ASIC key letters', when: 'Every 15 minutes', staleAfterHours: 1,
+    what: 'Reads ASIC key letters from the inbox and saves each key to its client and to Ontraport.' },
+  'asic-key-request-run':       { label: 'Key requests', when: 'Twice an hour', staleAfterHours: 2,
+    what: 'Closes key requests whose key has arrived, and puts back any a person started but didn’t finish.' },
+  'business-names-import':      { label: 'Register import', when: 'Daily, 3:00 am', staleAfterHours: 26,
+    what: 'Downloads ASIC’s public business names register when it changes, so customers see their names straight away.' },
+  'client-link':                { label: 'Link records to clients', when: 'Every 15 minutes', staleAfterHours: 1,
+    what: 'Puts new sales, visits, renewals and key letters on their client, and refreshes clients’ names from the register.' },
+  'early-renewal-check':        { label: 'Paid-early check', when: 'Daily, 7:15 am', staleAfterHours: 26,
+    what: 'For names paid before ASIC opens their renewal, asks ASIC each morning and lodges the renewal once it’s open.' },
+  'email-body-purge':           { label: 'Old email clean-up', when: 'Daily, 3:30 am', staleAfterHours: 26,
+    what: 'Clears the text of emails older than 180 days. The record of each email sent stays.' },
+  'ontraport-outbox-retry':     { label: 'Ontraport update retry', when: 'Twice an hour', staleAfterHours: 2,
+    what: 'Sends renewal results to Ontraport again when saving them there failed the first time.' },
+  'ontraport-process-renewals': { label: 'Renew Ontraport sales', when: 'Daily, 7:00 am', staleAfterHours: 26,
+    what: 'Starts the ASIC renewal for Ontraport sales that are ready to lodge.' },
+  'ontraport-sales-sync':       { label: 'Ontraport sales sync', when: 'Daily, 6:00 am', staleAfterHours: 26,
+    what: 'Brings in new sales paid through Ontraport.' },
+  'ontraport-search-retry':     { label: 'Retry ASIC name searches', when: 'Every hour', staleAfterHours: 2,
+    what: 'Asks ASIC again about Ontraport sales whose name search got no answer, waiting longer between each try.' },
+  'payment-follow-up':          { label: 'Payment reminder emails', when: 'Every hour', staleAfterHours: 2,
+    what: 'Emails visitors who reached the payment page and left without paying, once, a few hours later.' },
+  'registration-asic-check':    { label: 'New names: ASIC fee check', when: 'Every 2 hours', staleAfterHours: 3,
+    what: 'For new business name applications paid by BPAY, checks Airwallex and ASIC until ASIC shows the fee as paid.' },
+  'renewal-orders-refresh':     { label: 'Paid renewals refresh', when: 'Every 10 minutes', staleAfterHours: 1,
+    what: 'Keeps each paid renewal’s status in step with its ASIC runs and payments.' },
+  'renewal-reconciliation':     { label: 'Repair stuck renewals', when: 'Daily, 5:30 am', staleAfterHours: 26,
+    what: 'Finds renewals that stopped part-way and starts them again, up to 25 a day.' },
+}
+
+/** A job missing from the list above still reads as words: "some-new-job" → "Some new job". */
+const fallbackJob = (id: string): JobInfo => {
+  const words = id.replace(/[-_]+/g, ' ').trim()
+  return { label: words.charAt(0).toUpperCase() + words.slice(1), what: 'A background job without a description yet.', when: '', staleAfterHours: 26 }
 }
 
 type JobState = 'ok' | 'stale' | 'never'
@@ -165,14 +208,14 @@ type JobState = 'ok' | 'stale' | 'never'
 /** "Is the machine running?": job freshness, queue depth, stuck rows, outbox backlog. */
 function HealthCard({ health }: { health: NonNullable<DashboardResponse['health']> }) {
   const jobs = (health.recurringJobs ?? []).map((j) => {
-    const display = jobDisplay[j.id] ?? { label: j.id.replace(/-/g, ' '), staleAfterHours: 26 }
+    const display = jobDisplay[j.id] ?? fallbackJob(j.id)
     const state: JobState = !j.lastExecution
       ? 'never'
       : Date.now() - new Date(j.lastExecution).getTime() > display.staleAfterHours * 3600_000
         ? 'stale'
         : 'ok'
     return { ...j, ...display, state }
-  })
+  }).sort((a, b) => a.label.localeCompare(b.label))
   // "never" doesn't trip the card: right after a deploy every job reads never
   // until its first scheduled run, and that's expected, not an incident.
   const attention = !!health.otpProblem || health.stuckCount > 0 || health.outboxDead > 0 || jobs.some((j) => j.state === 'stale')
@@ -227,10 +270,23 @@ function HealthCard({ health }: { health: NonNullable<DashboardResponse['health'
         {jobs.length > 0 ? (
           <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t px-4 py-4 sm:grid-cols-3 sm:px-5 lg:grid-cols-5">
             {jobs.map((j) => (
-              <div key={j.id} className="flex min-w-0 items-start gap-2" title={j.nextExecution ? `Next run: ${new Date(j.nextExecution).toLocaleString()}` : undefined}>
+              <div key={j.id} className="flex min-w-0 items-start gap-2">
                 <span aria-hidden className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', j.state === 'ok' ? 'bg-success' : j.state === 'stale' ? 'bg-warning' : 'bg-muted-foreground/40')} />
                 <div className="min-w-0">
-                  <div className="truncate text-sm">{j.label}</div>
+                  <div className="flex min-w-0 items-center gap-0.5">
+                    <span className="truncate text-sm">{j.label}</span>
+                    <Hint className="-my-1 size-5" text={
+                      <div className="space-y-1.5">
+                        <p className="font-medium">{j.label}</p>
+                        <p>{j.what}</p>
+                        <p className="text-caption text-muted-foreground">
+                          {[j.when, j.nextExecution ? `next run ${new Date(j.nextExecution).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })}` : null]
+                            .filter(Boolean).join(' · ')}
+                        </p>
+                        {j.state === 'stale' ? <p className="text-caption">It hasn’t run when it should have. Check the Hangfire dashboard.</p> : null}
+                      </div>
+                    } />
+                  </div>
                   <div className="text-caption text-muted-foreground tabular-nums">
                     {j.lastExecution ? relativeTime(j.lastExecution) : 'never ran'}
                   </div>
