@@ -262,6 +262,17 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // The welcome page after an Ontraport checkout asks every few seconds until the payment shows
+    // (each ask is an Ontraport lookup); enough for one payer, too few to walk contact ids.
+    options.AddPolicy(Renewtron.Modules.WelcomeModule.RateLimitPolicy, ctx =>
+        System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(ctx),
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
     // The ASIC search screen-scrapes a slow upstream — much tighter than the global cap.
     options.AddPolicy("asic-search", ctx =>
         System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(ClientKey(ctx),

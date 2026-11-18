@@ -5,6 +5,16 @@ namespace Renewtron.Abstractions;
 public interface IOntraportSalesService
 {
     Task<List<OntraportSale>> SyncSalesAsync();
+
+    /// <summary>
+    /// Brings one contact's sale in now instead of at the next daily sync (the welcome page after
+    /// an Ontraport checkout). Same rules as the sync: null until Ontraport marks the contact paid,
+    /// or when it has no business name/ABN. A contact already brought in returns its first sale.
+    /// </summary>
+    Task<OntraportSale?> SyncContactAsync(string contactId);
+
+    /// <summary>When the contact's newest paid Ontraport invoice was created (UTC); null if none, or Ontraport didn't answer.</summary>
+    Task<DateTime?> LastPaidAtAsync(string contactId);
     Task ProcessEligibleRenewalsAsync();
 
     /// <summary>Tries again the ASIC name searches that didn't get an answer (see <see cref="Services.SearchRetry"/>).</summary>

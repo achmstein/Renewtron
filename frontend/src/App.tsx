@@ -4,6 +4,7 @@ import SiteHeader from './components/SiteHeader'
 import SiteFooter from './components/SiteFooter'
 import LoginPage from './pages/LoginPage'
 import UpdateAsicKeyPage from './pages/UpdateAsicKeyPage'
+import WelcomePage from './pages/WelcomePage'
 import StartPage from './wizard/StartPage'
 import DetailsPage from './wizard/DetailsPage'
 import CheckingPage from './wizard/CheckingPage'
@@ -54,6 +55,9 @@ export default function App() {
           {/* Same path as the old Ontraport page (idealbusiness.au/updateasickey) so links carry over. */}
           <Route path="/updateasickey" element={<UpdateAsicKeyPage />} />
           <Route path="/update-asic-key" element={<UpdateAsicKeyPage />} />
+
+          {/* After paying on an Ontraport order form: straight into the Business Portal. */}
+          <Route path="/welcome" element={<WelcomePage />} />
 
           <Route path="/login" element={<LoginPage />} />
 

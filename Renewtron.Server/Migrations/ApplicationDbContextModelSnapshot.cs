@@ -1383,6 +1383,9 @@ namespace Renewtron.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTime?>("PortalLinkIssuedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Postcode")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");

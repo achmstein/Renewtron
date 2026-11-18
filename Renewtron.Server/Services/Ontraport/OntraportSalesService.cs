@@ -70,6 +70,19 @@ public class OntraportSalesService : IOntraportSalesService
 
     public async Task<List<OntraportSale>> SyncSalesAsync()
     {
+        await ImportLock.WaitAsync();
+        try
+        {
+            return await SyncSalesLockedAsync();
+        }
+        finally
+        {
+            ImportLock.Release();
+        }
+    }
+
+    private async Task<List<OntraportSale>> SyncSalesLockedAsync()
+    {
         _logger.LogInformation("Starting Ontraport sales sync");
         var synced = new List<OntraportSale>();
 
@@ -102,86 +115,8 @@ public class OntraportSalesService : IOntraportSalesService
                         continue;
                     }
 
-                    // Skip contacts without business name data
-                    var businessName = contact.GetValueOrDefault(FieldBusinessName, "");
-                    var abn = contact.GetValueOrDefault(FieldAbn, "");
-                    if (string.IsNullOrWhiteSpace(businessName) || string.IsNullOrWhiteSpace(abn))
-                        continue;
-
-                    // Parse renewal due date
-                    DateTime? renewalDueDate = null;
-                    var dueDateStr = contact.GetValueOrDefault(FieldRenewalDueDate, "0");
-                    if (long.TryParse(dueDateStr, out var dueDateUnix) && dueDateUnix > 0)
-                        renewalDueDate = DateTimeOffset.FromUnixTimeSeconds(dueDateUnix).UtcDateTime;
-
-                    // Parse renewal term
-                    var termValue = contact.GetValueOrDefault(FieldRenewalTerm, "0");
-                    var renewalYears = RenewalTermMap.GetValueOrDefault(termValue ?? "0", 1);
-
-                    // Amount from spent field
-                    var spentStr = contact.GetValueOrDefault("spent", "0");
-                    var amountPaid = decimal.TryParse(spentStr, out var spent) ? spent : 0;
-
-                    // Determine status: eligible when strictly under 30 days (i.e. <= 29)
-                    var status = OntraportSaleStatus.Synced;
-                    if (renewalDueDate.HasValue)
-                    {
-                        var daysUntilDue = (renewalDueDate.Value - DateTime.UtcNow).TotalDays;
-                        status = daysUntilDue <= 29
-                            ? OntraportSaleStatus.Synced
-                            : OntraportSaleStatus.WaitingForRenewalWindow;
-                    }
-
-                    // Skip cancellations, refunds, disputes, and underpayments so they never auto-renew
-                    var ineligibleReason = GetIneligibilityReason(contact, amountPaid);
-                    string? errorMessage = null;
-                    if (ineligibleReason != null)
-                    {
-                        status = OntraportSaleStatus.IneligibleForRenewal;
-                        errorMessage = ineligibleReason;
-                    }
-
-                    var sale = new OntraportSale
-                    {
-                        Id = Guid.NewGuid(),
-                        OntraportContactId = contactId,
-                        OntraportTransactionId = "",
-                        ContactName = $"{contact.GetValueOrDefault("firstname", "")} {contact.GetValueOrDefault("lastname", "")}".Trim(),
-                        Email = contact.GetValueOrDefault("email") ?? "",
-                        MobileNumber = contact.GetValueOrDefault("sms_number") ?? "",
-                        DateOfBirth = contact.GetValueOrDefault(FieldDateOfBirth, null),
-                        BusinessName = businessName,
-                        Abn = abn,
-                        BusinessNameOwner = contact.GetValueOrDefault(FieldBusinessNameOwner, null),
-                        RenewalDueDate = renewalDueDate,
-                        RenewalYears = renewalYears,
-                        AmountPaid = amountPaid,
-                        Status = status,
-                        ErrorMessage = errorMessage,
-                        SyncedAt = DateTime.UtcNow
-                    };
-                    ApplyProfile(sale, contact, encryption);
-
-                    _dbContext.OntraportSales.Add(sale);
-                    synced.Add(sale);
-
-                    // Queue the ASIC key request alongside the sale, for a person to send from ASIC's
-                    // form. Skipped when the client already gave us the key (the contact's ASIC key
-                    // field is filled), and for cancellations/disputes — no point asking for a key
-                    // we won't use.
-                    var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;
-                    var hasKey = asicKeyField.Length > 0 && !string.IsNullOrWhiteSpace(contact.GetValueOrDefault(asicKeyField, null));
-                    if (status != OntraportSaleStatus.IneligibleForRenewal
-                        && !hasKey
-                        && _asicKeyRequestSettings.CurrentValue is { Enabled: true, AutoRequestOnSync: true })
-                    {
-                        var keyRequest = AsicKeyRequestService.FromSale(sale, "Sync", _asicKeyRequestSettings.CurrentValue);
-                        await AsicKeyRequestService.AddOtherBusinessNamesAsync(_dbContext, keyRequest, _asicKeyRequestSettings.CurrentValue, _logger);
-                        _dbContext.AsicKeyRequests.Add(keyRequest);
-                    }
-
-                    _logger.LogInformation("Synced Ontraport sale: {BusinessName} (ABN: {Abn}), due: {DueDate}, contact: {ContactName}",
-                        businessName, abn, renewalDueDate?.ToString("yyyy-MM-dd") ?? "unknown", sale.ContactName);
+                    if (await AddSaleAsync(contact, contactId, encryption) is { } sale)
+                        synced.Add(sale);
                 }
                 catch (Exception ex)
                 {
@@ -199,6 +134,95 @@ public class OntraportSalesService : IOntraportSalesService
         }
 
         return synced;
+    }
+
+    /// <summary>
+    /// A new sale from a paid Ontraport contact (not saved yet), with its ASIC key request queued
+    /// alongside. Null when the contact has no business name or ABN. Used by the daily sync and by
+    /// the welcome page after an Ontraport checkout, so both bring a sale in the same way.
+    /// </summary>
+    private async Task<OntraportSale?> AddSaleAsync(Dictionary<string, string?> contact, string contactId, IEncryptionService? encryption)
+    {
+        // Skip contacts without business name data
+        var businessName = contact.GetValueOrDefault(FieldBusinessName, "");
+        var abn = contact.GetValueOrDefault(FieldAbn, "");
+        if (string.IsNullOrWhiteSpace(businessName) || string.IsNullOrWhiteSpace(abn))
+            return null;
+
+        // Parse renewal due date
+        DateTime? renewalDueDate = null;
+        var dueDateStr = contact.GetValueOrDefault(FieldRenewalDueDate, "0");
+        if (long.TryParse(dueDateStr, out var dueDateUnix) && dueDateUnix > 0)
+            renewalDueDate = DateTimeOffset.FromUnixTimeSeconds(dueDateUnix).UtcDateTime;
+
+        // Parse renewal term
+        var termValue = contact.GetValueOrDefault(FieldRenewalTerm, "0");
+        var renewalYears = RenewalTermMap.GetValueOrDefault(termValue ?? "0", 1);
+
+        // Amount from spent field
+        var spentStr = contact.GetValueOrDefault("spent", "0");
+        var amountPaid = decimal.TryParse(spentStr, out var spent) ? spent : 0;
+
+        // Determine status: eligible when strictly under 30 days (i.e. <= 29)
+        var status = OntraportSaleStatus.Synced;
+        if (renewalDueDate.HasValue)
+        {
+            var daysUntilDue = (renewalDueDate.Value - DateTime.UtcNow).TotalDays;
+            status = daysUntilDue <= 29
+                ? OntraportSaleStatus.Synced
+                : OntraportSaleStatus.WaitingForRenewalWindow;
+        }
+
+        // Skip cancellations, refunds, disputes, and underpayments so they never auto-renew
+        var ineligibleReason = GetIneligibilityReason(contact, amountPaid);
+        string? errorMessage = null;
+        if (ineligibleReason != null)
+        {
+            status = OntraportSaleStatus.IneligibleForRenewal;
+            errorMessage = ineligibleReason;
+        }
+
+        var sale = new OntraportSale
+        {
+            Id = Guid.NewGuid(),
+            OntraportContactId = contactId,
+            OntraportTransactionId = "",
+            ContactName = $"{contact.GetValueOrDefault("firstname", "")} {contact.GetValueOrDefault("lastname", "")}".Trim(),
+            Email = contact.GetValueOrDefault("email") ?? "",
+            MobileNumber = contact.GetValueOrDefault("sms_number") ?? "",
+            DateOfBirth = contact.GetValueOrDefault(FieldDateOfBirth, null),
+            BusinessName = businessName,
+            Abn = abn,
+            BusinessNameOwner = contact.GetValueOrDefault(FieldBusinessNameOwner, null),
+            RenewalDueDate = renewalDueDate,
+            RenewalYears = renewalYears,
+            AmountPaid = amountPaid,
+            Status = status,
+            ErrorMessage = errorMessage,
+            SyncedAt = DateTime.UtcNow
+        };
+        ApplyProfile(sale, contact, encryption);
+
+        _dbContext.OntraportSales.Add(sale);
+
+        // Queue the ASIC key request alongside the sale, for a person to send from ASIC's
+        // form. Skipped when the client already gave us the key (the contact's ASIC key
+        // field is filled), and for cancellations/disputes — no point asking for a key
+        // we won't use.
+        var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;
+        var hasKey = asicKeyField.Length > 0 && !string.IsNullOrWhiteSpace(contact.GetValueOrDefault(asicKeyField, null));
+        if (status != OntraportSaleStatus.IneligibleForRenewal
+            && !hasKey
+            && _asicKeyRequestSettings.CurrentValue is { Enabled: true, AutoRequestOnSync: true })
+        {
+            var keyRequest = AsicKeyRequestService.FromSale(sale, "Sync", _asicKeyRequestSettings.CurrentValue);
+            await AsicKeyRequestService.AddOtherBusinessNamesAsync(_dbContext, keyRequest, _asicKeyRequestSettings.CurrentValue, _logger);
+            _dbContext.AsicKeyRequests.Add(keyRequest);
+        }
+
+        _logger.LogInformation("Synced Ontraport sale: {BusinessName} (ABN: {Abn}), due: {DueDate}, contact: {ContactName}",
+            businessName, abn, renewalDueDate?.ToString("yyyy-MM-dd") ?? "unknown", sale.ContactName);
+        return sale;
     }
 
     public const string NoDueDateMessage = "No renewal due date from Ontraport or ASIC: Renewtron can't tell when to renew it.";
@@ -683,22 +707,94 @@ public class OntraportSalesService : IOntraportSalesService
             sale.TfnEncrypted = encryption.Encrypt(tfn);
     }
 
-    private async Task<List<Dictionary<string, string?>>> FetchPaidContactsAsync()
+    /// <summary>The contact fields a sale is made from.</summary>
+    private string SaleContactFields()
     {
-        // Query contacts where f5194 (payment received) = "yes", sorted by most recent activity
-        // Condition format: value must be wrapped in {"value":"..."} for Ontraport API
-        var condition = Uri.EscapeDataString(
-            "[{\"field\":{\"field\":\"f5194\"},\"op\":\"=\",\"value\":{\"value\":\"yes\"}}]");
         var fields = $"id,firstname,lastname,email,sms_number,spent,refund,refundtotal,{FieldBusinessName},{FieldAbn},{FieldBusinessNameOwner},{FieldRenewalDueDate},{FieldRenewalTerm},{FieldPaymentReceived},{FieldCancel},{FieldDateOfBirth}"
                      + "," + string.Join(",", ProfileFieldKeys);
         // The contact's ASIC key field (where the inbox scanner writes it) — read so the sync
         // doesn't ask ASIC for a key the client already supplied.
         var asicKeyField = _asicKeyInboxSettings.CurrentValue.OntraportFieldId;
         if (!string.IsNullOrWhiteSpace(asicKeyField)) fields += $",{asicKeyField.Trim()}";
+        return fields;
+    }
+
+    /// <summary>
+    /// Bringing sales in is one at a time (the daily sync, and each welcome page): two at once
+    /// could both see a contact as new and add its sale twice, which would renew it twice.
+    /// </summary>
+    private static readonly SemaphoreSlim ImportLock = new(1, 1);
+
+    public async Task<OntraportSale?> SyncContactAsync(string contactId)
+    {
+        await ImportLock.WaitAsync();
+        try
+        {
+            return await SyncContactLockedAsync(contactId);
+        }
+        finally
+        {
+            ImportLock.Release();
+        }
+    }
+
+    private async Task<OntraportSale?> SyncContactLockedAsync(string contactId)
+    {
+        var contact = await FetchContactAsync(contactId, SaleContactFields());
+        if (contact is null) return null;
+        // The same rule as the daily sync: only a contact Ontraport marks as paid becomes a sale.
+        if (!string.Equals((contact.GetValueOrDefault(FieldPaymentReceived, "") ?? "").Trim(), "yes", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var existing = await _dbContext.OntraportSales.Where(s => s.OntraportContactId == contactId).OrderBy(s => s.SyncedAt).ToListAsync();
+        var encryption = TryGetEncryption();
+        if (existing.Count > 0)
+        {
+            foreach (var sale in existing) ApplyProfile(sale, contact, encryption);
+            await _dbContext.SaveChangesAsync();
+            return existing[0];
+        }
+
+        var added = await AddSaleAsync(contact, contactId, encryption);
+        if (added is null) return null;
+        await _dbContext.SaveChangesAsync();
+        RenewalOrderService.EnqueueRefresh(_backgroundJobClient);
+        return added;
+    }
+
+    public async Task<DateTime?> LastPaidAtAsync(string contactId)
+    {
+        // Invoices (objectID 46) of this contact that are paid ("Closed", status 1) and are a sale
+        // rather than a refund receipt (type 0); the newest one's creation time.
+        var condition = Uri.EscapeDataString(JsonSerializer.Serialize(new object[]
+        {
+            new { field = new { field = "contact_id" }, op = "=", value = new { value = contactId } }, "AND",
+            new { field = new { field = "status" }, op = "=", value = new { value = "1" } }, "AND",
+            new { field = new { field = "type" }, op = "=", value = new { value = "0" } },
+        }));
+        var response = await _httpClient.GetAsync($"objects?objectID=46&condition={condition}&sort=date&sortDir=desc&range=1&listFields=id,date");
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Ontraport invoice lookup for contact {ContactId} returned {StatusCode}", contactId, response.StatusCode);
+            return null;
+        }
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array || data.GetArrayLength() == 0)
+            return null;
+        var date = data[0].TryGetProperty("date", out var d) ? d.ToString() : null;
+        return long.TryParse(date, out var unix) && unix > 0 ? DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime : null;
+    }
+
+    private async Task<List<Dictionary<string, string?>>> FetchPaidContactsAsync()
+    {
+        // Query contacts where f5194 (payment received) = "yes", sorted by most recent activity
+        // Condition format: value must be wrapped in {"value":"..."} for Ontraport API
+        var condition = Uri.EscapeDataString(
+            "[{\"field\":{\"field\":\"f5194\"},\"op\":\"=\",\"value\":{\"value\":\"yes\"}}]");
 
         // Fetch up to 1000 most recent paid contacts in a single call (sorted by last activity desc)
         // New renewals always appear near the top; already-synced ones are skipped in code
-        var url = $"Contacts?condition={condition}&range=1000&listFields={fields}&sortDir=desc&sort=dla";
+        var url = $"Contacts?condition={condition}&range=1000&listFields={SaleContactFields()}&sortDir=desc&sort=dla";
         var response = await _httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
 
@@ -720,12 +816,14 @@ public class OntraportSalesService : IOntraportSalesService
         return contacts;
     }
 
-    private async Task<Dictionary<string, string?>?> FetchContactByIdAsync(string contactId)
+    private Task<Dictionary<string, string?>?> FetchContactByIdAsync(string contactId) =>
+        FetchContactAsync(contactId, $"id,spent,refund,refundtotal,{FieldPaymentReceived},{FieldCancel}");
+
+    private async Task<Dictionary<string, string?>?> FetchContactAsync(string contactId, string fields)
     {
         try
         {
-            var fields = $"id,spent,refund,refundtotal,{FieldPaymentReceived},{FieldCancel}";
-            var response = await _httpClient.GetAsync($"Contact?id={contactId}&listFields={fields}");
+            var response = await _httpClient.GetAsync($"Contact?id={Uri.EscapeDataString(contactId)}&listFields={fields}");
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Ontraport contact lookup for {ContactId} returned {StatusCode}", contactId, response.StatusCode);

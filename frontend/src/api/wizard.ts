@@ -23,6 +23,15 @@ export interface LeadDto {
   testStripePublishableKey?: string | null
 }
 
+/**
+ * The welcome page after an Ontraport checkout. "ready": the one-time portal sign-in link;
+ * "waiting": Ontraport hasn't recorded the payment yet, ask again shortly; "signIn": no link
+ * (already handed out, or paid too long ago): the plain portal sign-in page.
+ */
+export type WelcomeResponse =
+  | { status: 'ready'; url: string }
+  | { status: 'waiting' | 'signIn'; loginUrl?: string | null }
+
 export interface CheckResponse {
   outcome: 'RenewalAvailable' | 'NotDueForRenewal' | 'RenewalInProgress' | 'NoBusinessNames'
   message?: string
@@ -57,6 +66,8 @@ export const wizardApi = {
   createLead: (input: { abn: string; fullName: string; email: string; mobileNumber: string; dateOfBirth: string; tfn?: string; source?: string; ontraportContactId?: string; visitorId?: string }) =>
     apiFetch<{ leadId: string }>('/api/leads', { method: 'POST', body: JSON.stringify(input) }),
   getLead: (id: string) => apiFetch<LeadDto>(`/api/leads/${id}`),
+  welcome: (contactId: string) =>
+    apiFetch<WelcomeResponse>('/api/welcome', { method: 'POST', body: JSON.stringify({ contactId }) }),
   /** Starts ASIC's search for this ABN early; the answer is reused by the check step. */
   prefetchSearch: (abn: string) => apiFetch<void>('/api/search/prefetch', { method: 'POST', body: JSON.stringify({ abn }) }),
   checkLead: (id: string) => apiFetch<CheckResponse>(`/api/leads/${id}/check`, { method: 'POST' }),

@@ -57,6 +57,12 @@ public class OntraportSale
     public int SearchAttempts { get; set; }
     public DateTime? NextSearchAt { get; set; }
 
+    /// <summary>
+    /// When the welcome page (after an Ontraport checkout) handed out the one-time portal sign-in
+    /// link for this contact. Set once: anyone opening the welcome page after that gets no link.
+    /// </summary>
+    public DateTime? PortalLinkIssuedAt { get; set; }
+
     // Link to RenewalRequest when queued
     public Guid? RenewalRequestId { get; set; }
     public RenewalRequest? RenewalRequest { get; set; }
